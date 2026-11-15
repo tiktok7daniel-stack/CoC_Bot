@@ -14,6 +14,9 @@ class CoC_Bot:
         self.upgrader = Upgrader()
         self.attacker = Attacker()
         self.cycle_count = 0
+        self.session_start = None
+        self.session_attacks = 0
+        self.next_break = None
         self.upgrader.on_upgrade = lambda kind, name: stats.record(_utils.INSTANCE_ID, "upgrade", kind=kind, name=name)
 
     def load_settings(self):
@@ -49,7 +52,9 @@ class CoC_Bot:
         for k in ("gold", "elixir", "dark"):
             b, a = (before or {}).get(k), (after or {}).get(k)
             loot[k] = max(0, a - b) if a is not None and b is not None else 0
-        stats.record(_utils.INSTANCE_ID, "attack", base=base, **loot)
+        extra = {"strategy": self.attacker.last_strategy} if base == "home" else {}
+        stats.record(_utils.INSTANCE_ID, "attack", base=base, **loot, **extra)
+        self.session_attacks += 1
         logger.info(f"Attack ({base}) loot: gold={loot['gold']} elixir={loot['elixir']} dark={loot['dark']}")
 
     def excluded(self, task):
@@ -84,7 +89,9 @@ class CoC_Bot:
     def run(self):
         import time
 
+        import random
         stats.record(_utils.INSTANCE_ID, "session_start")
+        self.session_start = time.time()
         consecutive_errors = 0
         while True:
             try:
@@ -103,6 +110,37 @@ class CoC_Bot:
                     self.idle(1)
                     continue
 
+                # End conditions
+                lim = s["limits"]
+                if (lim["max_attacks"] and self.session_attacks >= lim["max_attacks"]) or \
+                   (lim["max_hours"] and time.time() - self.session_start >= lim["max_hours"] * 3600):
+                    if getattr(self, "_limit_logged", False) is False:
+                        logger.info("Session limit reached, bot is resting")
+                        self._limit_logged = True
+                        try: stop_coc()
+                        except Exception: pass
+                    update_status("limit")
+                    self.idle(1)
+                    continue
+                self._limit_logged = False
+
+                # Humanized breaks
+                br = s["breaks"]
+                if br["enabled"]:
+                    if self.next_break is None:
+                        self.next_break = time.time() + br["every_minutes"] * 60 * random.uniform(0.8, 1.2)
+                    elif time.time() >= self.next_break:
+                        length = max(1, br["length_minutes"] * random.uniform(0.7, 1.3))
+                        logger.info(f"Taking a break for {length:.0f} min")
+                        try: stop_coc()
+                        except Exception: pass
+                        update_status("break")
+                        self.idle(length)
+                        self.next_break = None
+                        continue
+                else:
+                    self.next_break = None
+
                 set_phase("start_game")
                 started, res = start_coc(detailed=True)
                 if started:
@@ -112,6 +150,9 @@ class CoC_Bot:
 
                     # Battle / wall / budget settings for this cycle
                     self.attacker.battle_end = s["attack"]["battle_end"]
+                    self.attacker.strategy = s["attack"]["strategy"]
+                    self.attacker.hero_delay = max(0.0, float(s["attack"]["hero_delay"]))
+                    self.attacker.hero_retap = max(0.0, float(s["attack"]["hero_retap"]))
                     self.attacker.surrender_after = max(0, int(s["attack"]["surrender_after"]))
                     walls = s["walls"]
                     wall_turn = walls["enabled"] and self.cycle_count % max(1, int(walls["every_cycles"])) == 0
@@ -142,6 +183,7 @@ class CoC_Bot:
                             if not running() or self.excluded("home_attacks"): break
                             set_phase("home_attack")
                             logger.info(f"Attacking home base ({i + 1}/{n})")
+                            self.attacker.choose_strategy([e for e in stats.read(_utils.INSTANCE_ID) if e["type"] == "attack" and e.get("base") == "home"][-60:])
                             self.attack_with_loot("home", lambda: self.attacker.run_home_base(restart=True))
                             # optionally spend the new loot on walls between farming attacks
                             w = self.settings["walls"]

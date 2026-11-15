@@ -43,7 +43,7 @@ header{display:flex;align-items:center;gap:14px;padding:12px 18px;background:lin
 .dot{width:9px;height:9px;border-radius:50%;background:var(--dim);flex:none}
 .st-running .dot{background:var(--ok);box-shadow:0 0 0 4px rgba(47,207,122,.18)}
 .st-idle .dot{background:var(--accent)}
-.st-paused .dot,.st-scheduled .dot{background:var(--warn)}
+.st-paused .dot,.st-scheduled .dot,.st-break .dot,.st-limit .dot{background:var(--warn)}
 .st-error .dot{background:var(--bad);box-shadow:0 0 0 4px rgba(255,93,108,.18)}
 
 /* ---------- tabs ---------- */
@@ -315,9 +315,6 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
         <div class="card-b">
           <div class="row"><div class="lbl" data-t="wall_enabled"></div><label class="sw"><input type="checkbox" data-bind="walls.enabled"><span></span></label></div>
           <div class="row"><div class="lbl"><span data-t="wall_farming"></span><small data-t="wall_farming_sub"></small></div><label class="sw"><input type="checkbox" data-bind="walls.during_farming"><span></span></label></div>
-          <div class="row" style="display:block"><div class="lbl" style="margin-bottom:8px" data-t="wall_types"></div>
-            <button class="choice" onclick="openWallModal()"><div class="t"><b data-t="choose_option"></b><small id="wallModeLbl"></small></div><svg width="70" height="44" id="wallModeIcon"><use href="#i-walls"/></svg><i class="fa-solid fa-chevron-left flip"></i></button>
-          </div>
           <div class="row"><div class="lbl" data-t="run_every"></div><input class="in" type="number" min="1" data-bind="walls.every_cycles" data-type="int"><span class="unit" data-t="cycles"></span></div>
           <div class="row"><div class="lbl" data-t="max_walls_run"></div><input class="in" type="number" min="0" data-bind="walls.max_per_run" data-type="int"><span class="unit" data-t="walls_unit"></span></div>
           <div class="note"><i class="fa-solid fa-circle-info"></i> <span data-t="wall_note"></span></div>
@@ -447,6 +444,21 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
         <div class="row"><div class="lbl" data-t="exclude_cc"></div><label class="sw"><input type="checkbox" data-bind="attack.exclude_clan_troops"><span></span></label></div>
       </div>
     </div>
+    <div class="card">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-chess-knight"></i></div><h3 data-t="strat_title"></h3></div>
+      <div class="card-sub" data-t="strat_sub"></div>
+      <div class="card-b">
+        <div class="row"><div class="lbl"><span data-t="strategy"></span><small data-t="strategy_sub"></small></div>
+          <select class="in" data-bind="attack.strategy"><option value="auto" data-t="st_auto"></option><option value="funnel" data-t="st_funnel"></option><option value="line" data-t="st_line"></option><option value="two_sides" data-t="st_two_sides"></option></select></div>
+        <div class="row"><div class="lbl"><span data-t="hero_delay"></span><small data-t="hero_delay_sub"></small></div><input class="in" type="number" min="0" step="0.5" data-bind="attack.hero_delay" data-type="float"><span class="unit" data-t="seconds"></span></div>
+        <div class="row"><div class="lbl"><span data-t="hero_retap"></span><small data-t="hero_retap_sub"></small></div><input class="in" type="number" min="0" step="1" data-bind="attack.hero_retap" data-type="float"><span class="unit" data-t="seconds"></span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-brain"></i></div><h3 data-t="learned_title"></h3></div>
+      <div class="card-sub" data-t="learned_sub"></div>
+      <div class="card-b"><table><thead><tr><th data-t="strategy"></th><th data-t="attacks"></th><th data-t="gold"></th><th data-t="elixir"></th><th data-t="dark"></th></tr></thead><tbody id="learnTable"></tbody></table></div>
+    </div>
     <div class="card span2">
       <div class="card-h"><div class="ico"><i class="fa-solid fa-flag-checkered"></i></div><h3 data-t="battle_end_title"></h3></div>
       <div class="card-sub" data-t="battle_end_sub"></div>
@@ -486,6 +498,11 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
       <div class="card-sub" data-t="interval_sub"></div>
       <div class="card-b">
         <div class="row"><div class="lbl" data-t="check_interval"></div><input class="in" type="number" min="1" data-bind="schedule.check_interval" data-type="float"><span class="unit" data-t="minutes"></span></div>
+        <div class="row"><div class="lbl"><span data-t="max_attacks"></span><small data-t="zero_off"></small></div><input class="in" type="number" min="0" data-bind="limits.max_attacks" data-type="int"><span class="unit" data-t="attacks_unit"></span></div>
+        <div class="row"><div class="lbl"><span data-t="max_hours"></span><small data-t="zero_off"></small></div><input class="in" type="number" min="0" step="0.5" data-bind="limits.max_hours" data-type="float"><span class="unit" data-t="hours"></span></div>
+        <div class="row"><div class="lbl"><span data-t="breaks"></span><small data-t="breaks_sub"></small></div><label class="sw"><input type="checkbox" data-bind="breaks.enabled"><span></span></label></div>
+        <div class="row"><div class="lbl" data-t="break_every"></div><input class="in" type="number" min="10" data-bind="breaks.every_minutes" data-type="int"><span class="unit" data-t="minutes"></span></div>
+        <div class="row"><div class="lbl" data-t="break_len"></div><input class="in" type="number" min="1" data-bind="breaks.length_minutes" data-type="int"><span class="unit" data-t="minutes"></span></div>
         <div class="row"><div class="lbl"><span data-t="keep_open"></span><small data-t="keep_open_sub"></small></div><label class="sw"><input type="checkbox" data-bind="game.keep_open"><span></span></label></div>
         <div class="row"><div class="lbl"><span data-t="apply_instantly"></span><small data-t="apply_instantly_sub"></small></div><label class="sw"><input type="checkbox" data-bind="game.apply_instantly"><span></span></label></div>
         <div class="note"><i class="fa-solid fa-circle-info"></i> <span data-t="interval_note"></span></div>
@@ -554,6 +571,7 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
   <div class="card">
     <div class="card-h"><div class="ico" style="color:var(--bad)"><i class="fa-solid fa-bug"></i></div><h3 data-t="err_title"></h3>
       <div class="tools">
+        <button class="btn sm primary" onclick="githubReport()"><i class="fa-brands fa-github"></i><span data-t="gh_upload"></span></button>
         <button class="btn sm gold" onclick="saveReport()"><i class="fa-solid fa-file-zipper"></i><span data-t="save_report"></span></button>
         <button class="btn sm" onclick="openErrFolder()"><i class="fa-regular fa-folder-open"></i><span data-t="open_folder"></span></button>
         <button class="btn sm" onclick="clearErrors()"><i class="fa-solid fa-broom"></i><span data-t="clear"></span></button>
@@ -595,6 +613,15 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
       <div class="card-h"><div class="ico"><i class="fa-brands fa-telegram"></i></div><h3 data-t="notifications"></h3></div>
       <div class="card-sub" data-t="notifications_sub"></div>
       <div class="card-b"><div class="row"><div class="lbl" data-t="telegram_token"></div><input class="in" style="width:60%" type="password" data-app="telegram_bot_token" placeholder="123456:ABC..."></div></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="ico"><i class="fa-brands fa-github"></i></div><h3 data-t="gh_title"></h3></div>
+      <div class="card-sub" data-t="gh_sub"></div>
+      <div class="card-b">
+        <div class="row"><div class="lbl"><span data-t="gh_token"></span><small data-t="gh_token_sub"></small></div><input class="in" style="width:55%" type="password" data-app="github_token" placeholder="github_pat_..."></div>
+        <div class="row"><div class="lbl"><span data-t="gh_auto"></span><small data-t="gh_auto_sub"></small></div><label class="sw"><input type="checkbox" data-app="auto_report"><span></span></label></div>
+        <div class="note"><i class="fa-solid fa-triangle-exclamation" style="color:var(--warn)"></i> <span data-t="gh_warn"></span></div>
+      </div>
     </div>
     <div class="card">
       <div class="card-h"><div class="ico"><i class="fa-solid fa-eye"></i></div><h3 data-t="ocr_title"></h3></div>
@@ -675,7 +702,7 @@ ar:{
  bb_upgrades:"ترقيات قاعدة البنّاء", bb_upgrades_sub:"المباني ومختبر النجوم", t_builder_base:"ترقية مباني قاعدة البنّاء", t_builder_lab:"ترقية مختبر النجوم", use_priority_bb:"مباني قاعدة البنّاء حسب الأولوية", use_priority_bl:"مختبر النجوم حسب الأولوية", bb_priority:"أولوية مباني قاعدة البنّاء", bl_priority:"أولوية مختبر النجوم",
  attack_title:"الهجوم", attack_sub:"عدد الهجمات في كل دورة", t_home_attacks:"هجوم القرية الرئيسية", home_attacks_n:"هجمات القرية الرئيسية لكل دورة", home_attacks_n_sub:"أكتر من هجمة = فارم أسرع", t_builder_attacks:"هجوم قاعدة البنّاء", builder_attacks_n:"هجمات قاعدة البنّاء لكل دورة", attacks_unit:"هجمات",
  army_title:"الجيش والإنزال", army_sub:"طريقة إنزال الجنود", deploy_time:"وقت إنزال كل نوع جنود", deploy_time_sub:"الوقت اللي البوت ماسك فيه على الشاشة لكل نوع", seconds:"ثانية", slot_range:"خانات الجيش المستخدمة", slot_range_sub:"من خانة لخانة (أول خانة = 0)", to:"إلى", exclude_cc:"عدم استخدام جنود القلعة",
- farm_title:"الفارم", farm_sub:"جمع الموارد وصرفها", farm_note:"قريبًا: تخطّي القرى قليلة الغنيمة تلقائيًا (محتاج صور من شاشة البحث عن خصم).",
+ farm_title:"الفارم", farm_sub:"جمع الموارد وصرفها", farm_note:"تخطّي القرى قليلة الغنيمة محتاج صورة لشاشة البحث عن خصم عشان يتظبط على شاشتك.",
  sch_title:"الجدول الزمني", sch_sub:"البوت يشتغل بس في الأوقات دي", sch_enabled:"تفعيل الجدول الزمني", from:"من الساعة", until:"إلى الساعة", until_sub:"لو وقت النهاية أصغر من البداية يبقى بيعدّي نص الليل", days:"الأيام",
  interval_title:"الفاصل بين الدورات", interval_sub:"البوت بيفتح اللعبة كل فترة ويعمل كل المهام", check_interval:"كل", minutes:"دقيقة", interval_note:"مدة أقل = شغل أكتر، بس استهلاك أعلى للجهاز واحتمال أكبر إن اللعبة تلاحظ.",
  sched_now_in:"الوقت الحالي داخل الجدول — البوت يقدر يشتغل", sched_now_out:"الوقت الحالي خارج الجدول — البوت هيستنى", sched_off:"الجدول متقفل — البوت شغال طول الوقت",
@@ -694,7 +721,17 @@ ar:{
  tess_sub:"قارئ الأرقام السريع", tess_ok:"متثبّت ✓", tess_missing:"مش متثبّت", tess_path:"مسار Tesseract", tess_path_sub:"سيبه فاضي والبوت هيلاقيه لوحده", tess_install:"تثبيت Tesseract", tess_check:"تحقق",
  tess_found_at:"موجود في:", tess_hint:"اضغط \"تثبيت Tesseract\" — هتفتح نافذة سودا تثبّته لوحدها، وافق لو ويندوز سألك. لحد ما يتثبّت البوت بيستخدم easyocr عادي.", tess_installing:"جاري التثبيت في النافذة اللي اتفتحت… الحالة هتتحدث لوحدها لما يخلص.", groq_key:"مفتاح Groq API",
  unsaved:"تغييرات غير محفوظة. اضغط على حفظ الإعدادات لتطبيقها على البوت.", start_bot:"بدء البوت", save_settings:"حفظ الإعدادات",
- one_err:"خطأ", one_warn:"تحذير", tab_err:"الأخطاء", sub_err:"تشخيص المشاكل", err_title:"سجل الأخطاء", err_sub:"كل خطأ بيتسجّل بالخطوة اللي البوت كان فيها، وشرح بالعربي، وصورة من المحاكي لحظة الخطأ",
+ one_err:"خطأ", one_warn:"تحذير",
+ st_limit:"وصل للحد", st_break:"في استراحة",
+ strat_title:"خطة الهجوم", strat_sub:"إزاي البوت ينزّل الجيش", strategy:"الخطة", strategy_sub:"\"تلقائي\" بيجرّب الخطط ويتعلّم أنهي واحدة بتجيب غنيمة أكتر ويستخدمها",
+ st_auto:"تلقائي (يتعلّم الأفضل) 🧠", st_funnel:"نقطة واحدة (قمع)", st_line:"على خط الحافة", st_two_sides:"من جهتين",
+ hero_delay:"تأخير الأبطال", hero_delay_sub:"الأبطال بينزلوا بعد الجيش بالوقت ده عشان الجيش ياخد ضرب الدفاعات الأول", hero_retap:"تفعيل قدرة الأبطال بعد", hero_retap_sub:"يدوس على كارت البطل تاني عشان يشغّل القدرة (0 = مقفول)",
+ learned_title:"اللي البوت اتعلّمه", learned_sub:"متوسط الغنيمة لكل خطة من كل الهجمات. 🏆 = الأفضل لحد دلوقتي", learn_empty:"لسه بيجرّب — محتاج كام هجمة بكل خطة",
+ max_attacks:"وقّف بعد عدد هجمات", max_hours:"وقّف بعد عدد ساعات", zero_off:"0 = من غير حد", hours:"ساعات",
+ breaks:"استراحات طبيعية", breaks_sub:"يقفل اللعبة شوية كل فترة بوقت عشوائي — أأمن من اللعب المتواصل", break_every:"استراحة كل حوالي", break_len:"مدة الاستراحة حوالي",
+ gh_upload:"رفع الأخطاء على GitHub", gh_title:"تقارير الأخطاء على GitHub", gh_sub:"الأخطاء بتترفع كـ Issue في مستودع البوت عشان تتصلح في التحديث الجاي",
+ gh_token:"توكن GitHub", gh_token_sub:"Fine-grained token على مستودع البوت بس، بصلاحية Issues: Read and write", gh_auto:"رفع تلقائي كل 6 ساعات", gh_auto_sub:"لو فيه أخطاء جديدة بس",
+ gh_warn:"لو المستودع عام (Public) أي حد يقدر يشوف التقارير. البوت بيشيل مسارات جهازك والمفاتيح قبل الرفع.", gh_done:"اترفع ✓", gh_need_token:"حط توكن GitHub في الإعدادات الأول", tab_err:"الأخطاء", sub_err:"تشخيص المشاكل", err_title:"سجل الأخطاء", err_sub:"كل خطأ بيتسجّل بالخطوة اللي البوت كان فيها، وشرح بالعربي، وصورة من المحاكي لحظة الخطأ",
  save_report:"حفظ تقرير للمطوّر", open_folder:"فتح فولدر الصور", errors_k:"أخطاء", warnings_k:"تحذيرات", last_error:"آخر خطأ", no_errors:"مفيش أخطاء 🎉 البوت شغال تمام",
  report_saved:"التقرير اتحفظ على سطح المكتب:", during:"أثناء", fix:"الحل", tech:"تفاصيل تقنية", confirm_clear_err:"مسح قائمة الأخطاء؟",
  ph_start_game:"فتح اللعبة", ph_to_home:"الرجوع للقرية الرئيسية", ph_read_resources:"قراءة الموارد", ph_home_upgrades:"ترقيات القرية الرئيسية", ph_home_attack:"هجوم القرية الرئيسية", ph_walls_farming:"ترقية الجدران أثناء الفارم", ph_to_builder:"الانتقال لقاعدة البنّاء", ph_builder_upgrades:"ترقيات قاعدة البنّاء", ph_builder_attack:"هجوم قاعدة البنّاء", ph_finish:"إنهاء الدورة", ph_idle:"الانتظار بين الدورات",
@@ -749,7 +786,17 @@ en:{
  tess_sub:"fast number reader", tess_ok:"Installed ✓", tess_missing:"Not installed", tess_path:"Tesseract path", tess_path_sub:"Leave empty to find it automatically", tess_install:"Install Tesseract", tess_check:"Check",
  tess_found_at:"Found at:", tess_hint:"Click \"Install Tesseract\" — a console window installs it; accept if Windows asks. Until then the bot uses easyocr.", tess_installing:"Installing in the window that opened… the status updates when it's done.", groq_key:"Groq API key",
  unsaved:"Unsaved changes. Click Save settings to apply them to the bot.", start_bot:"Start bot", save_settings:"Save settings",
- one_err:"Error", one_warn:"Warning", tab_err:"Errors", sub_err:"Troubleshooting", err_title:"Error log", err_sub:"Every error is saved with the step the bot was on, an explanation and an emulator screenshot",
+ one_err:"Error", one_warn:"Warning",
+ st_limit:"Limit reached", st_break:"On a break",
+ strat_title:"Attack plan", strat_sub:"How the bot deploys the army", strategy:"Strategy", strategy_sub:"\"Auto\" tries the plans and learns which one brings the most loot",
+ st_auto:"Auto (learns the best) 🧠", st_funnel:"Single point (funnel)", st_line:"Along the edge", st_two_sides:"Two sides",
+ hero_delay:"Hero delay", hero_delay_sub:"Heroes go in after the army so the troops take the first hits", hero_retap:"Fire hero abilities after", hero_retap_sub:"Taps the hero card again to use its ability (0 = off)",
+ learned_title:"What the bot learned", learned_sub:"Average loot per plan over all attacks. 🏆 = best so far", learn_empty:"Still testing — needs a few attacks per plan",
+ max_attacks:"Stop after attacks", max_hours:"Stop after hours", zero_off:"0 = no limit", hours:"hours",
+ breaks:"Humanized breaks", breaks_sub:"Closes the game for a while at random intervals — safer than nonstop play", break_every:"Break about every", break_len:"Break length about",
+ gh_upload:"Upload errors to GitHub", gh_title:"Error reports on GitHub", gh_sub:"Errors are uploaded as Issues in the bot repository so the next update can fix them",
+ gh_token:"GitHub token", gh_token_sub:"Fine-grained token for the bot repo only, with Issues: Read and write", gh_auto:"Upload automatically every 6 hours", gh_auto_sub:"Only when there are new errors",
+ gh_warn:"If the repository is public anyone can read the reports. Paths and keys are removed before upload.", gh_done:"Uploaded ✓", gh_need_token:"Add a GitHub token in Settings first", tab_err:"Errors", sub_err:"Troubleshooting", err_title:"Error log", err_sub:"Every error is saved with the step the bot was on, an explanation and an emulator screenshot",
  save_report:"Save report for developer", open_folder:"Open screenshots folder", errors_k:"Errors", warnings_k:"Warnings", last_error:"Last error", no_errors:"No errors 🎉 the bot is running fine",
  report_saved:"Report saved to the Desktop:", during:"During", fix:"Fix", tech:"Technical details", confirm_clear_err:"Clear the error list?",
  ph_start_game:"Opening the game", ph_to_home:"Going to home village", ph_read_resources:"Reading resources", ph_home_upgrades:"Home upgrades", ph_home_attack:"Home attack", ph_walls_farming:"Walls while farming", ph_to_builder:"Going to builder base", ph_builder_upgrades:"Builder base upgrades", ph_builder_attack:"Builder base attack", ph_finish:"Finishing cycle", ph_idle:"Waiting between cycles",
@@ -768,6 +815,14 @@ const LOG_AR = [
  [/^CoC already open/, "اللعبة مفتوحة بالفعل — هيكمّل عليها ✓"],
  [/^Settings changed, applying now/, "الإعدادات اتغيّرت — جاري التطبيق دلوقتي"],
  [/^Run now requested/, "تم طلب تشغيل دورة الآن"],
+ [/^Attack strategy: funnel/, "خطة الهجوم: نقطة واحدة (قمع)"],
+ [/^Attack strategy: line/, "خطة الهجوم: على خط الحافة"],
+ [/^Attack strategy: two_sides/, "خطة الهجوم: من جهتين"],
+ [/^Activated (\d+) hero abilities/, "تم تفعيل قدرة $1 بطل ⚡"],
+ [/^Touch connection lost.*/, "أداة اللمس فصلت — جاري إعادة تشغيلها"],
+ [/^minitouch restarted\./, "أداة اللمس رجعت تشتغل ✓"],
+ [/^Session limit reached.*/, "وصل للحد اللي حددته — البوت واقف"],
+ [/^Taking a break for (\d+) min/, "استراحة لمدة $1 دقيقة ☕"],
  [/^ADB connection lost during '(.*?)'.*/, "الاتصال بالمحاكي اتقطع أثناء ($1) — جاري إعادة الاتصال…"],
  [/^ADB reconnected\./, "رجع الاتصال بالمحاكي ✓"],
  [/^Battle end not detected, reopening the game/, "مقدرش يلاقي نهاية المعركة — هيعيد فتح اللعبة"],
@@ -1013,7 +1068,7 @@ function renderPrio(){
    Wall mode modal
    ===================================================================== */
 function updateWallLabel(){
-  if (!S) return;
+  if (!S || !S.walls.mode || !$("#wallModeLbl")) return;
   $("#wallModeLbl").textContent = t(S.walls.mode === "single" ? "wall_single" : "wall_multi");
   $("#wallModeIcon").innerHTML = `<use href="#${S.walls.mode === "single" ? "i-wall" : "i-walls"}"/>`;
 }
@@ -1030,6 +1085,8 @@ function statusKey(a){
   if (!a || !a.running) return "stopped";
   if (a.status === "paused") return "paused";
   if (a.status === "scheduled") return "scheduled";
+  if (a.status === "limit") return "limit";
+  if (a.status === "break") return "break";
   if (a.status === "error") return "error";
   if (a.status === "now") return "running";
   if (a.status === "starting" || a.status === "") return "starting";
@@ -1197,6 +1254,9 @@ function renderStats(){
   $("#sessSince").textContent = `${t("since")}: ${new Date(STATS.session_start * 1000).toLocaleString(LANG === "ar" ? "ar-EG" : "en-US")}`;
   const atk = STATS.recent_attacks;
   $("#atkTable").innerHTML = atk.length ? atk.map((e, i) => `<tr><td class="num">${atk.length - i}</td><td class="num">${new Date(e.t * 1000).toLocaleTimeString("en-GB")}</td><td>${t(e.base === "builder" ? "builder" : "home")}</td><td class="num c-g">${fmt(e.gold)}</td><td class="num c-e">${fmt(e.elixir)}</td><td class="num c-d">${fmt(e.dark)}</td></tr>`).join("") : `<tr><td colspan="6" class="empty">${t("no_attacks")}</td></tr>`;
+  const names = {funnel:t("st_funnel"), line:t("st_line"), two_sides:t("st_two_sides")};
+  const learned = Object.entries(STATS.strategies || {}).sort((a, b) => (b[1].gold + b[1].elixir) - (a[1].gold + a[1].elixir));
+  $("#learnTable").innerHTML = learned.length ? learned.map(([k, v], i) => `<tr><td>${i === 0 ? "🏆 " : ""}${names[k] || k}</td><td class="num">${v.attacks}</td><td class="num c-g">${fmt(v.gold)}</td><td class="num c-e">${fmt(v.elixir)}</td><td class="num c-d">${fmt(v.dark)}</td></tr>`).join("") : `<tr><td colspan="5" class="empty">${t("learn_empty")}</td></tr>`;
   const up = STATS.recent_upgrades;
   $("#upgTable").innerHTML = up.length ? up.map(e => `<tr><td class="num">${new Date(e.t * 1000).toLocaleString("en-GB")}</td><td>${t("k_" + e.kind)}</td><td>${e.name || ""}</td></tr>`).join("") : `<tr><td colspan="3" class="empty">—</td></tr>`;
 }
@@ -1299,6 +1359,13 @@ function renderErrors(){
       <details><summary>${t("tech")}</summary><pre>${esc([e.message, e.detail, e.where].filter(Boolean).join("\n"))}</pre></details>
     </div>${shot}</div>`;
   }).join("");
+}
+async function githubReport(){
+  $("#reportNote").textContent = "…";
+  const r = await api(`/api/github/report/${encodeURIComponent(CUR)}`, {method:"POST", body:{}});
+  if (r.ok && r.url) $("#reportNote").innerHTML = `${t("gh_done")} <span class="num">${esc(r.url)}</span>`;
+  else if (r.ok) $("#reportNote").textContent = t("no_errors");
+  else $("#reportNote").textContent = r.error === "no_token" ? t("gh_need_token") : r.error;
 }
 function showShot(src){ $("#shotImg").src = src; $("#shotModal").classList.add("show"); }
 async function saveReport(){

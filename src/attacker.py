@@ -10,6 +10,11 @@ class Attacker:
     def __init__(self):
         self.assets = Asset_Manager.attacker_assets
         self.misc_assets = Asset_Manager.misc_assets
+        self.deployed_heroes = []
+        self.strategy = "funnel"   # "funnel" | "line" | "two_sides" | "auto" (learns the best)
+        self.last_strategy = "funnel"
+        self.hero_delay = 1.0      # seconds between the army and the heroes
+        self.hero_retap = 0        # seconds after deploying to fire hero abilities (0 = off)
         self.battle_end = "wait"    # "wait": stay in game until the battle ends | "restart": reopen the game (faster)
         self.surrender_after = 0    # seconds after deployment to end the battle early (0 = never)
 
@@ -252,6 +257,38 @@ class Attacker:
         output.append(type_gaps_seen)
         return output
     
+    # Deployment paths (fractions of the screen, after zooming out and scrolling up).
+    # The finger is dragged along the path while a troop card is held, which spreads the troops.
+    DEPLOY_PATHS = {
+        "funnel":    [(0.5, 0.8)],                                   # everything on one point (original)
+        "line":      [(0.38, 0.66), (0.5, 0.8), (0.62, 0.66)],       # spread along the bottom edge
+        "two_sides": [(0.36, 0.64), (0.42, 0.72), (0.58, 0.72), (0.64, 0.64)],
+    }
+    STRATEGIES = list(DEPLOY_PATHS.keys())
+
+    def choose_strategy(self, history=None):
+        """
+        "auto" learns which deployment brings the most loot: mostly the best average
+        so far, sometimes another one to keep learning (each needs a few attacks first).
+        """
+        import random
+        wanted = getattr(self, "strategy", "funnel")
+        if wanted != "auto":
+            self.last_strategy = wanted if wanted in self.DEPLOY_PATHS else "funnel"
+            return self.last_strategy
+        history = history or []
+        scores = {}
+        for st in self.STRATEGIES:
+            loots = [e["gold"] + e["elixir"] + 50 * e.get("dark", 0) for e in history if e.get("strategy") == st]
+            scores[st] = (sum(loots) / len(loots), len(loots)) if loots else (None, 0)
+        untried = [st for st, (_, n) in scores.items() if n < 3]
+        if untried: choice = random.choice(untried)
+        elif random.random() < 0.15: choice = random.choice(self.STRATEGIES)
+        else: choice = max(self.STRATEGIES, key=lambda st: scores[st][0])
+        self.last_strategy = choice
+        logger.info(f"Attack strategy: {choice}")
+        return choice
+
     def deploy_troops(self, card_centers, available_slots=None, card_types=None, card_counts=None):
         import time, numpy as np
         
@@ -262,43 +299,77 @@ class Attacker:
         if available_slots is None: available_slots = [1] * len(card_centers)
         if card_types is None: card_types = [None] * len(card_centers)
         if card_counts is None: card_counts = [0] * len(card_centers)
+
+        path = self.DEPLOY_PATHS.get(getattr(self, "last_strategy", "funnel"), self.DEPLOY_PATHS["funnel"])
+        anchor = path[len(path) // 2]
+        hero_delay = getattr(self, "hero_delay", 1.0)
+
+        # Order: troops & clan castle first, then heroes (they follow the army), spells last
+        order = {"troop": 0, "clan": 0, None: 1, "hero": 2, "spell": 3}
+        idx = sorted([i for i in range(len(card_centers)) if available_slots[i]], key=lambda i: order.get(card_types[i], 1))
         
         # Start holding deploy position w/ additional touch pointer
-        Input_Handler.down(0.5, 0.8, pointer=1)
+        Input_Handler.down(*anchor, pointer=1)
+        heroes_started = False
         
-        for i in range(len(card_centers)):
-            if available_slots[i]:
-                # Select slot
-                Input_Handler.click(card_centers[i], 0.9)
-                
-                # Deploy selected slot
-                if card_types[i] in ["hero", "clan"]:
-                    Input_Handler.click(0.5, 0.8)
-                elif card_types[i] == "troop":
-                    Input_Handler.down(0.5, 0.8, pointer=0)
-                    end_time = time.monotonic() + TROOP_DEPLOY_TIME
-                    while time.monotonic() < end_time and not card_gray(card_centers[i]): time.sleep(0.2) # each check is a full screenshot
-                    Input_Handler.up(pointer=0)
-                elif card_types[i] == "spell":
-                    n = card_counts[i]
-                    rxs = np.random.uniform(0.35, 0.65, n)
-                    rys = np.random.uniform(0.45, 0.55, n)
-                    for coord in zip(rxs, rys):
-                        Input_Handler.click(*coord)
-                else:
-                    Input_Handler.click(0.5, 0.8, n=max(0, card_counts[i]))
+        for i in idx:
+            if card_types[i] == "hero" and not heroes_started:
+                heroes_started = True
+                time.sleep(hero_delay) # let the troops take the aggro first
+            # Select slot
+            Input_Handler.click(card_centers[i], 0.9)
+            
+            # Deploy selected slot
+            if card_types[i] in ["hero", "clan"]:
+                Input_Handler.click(*anchor)
+                if card_types[i] == "hero": self.deployed_heroes.append(card_centers[i])
+            elif card_types[i] == "troop":
+                # drag along the strategy path while holding, then finish on the anchor
+                end_time = time.monotonic() + TROOP_DEPLOY_TIME
+                Input_Handler.down(*path[0], pointer=0)
+                points = [path[0]] if len(path) == 1 else [
+                    (path[k][0] + (path[k+1][0] - path[k][0]) * t, path[k][1] + (path[k+1][1] - path[k][1]) * t)
+                    for k in range(len(path) - 1) for t in np.linspace(0, 1, 5, endpoint=False)
+                ] + [path[-1]]
+                step = TROOP_DEPLOY_TIME * 0.8 / max(1, len(points))
+                for x, y in points:
+                    Input_Handler.move(x, y, pointer=0)
+                    time.sleep(step)
+                Input_Handler.move(*anchor, pointer=0)
+                while time.monotonic() < end_time + 0.5 and not card_gray(card_centers[i]): time.sleep(0.2) # each check is a full screenshot
+                Input_Handler.up(pointer=0)
+            elif card_types[i] == "spell":
+                n = card_counts[i]
+                rxs = np.random.uniform(0.35, 0.65, n)
+                rys = np.random.uniform(0.45, 0.55, n)
+                for coord in zip(rxs, rys):
+                    Input_Handler.click(*coord)
+            else:
+                Input_Handler.click(*anchor, n=max(0, card_counts[i]))
         
         # Release additional pointer
         Input_Handler.up(pointer=1)
         
         # Unselect last card
         Input_Handler.click(0.01, 0.9)
+
+    def activate_hero_abilities(self):
+        """Tap the deployed hero cards again after a delay to fire their abilities."""
+        import time
+        delay = getattr(self, "hero_retap", 0)
+        if delay <= 0 or not self.deployed_heroes: return
+        time.sleep(delay)
+        for x in self.deployed_heroes:
+            Input_Handler.click(x, 0.9)
+            time.sleep(0.15)
+        logger.info(f"Activated {len(self.deployed_heroes)} hero abilities")
     
     def complete_normal_attack(self, restart=True, exclude_clan_troops=False):
         import time, numpy as np
 
         Input_Handler.zoom(dir="out")
         Input_Handler.swipe_up(y1=0.5)
+        self.deployed_heroes = []
         
         type_gaps_seen = 0
         total_slots_seen = 0
@@ -337,6 +408,8 @@ class Attacker:
             elif last_card_left is None:
                 break
         
+        try: self.activate_hero_abilities()
+        except Exception: logger.warning("Hero ability activation failed")
         self.finish_battle(restart)
     
     def complete_builder_attack(self, restart=True):
@@ -346,7 +419,10 @@ class Attacker:
         Input_Handler.swipe_up(y1=0.5)
         
         card_centers = np.linspace(0.1, 0.9, 11)
-        self.deploy_troops(card_centers, card_counts=[4]*len(card_centers))
+        self.deployed_heroes = []
+        home_strategy, self.last_strategy = self.last_strategy, "funnel" # builder base keeps the proven point
+        try: self.deploy_troops(card_centers, card_counts=[4]*len(card_centers))
+        finally: self.last_strategy = home_strategy
         
         self.finish_battle(restart, max_wait=260) # builder battles can have two stages
     

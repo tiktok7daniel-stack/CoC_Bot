@@ -51,7 +51,6 @@ def default_settings():
             "enabled": any("Wall" in lvl for lvl in _cfg("HOME_BASE_UPGRADE_PRIORITY", [])),
             "every_cycles": 1,       # upgrade walls every N cycles
             "max_per_run": 5,        # max wall upgrades per cycle
-            "mode": "multiple",      # "multiple" | "single" wall levels
             "during_farming": False, # also upgrade walls between farming attacks
         },
         "budget": {
@@ -73,8 +72,20 @@ def default_settings():
             "slot_first": _cfg("ATTACK_SLOT_RANGE", (0, 100))[0],
             "slot_last": _cfg("ATTACK_SLOT_RANGE", (0, 100))[1],
             "exclude_clan_troops": _cfg("EXCLUDE_CLAN_TROOPS", True),
+            "strategy": "auto",      # "auto" (learns the best) | "funnel" | "line" | "two_sides"
+            "hero_delay": 1.0,       # seconds between the army and the heroes
+            "hero_retap": 6,         # seconds after deploying to fire hero abilities (0 = off)
             "battle_end": "wait",    # "wait" (game stays open) | "restart" (reopen game, faster)
             "surrender_after": 0,    # seconds after deployment to end the battle early (0 = wait for the end)
+        },
+        "limits": {
+            "max_attacks": 0,        # stop after this many attacks in the session (0 = no limit)
+            "max_hours": 0,          # stop after running this many hours (0 = no limit)
+        },
+        "breaks": {
+            "enabled": False,        # humanized breaks: close the game for a while now and then
+            "every_minutes": 90,
+            "length_minutes": 15,
         },
         "game": {
             "keep_open": True,       # don't close the game between cycles
@@ -97,6 +108,9 @@ def default_app_settings():
         "telegram_bot_token": _cfg("TELEGRAM_BOT_TOKEN", ""),
         "groq_api_key": _cfg("GROQ_API_KEY", ""),
         "tesseract_path": _cfg("TESSERACT_PATH", ""),  # empty = find automatically
+        "github_token": "",          # fine-grained token with Issues: read & write on the bot repo
+        "auto_report": False,        # upload new errors to GitHub Issues automatically
+        "last_report": 0,
         "suspend_emulator_on_idle": _cfg("SUSPEND_EMULATOR_ON_IDLE", False),
         "auto_start_emulator": _cfg("AUTO_START_EMULATOR", True),
         "accounts": list(_cfg("INSTANCE_IDS", ["main"])),

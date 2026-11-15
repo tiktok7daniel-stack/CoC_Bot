@@ -240,6 +240,72 @@ def api_report(id):
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
+# ---------------------------------------------------------------- GitHub error reports
+
+def _sanitize(text):
+    """Never publish personal paths or secrets."""
+    import re
+    home = str(Path.home())
+    text = text.replace(home, "~").replace(home.replace("\\", "/"), "~")
+    text = re.sub(r"(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|gsk_[A-Za-z0-9]{20,}|\d{6,}:[A-Za-z0-9_-]{30,})", "<secret>", text)
+    return text
+
+def github_report(id, since=0):
+    import requests
+    from version import UPDATE_REPO
+    app_cfg = bot_settings.load_app()
+    token = app_cfg.get("github_token", "")
+    if not token: return {"ok": False, "error": "no_token"}
+    groups = stats.error_groups(id, since)
+    if not groups: return {"ok": True, "skipped": "no_errors"}
+    lines = [f"**Version:** {VERSION}  ", f"**Account:** {id}  ", f"**Platform:** {sys.platform}  ",
+             f"**Emulator:** {app_cfg.get('emulator')}", "", "| # | Type | Message | Steps | Where |", "|---|---|---|---|---|"]
+    for g in groups[:25]:
+        msg = g["message"].replace("|", "/")[:150]
+        lines.append(f"| {g['count']} | {g['type']} | {msg} | {', '.join(g['phases'])} | `{g['where'][:80]}` |")
+    details = [f"- **{g['message'][:120]}**: `{g['detail'][:200]}`" for g in groups[:25] if g["detail"]]
+    if details: lines += ["", "### Details", *details]
+    lp = log_path(id)
+    if lp.exists():
+        tail = lp.read_text(encoding="utf-8", errors="replace").splitlines()[-120:]
+        lines += ["", "<details><summary>Last log lines</summary>", "", "```", *tail, "```", "</details>"]
+    body = _sanitize("\n".join(lines))[:60000]
+    title = f"[Bot report] {id} v{VERSION} - {len(groups)} problem types - {time.strftime('%Y-%m-%d %H:%M')}"
+    r = requests.post(f"https://api.github.com/repos/{UPDATE_REPO}/issues",
+                      headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
+                      json={"title": title, "body": body, "labels": ["bot-report"]}, timeout=20)
+    if r.status_code == 422: # label may not exist -> retry without
+        r = requests.post(f"https://api.github.com/repos/{UPDATE_REPO}/issues",
+                          headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
+                          json={"title": title, "body": body}, timeout=20)
+    if r.status_code >= 300: return {"ok": False, "error": f"GitHub {r.status_code}: {r.text[:200]}"}
+    return {"ok": True, "url": r.json().get("html_url")}
+
+@app.route("/api/github/report/<id>", methods=["POST"])
+def api_github_report(id):
+    if not valid_id(id): abort(404)
+    try:
+        res = github_report(id)
+        if res.get("ok"):
+            a = bot_settings.load_app(); a["last_report"] = time.time(); bot_settings.save_app(a)
+        return jsonify(res)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+def auto_report_loop():
+    """Every 6 hours, upload new errors of every account if the user enabled it."""
+    while True:
+        time.sleep(600)
+        try:
+            a = bot_settings.load_app()
+            if not a.get("auto_report") or not a.get("github_token"): continue
+            if time.time() - float(a.get("last_report") or 0) < 6 * 3600: continue
+            since = float(a.get("last_report") or 0)
+            for i in a["accounts"]: github_report(i, since)
+            a["last_report"] = time.time(); bot_settings.save_app(a)
+        except Exception:
+            pass
+
 # ---------------------------------------------------------------- tesseract (fast number OCR)
 
 def _find_tesseract():
@@ -349,6 +415,8 @@ def start_server(pipe, port, id=None, debug=False):
         sys.stderr = open(os.devnull, 'w')
 
     bot_settings.apply_app_settings()
+    import threading
+    threading.Thread(target=auto_report_loop, daemon=True).start()
     for i in ([id] if isinstance(id, str) else (id or [])): # accounts launched together with the GUI
         instances[i] = Instance(i)
 

@@ -1637,6 +1637,10 @@ class ADB_Manager:
         try:
             d1 = adbutils.device(addr)
             ensure_minitouch(d1)
+            try:
+                if cls._minitouch_device is not None: cls._minitouch_device.stop()
+            except Exception: pass
+            cls.kill_device_minitouch(d1)
             d2 = MNTDevice(addr)
             d3 = u2.connect(addr)
             devices = [d1, d2, d3]
@@ -1679,6 +1683,28 @@ class ADB_Manager:
             if cls.device_state(addr) == "device": return True
             time.sleep(0.5)
         return False
+
+    @classmethod
+    def kill_device_minitouch(cls, device=None):
+        """A minitouch left running on the device (old session / crash) makes the next start fail."""
+        try:
+            (device or cls._adbutils_device).shell("pkill minitouch; killall minitouch 2>/dev/null")
+        except Exception:
+            pass
+
+    @classmethod
+    def reset_minitouch(cls):
+        import time
+        from pyminitouch import MNTDevice
+        try:
+            if cls._minitouch_device is not None: cls._minitouch_device.stop()
+        except Exception:
+            pass
+        cls.kill_device_minitouch()
+        time.sleep(0.3)
+        cls._minitouch_device = MNTDevice(ADB_ADDRESS)
+        Exit_Handler.register(cls._minitouch_device.stop)
+        logger.info("minitouch restarted.")
 
     @classmethod
     def start_keepalive(cls):
@@ -1770,7 +1796,30 @@ class Input_Handler:
         elif isinstance(pointer, (list, tuple)):
             for p in pointer:
                 builder.down(p, x, y, 100)
-        builder.publish(ADB_Manager.minitouch_device.connection)
+        cls._publish(builder)
+
+    @classmethod
+    def _publish(cls, builder):
+        """Send touch commands; if the minitouch socket died, restart minitouch once and resend."""
+        content = builder._content
+        try:
+            builder.publish(ADB_Manager.minitouch_device.connection)
+        except (OSError, ConnectionError, BrokenPipeError) as e:
+            builder.reset()
+            logger.warning(f"Touch connection lost ({type(e).__name__}), restarting minitouch")
+            ADB_Manager.reset_minitouch()
+            ADB_Manager.minitouch_device.connection.send(content + "c\n")
+
+    @classmethod
+    def move(cls, x, y, pointer=0):
+        """Move a finger that is already down (drag)."""
+        from pyminitouch import CommandBuilder
+        if x < 0: x = 1 + x
+        if y < 0: y = 1 + y
+        x, y = cls._to_raw(x, y)
+        builder = CommandBuilder()
+        builder.move(pointer, x, y, 100)
+        cls._publish(builder)
 
     @classmethod
     def up(cls, pointer=0):
@@ -1781,7 +1830,7 @@ class Input_Handler:
         elif isinstance(pointer, (list, tuple)):
             for p in pointer:
                 builder.up(p)
-        builder.publish(ADB_Manager.minitouch_device.connection)
+        cls._publish(builder)
 
     @classmethod
     def click(cls, x, y, n=1, delay=0, pointer=0):
@@ -1795,7 +1844,7 @@ class Input_Handler:
             builder.down(pointer, x, y, 100)
             builder.commit()
             builder.up(pointer)
-            builder.publish(ADB_Manager.minitouch_device.connection)
+            cls._publish(builder)
             time.sleep(delay)
 
     @classmethod
@@ -1826,14 +1875,14 @@ class Input_Handler:
         dt = duration / (inter_points + 1)
         
         builder.down(pointer, x1, y1, pressure=100)
-        builder.publish(ADB_Manager.minitouch_device.connection)
+        cls._publish(builder)
         for x, y in zip(x_points, y_points):
             builder.move(pointer, x, y, pressure=100)
-            builder.publish(ADB_Manager.minitouch_device.connection)
+            cls._publish(builder)
             if dt > 0: time.sleep(dt / 1000)
         if hold_end_time > 0: time.sleep(hold_end_time / 1000)
         builder.up(pointer)
-        builder.publish(ADB_Manager.minitouch_device.connection)
+        cls._publish(builder)
 
     @classmethod
     def swipe_up(cls, y1=1.0, y2=0.0, x=1.0, **kwargs):
@@ -1867,14 +1916,14 @@ class Input_Handler:
         
         builder.down(0, *start[0], pressure=100)
         builder.down(1, *start[1], pressure=100)
-        builder.publish(ADB_Manager.minitouch_device.connection)
+        cls._publish(builder)
         builder.move(0, *end[0], pressure=100)
         builder.move(1, *end[1], pressure=100)
         builder.commit()
-        builder.publish(ADB_Manager.minitouch_device.connection)
+        cls._publish(builder)
         builder.up(0)
         builder.up(1)
-        builder.publish(ADB_Manager.minitouch_device.connection)
+        cls._publish(builder)
 
 class Frame_Handler:
     pool = None

@@ -88,6 +88,7 @@ def summary(id):
         "resources_time": latest_res["t"] if latest_res else None,
         "recent_attacks": list(reversed(attacks[-50:])),
         "recent_upgrades": list(reversed(upgrades[-50:])),
+        "strategies": strategy_scores(events),
         "errors": sum(1 for e in session if e["type"] == "error"),
         "warnings": sum(1 for e in session if e["type"] == "warning"),
     }
@@ -97,3 +98,31 @@ def problems(id, limit=150):
     events = read(id)
     cut = max((i for i, e in enumerate(events) if e["type"] == "errors_cleared"), default=-1)
     return list(reversed([e for e in events[cut + 1:] if e["type"] in ("error", "warning")][-limit:]))
+
+def strategy_scores(events):
+    """What the bot has learned: average loot per deployment strategy (all sessions)."""
+    out = {}
+    for e in events:
+        if e["type"] != "attack" or e.get("base") != "home" or not e.get("strategy"): continue
+        d = out.setdefault(e["strategy"], {"attacks": 0, "gold": 0, "elixir": 0, "dark": 0})
+        d["attacks"] += 1
+        for k in ("gold", "elixir", "dark"): d[k] += int(e.get(k) or 0)
+    for d in out.values():
+        for k in ("gold", "elixir", "dark"): d[k] //= max(1, d["attacks"])
+    return out
+
+def error_groups(id, since=0):
+    """Errors grouped by message (numbers stripped), most frequent first."""
+    import re
+    groups = {}
+    for e in read(id, since):
+        if e["type"] not in ("error", "warning"): continue
+        key = re.sub(r"\d+", "#", e.get("message", ""))[:160]
+        g = groups.setdefault(key, {"message": e.get("message", ""), "type": e["type"], "count": 0, "phases": set(),
+                                    "where": e.get("where", ""), "detail": e.get("detail", ""), "last": 0})
+        g["count"] += 1
+        g["phases"].add(e.get("phase", ""))
+        g["last"] = max(g["last"], e["t"])
+    out = sorted(groups.values(), key=lambda g: -g["count"])
+    for g in out: g["phases"] = sorted(p for p in g["phases"] if p)
+    return out
