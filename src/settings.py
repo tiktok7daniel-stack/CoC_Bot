@@ -85,6 +85,8 @@ def default_settings():
             },
             "battle_end": "wait",    # "wait" (game stays open) | "restart" (reopen game, faster)
             "surrender_after": 0,    # seconds after deployment to end the battle early (0 = wait for the end)
+            "smart_end": True,       # end the battle when the enemy loot stops going down
+            "smart_end_after": 15,   # ... for this many seconds
         },
         "limits": {
             "max_attacks": 0,        # stop after this many attacks in the session (0 = no limit)

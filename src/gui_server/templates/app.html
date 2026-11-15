@@ -567,6 +567,8 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
       <div class="card-b">
         <div class="row"><div class="lbl"><span data-t="battle_end"></span><small data-t="battle_end_hint"></small></div>
           <select class="in" data-bind="attack.battle_end"><option value="wait" data-t="be_wait"></option><option value="restart" data-t="be_restart"></option></select></div>
+        <div class="row"><div class="lbl"><span data-t="smart_end"></span><small data-t="smart_end_sub"></small></div><label class="sw"><input type="checkbox" data-bind="attack.smart_end"><span></span></label></div>
+        <div class="row"><div class="lbl"><span data-t="smart_end_after"></span><small data-t="smart_end_after_sub"></small></div><input class="in" type="number" min="5" step="5" data-bind="attack.smart_end_after" data-type="int"><span class="unit" data-t="seconds"></span></div>
         <div class="row"><div class="lbl"><span data-t="surrender_after"></span><small data-t="surrender_after_sub"></small></div><input class="in" type="number" min="0" step="5" data-bind="attack.surrender_after" data-type="int"><span class="unit" data-t="seconds"></span></div>
       </div>
     </div>
@@ -1019,6 +1021,8 @@ ar:{
  run_now:"شغّل دورة الآن", run_now_t:"البوت هيبدأ دورة دلوقتي", saving:"جاري الحفظ…", auto_saved:"اتحفظ تلقائيًا",
  keep_open:"خلّي اللعبة مفتوحة", keep_open_sub:"البوت مش هيقفل اللعبة بعد كل دورة، ولو لقاها مفتوحة هيكمّل عليها من غير ما يعيد تشغيلها", apply_instantly:"طبّق التغييرات فورًا", apply_instantly_sub:"لما تغيّر أي إعداد والبوت مستني، يبدأ دورة جديدة بعد ثواني",
  battle_end_title:"إنهاء الهجوم", battle_end_sub:"إزاي البوت يخلّص المعركة بعد ما ينزّل الجيش", battle_end:"طريقة إنهاء المعركة", battle_end_hint:"الانتظار بيخلّي اللعبة مفتوحة. إعادة التشغيل أسرع بس اللعبة بتتقفل وتتفتح",
+ smart_end:"إنهاء ذكي للمعركة ⚡", smart_end_sub:"لما اللوت المتبقي يبطّل ينزل، البوت ينهي المعركة على طول — اللوت اللي اتجمع بيفضل ليك وبيوفّر دقيقة أو أكتر في كل هجمة",
+ smart_end_after:"ينهيها لو اللوت وقف لمدة", smart_end_after_sub:"كل ما تقلّ أسرع، بس ممكن ينهيها قبل ما الوحوش توصل لمخزن بعيد (15 مناسب)",
  be_wait:"انتظار نهاية المعركة (اللعبة تفضل مفتوحة)", be_restart:"إعادة تشغيل اللعبة (أسرع)", surrender_after:"إنهاء المعركة بعد", surrender_after_sub:"يدوس End Battle بعد الوقت ده عشان يوفّر وقت (0 = يستنى للآخر)",
  saved:"تم حفظ الإعدادات ✓", save_err:"فشل الحفظ", started:"تم تشغيل البوت", stopped_t:"تم إيقاف البوت", paused_t:"تم الإيقاف المؤقت", resumed:"تم الاستئناف", need_running:"شغّل البوت الأول",
  confirm_remove:"حذف الحساب من القائمة؟ (الإعدادات والنتائج هتفضل محفوظة)", confirm_reset:"تصفير نتائج الجلسة؟", copied:"تم النسخ", added:"تمت الإضافة — احفظ الإعدادات", invalid_name:"اسم غير صالح (حروف إنجليزي وأرقام و - _ فقط)",
@@ -1166,6 +1170,8 @@ en:{
  run_now:"Run cycle now", run_now_t:"The bot will start a cycle now", saving:"Saving…", auto_saved:"Saved automatically",
  keep_open:"Keep the game open", keep_open_sub:"Don't close the game after each cycle; if it's already open in a village, continue without restarting it", apply_instantly:"Apply changes instantly", apply_instantly_sub:"When you change a setting while the bot waits, a new cycle starts within seconds",
  battle_end_title:"Ending the battle", battle_end_sub:"How the bot finishes a battle after deploying", battle_end:"Battle end method", battle_end_hint:"Waiting keeps the game open. Restarting is faster but closes and reopens the game",
+ smart_end:"Smart battle end ⚡", smart_end_sub:"Ends the battle as soon as the remaining loot stops going down — you keep the loot and save a minute or more per attack",
+ smart_end_after:"End when loot is unchanged for", smart_end_after_sub:"Lower is faster but may end before troops reach a far storage (15 is good)",
  be_wait:"Wait for the battle to end (game stays open)", be_restart:"Restart the game (faster)", surrender_after:"End the battle after", surrender_after_sub:"Presses End Battle after this time to save time (0 = wait until the end)",
  saved:"Settings saved ✓", save_err:"Save failed", started:"Bot started", stopped_t:"Bot stopped", paused_t:"Paused", resumed:"Resumed", need_running:"Start the bot first",
  confirm_remove:"Remove this account from the list? (settings and results are kept)", confirm_reset:"Reset session results?", copied:"Copied", added:"Added — save settings", invalid_name:"Invalid name (English letters, digits, - _ only)",
@@ -1190,6 +1196,7 @@ const LOG_AR = [
  [/^Pre-flight: touch ready/, "✓ الضغط على الشاشة جاهز"],
  [/^Pre-flight check passed.*/, "✅ الفحص خلص: كل حاجة جاهزة — البوت بيبدأ"],
  [/^Pre-flight problem: (.*)/, "❌ مشكلة: $1"],
+ [/^Loot stopped for (\d+)s, ending the battle early/, "⚡ اللوت وقف $1 ثانية — البوت أنهى المعركة بدري عشان يوفّر وقت"],
  [/^Bot starting: preparing the emulator/, "🚀 البوت بيبدأ: بيجهّز المحاكي…"],
  [/^Emulator already running, using it/, "✓ المحاكي شغال أصلًا — هيستخدمه زي ما هو"],
  [/^Starting the emulator…/, "بيشغّل المحاكي…"],

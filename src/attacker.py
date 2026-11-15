@@ -21,6 +21,8 @@ class Attacker:
         self.hero_retap = 0        # seconds after deploying to fire hero abilities (0 = off)
         self.battle_end = "wait"    # "wait": stay in game until the battle ends | "restart": reopen the game (faster)
         self.surrender_after = 0    # seconds after deployment to end the battle early (0 = never)
+        self.smart_end = True       # end the battle once the enemy loot stops going down
+        self.smart_end_after = 15   # seconds without loot change before ending
 
     def in_battle(self):
         """End Battle / Surrender button visible = the battle is still running."""
@@ -43,10 +45,35 @@ class Attacker:
             else: stop_coc(reason="battle end mode = restart")
             return
 
+        import teach
         start = time.monotonic()
         surrendered = False
+        smart = self.smart_end and teach.taught("enemy_gold") and teach.taught("enemy_elixir")
+        last_loot, last_change, next_read, dropped = None, time.monotonic(), 0, False
         while time.monotonic() - start < max_wait:
             if not running(): break
+            # smart end: the remaining enemy loot (top-left) stopped going down -> nothing more to take
+            if smart and not surrendered and time.monotonic() >= next_read:
+                next_read = time.monotonic() + 2.5
+                try:
+                    frame = Frame_Handler.get_frame(grayscale=False)
+                    vals = [read_taught_number(k, frame) for k in ("enemy_gold", "enemy_elixir")]
+                except Exception:
+                    vals = [None, None]
+                if all(v is not None for v in vals):
+                    if last_loot is None or any(v < o for v, o in zip(vals, last_loot)):
+                        if last_loot is not None: dropped = True # troops are taking loot
+                        last_change = time.monotonic()
+                    last_loot = [v if o is None else min(v, o) for v, o in zip(vals, last_loot or [None, None])]
+                # only after the loot went down at least once (troops still walking in is not "stopped"),
+                # or when nothing at all was taken for 45 seconds
+                stalled = time.monotonic() - last_change > (self.smart_end_after if dropped else max(45, self.smart_end_after))
+                if last_loot is not None and stalled and self.in_battle():
+                    logger.info(f"Loot stopped for {self.smart_end_after}s, ending the battle early")
+                    if self._click_end_battle(timeout=0) or Auto_Learn.learn_button("end_battle", tap=True):
+                        time.sleep(0.7)
+                        if not self._click_okay(timeout=3): Auto_Learn.learn_button("okay_button", tap=True, min_interval=0)
+                        surrendered = True
             # results screen -> back to the village
             if self._click_return_home(timeout=0):
                 time.sleep(2)
@@ -227,9 +254,14 @@ class Attacker:
         need = {"gold": int(f.get("min_gold", 0)), "elixir": int(f.get("min_elixir", 0)), "dark": int(f.get("min_dark", 0))}
         for skip in range(max(0, int(f.get("max_skips", 30))) + 1):
             if not running(): return False
-            time.sleep(0.8) # loot numbers count up for a moment
-            frame = Frame_Handler.get_frame(grayscale=False)
-            loot = {k: read_taught_number(f"enemy_{k}", frame) for k in need}
+            # loot numbers count up for a moment: read until two reads agree (max ~1.6 s)
+            loot, prev = None, None
+            for _ in range(6):
+                frame = Frame_Handler.get_frame(grayscale=False)
+                loot = {k: read_taught_number(f"enemy_{k}", frame) for k in need}
+                if prev == loot and any(v for v in loot.values()): break
+                prev = loot
+                time.sleep(0.25)
             checks = [(loot[k] or 0) >= v for k, v in need.items() if v > 0 and (k != "dark" or teach.taught("enemy_dark"))]
             ok = (all(checks) if f.get("mode", "all") == "all" else any(checks)) if checks else True
             logger.info(f"Base loot: gold={loot['gold']} elixir={loot['elixir']} dark={loot['dark']} -> {'attack' if ok else 'next'}")
@@ -239,7 +271,7 @@ class Attacker:
             if not tap_taught("next_button", timeout=2) and not Auto_Learn.learn_button("next_button", tap=True, min_interval=0):
                 logger.warning("Next button not found, attacking this base")
                 return True
-            time.sleep(1.5)
+            time.sleep(0.6) # clouds; wait_for_base below waits for the next village
             if not self.wait_for_base(20): return False
         logger.info("No base passed the loot filter, attacking the last one")
         return True
