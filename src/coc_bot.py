@@ -14,6 +14,7 @@ class CoC_Bot:
     def run(self):
         import time
         
+        consecutive_errors = 0
         while True:
             try:
                 if not online():
@@ -27,6 +28,7 @@ class CoC_Bot:
                 started, res = start_coc(detailed=True)
                 if started:
                     update_status("now")
+                    cycle_start = time.monotonic()
                     
                     Task_Handler.get_exclusions()
                     exclude_home_base = Task_Handler.excluded("home_base", use_cached=True)
@@ -66,14 +68,23 @@ class CoC_Bot:
                     to_home_base()
                     stop_coc(sleep=configs.SUSPEND_EMULATOR_ON_IDLE)
                     update_status(time.time())
+                    logger.info(f"Cycle finished in {time.monotonic() - cycle_start:.0f}s")
+                    consecutive_errors = 0
                 elif res == "error":
                     update_status("error")
                 
                 time.sleep(60 * CHECK_INTERVAL)
             
             except (KeyboardInterrupt, SystemExit): raise
-            except Exception:
-                logger.exception("CoC_Bot.run:")
-                stop_coc()
+            except Exception as e:
+                consecutive_errors += 1
+                logger.exception(f"CoC_Bot.run (error #{consecutive_errors} in a row):")
+                if consecutive_errors == 3:
+                    send_notification(f"Bot failed 3 times in a row, last error: {type(e).__name__}: {e}")
+                try: stop_coc()
+                except (KeyboardInterrupt, SystemExit): raise
+                except Exception: logger.exception("CoC_Bot.run: stop_coc failed")
                 update_status("error")
-                time.sleep(60 * CHECK_INTERVAL)
+                # retry quickly after a one-off glitch, back off when something is persistently broken
+                wait = 60 if consecutive_errors == 1 else 60 * CHECK_INTERVAL * min(consecutive_errors - 1, 6)
+                time.sleep(wait)

@@ -35,7 +35,13 @@ def parse_args(debug=None, id=None, gui=None, gui_port=None):
     parser.add_argument("--id", type=str, default=None, help="Instance ID")
     parser.add_argument("--gui", action="store_true", default=configs.LOCAL_GUI, help="Run with GUI")
     parser.add_argument("--gui-port", type=int, default=None, help="GUI port")
+    parser.add_argument("--ids", type=str, nargs="+", default=None, help="Run several instances (accounts) in parallel")
+    parser.add_argument("--all", action="store_true", help="Run every instance in INSTANCE_IDS in parallel")
     args = parser.parse_args()
+    if args.all: args.ids = list(configs.INSTANCE_IDS)
+    if args.ids is not None:
+        for i in args.ids:
+            assert i in configs.INSTANCE_IDS, f"Invalid instance ID {i}. Must be one of: {configs.INSTANCE_IDS}"
     configs.DEBUG = args.debug if debug is None else debug
     configs.LOCAL_GUI = args.gui if gui is None else gui
     TEMP_CACHE["gui_port"] = args.gui_port if gui_port is None else gui_port
@@ -725,34 +731,68 @@ class Scheduler:
     add_job = scheduler.add_job
 
 class Disk_Cache(collections.UserDict):
+    """
+    JSON cache shared by every bot process (one per account/instance).
+    Each process only writes back the keys it changed, merged into the latest
+    on-disk contents, so parallel instances never overwrite each other's data.
+    Writes are atomic (temp file + replace) so a crash can't corrupt the file.
+    """
     def __init__(self, path):
+        import threading
         super().__init__()
-        self.path = path
+        self.path = Path(path)
+        self.lock_path = self.path.with_name(self.path.name + ".lock")
+        self._dirty = set()
+        self._mutex = threading.Lock()
         self.load_cache()
         Exit_Handler.register(self.save_cache)
-    
+
     def __setitem__(self, key, value):
         from datetime import datetime, timedelta
         super().__setitem__(key, value)
-        Scheduler.add_job(
-            self.save_cache,
-            trigger="date",
-            run_date=datetime.now() + timedelta(seconds=10),
-            id="save_cache",
-            replace_existing=True
-        )
+        if hasattr(self, "_dirty"):
+            self._dirty.add(key)
+            Scheduler.add_job(
+                self.save_cache,
+                trigger="date",
+                run_date=datetime.now() + timedelta(seconds=10),
+                id="save_cache",
+                replace_existing=True
+            )
+
+    def _read_disk(self):
+        import json
+        if not self.path.exists(): return {}
+        try:
+            with open(self.path, "r") as f:
+                return json.load(f)
+        except (ValueError, OSError):
+            logger.warning("Disk_Cache: cache file unreadable, ignoring it")
+            return {}
 
     def load_cache(self):
-        import json, portalocker
-        if self.path.exists():
-            with portalocker.Lock(self.path, "r", timeout=5) as f:
-                self.update(json.load(f))
+        import portalocker
+        with portalocker.Lock(self.lock_path, "a", timeout=10):
+            self.data.update(self._read_disk())
         return self.data
 
     def save_cache(self):
-        import json, portalocker
-        with portalocker.Lock(self.path, "w", timeout=5) as f:
-            json.dump(self.data, f, indent=4)
+        import json, os, portalocker
+        with self._mutex:
+            if not self._dirty: return
+            dirty = set(self._dirty)
+            with portalocker.Lock(self.lock_path, "a", timeout=10):
+                merged = self._read_disk()
+                for key in dirty:
+                    if key in self.data: merged[key] = self.data[key]
+                tmp_path = self.path.with_name(f"{self.path.name}.{os.getpid()}.tmp")
+                with open(tmp_path, "w") as f:
+                    json.dump(merged, f, indent=4)
+                os.replace(tmp_path, self.path)
+            # pick up keys other instances wrote in the meantime
+            for key, value in merged.items():
+                if key not in self._dirty: self.data[key] = value
+            self._dirty -= dirty
 
 Cache_Manager = Disk_Cache(CACHE_PATH)
 
@@ -1122,7 +1162,7 @@ class Task_Handler:
     task_defaults = {
         "home_base_priority": "PRIORITY_HOME_BASE_UPGRADES",
         "home_lab_priority": "PRIORITY_HOME_LAB_UPGRADES",
-        "pet_house_priority": "PRIORITY_PETS_UPGRADES",
+        "pet_house_priority": "PRIORITY_PET_UPGRADES",
         "builder_base_priority": "PRIORITY_BUILDER_BASE_UPGRADES",
         "builder_lab_priority": "PRIORITY_BUILDER_LAB_UPGRADES",
         "heroes": "UPGRADE_HEROES",
@@ -1216,10 +1256,13 @@ class OCR_Handler:
         import cv2, base64
         from groq import Groq
         
-        base64_img = base64.b64encode(cv2.imencode(".jpg", frame)[1]).decode("utf-8")
-        client = Groq(api_key=configs.GROQ_API_KEY, timeout=10, max_retries=0)
-        chat_completion = client.chat.completions.create(
+        # PNG is lossless: JPEG artifacts around thin game-font digits cause misreads
+        base64_img = base64.b64encode(cv2.imencode(".png", frame)[1]).decode("utf-8")
+        if getattr(cls, "groq_client", None) is None:
+            cls.groq_client = Groq(api_key=configs.GROQ_API_KEY, timeout=10, max_retries=0)
+        chat_completion = cls.groq_client.chat.completions.create(
             model="meta-llama/llama-4-scout-17b-16e-instruct",
+            temperature=0,
             messages=[
                 {
                     "role": "user",
@@ -1228,7 +1271,7 @@ class OCR_Handler:
                         {
                             "type": "image_url",
                             "image_url": {
-                                "url": f"data:image/jpg;base64,{base64_img}",
+                                "url": f"data:image/png;base64,{base64_img}",
                             },
                         },
                     ],
@@ -1397,9 +1440,16 @@ class ADB_Manager:
         pyminitouch.connection._ADB = adb_executable
         # if cls.is_connected(): return
         subprocess.run([adb_executable, "start-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        def reset_adb():
+            # Killing the shared adb server would drop every other running instance,
+            # so with multiple accounts only this instance's device is disconnected.
+            if len(configs.INSTANCE_IDS) > 1:
+                subprocess.run([adb_executable, "disconnect", addr], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            else:
+                subprocess.run([adb_executable, "kill-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         res = adbutils.adb.connect(addr)
         if "connected" not in res:
-            subprocess.run([adb_executable, "kill-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            reset_adb()
             raise Exception("Failed to connect to ADB.")
         devices = []
         try:
@@ -1410,7 +1460,7 @@ class ADB_Manager:
             Exit_Handler.register(d2.stop)
         except (KeyboardInterrupt, SystemExit): raise
         except:
-            subprocess.run([adb_executable, "kill-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            reset_adb()
             raise Exception("Failed to get ADB device.")
         cls._adbutils_device, cls._minitouch_device, cls._uiautomator_device = devices
     
@@ -1485,7 +1535,7 @@ class Input_Handler:
         if isinstance(pointer, int):
             builder.down(pointer, x, y, 100)
         elif isinstance(pointer, (list, tuple)):
-            for p in enumerate(pointer):
+            for p in pointer:
                 builder.down(p, x, y, 100)
         builder.publish(ADB_Manager.minitouch_device.connection)
 
@@ -1496,7 +1546,7 @@ class Input_Handler:
         if isinstance(pointer, int):
             builder.up(pointer)
         elif isinstance(pointer, (list, tuple)):
-            for p in enumerate(pointer):
+            for p in pointer:
                 builder.up(p)
         builder.publish(ADB_Manager.minitouch_device.connection)
 
@@ -1646,7 +1696,8 @@ class Frame_Handler:
             except (KeyboardInterrupt, SystemExit): raise
             except: frame = ADB_Manager.adbutils_device.screenshot()
             frame = np.array(frame)[..., :3]
-            frame = cv2.resize(frame, WINDOW_DIMS, interpolation=cv2.INTER_NEAREST)
+            if (frame.shape[1], frame.shape[0]) != tuple(WINDOW_DIMS):
+                frame = cv2.resize(frame, WINDOW_DIMS, interpolation=cv2.INTER_NEAREST)
             cls.cached_frame = frame.copy()
         # if configs.DEBUG: cls.save_frame(frame, "frame.png")
         if high_contrast: frame = cls.high_contrast(frame, thresh)

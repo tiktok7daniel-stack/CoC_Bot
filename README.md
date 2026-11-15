@@ -106,6 +106,7 @@
     > 💡 __Tip__: If not using the bot for development purposes, it can be built into an executable or desktop app for convenience using [build.sh](scripts/build.sh). The desktop app GUI or command-line arguments can be used to specify the instance to run if using multiple bot instances. View a demo of the desktop app [here](#desktop-app-demo).
 
     * To run bots for multiple accounts just create additional instances with your emulator's multi-instance manager (ensuring instance names match bot instance IDs), set up the instance as usual, and append new instance names to `INSTANCE_IDS` in `configs.py`. Specify the instance to run using the `--id` flag (e.g. `python src/main.py --id main`).
+    * To run several accounts **at the same time**, use `--all` (every ID in `INSTANCE_IDS`) or `--ids` (e.g. `python src/main.py --ids main alt1`). Each account runs in its own process, launches are staggered by `MULTI_INSTANCE_STAGGER` seconds, and a crashed instance is restarted automatically with increasing delays.
 
 ## Miscellaneous
 * Please report issues in the [Issues Tab](https://github.com/m24842/CoC_Bot/issues)

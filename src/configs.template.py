@@ -13,8 +13,9 @@ TELEGRAM_BOT_TOKEN = "" # (e.g. 123456789:ABCdefGHIjkl-MNO_pqrSTUvwxYZ)
 GROQ_API_KEY = ""
 
 # REQUIRED: Instance Settings
-INSTANCE_IDS = ["main"]
+INSTANCE_IDS = ["main"] # one ID per account/emulator instance (e.g. ["main", "alt1", "alt2"])
 DEFAULT_INSTANCE_ID = INSTANCE_IDS[0]
+MULTI_INSTANCE_STAGGER = 20 # seconds between starting instances when running several at once (--all / --ids)
 
 # REQUIRED: General Settings
 LOCAL_GUI = True # web app not required
