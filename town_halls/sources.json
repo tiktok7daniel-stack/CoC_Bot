@@ -1,0 +1,95 @@
+{
+  "note": "Supercell game artwork; display-only normal Town Hall level, not weapon sublevel. Not vision templates.",
+  "images": [
+    {
+      "level": 1,
+      "source": "https://raw.githubusercontent.com/chiefpansancolt/clash-of-clans-data/aaa517aae76f3d8dbc88448f1a2c13cd8808569b/images/home/town-hall/normal/level-1.png",
+      "source_sha256": "f655f8b2bdb4138fb3b56c614c0dcd9abb7d5cdc0c44a4cf445c34ef7e8d3814"
+    },
+    {
+      "level": 2,
+      "source": "https://raw.githubusercontent.com/chiefpansancolt/clash-of-clans-data/aaa517aae76f3d8dbc88448f1a2c13cd8808569b/images/home/town-hall/normal/level-2.png",
+      "source_sha256": "0a32280421270dfd31a08dc60af564870db17a12618a80e114b3c8149f759b49"
+    },
+    {
+      "level": 3,
+      "source": "https://raw.githubusercontent.com/chiefpansancolt/clash-of-clans-data/aaa517aae76f3d8dbc88448f1a2c13cd8808569b/images/home/town-hall/normal/level-3.png",
+      "source_sha256": "12dd01e9b61192eda9071b0962e9bee29116397225371a1dc349154d868fcc95"
+    },
+    {
+      "level": 4,
+      "source": "https://raw.githubusercontent.com/chiefpansancolt/clash-of-clans-data/aaa517aae76f3d8dbc88448f1a2c13cd8808569b/images/home/town-hall/normal/level-4.png",
+      "source_sha256": "d536acd4a6d1b658e0654518257ee90fb7e797e3dc11781fb198c5e272904e52"
+    },
+    {
+      "level": 5,
+      "source": "https://raw.githubusercontent.com/chiefpansancolt/clash-of-clans-data/aaa517aae76f3d8dbc88448f1a2c13cd8808569b/images/home/town-hall/normal/level-5.png",
+      "source_sha256": "cd342c4b64f59c3f67aabbe14a3e3106cf2047f2d6b37c8bde5c06be9c4ba343"
+    },
+    {
+      "level": 6,
+      "source": "https://raw.githubusercontent.com/chiefpansancolt/clash-of-clans-data/aaa517aae76f3d8dbc88448f1a2c13cd8808569b/images/home/town-hall/normal/level-6.png",
+      "source_sha256": "2ba9252049000cb10c72ca141695ecfeb6bf435bd07b56ef7bb60a9def297ac4"
+    },
+    {
+      "level": 7,
+      "source": "https://raw.githubusercontent.com/chiefpansancolt/clash-of-clans-data/aaa517aae76f3d8dbc88448f1a2c13cd8808569b/images/home/town-hall/normal/level-7.png",
+      "source_sha256": "ff2e07cfad8047ee68617a85233906c16328c4b9175499f36875079da22b277e"
+    },
+    {
+      "level": 8,
+      "source": "https://raw.githubusercontent.com/chiefpansancolt/clash-of-clans-data/aaa517aae76f3d8dbc88448f1a2c13cd8808569b/images/home/town-hall/normal/level-8.png",
+      "source_sha256": "ce7f9e2dce87cda29fdda0bcf429c0502627189e275b82baf22c03d192d37ad1"
+    },
+    {
+      "level": 9,
+      "source": "https://raw.githubusercontent.com/chiefpansancolt/clash-of-clans-data/aaa517aae76f3d8dbc88448f1a2c13cd8808569b/images/home/town-hall/normal/level-9.png",
+      "source_sha256": "b7d5a2bbc671e5768701b8d07e8ca07d1373adf6def37c8b9e83bb8a93a8e708"
+    },
+    {
+      "level": 10,
+      "source": "https://raw.githubusercontent.com/chiefpansancolt/clash-of-clans-data/aaa517aae76f3d8dbc88448f1a2c13cd8808569b/images/home/town-hall/normal/level-10.png",
+      "source_sha256": "30a87d885597eb28e4c5bc6f249b4cd3671e749e3f5102af188623252014fe75"
+    },
+    {
+      "level": 11,
+      "source": "https://raw.githubusercontent.com/chiefpansancolt/clash-of-clans-data/aaa517aae76f3d8dbc88448f1a2c13cd8808569b/images/home/town-hall/normal/level-11.png",
+      "source_sha256": "425319f15c893c784a31967b75f6ae40c0fe218790bd465fea231f4634ca4606"
+    },
+    {
+      "level": 12,
+      "source": "https://raw.githubusercontent.com/chiefpansancolt/clash-of-clans-data/aaa517aae76f3d8dbc88448f1a2c13cd8808569b/images/home/town-hall/normal/level-12.png",
+      "source_sha256": "2b71302c89dd1f552151fa759c334188a6be189f905b770acf7452366414eb2b"
+    },
+    {
+      "level": 13,
+      "source": "https://raw.githubusercontent.com/chiefpansancolt/clash-of-clans-data/aaa517aae76f3d8dbc88448f1a2c13cd8808569b/images/home/town-hall/normal/level-13.png",
+      "source_sha256": "883798e79b5805cfa0266f36ed9c1a2446388bc5031de9afe5a774214bf17a39"
+    },
+    {
+      "level": 14,
+      "source": "https://raw.githubusercontent.com/chiefpansancolt/clash-of-clans-data/aaa517aae76f3d8dbc88448f1a2c13cd8808569b/images/home/town-hall/normal/level-14.png",
+      "source_sha256": "fce4ee0478474aa87624ed6ab387a28510cf6750e083b11a4ec6e70db5fe2252"
+    },
+    {
+      "level": 15,
+      "source": "https://raw.githubusercontent.com/chiefpansancolt/clash-of-clans-data/aaa517aae76f3d8dbc88448f1a2c13cd8808569b/images/home/town-hall/normal/level-15.png",
+      "source_sha256": "a93c71fedc413ff46c7e87b6a65ee2a9e3d985e9372f782bac76fec48294307c"
+    },
+    {
+      "level": 16,
+      "source": "https://raw.githubusercontent.com/chiefpansancolt/clash-of-clans-data/aaa517aae76f3d8dbc88448f1a2c13cd8808569b/images/home/town-hall/normal/level-16.png",
+      "source_sha256": "6b3bf3dfa09e6ab7a6dae0b6b975e3db177acd69987dec0665e8402c7f9ae851"
+    },
+    {
+      "level": 17,
+      "source": "https://raw.githubusercontent.com/chiefpansancolt/clash-of-clans-data/aaa517aae76f3d8dbc88448f1a2c13cd8808569b/images/home/town-hall/normal/level-17.png",
+      "source_sha256": "c120b8fd11df85c228221fbb82c6e11d541461cdc1496ac67949a86deaa9d93f"
+    },
+    {
+      "level": 18,
+      "source": "https://raw.githubusercontent.com/chiefpansancolt/clash-of-clans-data/aaa517aae76f3d8dbc88448f1a2c13cd8808569b/images/home/town-hall/normal/level-18.png",
+      "source_sha256": "7bb54ffa1534632ad4d060a0457aa9f5daf537f2ff99dccdc0e94fc3a2e2690a"
+    }
+  ]
+}
