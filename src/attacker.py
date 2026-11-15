@@ -19,6 +19,14 @@ class Attacker:
         self.battle_end = "wait"    # "wait": stay in game until the battle ends | "restart": reopen the game (faster)
         self.surrender_after = 0    # seconds after deployment to end the battle early (0 = never)
 
+    def in_battle(self):
+        """End Battle / Surrender button visible = the battle is still running."""
+        if find_taught("end_battle"): return True
+        x, y = Frame_Handler.locate(self.assets["end_battle"], thresh=0.9)
+        if x is not None: return True
+        x, y = Frame_Handler.locate(self.assets["surrender"], thresh=0.9, use_cached=True)
+        return x is not None
+
     def finish_battle(self, restart=True, max_wait=200):
         """
         End the battle after all troops are deployed.
@@ -49,8 +57,9 @@ class Attacker:
                     time.sleep(0.7)
                     if not self._click_okay(timeout=3): Auto_Learn.learn_button("okay_button", tap=True, min_interval=0)
                     surrendered = True
-            # results screen not recognised yet -> find "Return Home" by its text and learn it
-            if time.monotonic() - start > 25 and Auto_Learn.learn_button("return_home", tap=True, min_interval=12):
+            # results screen not recognised yet -> once the battle is over (no End Battle button),
+            # find "Return Home" by its text and learn it
+            if time.monotonic() - start > 15 and not self.in_battle() and Auto_Learn.learn_button("return_home", tap=True, min_interval=12):
                 time.sleep(2)
                 for _ in range(10):
                     if game_ready(): return

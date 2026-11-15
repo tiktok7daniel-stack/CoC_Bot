@@ -284,8 +284,12 @@ def get_vocab():
     except:
         return Cache_Manager.get("vocab", {})
 
-    branch = repo.get_branch(repo.default_branch)
-    tree = repo.get_git_tree(branch.commit.sha, recursive=True)
+    try:
+        branch = repo.get_branch(repo.default_branch)
+        tree = repo.get_git_tree(branch.commit.sha, recursive=True)
+    except (KeyboardInterrupt, SystemExit): raise
+    except Exception: # rate limit / offline: keep the saved list
+        return Cache_Manager.get("vocab", {})
 
     file_structure = [element.path for element in tree.tree]
 
@@ -303,16 +307,48 @@ def get_vocab():
     
     return data
 
+VOCAB_DIRS = ["buildings/builder-base", "buildings/home-village", "buildings/seasonal-defense", "traps/builder-base",
+              "traps/home-village", "troops", "spells", "heroes", "guardians", "pets"]
+_vocab_refreshing = {"busy": False}
+
+def _refresh_vocab():
+    import time
+    try:
+        data = get_vocab()
+        if data and any(data.values()):
+            Cache_Manager["vocab_time"] = time.time()
+            return data
+    except (KeyboardInterrupt, SystemExit): raise
+    except Exception:
+        pass
+    finally:
+        _vocab_refreshing["busy"] = False
+    return None
+
+def vocab():
+    """
+    Building / troop / hero names (kept up to date with new Town Halls from the ClashKing assets list).
+    Uses the saved copy; refreshes from GitHub at most once a day, in the background.
+    """
+    import time, threading
+    data = Cache_Manager.get("vocab")
+    if not data:
+        data = _refresh_vocab() or {}
+    elif time.time() - Cache_Manager.get("vocab_time", 0) > 86400 and not _vocab_refreshing["busy"]:
+        _vocab_refreshing["busy"] = True
+        threading.Thread(target=_refresh_vocab, daemon=True).start()
+    return {d: data.get(d, []) for d in VOCAB_DIRS} | {k: v for k, v in data.items() if k not in VOCAB_DIRS}
+
 def get_vocab_in_categories(categories):
-    vocab = Cache_Manager.get("vocab", get_vocab())
+    names = vocab()
     if isinstance(categories, str):
         categories = [categories]
     out = []
     if "all" in categories:
-        for cat in vocab: out.extend(vocab[cat])
+        for cat in names: out.extend(names[cat])
     else:
         for cat in categories:
-            if cat in vocab: out.extend(vocab[cat])
+            if cat in names: out.extend(names[cat])
     return out
 
 def spell_check(text, vocab_categories=["all"], phrase_level=False, cutoff=70):
@@ -367,16 +403,28 @@ def to_int_array(*args):
     import numpy as np
     return np.array(list(map(int, args)))
 
+@lru_cache(maxsize=64)
+def _get_font(font, font_size):
+    from PIL import ImageFont
+    return ImageFont.truetype(Asset_Manager.fonts.get(font), font_size)
+
+_render_cache = {}
+
 def render_text(text, font, font_size, color=(255, 255, 255)):
+    """Text image used as a search template. Cached: the same templates are used constantly."""
+    key = (text, font, font_size, tuple(color))
+    hit = _render_cache.get(key)
+    if hit is not None: return hit.copy()
+    out = _render_text(text, font, font_size, color)
+    if len(_render_cache) > 3000: _render_cache.clear()
+    _render_cache[key] = out
+    return out.copy()
+
+def _render_text(text, font, font_size, color=(255, 255, 255)):
     import numpy as np
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageDraw
     
-    @lru_cache(maxsize=32)
-    def get_font(font, font_size):
-        font_path = Asset_Manager.fonts.get(font)
-        return ImageFont.truetype(font_path, font_size)
-    
-    font = get_font(font, font_size)
+    font = _get_font(font, font_size)
     temp = Image.new("RGB", (1, 1))
     bbox = ImageDraw.Draw(temp).textbbox((0, 0), text, font=font)
     w = bbox[2] - bbox[0]
@@ -2316,8 +2364,11 @@ DISMISS_WORDS = ["later", "not now", "close", "okay", "continue", "claim", "coll
 
 def ocr_boxes(frame):
     """[(text, x1, y1, x2, y2, conf)] with fractions of the frame. easyocr first, Tesseract TSV fallback."""
-    import numpy as np
+    import numpy as np, cv2
     h, w = frame.shape[:2]
+    if w > 1300: # buttons/numbers are big: half resolution reads them fine and ~4x faster
+        frame = cv2.resize(frame, (w // 2, h // 2), interpolation=cv2.INTER_AREA)
+        h, w = frame.shape[:2]
     out = []
     try:
         if not hasattr(OCR_Handler, "reader"):

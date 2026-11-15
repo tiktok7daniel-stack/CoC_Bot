@@ -501,7 +501,7 @@ class Upgrader:
                 self._scroll_to_menu_bottom(menu_left, menu_right, menu_top, menu_bottom)
             
             town_hall_template = [render_text("Town Hall", "SupercellMagic", 17)]
-            hero_templates = [render_text(text, "SupercellMagic", 17) for text in Cache_Manager.get("vocab", get_vocab())["heroes"]]
+            hero_templates = [render_text(text, "SupercellMagic", 17) for text in vocab()["heroes"]]
             seasonal_defense_template = [render_text("Crafting Station", "SupercellMagic", 17)]
             if getattr(self, "skip_walls", False): # wall budget used up -> random pick must not choose walls
                 seasonal_defense_template.append(render_text("Wall", "SupercellMagic", 17))
@@ -584,7 +584,7 @@ class Upgrader:
             ])
             
             # Hero upgrades go directly to confirm screen now
-            in_hero_hall = upgrade_name in Cache_Manager.get("vocab", get_vocab())["heroes"]
+            in_hero_hall = upgrade_name in vocab()["heroes"]
             if in_hero_hall and Task_Handler.excluded("heroes"): return None
             
             # Click confirm button
@@ -604,7 +604,7 @@ class Upgrader:
             # Render templates
             if type(upgrade_text) == str: upgrade_text = [upgrade_text]
             if Task_Handler.excluded("heroes"):
-                upgrade_text = list(set(upgrade_text) - set(Cache_Manager.get("vocab", get_vocab())["heroes"]))
+                upgrade_text = list(set(upgrade_text) - set(vocab()["heroes"]))
             if len(upgrade_text) == 0: return None
             templates = self._get_upgrade_templates(upgrade_text, include_new=False)
             np.random.shuffle(templates)
@@ -683,7 +683,7 @@ class Upgrader:
             ])
             
             # Hero upgrades go directly to confirm screen now
-            in_hero_hall = upgrade_name in Cache_Manager.get("vocab", get_vocab())["heroes"]
+            in_hero_hall = upgrade_name in vocab()["heroes"]
             if in_hero_hall:
                 if Task_Handler.excluded("heroes"): return None
             
