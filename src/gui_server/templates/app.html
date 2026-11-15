@@ -421,6 +421,11 @@ th{background:var(--panel)}
     <button class="btn" onclick="showTab('sch')"><i class="fa-regular fa-clock"></i><span data-t="tab_sch"></span></button>
   </div>
   <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><div class="ico"><i class="fa-solid fa-video"></i></div><h3 data-t="hr_title"></h3><div class="tools"><button class="btn sm" onclick="showTab('atk');showAtk('plans')" data-t="hr_new"></button></div></div>
+    <div class="card-sub" data-t="hr_sub"></div>
+    <div class="card-b"><div id="homeRecs" class="home-accs"></div></div>
+  </div>
+  <div class="card" style="margin-bottom:12px">
     <div class="card-h"><h3 data-t="acc_cards"></h3><div class="tools"><button class="btn sm" onclick="showTab('acc')" data-t="nv_acc"></button></div></div>
     <div class="card-b"><div id="homeAccs" class="home-accs"></div></div>
   </div>
@@ -1037,6 +1042,9 @@ ar:{
  one_err:"خطأ", one_warn:"تحذير",
  brand_sub:"أتمتة كلاش أوف كلانس",
  as_plans:"التشكيلات",
+ hr_title:"تسجيلاتي (البوت يقلّدك)", hr_sub:"دوس \"استخدمه وابدأ\" على أي تسجيل: البوت هيهاجم ويعيد نفس ضغطاتك بنفس التوقيت في كل هجمة.",
+ hr_new:"تسجيل جديد", hr_use:"استخدمه وابدأ", hr_active:"شغّال", hr_off:"وقّفه", hr_offed:"رجع للطريقة العادية",
+ hr_none:"مفيش تسجيلات لسه — دوس \"تسجيل جديد\"", hr_started:"البوت هيهاجم بتسجيل \"{n}\"",
  dash_panel:"لوحة تحكم البوت", acc_cards:"بطاقات الحسابات", last_logs:"آخر السجلات", no_accounts:"مفيش حسابات لسه",
  pl_wave_sub2:"دوس على صور التعاويذ اللي تتأجل للموجة التانية (مثلًا العلاج). البوت بيتعرّف على الكروت من الصور — أو اكتب أرقام الكروت من الشمال: 1،2،3",
  ug_title:"صور الوحوش والتعاويذ", ug_sub:"الصور اللي رفعتها على المشروع. البوت بيستخدمها عشان يعرف اسم كل كارت في شريط المعركة (بيكتبه في السجل: \"شريط الجيش\").",
@@ -1201,6 +1209,9 @@ en:{
  one_err:"Error", one_warn:"Warning",
  brand_sub:"Clash of Clans automation",
  as_plans:"Loadouts",
+ hr_title:"My recordings", hr_sub:"Press \"Use & start\": the bot replays your taps in every attack.",
+ hr_new:"New recording", hr_use:"Use & start", hr_active:"Active", hr_off:"Turn off", hr_offed:"Back to normal deployment",
+ hr_none:"No recordings yet", hr_started:"Attacking with \"{n}\"",
  dash_panel:"Bot control panel", acc_cards:"Account cards", last_logs:"Latest logs", no_accounts:"No accounts yet",
  pl_wave_sub2:"Tap the spells to hold back for the second wave (e.g. healing) — or type card numbers from the left: 1,2,3",
  ug_title:"Troop & spell pictures", ug_sub:"The pictures uploaded to the project. The bot uses them to name every card in the battle bar (logged as \"Troop bar\").",
@@ -1651,11 +1662,47 @@ async function loadRecordings(){
   box.innerHTML = RECS.length ? RECS.map(r => `<div class="row"><div class="lbl"><b>${esc(r.name)}</b><small>${r.touches} ${t("rec_taps")} · ${Math.round(r.duration || 0)} ${t("seconds")}</small></div>
     <button class="btn sm" data-del="${esc(r.name)}"><i class="fa-solid fa-trash"></i> ${t("rec_delete")}</button></div>`).join("")
     : `<div class="card-sub">${t("rec_empty")}</div>`;
+  renderHomeRecs();
   box.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
     if (!confirm(t("rec_confirm"))) return;
     await api("/api/recordings/delete", {method:"POST", body:{name:b.dataset.del}}); loadRecordings();
   });
   renderPlans();
+}
+/* home: pick a recording and play it */
+function activeRecording(){
+  const p = S && (S.plans || []).find(x => x.name === S.active_plan);
+  return p && p.recording ? p.recording : "";
+}
+function renderHomeRecs(){
+  const box = $("#homeRecs"); if (!box || !S) return;
+  const cur = activeRecording();
+  box.innerHTML = RECS.length ? RECS.map(r => `<div class="hacc ${r.name === cur ? "cur" : ""}" style="min-width:260px">
+      <div class="av"><i class="fa-solid fa-film"></i></div>
+      <div class="nm"><b>${esc(r.name)}</b><small>${r.touches} ${t("rec_taps")} · ${Math.round(r.duration || 0)} ${t("seconds")}</small></div>
+      ${r.name === cur ? `<span class="pill st-running" style="padding:2px 10px"><span class="dot"></span>${t("hr_active")}</span>
+        <button class="btn sm" data-off="1">${t("hr_off")}</button>`
+      : `<button class="btn sm go" data-use="${esc(r.name)}"><i class="fa-solid fa-play"></i>${t("hr_use")}</button>`}</div>`).join("")
+    : `<div class="card-sub" style="border:0;padding:0">${t("hr_none")}</div>`;
+  box.querySelectorAll("[data-use]").forEach(b => b.onclick = () => useRecording(b.dataset.use));
+  box.querySelectorAll("[data-off]").forEach(b => b.onclick = async () => { S.active_plan = ""; await saveAll(true); renderPlans(); renderHomeRecs(); toast(t("hr_offed")); });
+}
+async function useRecording(name){
+  // a loadout that plays this recording (made once, then reused)
+  let p = S.plans.find(x => x.recording === name);
+  if (!p) {
+    const base = S.plans[0] || {};
+    p = Object.assign({}, base, {name: "🎬 " + name, army: "", recording: name});
+    S.plans.push(p);
+  }
+  S.active_plan = p.name;
+  if (S.tasks && S.tasks.home_attacks === false) S.tasks.home_attacks = true; // attacking must be on
+  await saveAll(true);
+  renderPlans(); renderHomeRecs();
+  const a = acc(CUR);
+  if (!a || !a.running) await accAction(CUR, "start");
+  else await accAction(CUR, "wake");
+  toast(t("hr_started").replace("{n}", name));
 }
 async function startRecording(){
   const name = $("#recName").value.trim();
