@@ -456,22 +456,8 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
         <div class="row"><div class="lbl"><span data-t="slot_range"></span><small data-t="slot_range_sub"></small></div>
           <input class="in" type="number" min="0" style="width:80px" data-bind="attack.slot_first" data-type="int"><span class="unit" data-t="to"></span><input class="in" type="number" min="0" style="width:80px" data-bind="attack.slot_last" data-type="int"></div>
         <div class="row"><div class="lbl" data-t="exclude_cc"></div><label class="sw"><input type="checkbox" data-bind="attack.exclude_clan_troops"><span></span></label></div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-h"><div class="ico"><i class="fa-solid fa-chess-knight"></i></div><h3 data-t="strat_title"></h3></div>
-      <div class="card-sub" data-t="strat_sub"></div>
-      <div class="card-b">
-        <div class="row"><div class="lbl"><span data-t="strategy"></span><small data-t="strategy_sub"></small></div>
-          <select class="in" data-bind="attack.strategy"><option value="auto" data-t="st_auto"></option><option value="funnel" data-t="st_funnel"></option><option value="line" data-t="st_line"></option><option value="two_sides" data-t="st_two_sides"></option></select></div>
-        <div class="row"><div class="lbl"><span data-t="hero_delay"></span><small data-t="hero_delay_sub"></small></div><input class="in" type="number" min="0" step="0.5" data-bind="attack.hero_delay" data-type="float"><span class="unit" data-t="seconds"></span></div>
         <div class="row"><div class="lbl"><span data-t="hero_retap"></span><small data-t="hero_retap_sub"></small></div><input class="in" type="number" min="0" step="1" data-bind="attack.hero_retap" data-type="float"><span class="unit" data-t="seconds"></span></div>
       </div>
-    </div>
-    <div class="card">
-      <div class="card-h"><div class="ico"><i class="fa-solid fa-brain"></i></div><h3 data-t="learned_title"></h3></div>
-      <div class="card-sub" data-t="learned_sub"></div>
-      <div class="card-b"><table><thead><tr><th data-t="strategy"></th><th data-t="attacks"></th><th data-t="gold"></th><th data-t="elixir"></th><th data-t="dark"></th></tr></thead><tbody id="learnTable"></tbody></table></div>
     </div>
     <div class="card span2">
       <div class="card-h"><div class="ico"><i class="fa-solid fa-flag-checkered"></i></div><h3 data-t="battle_end_title"></h3></div>
@@ -940,6 +926,8 @@ const LOG_AR = [
  [/^CoC already open/, "اللعبة مفتوحة بالفعل — هيكمّل عليها ✓"],
  [/^Settings changed, applying now/, "الإعدادات اتغيّرت — جاري التطبيق دلوقتي"],
  [/^Run now requested/, "تم طلب تشغيل دورة الآن"],
+ [/^No troops could be deployed, ending the battle/, "الجيش ما نزلش خالص — أنهى المعركة على طول بدل ما يستنى"],
+ [/^Could not verify the deployment/, "مقدرش يتأكد إن الجيش نزل"],
  [/^CoC reconnected/, "اللعبة كانت فاصلة — داس Reload ورجعت ✓"],
  [/^Game stuck while starting, restarting it once/, "اللعبة علّقت وهي بتفتح أكتر من دقيقة — هيعيد فتحها مرة واحدة"],
  [/^Waiting for the emulator to finish starting\.\.\./, "مستني المحاكي يخلّص تشغيل…"],
@@ -1408,7 +1396,7 @@ function renderStats(){
   $("#atkTable").innerHTML = atk.length ? atk.map((e, i) => `<tr><td class="num">${atk.length - i}</td><td class="num">${new Date(e.t * 1000).toLocaleTimeString("en-GB")}</td><td>${t(e.base === "builder" ? "builder" : "home")}</td><td class="num c-g">${fmt(e.gold)}</td><td class="num c-e">${fmt(e.elixir)}</td><td class="num c-d">${fmt(e.dark)}</td></tr>`).join("") : `<tr><td colspan="6" class="empty">${t("no_attacks")}</td></tr>`;
   const names = {funnel:t("st_funnel"), line:t("st_line"), two_sides:t("st_two_sides")};
   const learned = Object.entries(STATS.strategies || {}).sort((a, b) => (b[1].gold + b[1].elixir) - (a[1].gold + a[1].elixir));
-  $("#learnTable").innerHTML = learned.length ? learned.map(([k, v], i) => `<tr><td>${i === 0 ? "🏆 " : ""}${names[k] || k}</td><td class="num">${v.attacks}</td><td class="num c-g">${fmt(v.gold)}</td><td class="num c-e">${fmt(v.elixir)}</td><td class="num c-d">${fmt(v.dark)}</td></tr>`).join("") : `<tr><td colspan="5" class="empty">${t("learn_empty")}</td></tr>`;
+  if ($("#learnTable")) $("#learnTable").innerHTML = learned.length ? learned.map(([k, v], i) => `<tr><td>${i === 0 ? "🏆 " : ""}${names[k] || k}</td><td class="num">${v.attacks}</td><td class="num c-g">${fmt(v.gold)}</td><td class="num c-e">${fmt(v.elixir)}</td><td class="num c-d">${fmt(v.dark)}</td></tr>`).join("") : `<tr><td colspan="5" class="empty">${t("learn_empty")}</td></tr>`;
   const up = STATS.recent_upgrades;
   $("#upgTable").innerHTML = up.length ? up.map(e => `<tr><td class="num">${new Date(e.t * 1000).toLocaleString("en-GB")}</td><td>${t("k_" + e.kind)}</td><td>${e.name || ""}</td></tr>`).join("") : `<tr><td colspan="3" class="empty">—</td></tr>`;
 }
