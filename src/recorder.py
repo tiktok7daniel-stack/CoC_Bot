@@ -40,7 +40,11 @@ def request(id, name):
     REQ_DIR.mkdir(parents=True, exist_ok=True)
     (REQ_DIR / f"{id}.json").write_text(json.dumps({"name": name, "t": time.time()}), encoding="utf-8")
 
-def take_request(id):
+def pending(id):
+    return (REQ_DIR / f"{id}.json").exists()
+
+def take_request(id, max_age=600):
+    """The waiting "record a battle" request (requests older than 10 minutes are dropped)."""
     p = REQ_DIR / f"{id}.json"
     if not p.exists(): return None
     try:
@@ -49,7 +53,17 @@ def take_request(id):
         d = None
     try: p.unlink()
     except OSError: pass
+    if d and time.time() - float(d.get("t", 0)) > max_age: return None
     return d
+
+def set_status(id, text):
+    """What the recording is doing now (shown on the loadouts page)."""
+    REQ_DIR.mkdir(parents=True, exist_ok=True)
+    (REQ_DIR / f"{id}.status").write_text(json.dumps({"text": text, "t": time.time()}), encoding="utf-8")
+
+def get_status(id):
+    try: return json.loads((REQ_DIR / f"{id}.status").read_text(encoding="utf-8"))
+    except (OSError, ValueError): return None
 
 # ---------------------------------------------------------------- touch device discovery
 

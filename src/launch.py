@@ -35,7 +35,6 @@ def launch_proc(args):
             time.sleep(min(60, 10 * attempt))
     install_error_reporter()
     start_capture_service()
-    start_record_service()
     preflight()
     bot = CoC_Bot()
     bot.run()

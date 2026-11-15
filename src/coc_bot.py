@@ -133,6 +133,52 @@ class CoC_Bot:
         logger.info("Spent the loot, back to attacking" if spent else "Nothing could be bought")
         return spent
 
+    # ---------------------------------------------------------------- record a battle
+    def record_battle(self, name):
+        """Open the game, go into a battle by itself, then record the user's own taps until the battle ends."""
+        import time, recorder
+        iid = _utils.INSTANCE_ID
+        set_phase("recording")
+        recorder.set_status(iid, "opening")
+        logger.info(f"Battle recording '{name}': opening the game and finding a base")
+        try:
+            start_coc()
+            to_home_base()
+            self.attacker.plan = None # the user's own army, no loadout
+            if not self.attacker.start_normal_attack(60):
+                recorder.set_status(iid, "failed")
+                logger.warning("Battle recording cancelled: could not start a battle")
+                return
+            Input_Handler.zoom(dir="out")
+            Input_Handler.swipe_up(y1=0.5)
+            time.sleep(0.8)
+            found = recorder.find_touch_device(lambda c: ADB_Manager.adbutils_device.shell(c))
+            if not found:
+                recorder.set_status(iid, "failed")
+                logger.error("Battle recording failed: touch device not found")
+                return
+            rec = recorder.Recorder(ADB_Manager._adb_exe or "adb", _utils.ADB_ADDRESS, *found)
+            rec.start()
+            recorder.set_status(iid, "recording")
+            logger.info("Battle recording: attack now, every tap is being recorded")
+            start, gone = time.monotonic(), 0
+            while time.monotonic() - start < 200:
+                time.sleep(1)
+                gone = 0 if self.attacker.in_battle() else gone + 1
+                if gone >= 3: break
+            rec.stop()
+            time.sleep(0.3)
+            data = rec.save(name)
+            taps = sum(1 for e in data["events"] if e["type"] == "down")
+            recorder.set_status(iid, "saved")
+            logger.info(f"Battle recording '{name}' saved: {taps} taps, {data['duration']:.0f} seconds")
+            self.attacker.battle_end = "wait"
+            self.attacker.finish_battle(restart=True) # results screen -> back to the village
+        except (KeyboardInterrupt, SystemExit): raise
+        except Exception:
+            recorder.set_status(iid, "failed")
+            logger.exception("Battle recording failed")
+
     def run_routines(self, s):
         """Tap the taught buttons of every enabled routine, in order (missing steps are skipped)."""
         import time, teach
@@ -174,6 +220,10 @@ class CoC_Bot:
         next_nudge = time.monotonic() + random.uniform(70, 110)
         while time.monotonic() - start < minutes * 60:
             time.sleep(2)
+            try:
+                import recorder
+                if recorder.pending(_utils.INSTANCE_ID): return
+            except Exception: pass
             if anti_idle and time.monotonic() >= next_nudge and running():
                 next_nudge = time.monotonic() + random.uniform(70, 110)
                 try:
@@ -217,6 +267,13 @@ class CoC_Bot:
                     time.sleep(3)
                     continue
                 self._offline_logged = False
+
+                import recorder
+                req = recorder.take_request(_utils.INSTANCE_ID)
+                if req:
+                    update_status("now")
+                    self.record_battle(req.get("name") or "battle")
+                    continue
 
                 if not running():
                     update_status("paused")
@@ -312,7 +369,8 @@ class CoC_Bot:
                     if running() and not self.excluded("home_attacks") and farm.get("enabled", True):
                         # attack non-stop; when the storages are full spend them, then attack again
                         attacks = 0
-                        while running() and not self.excluded("home_attacks") and attacks < 300:
+                        import recorder
+                        while running() and not self.excluded("home_attacks") and attacks < 300 and not recorder.pending(_utils.INSTANCE_ID):
                             self.load_settings()
                             if not self.settings["attack"].get("farm", {}).get("enabled", True): break
                             if self.full_resources(self.settings):

@@ -307,13 +307,24 @@ def api_recordings_delete():
 def api_record(id):
     import recorder
     if not valid_id(id): abort(404)
-    inst = instances.get(id)
-    if inst is None: return jsonify({"ok": False, "error": "not_running"}), 400
     name = str((request.json or {}).get("name", "")).strip()
     if not name: return jsonify({"ok": False, "error": "no_name"}), 400
-    inst.end_time = time.time() + 10 * 60 # the bot rests while you attack
     recorder.request(id, name)
+    recorder.set_status(id, "waiting")
+    inst = instances.get(id)
+    if inst is None: # the recording runs inside the bot: start it
+        instances[id] = Instance(id)
+        bot_pipe.send({"action": "start", "id": id})
+    else:
+        inst.end_time = 0 # a paused bot would never pick the request up
+        bot_settings.request_wake(id)
     return jsonify({"ok": True})
+
+@app.route("/api/record_status/<id>", methods=["GET"])
+def api_record_status(id):
+    import recorder
+    if not valid_id(id): abort(404)
+    return jsonify(recorder.get_status(id) or {})
 
 # ---------------------------------------------------------------- teach the bot
 

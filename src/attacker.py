@@ -344,7 +344,19 @@ class Attacker:
         peaks_norm = peaks_norm[remove_left:remove_right+2]
         dists_discrete = dists_discrete[remove_left:remove_right+1]
         
-        assert len(peaks) % 2 == 0, "Uneven number of troop slot edges detected"
+        if len(peaks) % 2 == 1:
+            # an extra edge (a half-visible card at the side, a glow): drop the one edge whose
+            # removal leaves edge pairs that all look like whole cards
+            card_w = dist_categories[2]
+            def pair_err(pn):
+                return sum(abs((pn[k + 1] - pn[k]) - card_w) for k in range(0, len(pn) - 1, 2))
+            best = min(range(len(peaks)), key=lambda k: pair_err(np.delete(peaks_norm, k)))
+            peaks, peaks_norm = np.delete(peaks, best), np.delete(peaks_norm, best)
+            dists_discrete = np.delete(dists_discrete, min(best, len(dists_discrete) - 1)) if len(dists_discrete) else dists_discrete
+            dd = np.diff(peaks_norm)
+            dd_idx = np.argmin(np.abs(dd[:, None] - dist_categories), axis=1) if len(dd) else np.array([], dtype=int)
+            dists_discrete = dist_categories[dd_idx] if len(dd) else dd
+        if len(peaks) < 2: raise ValueError("No troop cards found")
         
         # Convert edge distances to card locations
         card_types = []

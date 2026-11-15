@@ -625,6 +625,7 @@ th{background:var(--panel)}
         <div class="row"><div class="lbl"><span data-t="rec_name"></span><small data-t="rec_name_sub"></small></div>
           <input class="in" id="recName" placeholder="مثلًا: تنانين 1" style="width:170px">
           <button class="btn go" onclick="startRecording()"><i class="fa-solid fa-circle-dot"></i> <span data-t="rec_start"></span></button></div>
+        <div id="recLive" class="su-hint" style="display:none;font-size:15px"></div>
         <div id="recList"></div>
         <div class="note"><i class="fa-solid fa-triangle-exclamation"></i> <span data-t="rec_note"></span></div>
       </div>
@@ -1067,11 +1068,13 @@ ar:{
  su_failed_adb:"المحاكي ما اتصلش خلال 3 دقايق — اتأكد إن ADB مفعّل",
  su_done_launch:"بيشغّل المحاكي… استنى دقيقة", su_done_fix_res:"اتظبط الحجم والـDPI", su_done_open_game:"بيفتح اللعبة…",
  su_err_no_copy:"الحساب مش مربوط بنسخة محاكي", su_err_no_adb:"المحاكي مش متصل لسه", su_err_no_emulator:"مش لاقي المحاكي", su_err_manual:"افتحها بإيدك في المحاكي ده", su_err_x:"حصلت مشكلة",
- rec_title:"تسجيل معركة (البوت يقلّدك)", rec_sub:"اكتب اسم للتسجيل ودوس تسجيل، وبعدين ادخل هجوم بنفسك في اللعبة. البوت بيسجّل كل ضغطة ووقتها، وبعدين تختار التسجيل ده في أي تشكيلة فيعيد هجومك بالظبط.",
+ rec_title:"تسجيل معركة (البوت يقلّدك)", rec_sub:"اكتب اسم للتسجيل ودوس \"ابدأ التسجيل\": البوت بيفتح اللعبة ويدخل معركة ويلاقي قرية لوحده، وبعدين يقولك \"سجّل دلوقتي\" — إنت تنزّل الجيش بإيدك، وهو بيسجّل كل ضغطة ووقتها. بعدها اختار التسجيل ده في تشكيلة مع الجيش بتاعه.",
+ rs_waiting:"⏳ مستني البوت يبدأ…", rs_opening:"⏳ البوت بيفتح اللعبة ويدوّر على قرية…", rs_recording:"🔴 سجّل دلوقتي! نزّل الجيش بإيدك — كل ضغطة بتتسجّل لحد ما المعركة تخلص",
+ rs_saved:"✓ اتحفظ التسجيل — اختاره من \"إعادة تسجيل\" في التشكيلة", rs_failed:"✗ التسجيل ما كملش — شوف السجل", rs_banner:"🔴 سجّل دلوقتي — نزّل الجيش بإيدك",
  rec_name:"اسم التسجيل", rec_name_sub:"مثلًا اسم التشكيلة أو رقم الفريق", rec_start:"ابدأ التسجيل",
  rec_taps:"ضغطة", rec_delete:"مسح", rec_empty:"مفيش تسجيلات لسه", rec_confirm:"تمسح التسجيل ده؟",
  rec_need_name:"اكتب اسم للتسجيل الأول", rec_not_running:"شغّل الحساب الأول عشان يقدر يسجّل",
- rec_started:"البوت وقف مؤقتًا — ادخل هجوم في اللعبة دلوقتي وتابع السجل",
+ rec_started:"البوت بيدخل معركة لوحده — أول ما يقولك \"سجّل دلوقتي\" نزّل الجيش",
  rec_note:"لازم الجيش يكون نفسه وبنفس ترتيب الكروت تحت. نزّل الوحوش على أطراف الخريطة البعيدة عشان كل قرية شكلها مختلف. البوت بيبعّد الكاميرا لوحده أول ما المعركة تبدأ — ما تحركش الكاميرا وانت بتهاجم.",
  pl_rec:"إعادة تسجيل", pl_rec_sub:"لو اخترت تسجيل البوت هيعيد هجومك المتسجّل بدل طريقة الإنزال اللي تحت", pl_rec_none:"من غير تسجيل", pl_title:"التشكيلات (خطط الهجوم)", pl_sub:"اختار تشكيلة: البوت يختار الجيش المحفوظ بتاعها في اللعبة، وينزّل كل نوع في المكان اللي تحدده",
  pl_classic:"نقطة واحدة (الطريقة الأصلية)", pl_classic_sub:"كل الجيش في النقطة المضمونة تحت — من غير تشكيلة",
@@ -1232,7 +1235,9 @@ en:{
  rec_name:"Recording name", rec_name_sub:"e.g. loadout name", rec_start:"Start recording",
  rec_taps:"taps", rec_delete:"Delete", rec_empty:"No recordings yet", rec_confirm:"Delete this recording?",
  rec_need_name:"Enter a name first", rec_not_running:"Start the account first",
- rec_started:"Bot paused — start an attack in the game now",
+ rec_started:"The bot is starting a battle — deploy when it says \"record now\"",
+ rs_waiting:"⏳ Waiting for the bot…", rs_opening:"⏳ Opening the game and finding a base…", rs_recording:"🔴 Record now! Deploy by hand — every tap is recorded",
+ rs_saved:"✓ Recording saved", rs_failed:"✗ Recording failed — see the log", rs_banner:"🔴 Record now — deploy by hand",
  rec_note:"Use the same army in the same card order. Deploy on the far edges. Don't move the camera while attacking.",
  pl_rec:"Replay recording", pl_rec_sub:"Replays your recorded attack instead of the deployment below", pl_rec_none:"No recording", pl_title:"Loadouts (attack plans)", pl_sub:"Pick a loadout: the bot selects its saved army in the game and deploys each type where you choose",
  pl_classic:"Single point (original)", pl_classic_sub:"The whole army on the proven bottom spot — no loadout",
@@ -1353,6 +1358,8 @@ const LOG_AR = [
  [/^Pre-flight: screenshots (\d+x\d+)/, "✓ تصوير الشاشة شغال $1"],
  [/^Pre-flight: the bot's images are made for 1920x1080.*/, "⚠ صور البوت معمولة على 1920×1080 — على المقاس ده ممكن ما يلاقيش الزراير أو ينزّل غلط"],
  [/^Pre-flight: the bot waits.*/, "البوت مستني لحد ما المشكلة تتصلح (بيفحص تاني كل 20 ثانية) — افتح شاشة \"تجهيز البوت\""],
+ [/^Battle recording '(.*?)': opening the game.*/, "🎬 تسجيل \"$1\": البوت بيفتح اللعبة ويدخل معركة…"],
+ [/^Battle recording cancelled: could not start a battle/, "اتلغى التسجيل: البوت ماقدرش يدخل معركة"],
  [/^Battle recording '(.*?)': start an attack.*/, "🔴 تسجيل \"$1\": ادخل هجوم في اللعبة بنفسك دلوقتي"],
  [/^Battle recording: attack now.*/, "🔴 هاجم دلوقتي — كل ضغطة بتتسجّل"],
  [/^Battle recording '(.*?)' saved: (\d+) taps, (\d+) seconds/, "✓ اتحفظ التسجيل \"$1\": $2 ضغطة في $3 ثانية"],
@@ -1654,9 +1661,23 @@ async function startRecording(){
   const name = $("#recName").value.trim();
   if (!name) return toast(t("rec_need_name"), true);
   const r = await api(`/api/record/${encodeURIComponent(CUR)}`, {method:"POST", body:{name}});
-  if (!r.ok) return toast(t(r.error === "not_running" ? "rec_not_running" : "rec_need_name"), true);
+  if (!r.ok) return toast(t("rec_need_name"), true);
   toast(t("rec_started"));
-  setTimeout(loadRecordings, 60000); setTimeout(loadRecordings, 240000);
+  watchRecording();
+}
+let recTimer = null, recShown = "";
+function watchRecording(){
+  clearInterval(recTimer);
+  recTimer = setInterval(async () => {
+    let st = {}; try { st = await api(`/api/record_status/${encodeURIComponent(CUR)}`); } catch(e) { return; }
+    const box = $("#recLive"); if (!box || !st.text) return;
+    box.style.display = "";
+    box.style.color = st.text === "failed" ? "var(--bad)" : st.text === "saved" ? "var(--ok)" : st.text === "recording" ? "#ff5d6c" : "var(--accent2)";
+    box.innerHTML = t("rs_" + st.text);
+    if (st.text === "recording" && recShown !== "recording") showBanner(t("rs_banner"));
+    recShown = st.text;
+    if (st.text === "saved" || st.text === "failed") { clearInterval(recTimer); loadRecordings(); }
+  }, 2000);
 }
 /* unit pictures uploaded to the project */
 let UNITS = {};
