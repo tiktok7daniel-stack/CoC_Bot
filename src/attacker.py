@@ -277,7 +277,7 @@ class Attacker:
                 elif card_types[i] == "troop":
                     Input_Handler.down(0.5, 0.8, pointer=0)
                     end_time = time.monotonic() + TROOP_DEPLOY_TIME
-                    while time.monotonic() < end_time and not card_gray(card_centers[i]): time.sleep(0.01)
+                    while time.monotonic() < end_time and not card_gray(card_centers[i]): time.sleep(0.2) # each check is a full screenshot
                     Input_Handler.up(pointer=0)
                 elif card_types[i] == "spell":
                     n = card_counts[i]
@@ -361,9 +361,11 @@ class Attacker:
         try:
             # Make sure in home base
             start_time = time.time()
+            found = False
             while time.time() - start_time < timeout:
-                if in_home_base(): break
-            if time.time() - start_time >= timeout:
+                if in_home_base(): found = True; break
+                time.sleep(0.3)
+            if not found:
                 logger.error("Not in home base. Aborting home attack.")
                 return
             
@@ -383,9 +385,11 @@ class Attacker:
         try:
             # Make sure in builder base
             start_time = time.time()
+            found = False
             while time.time() - start_time < timeout:
-                if in_builder_base(): break
-            if time.time() - start_time >= timeout:
+                if in_builder_base(): found = True; break
+                time.sleep(0.3)
+            if not found:
                 logger.error("Not in builder base. Aborting builder attack.")
                 return
             

@@ -88,4 +88,12 @@ def summary(id):
         "resources_time": latest_res["t"] if latest_res else None,
         "recent_attacks": list(reversed(attacks[-50:])),
         "recent_upgrades": list(reversed(upgrades[-50:])),
+        "errors": sum(1 for e in session if e["type"] == "error"),
+        "warnings": sum(1 for e in session if e["type"] == "warning"),
     }
+
+def problems(id, limit=150):
+    """Most recent errors / warnings, newest first."""
+    events = read(id)
+    cut = max((i for i, e in enumerate(events) if e["type"] == "errors_cleared"), default=-1)
+    return list(reversed([e for e in events[cut + 1:] if e["type"] in ("error", "warning")][-limit:]))

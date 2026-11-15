@@ -189,6 +189,22 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
 #toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%) translateY(20px);background:#1d3463;border:1px solid var(--line2);border-radius:12px;padding:10px 18px;opacity:0;transition:.2s;z-index:60;font-weight:700;pointer-events:none;box-shadow:var(--shadow)}
 #toast.show{opacity:1;transform:translateX(-50%)}
 #toast.err{border-color:var(--bad);color:#ffc1c7}
+.badge{position:absolute;top:4px;inset-inline-end:10px;background:var(--bad);color:#fff;border-radius:999px;font-size:11px;padding:0 7px;line-height:18px;display:none}
+.badge.show{display:inline-block}
+.errs{display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 330px);overflow:auto}
+.err{display:flex;gap:12px;background:#0f1b38;border:1px solid var(--line2);border-inline-start:4px solid var(--bad);border-radius:12px;padding:10px 12px}
+.err.warning{border-inline-start-color:var(--warn)}
+.err .body{flex:1;min-width:0}
+.err .top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:12.5px}
+.err .ttl{font-weight:800;font-size:15px;margin:3px 0}
+.err .fix{color:#bfe3c9;font-size:13px}
+.err .fix i{color:var(--ok)}
+.err details{margin-top:4px;color:var(--dim);font-size:12px}
+.err details pre{direction:ltr;text-align:left;white-space:pre-wrap;margin:4px 0 0;font-family:Consolas,monospace}
+.err img{width:150px;height:84px;object-fit:cover;border-radius:8px;border:1px solid var(--line2);cursor:zoom-in;flex:none}
+.tagp{background:#1d3463;border-radius:7px;padding:0 8px;font-weight:700}
+#shotModal .modal{width:min(1100px,95vw)}
+#shotModal img{width:100%;border-radius:10px;display:block}
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-thumb{background:#2a4173;border-radius:10px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -233,6 +249,7 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
   <button data-tab="sch"><i class="fa-regular fa-calendar-check"></i><span data-t="tab_sch"></span></button>
   <button data-tab="acc"><i class="fa-solid fa-users"></i><span data-t="tab_acc"></span></button>
   <button data-tab="res"><i class="fa-solid fa-chart-line"></i><span data-t="tab_res"></span></button>
+  <button data-tab="err" style="position:relative"><i class="fa-solid fa-bug"></i><span data-t="tab_err"></span><span class="badge" id="errBadge"></span></button>
   <button data-tab="set"><i class="fa-solid fa-gear"></i><span data-t="tab_set"></span></button>
 </nav>
 
@@ -532,6 +549,24 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
   </div>
 </section>
 
+<!-- ============================ ERRORS ============================ -->
+<section class="page" id="p-err">
+  <div class="card">
+    <div class="card-h"><div class="ico" style="color:var(--bad)"><i class="fa-solid fa-bug"></i></div><h3 data-t="err_title"></h3>
+      <div class="tools">
+        <button class="btn sm gold" onclick="saveReport()"><i class="fa-solid fa-file-zipper"></i><span data-t="save_report"></span></button>
+        <button class="btn sm" onclick="openErrFolder()"><i class="fa-regular fa-folder-open"></i><span data-t="open_folder"></span></button>
+        <button class="btn sm" onclick="clearErrors()"><i class="fa-solid fa-broom"></i><span data-t="clear"></span></button>
+      </div></div>
+    <div class="card-sub" data-t="err_sub"></div>
+    <div class="card-b">
+      <div class="kpis" id="errKpis"></div>
+      <div class="row" style="padding-top:0"><select class="in" id="errFilter" onchange="renderErrors()"><option value="" data-t="all_levels"></option><option value="error" data-t="lv_err"></option><option value="warning" data-t="lv_warn"></option></select><div class="note" id="reportNote" style="margin:0"></div></div>
+      <div class="errs" id="errList"></div>
+    </div>
+  </div>
+</section>
+
 <!-- ============================ SETTINGS ============================ -->
 <section class="page" id="p-set">
   <div class="grid">
@@ -599,6 +634,9 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
     <div class="modal-f"><button class="btn primary" onclick="applyWallMode()"><i class="fa-solid fa-check"></i><span data-t="apply_choice"></span></button><button class="btn" onclick="closeWallModal()" data-t="cancel"></button></div>
   </div>
 </div>
+<div class="modal-bg" id="shotModal" onclick="this.classList.remove('show')">
+  <div class="modal"><div class="modal-b"><img id="shotImg" alt=""></div></div>
+</div>
 <div id="toast"></div>
 <datalist id="dl-prio"></datalist>
 
@@ -648,6 +686,10 @@ ar:{
  upd_none:"إنت على آخر إصدار ✓", upd_avail:"فيه تحديث جديد متاح!", upd_done:"تم التحديث ({n} ملف). اقفل البرنامج وافتحه تاني.", upd_err:"فشل التحقق: ",
  notifications:"الإشعارات", notifications_sub:"ابعت إشعارات للتليجرام عند الترقيات والأخطاء", telegram_token:"توكن بوت التليجرام", ocr_title:"قراءة النصوص (OCR)", ocr_sub:"اختياري: مفتاح Groq لقراءة أسرع وأدق", groq_key:"مفتاح Groq API",
  unsaved:"تغييرات غير محفوظة. اضغط على حفظ الإعدادات لتطبيقها على البوت.", start_bot:"بدء البوت", save_settings:"حفظ الإعدادات",
+ one_err:"خطأ", one_warn:"تحذير", tab_err:"الأخطاء", sub_err:"تشخيص المشاكل", err_title:"سجل الأخطاء", err_sub:"كل خطأ بيتسجّل بالخطوة اللي البوت كان فيها، وشرح بالعربي، وصورة من المحاكي لحظة الخطأ",
+ save_report:"حفظ تقرير للمطوّر", open_folder:"فتح فولدر الصور", errors_k:"أخطاء", warnings_k:"تحذيرات", last_error:"آخر خطأ", no_errors:"مفيش أخطاء 🎉 البوت شغال تمام",
+ report_saved:"التقرير اتحفظ على سطح المكتب:", during:"أثناء", fix:"الحل", tech:"تفاصيل تقنية", confirm_clear_err:"مسح قائمة الأخطاء؟",
+ ph_start_game:"فتح اللعبة", ph_to_home:"الرجوع للقرية الرئيسية", ph_read_resources:"قراءة الموارد", ph_home_upgrades:"ترقيات القرية الرئيسية", ph_home_attack:"هجوم القرية الرئيسية", ph_walls_farming:"ترقية الجدران أثناء الفارم", ph_to_builder:"الانتقال لقاعدة البنّاء", ph_builder_upgrades:"ترقيات قاعدة البنّاء", ph_builder_attack:"هجوم قاعدة البنّاء", ph_finish:"إنهاء الدورة", ph_idle:"الانتظار بين الدورات",
  run_now:"شغّل دورة الآن", run_now_t:"البوت هيبدأ دورة دلوقتي", saving:"جاري الحفظ…", auto_saved:"اتحفظ تلقائيًا",
  keep_open:"خلّي اللعبة مفتوحة", keep_open_sub:"البوت مش هيقفل اللعبة بعد كل دورة، ولو لقاها مفتوحة هيكمّل عليها من غير ما يعيد تشغيلها", apply_instantly:"طبّق التغييرات فورًا", apply_instantly_sub:"لما تغيّر أي إعداد والبوت مستني، يبدأ دورة جديدة بعد ثواني",
  battle_end_title:"إنهاء الهجوم", battle_end_sub:"إزاي البوت يخلّص المعركة بعد ما ينزّل الجيش", battle_end:"طريقة إنهاء المعركة", battle_end_hint:"الانتظار بيخلّي اللعبة مفتوحة. إعادة التشغيل أسرع بس اللعبة بتتقفل وتتفتح",
@@ -697,6 +739,10 @@ en:{
  upd_none:"You're on the latest version ✓", upd_avail:"A new update is available!", upd_done:"Updated ({n} files). Close and reopen the app.", upd_err:"Check failed: ",
  notifications:"Notifications", notifications_sub:"Send Telegram notifications for upgrades and errors", telegram_token:"Telegram bot token", ocr_title:"Text reading (OCR)", ocr_sub:"Optional: Groq key for faster, more accurate reading", groq_key:"Groq API key",
  unsaved:"Unsaved changes. Click Save settings to apply them to the bot.", start_bot:"Start bot", save_settings:"Save settings",
+ one_err:"Error", one_warn:"Warning", tab_err:"Errors", sub_err:"Troubleshooting", err_title:"Error log", err_sub:"Every error is saved with the step the bot was on, an explanation and an emulator screenshot",
+ save_report:"Save report for developer", open_folder:"Open screenshots folder", errors_k:"Errors", warnings_k:"Warnings", last_error:"Last error", no_errors:"No errors 🎉 the bot is running fine",
+ report_saved:"Report saved to the Desktop:", during:"During", fix:"Fix", tech:"Technical details", confirm_clear_err:"Clear the error list?",
+ ph_start_game:"Opening the game", ph_to_home:"Going to home village", ph_read_resources:"Reading resources", ph_home_upgrades:"Home upgrades", ph_home_attack:"Home attack", ph_walls_farming:"Walls while farming", ph_to_builder:"Going to builder base", ph_builder_upgrades:"Builder base upgrades", ph_builder_attack:"Builder base attack", ph_finish:"Finishing cycle", ph_idle:"Waiting between cycles",
  run_now:"Run cycle now", run_now_t:"The bot will start a cycle now", saving:"Saving…", auto_saved:"Saved automatically",
  keep_open:"Keep the game open", keep_open_sub:"Don't close the game after each cycle; if it's already open in a village, continue without restarting it", apply_instantly:"Apply changes instantly", apply_instantly_sub:"When you change a setting while the bot waits, a new cycle starts within seconds",
  battle_end_title:"Ending the battle", battle_end_sub:"How the bot finishes a battle after deploying", battle_end:"Battle end method", battle_end_hint:"Waiting keeps the game open. Restarting is faster but closes and reopens the game",
@@ -712,6 +758,8 @@ const LOG_AR = [
  [/^CoC already open/, "اللعبة مفتوحة بالفعل — هيكمّل عليها ✓"],
  [/^Settings changed, applying now/, "الإعدادات اتغيّرت — جاري التطبيق دلوقتي"],
  [/^Run now requested/, "تم طلب تشغيل دورة الآن"],
+ [/^ADB connection lost during '(.*?)'.*/, "الاتصال بالمحاكي اتقطع أثناء ($1) — جاري إعادة الاتصال…"],
+ [/^ADB reconnected\./, "رجع الاتصال بالمحاكي ✓"],
  [/^Battle end not detected, reopening the game/, "مقدرش يلاقي نهاية المعركة — هيعيد فتح اللعبة"],
  [/^CoC started/, "تم فتح اللعبة ✓"],
  [/^Stopping CoC\.\.\./, "جاري إغلاق اللعبة…"],
@@ -802,6 +850,7 @@ function showTab(name){
   $("#pageTitle").textContent = t("sub_" + name);
   try { localStorage.setItem("tab", name); } catch(e) {}
   if (name === "res") { loadStats(); loadLog(); }
+  if (name === "err") loadErrors();
 }
 function showSub(name){
   curSub = name;
@@ -1071,7 +1120,7 @@ async function switchAccount(id){
   if (isDirty() && JSON.stringify(S) !== savedS && !confirm(t("unsaved"))) { $("#accSel").value = CUR; return; }
   CUR = id;
   try { localStorage.setItem("acc", id); } catch(e) {}
-  await loadSettings(); renderState(); loadStats(); loadLog();
+  await loadSettings(); renderState(); loadStats(); loadLog(); loadErrors();
 }
 
 /* =====================================================================
@@ -1132,6 +1181,7 @@ function renderStats(){
     <div class="kpi"><b class="num">${STATS.cycles}</b><span>${t("cycles_k")}</span></div>
     <div class="kpi"><b>${STATS.avg_cycle_seconds ? dur(STATS.avg_cycle_seconds) : "—"}</b><span>${t("avg_cycle")}</span></div>`;
   $("#resKpis").innerHTML = kpis; $("#dashKpis").innerHTML = kpis;
+  const b = $("#errBadge"); b.textContent = STATS.errors || ""; b.classList.toggle("show", (STATS.errors || 0) > 0);
   $("#resStats").innerHTML = statCard("g", "i-gold", "gold") + statCard("e", "i-elixir", "elixir") + statCard("d", "i-dark", "dark");
   $("#sessSince").textContent = `${t("since")}: ${new Date(STATS.session_start * 1000).toLocaleString(LANG === "ar" ? "ar-EG" : "en-US")}`;
   const atk = STATS.recent_attacks;
@@ -1188,6 +1238,73 @@ function copyLog(){
 }
 
 /* =====================================================================
+   Errors / diagnostics
+   ===================================================================== */
+let ERRS = [];
+/* [pattern, Arabic title, Arabic fix, English title, English fix] */
+const ERR_HELP = [
+ [/not found|offline|Failed to connect to ADB|ADB connection lost|auto-reconnect|ADB device setup failed/i,
+  "الاتصال بالمحاكي اتقطع", "البوت بيعيد الاتصال لوحده. لو اتكرر كتير: تأكد إن ADB مفعّل في إعدادات BlueStacks، ومتفتحش برامج تانية بتستخدم ADB، وجرّب تعيد تشغيل المحاكي.",
+  "Lost connection to the emulator", "The bot reconnects by itself. If it keeps happening: check ADB is enabled in BlueStacks, close other ADB tools and restart the emulator."],
+ [/home_lab_available|builder_lab_available|Failed to get .*lab availability/i,
+  "مقدرش يقرا حالة المختبر", "البوت بيدوّر على عدد المختبر (زي 0/1) في قايمة البنّائين. ابعت التقرير بالصورة عشان نظبط مكان القراءة.",
+  "Couldn't read the laboratory status", "The bot looks for the lab counter (like 0/1) in the builder menu. Send the report with the screenshot so it can be calibrated."],
+ [/pet_house_available/i, "مقدرش يقرا حالة بيت الحيوانات", "ابعت التقرير بالصورة.", "Couldn't read the pet house status", "Send the report with the screenshot."],
+ [/get_home_builders|get_builder_builders|builders/i, "مقدرش يقرا عدد البنّائين الفاضيين", "ممكن تكون في نافذة مفتوحة فوق القرية. ابعت التقرير لو اتكرر.", "Couldn't read free builders", "A window may be covering the village. Send the report if it repeats."],
+ [/find a match/i, "مقدرش يلاقي زرار البحث عن خصم", "ممكن الجيش مش جاهز أو فيه نافذة مفتوحة. اتأكد إن الجيش مدرّب.", "Couldn't find the Find a Match button", "The army may not be ready or a window is open."],
+ [/confirm attack/i, "مقدرش يأكد الهجوم", "ابعت التقرير بالصورة.", "Couldn't confirm the attack", "Send the report with the screenshot."],
+ [/search for attack/i, "البحث عن خصم أخد وقت طويل", "ممكن النت بطيء أو اللعبة اتقطعت.", "Searching for an opponent took too long", "The connection may be slow or the game disconnected."],
+ [/Not in home base|Not in builder base/i, "البوت مكانش في القرية الصح", "بيرجع يحاول في الدورة الجاية.", "The bot wasn't in the right village", "It retries next cycle."],
+ [/Battle end not detected/i, "مقدرش يلاقي شاشة نهاية المعركة", "البوت قفل اللعبة وفتحها عشان يكمّل. ابعت صورة لشاشة نهاية المعركة عشان نظبطها.", "Battle end screen not detected", "The bot reopened the game to continue. Send a screenshot of the results screen."],
+ [/Failed to start CoC/i, "اللعبة مفتحتش", "اتأكد إن اللعبة متسطّبة وبتفتح يدوي، وإن النت شغال.", "The game didn't open", "Check the game opens manually and the internet works."],
+ [/read_resources/i, "مقدرش يقرا الموارد", "مش بيأثر على الشغل. ابعت التقرير عشان نظبط القراءة.", "Couldn't read resources", "Doesn't stop the bot. Send the report to calibrate it."],
+ [/attempting to upgrade/i, "حصل خطأ أثناء الترقية", "بيعيد المحاولة لوحده.", "An upgrade attempt failed", "It retries automatically."],
+];
+function errHelp(e){
+  const text = `${e.message} ${e.detail || ""} ${e.where || ""}`;
+  for (const h of ERR_HELP) if (h[0].test(text)) return LANG === "ar" ? {title:h[1], fix:h[2]} : {title:h[3], fix:h[4]};
+  return {title: LANG === "ar" ? "خطأ غير متوقع" : "Unexpected error", fix: LANG === "ar" ? "اضغط \"حفظ تقرير للمطوّر\" وابعته." : "Click \"Save report\" and send it."};
+}
+async function loadErrors(){
+  if (!CUR) return;
+  try { ERRS = (await api(`/api/errors/${encodeURIComponent(CUR)}`)).items; renderErrors(); } catch(e) {}
+}
+function renderErrors(){
+  const f = $("#errFilter").value;
+  const nErr = ERRS.filter(e => e.type === "error").length, nWarn = ERRS.length - nErr;
+  $("#errKpis").innerHTML = `<div class="kpi"><b class="num" style="color:var(--bad)">${nErr}</b><span>${t("errors_k")}</span></div>
+    <div class="kpi"><b class="num" style="color:var(--warn)">${nWarn}</b><span>${t("warnings_k")}</span></div>
+    <div class="kpi"><b>${ERRS.length ? ago(ERRS[0].t) : "—"}</b><span>${t("last_error")}</span></div>`;
+  const list = ERRS.filter(e => !f || e.type === f);
+  if (!list.length) { $("#errList").innerHTML = `<div class="empty">${t("no_errors")}</div>`; return; }
+  $("#errList").innerHTML = list.map(e => {
+    const h = errHelp(e);
+    const shot = e.shot ? `<img src="/api/errors/${encodeURIComponent(CUR)}/shot/${e.shot}" onclick="showShot(this.src)" onerror="this.remove()" loading="lazy">` : "";
+    return `<div class="err ${e.type}"><div class="body">
+      <div class="top"><span class="num">${new Date(e.t * 1000).toLocaleString("en-GB")}</span><span class="lv ${e.type === "error" ? "ERROR" : "WARNING"}" style="border-radius:6px;padding:0 6px">${t(e.type === "error" ? "one_err" : "one_warn")}</span>${e.phase ? `<span class="tagp">${t("during")}: ${t("ph_" + e.phase)}</span>` : ""}</div>
+      <div class="ttl">${esc(h.title)}</div>
+      <div>${esc(translateMsg(e.message || ""))}</div>
+      <div class="fix"><i class="fa-solid fa-wrench"></i> <b>${t("fix")}:</b> ${esc(h.fix)}</div>
+      <details><summary>${t("tech")}</summary><pre>${esc([e.message, e.detail, e.where].filter(Boolean).join("\n"))}</pre></details>
+    </div>${shot}</div>`;
+  }).join("");
+}
+function showShot(src){ $("#shotImg").src = src; $("#shotModal").classList.add("show"); }
+async function saveReport(){
+  $("#reportNote").textContent = "…";
+  const r = await api(`/api/report/${encodeURIComponent(CUR)}`, {method:"POST", body:{}});
+  $("#reportNote").textContent = r.ok ? `${t("report_saved")} ${r.path}` : (r.error || t("save_err"));
+}
+async function openErrFolder(){
+  const r = await api(`/api/errors/${encodeURIComponent(CUR)}/open`, {method:"POST", body:{}});
+  if (!r.ok) $("#reportNote").textContent = r.path;
+}
+async function clearErrors(){
+  if (!confirm(t("confirm_clear_err"))) return;
+  await api(`/api/errors/${encodeURIComponent(CUR)}/clear`, {method:"POST", body:{}}); loadErrors(); loadStats();
+}
+
+/* =====================================================================
    Updates
    ===================================================================== */
 async function checkUpdate(){
@@ -1227,7 +1344,7 @@ async function refreshAll(user){
   applyLang();
   loadStats(); loadLog();
   setInterval(loadState, 3000);
-  setInterval(() => { loadStats(); if (curTab === "res" || curTab === "dash") loadLog(); updateSchedNote(); }, 5000);
+  setInterval(() => { loadStats(); if (curTab === "res" || curTab === "dash") loadLog(); if (curTab === "err") loadErrors(); updateSchedNote(); }, 5000);
 })();
 </script>
 </body>

@@ -182,6 +182,64 @@ def api_log(id):
     except OSError:
         return jsonify({"lines": []})
 
+# ---------------------------------------------------------------- errors / diagnostics
+
+ERRORS_DIR = Path.home() / ".CoC_Bot" / "errors"
+
+@app.route("/api/errors/<id>", methods=["GET"])
+def api_errors(id):
+    if not valid_id(id): abort(404)
+    return jsonify({"items": stats.problems(id)})
+
+@app.route("/api/errors/<id>/clear", methods=["POST"])
+def api_errors_clear(id):
+    if not valid_id(id): abort(404)
+    stats.record(id, "errors_cleared")
+    return jsonify({"ok": True})
+
+@app.route("/api/errors/<id>/shot/<name>", methods=["GET"])
+def api_error_shot(id, name):
+    from flask import send_from_directory
+    if not valid_id(id) or "/" in name or "\\" in name or ".." in name: abort(404)
+    return send_from_directory(ERRORS_DIR / id, name)
+
+@app.route("/api/errors/<id>/open", methods=["POST"])
+def api_errors_open(id):
+    if not valid_id(id): abort(404)
+    folder = ERRORS_DIR / id
+    folder.mkdir(parents=True, exist_ok=True)
+    try:
+        if sys.platform == "win32": os.startfile(str(folder))
+        elif sys.platform == "darwin":
+            import subprocess; subprocess.Popen(["open", str(folder)])
+        return jsonify({"ok": True, "path": str(folder)})
+    except Exception as e:
+        return jsonify({"ok": False, "path": str(folder), "error": str(e)})
+
+@app.route("/api/report/<id>", methods=["POST"])
+def api_report(id):
+    """Zip log + recent events + settings + error screenshots onto the Desktop, to send for help."""
+    import zipfile, json as _json
+    if not valid_id(id): abort(404)
+    desktop = Path.home() / "Desktop"
+    if not desktop.exists():
+        onedrive = Path.home() / "OneDrive" / "Desktop"
+        desktop = onedrive if onedrive.exists() else Path.home()
+    out = desktop / f"CoC_Bot_report_{id}_{time.strftime('%Y%m%d_%H%M%S')}.zip"
+    try:
+        with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+            lp = log_path(id)
+            if lp.exists(): z.write(lp, f"{id}.log")
+            z.writestr("errors.json", _json.dumps(stats.problems(id, 300), ensure_ascii=False, indent=1))
+            z.writestr("summary.json", _json.dumps(stats.summary(id), ensure_ascii=False, indent=1, default=str))
+            z.writestr("settings.json", _json.dumps(bot_settings.load(id), ensure_ascii=False, indent=1))
+            z.writestr("version.txt", VERSION)
+            for shot in sorted((ERRORS_DIR / id).glob("*.jpg"))[-25:]:
+                z.write(shot, f"screenshots/{shot.name}")
+        return jsonify({"ok": True, "path": str(out)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
 # ---------------------------------------------------------------- updates
 
 @app.route("/api/update/check", methods=["GET"])

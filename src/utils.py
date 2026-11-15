@@ -1454,8 +1454,11 @@ class DeviceProxy:
                     raise RuntimeError(f"Action '{context_name}' failed, and max retries ({self._max_retries}) exceeded.") from e
                 
                 attempts += 1
-                logger.exception(f"DeviceProxy.{context_name} failed (attempt {attempts}/{self._max_retries}), reconnecting...")
-                
+                logger.warning(f"ADB connection lost during '{context_name}' ({type(e).__name__}: {e}), reconnecting...")
+                # cheap path first: re-attach the device; full rebuild only if that fails
+                if self._manager_cls.quick_reconnect():
+                    logger.info("ADB reconnected.")
+                    continue
                 if not self._manager_cls.connect():
                     raise RuntimeError(f"Action '{context_name}' failed, and auto-reconnection timed out.") from e
 
@@ -1550,13 +1553,11 @@ class ADB_Manager:
         pyminitouch.connection._ADB = adb_executable
         # if cls.is_connected(): return
         subprocess.run([adb_executable, "start-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        cls._adb_exe = adb_executable
         def reset_adb():
-            # Killing the shared adb server would drop every other running instance,
-            # so with multiple accounts only this instance's device is disconnected.
-            if len(configs.INSTANCE_IDS) > 1:
-                subprocess.run([adb_executable, "disconnect", addr], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            else:
-                subprocess.run([adb_executable, "kill-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # Never kill the shared adb server (it drops every connection, including
+            # minitouch and other accounts): just reconnect this device.
+            subprocess.run([adb_executable, "disconnect", addr], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         res = adbutils.adb.connect(addr)
         if "connected" not in res:
             reset_adb()
@@ -1576,6 +1577,54 @@ class ADB_Manager:
             raise Exception("Failed to get ADB device.")
         cls._adbutils_device, cls._minitouch_device, cls._uiautomator_device = devices
     
+    _adb_exe = None
+    _keepalive = None
+
+    @classmethod
+    def device_state(cls, addr=None):
+        """'device' when usable, 'offline', or None when not listed."""
+        import adbutils
+        addr = addr or ADB_ADDRESS
+        try:
+            for info in adbutils.adb.list():
+                if info.serial == addr: return info.state
+        except Exception:
+            pass
+        return None
+
+    @classmethod
+    def quick_reconnect(cls, wait=6):
+        """Re-attach the TCP device without rebuilding minitouch/uiautomator (takes ~1s)."""
+        import time, subprocess, adbutils
+        addr = ADB_ADDRESS
+        try:
+            if cls.device_state(addr) == "offline" and cls._adb_exe:
+                subprocess.run([cls._adb_exe, "reconnect", "offline"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+            adbutils.adb.connect(addr, timeout=5)
+        except Exception:
+            pass
+        end = time.time() + wait
+        while time.time() < end:
+            if cls.device_state(addr) == "device": return True
+            time.sleep(0.5)
+        return False
+
+    @classmethod
+    def start_keepalive(cls):
+        """Background check every 15s so an idle TCP connection never stays dropped."""
+        import threading, time
+        if cls._keepalive is not None: return
+        def loop():
+            while True:
+                time.sleep(15)
+                try:
+                    if cls._adbutils_device is not None and cls.device_state() != "device":
+                        cls.quick_reconnect()
+                except Exception:
+                    pass
+        cls._keepalive = threading.Thread(target=loop, daemon=True, name="adb-keepalive")
+        cls._keepalive.start()
+
     @classmethod
     def connect(cls, timeout=60):
         import time
@@ -1584,6 +1633,7 @@ class ADB_Manager:
             try:
                 cls.connect_once()
                 logger.info("Connected to ADB.")
+                cls.start_keepalive()
                 return True
             except (KeyboardInterrupt, SystemExit): raise
             except Exception:
@@ -1976,3 +2026,70 @@ class Dev_Tools:
         if return_results:
             return optimal_size, results
         return optimal_size
+
+# ======================================================================
+# Error reporter: every WARNING/ERROR is stored with the bot's current step
+# and (for errors) a screenshot of the emulator, so the GUI can show exactly
+# what went wrong and where.
+# ======================================================================
+ERRORS_DIR = APP_DATA_DIR / "errors"
+
+def set_phase(name):
+    """What the bot is doing right now (shown next to every error)."""
+    TEMP_CACHE["phase"] = name
+
+def install_error_reporter():
+    import threading, time, traceback
+    import stats as _stats
+
+    state = {"last_shot": 0.0, "busy": False}
+    shot_dir = ERRORS_DIR / str(INSTANCE_ID)
+
+    def save_screenshot(path):
+        # raw device, no proxy / no logging: must never recurse into the logger
+        try:
+            import cv2, numpy as np
+            dev = ADB_Manager._adbutils_device
+            if dev is None: return
+            img = np.array(dev.screenshot())[..., :3]
+            path.parent.mkdir(parents=True, exist_ok=True)
+            cv2.imwrite(str(path), cv2.cvtColor(img, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 70])
+        except Exception:
+            pass
+        finally:
+            state["busy"] = False
+
+    def sink(message):
+        try:
+            rec = message.record
+            level = rec["level"].name
+            text = str(rec["message"]).strip()
+            first = text.splitlines()[0] if text else ""
+            exc = rec.get("exception")
+            detail = ""
+            if exc is not None and exc.type is not None:
+                detail = f"{exc.type.__name__}: {exc.value}"
+                tb = traceback.extract_tb(exc.traceback)[-3:] if exc.traceback else []
+                where = " <- ".join(f"{Path(f.filename).name}:{f.lineno} {f.name}" for f in reversed(tb))
+            else:
+                where = f"{Path(rec['file'].path).name}:{rec['line']} {rec['function']}"
+            entry = {"level": level, "message": first, "detail": detail, "where": where,
+                     "phase": TEMP_CACHE.get("phase", "")}
+            now = time.time()
+            if level in ("ERROR", "CRITICAL") and not state["busy"] and now - state["last_shot"] > 20:
+                state["busy"], state["last_shot"] = True, now
+                name = time.strftime("%Y%m%d_%H%M%S") + ".jpg"
+                entry["shot"] = name
+                threading.Thread(target=save_screenshot, args=(shot_dir / name,), daemon=True).start()
+            _stats.record(INSTANCE_ID, "error" if level in ("ERROR", "CRITICAL") else "warning", **entry)
+        except Exception:
+            pass
+
+    logger.add(sink, level="WARNING", enqueue=False, catch=True)
+
+    # keep the screenshot folder small
+    try:
+        shots = sorted(shot_dir.glob("*.jpg"))
+        for old in shots[:-60]: old.unlink()
+    except OSError:
+        pass

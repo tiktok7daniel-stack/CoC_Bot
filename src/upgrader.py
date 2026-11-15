@@ -106,7 +106,7 @@ class Upgrader:
                         ref="lc",
                         return_confidence=True
                     )
-                    if c < 0.9: continue
+                    if c < 0.9: time.sleep(0.3); continue # don't hammer adb with screenshots
 
                     section = Frame_Handler.crop(section, 0, 0, x, 1)
 
@@ -123,7 +123,7 @@ class Upgrader:
                         return_confidence=True
                     )
                     xs, ys, cs = zip(*xycs)
-                    if max(cs) < 0.8: continue
+                    if max(cs) < 0.8: time.sleep(0.3); continue # don't hammer adb with screenshots
                     available = np.argmax(cs) % 10
                     return available
                 except (KeyboardInterrupt, SystemExit): raise
@@ -152,7 +152,7 @@ class Upgrader:
                     grayscale=True,
                     return_confidence=True
                 )
-                if c < 0.9: continue
+                if c < 0.9: time.sleep(0.3); continue # don't hammer adb with screenshots
 
                 section = Frame_Handler.crop(section, 0, 0, x, 1)
 
@@ -169,7 +169,7 @@ class Upgrader:
                     return_confidence=True
                 )
                 xs, ys, cs = zip(*xycs)
-                if max(cs) < 0.8: continue
+                if max(cs) < 0.8: time.sleep(0.3); continue # don't hammer adb with screenshots
                 available = np.argmax(cs) % 10
                 return available
             except (KeyboardInterrupt, SystemExit): raise
@@ -198,7 +198,7 @@ class Upgrader:
                     grayscale=True,
                     return_confidence=True
                 )
-                if c < 0.9: continue
+                if c < 0.9: time.sleep(0.3); continue # don't hammer adb with screenshots
 
                 section = Frame_Handler.crop(section, 0, 0, x, 1)
 
@@ -215,7 +215,7 @@ class Upgrader:
                     return_confidence=True
                 )
                 xs, ys, cs = zip(*xycs)
-                if max(cs) < 0.8: continue
+                if max(cs) < 0.8: time.sleep(0.3); continue # don't hammer adb with screenshots
                 available = np.argmax(cs) % 10
                 return available > 0
             except (KeyboardInterrupt, SystemExit): raise
@@ -244,7 +244,7 @@ class Upgrader:
                     grayscale=True,
                     return_confidence=True
                 )
-                if c < 0.9: continue
+                if c < 0.9: time.sleep(0.3); continue # don't hammer adb with screenshots
 
                 section = Frame_Handler.crop(section, 0, 0, x, 1)
 
@@ -261,7 +261,7 @@ class Upgrader:
                     return_confidence=True
                 )
                 xs, ys, cs = zip(*xycs)
-                if max(cs) < 0.8: continue
+                if max(cs) < 0.8: time.sleep(0.3); continue # don't hammer adb with screenshots
                 available = np.argmax(cs) % 10
                 return available > 0
             except (KeyboardInterrupt, SystemExit): raise
@@ -293,7 +293,7 @@ class Upgrader:
                         grayscale=True,
                         return_confidence=True
                     )
-                    if c < 0.9: continue
+                    if c < 0.9: time.sleep(0.3); continue # don't hammer adb with screenshots
 
                     section = Frame_Handler.crop(section, 0, 0, x, 1)
 
@@ -310,7 +310,7 @@ class Upgrader:
                         return_confidence=True
                     )
                     xs, ys, cs = zip(*xycs)
-                    if max(cs) < 0.8: continue
+                    if max(cs) < 0.8: time.sleep(0.3); continue # don't hammer adb with screenshots
                     available = np.argmax(cs) % 10
                     return available > 0
                 except (KeyboardInterrupt, SystemExit): raise

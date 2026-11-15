@@ -103,6 +103,7 @@ class CoC_Bot:
                     self.idle(1)
                     continue
 
+                set_phase("start_game")
                 started, res = start_coc(detailed=True)
                 if started:
                     update_status("now")
@@ -124,10 +125,13 @@ class CoC_Bot:
 
                     # ---- Home village
                     if running() and (home_upgrades_wanted() or not self.excluded("home_attacks")):
+                        set_phase("to_home")
                         to_home_base(ref_cache=True)
+                        set_phase("read_resources")
                         self.read_and_record_resources()
 
                     if running() and home_upgrades_wanted():
+                        set_phase("home_upgrades")
                         logger.info("Upgrading home base")
                         self.load_settings()
                         self.upgrader.run_home_base(self.excluded("home_base"), self.excluded("home_lab"), self.excluded("pet_house"))
@@ -136,20 +140,24 @@ class CoC_Bot:
                         n = max(1, int(self.settings["attack"]["home_attacks_per_cycle"]))
                         for i in range(n):
                             if not running() or self.excluded("home_attacks"): break
+                            set_phase("home_attack")
                             logger.info(f"Attacking home base ({i + 1}/{n})")
                             self.attack_with_loot("home", lambda: self.attacker.run_home_base(restart=True))
                             # optionally spend the new loot on walls between farming attacks
                             w = self.settings["walls"]
                             if i < n - 1 and w["enabled"] and w["during_farming"] and not self.excluded("home_base"):
+                                set_phase("walls_farming")
                                 to_home_base()
                                 self.upgrader.wall_budget = max(0, int(w["max_per_run"]))
                                 self.upgrader.run_home_base(False, True, True)
 
                     # ---- Builder base
                     if running() and (builder_upgrades_wanted() or not self.excluded("builder_attacks")):
+                        set_phase("to_builder")
                         to_builder_base(ref_cache=True)
 
                         if builder_upgrades_wanted():
+                            set_phase("builder_upgrades")
                             logger.info("Upgrading builder base")
                             self.load_settings()
                             self.upgrader.collect_builder_attack_elixir()
@@ -159,9 +167,11 @@ class CoC_Bot:
                             n = max(1, int(self.settings["attack"]["builder_attacks_per_cycle"]))
                             for i in range(n):
                                 if not running() or self.excluded("builder_attacks"): break
+                                set_phase("builder_attack")
                                 logger.info(f"Attacking builder base ({i + 1}/{n})")
                                 self.attack_with_loot("builder", self.attacker.run_builder_base)
 
+                    set_phase("finish")
                     to_home_base()
                     if not self.settings["game"]["keep_open"]:
                         stop_coc(sleep=configs.SUSPEND_EMULATOR_ON_IDLE)
@@ -173,13 +183,13 @@ class CoC_Bot:
                 elif res == "error":
                     update_status("error")
 
+                set_phase("idle")
                 self.idle(configs.CHECK_INTERVAL)
 
             except (KeyboardInterrupt, SystemExit): raise
             except Exception as e:
                 consecutive_errors += 1
                 logger.exception(f"CoC_Bot.run (error #{consecutive_errors} in a row):")
-                stats.record(_utils.INSTANCE_ID, "error", message=f"{type(e).__name__}: {e}")
                 if consecutive_errors == 3:
                     send_notification(f"Bot failed 3 times in a row, last error: {type(e).__name__}: {e}")
                 try: stop_coc()
