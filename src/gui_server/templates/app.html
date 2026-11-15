@@ -265,6 +265,81 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-thumb{background:#2a4173;border-radius:10px}
 ::-webkit-scrollbar-track{background:transparent}
+/* =====================================================================
+   Layout & look: dark charcoal, sidebar on the left, big page title,
+   action buttons row, framed content, underline tabs, status bar
+   ===================================================================== */
+:root{
+  --bg:#12141b; --bg2:#171a22; --panel:#1b1e28; --panel2:#232735; --line:#2c3140; --line2:#3a4052;
+  --text:#e9ebf2; --muted:#9aa0b3; --dim:#6d7387; --accent:#8b7cf6; --accent2:#b0a4ff;
+  --radius:10px; --shadow:none;
+}
+body{background:var(--bg);padding-inline-start:0 !important;padding-left:262px !important}
+body.side-mini{padding-left:94px !important}
+nav.tabs{left:10px !important;right:auto !important;top:10px;bottom:10px;width:240px;border-radius:16px;background:var(--panel);border:1px solid var(--line);padding:12px 10px}
+body.side-mini nav.tabs{width:72px}
+body.side-mini nav.tabs button span,body.side-mini nav.tabs .side-brand div,body.side-mini nav.tabs .soon-tag,body.side-mini nav.tabs .side-foot{display:none}
+body.side-mini nav.tabs button{justify-content:center}
+body.side-mini .side-collapse i{transform:rotate(180deg)}
+.side-collapse{align-self:flex-end;width:40px;height:40px;border-radius:8px;border:0;background:var(--panel2);color:var(--text);cursor:pointer;margin-bottom:4px}
+nav.tabs .side-brand{border-bottom:0;padding-bottom:6px}
+nav.tabs button{flex-direction:row-reverse;justify-content:space-between;color:var(--text);border-radius:10px;padding:11px 14px;font-size:16px}
+nav.tabs button span:not(.soon-tag):not(.badge){flex:1}
+nav.tabs button i{font-size:20px}
+nav.tabs button:hover{background:var(--panel2)}
+nav.tabs button.active,body:not(.ltr) nav.tabs button.active{background:#3a3462;border-color:transparent;box-shadow:inset 4px 0 0 var(--accent2)}
+header{background:transparent;border:0;padding:18px 22px 6px}
+.acc-chip{display:flex;align-items:center;gap:14px;order:2;margin-inline-start:auto}
+.acc-chip .av{width:60px;height:60px;border-radius:10px;background:#2e2a52;border:1px solid var(--line2);display:grid;place-items:center;font-weight:800;font-size:20px}
+.acc-chip .who select{background:transparent;border:0;color:var(--text);font-weight:800;font-size:17px;outline:0;padding:0}
+.acc-chip .who select option{background:var(--panel)}
+.acc-chip .who small{display:block;color:var(--muted);font-size:13px}
+.page-title{margin:0;font-size:34px;font-weight:800;order:1}
+.actions{display:flex;align-items:center;gap:10px;padding:4px 22px 12px;flex-wrap:wrap}
+.actions .grow{flex:1}
+.abtn{display:inline-flex;align-items:center;gap:10px;min-width:140px;justify-content:center;padding:11px 18px;background:var(--panel);border:1px solid #7b8196;border-radius:4px;color:var(--text);font-weight:700;font-size:16px;cursor:pointer}
+.abtn:hover{background:var(--panel2)}
+.abtn:disabled{opacity:.45;cursor:not-allowed}
+.abtn.go{background:#2aa255;border:2px solid #4fd17d;color:#fff;min-width:180px}
+.abtn.go i{color:#fff}
+main{margin:0 22px 8px 0;padding:14px;border:2px solid #c9ccd6;border-radius:4px;background:var(--bg2)}
+.statusbar{display:flex;align-items:center;gap:14px;margin:0 22px 10px 0;padding:6px 14px;border:1px solid var(--line2);border-radius:4px;background:var(--bg2);color:var(--muted);font-size:14px}
+.statusbar .pill{border:0;background:transparent;padding:0;color:var(--text)}
+.statusbar .grow{flex:1}
+.statusbar .sep{color:var(--dim)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px}
+.card-h .ico{background:transparent}
+.card-sub{border-bottom:1px solid var(--line)}
+.row{border-bottom:1px dashed rgba(90,96,120,.35)}
+.subtabs{background:var(--panel);border-radius:0;border:0;border-bottom:1px solid var(--line2);padding:0;gap:0;width:max-content}
+.subtabs button{border-radius:0;padding:12px 26px;color:var(--text);font-weight:600;border-bottom:3px solid transparent}
+.subtabs button.active{background:transparent;color:var(--text);border-bottom-color:var(--accent2)}
+.panel{border:1px solid var(--line2);border-radius:6px;padding:12px;background:var(--panel);margin-bottom:12px}
+.panel-t{font-size:16px;margin-bottom:10px}
+.sys .tile{background:var(--panel2);border-color:var(--line);border-radius:4px}
+.quick .btn{background:transparent;border:1px solid #7b8196;border-radius:4px;min-width:150px}
+.home-accs{display:flex;flex-wrap:wrap;gap:10px}
+.hacc{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line2);border-radius:8px;background:var(--panel2);cursor:pointer;min-width:220px}
+.hacc.cur{border-color:var(--accent)}
+.hacc .av{width:38px;height:38px;border-radius:8px;background:#2e2a52;display:grid;place-items:center;font-weight:800}
+.hacc .nm{flex:1} .hacc .nm small{display:block;color:var(--muted);font-size:12px}
+.home-split{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:12px}
+.srow{display:flex;align-items:center;gap:12px;padding:12px;background:var(--panel2);border-radius:6px;margin-bottom:8px;font-weight:700}
+.srow .ic{width:24px;height:24px}
+.srow b{margin-inline-start:auto;font-size:18px}
+.log{background:#0d0f14;border-color:var(--line)}
+.log.term{background:#000;font-family:Consolas,"Courier New",monospace;font-size:13px}
+input.in,select.in{background:#14161d;border-color:var(--line2);border-radius:4px}
+.lvl,.acc-row,.stat,.choice,.titem{background:var(--panel2)}
+.modal{background:var(--panel)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+::-webkit-scrollbar-thumb{background:#3a4052}
+.opt{background:var(--panel2) !important;border-color:var(--line2) !important}
+.opt.sel,.opt.selbox{background:#2e2a52 !important;border-color:var(--accent) !important}
+.su-acc,.su-sum{background:var(--panel2)}
+.tag,.ibtn{background:#2a2e3d}
+th{background:var(--panel)}
+@media (max-width:900px){body,body.side-mini{padding-left:0 !important}nav.tabs{position:static;width:auto;border-radius:0}main,.statusbar{margin:0 8px 8px}.home-split{grid-template-columns:1fr}.abtn{min-width:0}}
 </style>
 </head>
 <body>
@@ -284,22 +359,27 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
 </svg>
 
 <header>
-  <div class="brand">
-    <img src="{{ url_for('static', filename='logo.svg') }}" alt="">
-    <div><h1>CoC Bot</h1><small id="pageTitle"></small></div>
+  <div class="acc-chip">
+    <div class="av" id="accAv">M</div>
+    <div class="who"><select id="accSel" onchange="switchAccount(this.value)"></select><small><span id="accNum">1</span> | <span id="accClock" class="num">--:--:--</span></small></div>
   </div>
-  <div class="res-chips">
-    <div class="chip"><svg class="ic"><use href="#i-gold"/></svg><div><label data-t="gold"></label><b class="num" id="resGold">—</b></div></div>
-    <div class="chip"><svg class="ic"><use href="#i-elixir"/></svg><div><label data-t="elixir"></label><b class="num" id="resElixir">—</b></div></div>
-    <div class="chip"><svg class="ic"><use href="#i-dark"/></svg><div><label data-t="dark"></label><b class="num" id="resDark">—</b></div></div>
-  </div>
-  <button class="hbtn" onclick="openSetup()"><i class="fa-solid fa-plug-circle-check"></i><span data-t="su_title"></span></button>
-  <button class="hbtn" onclick="refreshAll(true)"><i class="fa-solid fa-rotate"></i><span data-t="refresh"></span></button>
-  <div class="acc-select"><i class="fa-solid fa-user-shield" style="color:var(--gold)"></i><select id="accSel" onchange="switchAccount(this.value)"></select></div>
-  <div class="pill" id="statusPill"><span class="dot"></span><span id="statusText"></span></div>
+  <h1 class="page-title" id="pageTitle"></h1>
 </header>
+<div class="actions">
+  <button class="abtn" onclick="quickPause()" id="btnPause"><i class="fa-solid fa-pause" style="color:var(--gold)"></i><span id="btnPauseTxt" data-t="pause_title"></span></button>
+  <button class="abtn" id="btnWake" onclick="runNow()"><i class="fa-solid fa-bolt" style="color:var(--gold)"></i><span data-t="run_now"></span></button>
+  <button class="abtn" onclick="openSetup()"><i class="fa-solid fa-plug-circle-check" style="color:var(--accent2)"></i><span data-t="su_title"></span></button>
+  <button class="abtn" id="btnStop" onclick="stopBot()"><i class="fa-solid fa-stop" style="color:var(--bad)"></i><span data-t="stop"></span></button>
+  <button class="abtn go" id="btnStart" onclick="startBot()"><i class="fa-solid fa-play"></i><span data-t="start_bot"></span></button>
+  <span class="grow"></span>
+  <div class="pill" id="statusPill"><span class="dot"></span><span id="statusText"></span></div>
+  <span class="unit" id="saveState"></span>
+  <button class="btn ghost sm" onclick="discardChanges()" title=""><i class="fa-solid fa-rotate-left"></i></button>
+  <button class="btn sm" id="btnSave" onclick="saveAll()"><i class="fa-solid fa-floppy-disk"></i><span data-t="save_settings"></span></button>
+</div>
 
 <nav class="tabs" id="tabs">
+  <button class="side-collapse" onclick="toggleSide()" title=""><i class="fa-solid fa-chevron-left"></i></button>
   <div class="side-brand"><img src="{{ url_for('static', filename='logo.svg') }}" alt=""><div><b>CoC Bot</b><small data-t="brand_sub"></small></div></div>
   <button data-tab="dash"><i class="fa-solid fa-trophy"></i><span data-t="nv_home"></span></button>
   <button data-tab="acc"><i class="fa-solid fa-id-card"></i><span data-t="nv_acc"></span></button>
@@ -323,6 +403,8 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
 </div>
 <!-- ============================ DASHBOARD ============================ -->
 <section class="page" id="p-dash">
+  <div class="panel">
+  <div class="panel-t" data-t="dash_panel"></div>
   <div class="sys">
     <div class="tile" style="--c:#4fd6ff"><span data-t="sy_cpu"></span><b class="num" id="syCpu">—</b></div>
     <div class="tile" style="--c:#b18cff"><span data-t="sy_ram"></span><b class="num" id="syRam">—</b></div>
@@ -338,7 +420,27 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
     <button class="btn" onclick="showTab('log')"><i class="fa-solid fa-scroll"></i><span data-t="nv_log"></span></button>
     <button class="btn" onclick="showTab('sch')"><i class="fa-regular fa-clock"></i><span data-t="tab_sch"></span></button>
   </div>
-  <div class="card" style="margin-bottom:14px">
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3 data-t="acc_cards"></h3><div class="tools"><button class="btn sm" onclick="showTab('acc')" data-t="nv_acc"></button></div></div>
+    <div class="card-b"><div id="homeAccs" class="home-accs"></div></div>
+  </div>
+  <div class="home-split">
+    <div class="card">
+      <div class="card-h"><h3 data-t="last_logs"></h3><div class="tools"><button class="btn sm" onclick="showTab('log')" data-t="nv_log"></button></div></div>
+      <div class="card-b"><div id="dashLog" class="log term" style="height:300px"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3 data-t="nv_stats"></h3></div>
+      <div class="card-b">
+        <div class="srow"><svg class="ic"><use href="#i-gold"/></svg><span data-t="gold"></span><b class="num" id="resGold">—</b></div>
+        <div class="srow"><svg class="ic"><use href="#i-elixir"/></svg><span data-t="elixir"></span><b class="num" id="resElixir">—</b></div>
+        <div class="srow"><svg class="ic"><use href="#i-dark"/></svg><span data-t="dark"></span><b class="num" id="resDark">—</b></div>
+        <div class="kpis" id="dashKpis" style="margin-top:10px"></div>
+      </div>
+    </div>
+  </div>
+  </div>
+  <div class="card" style="margin:12px 0">
     <div class="card-h"><div class="ico"><i class="fa-solid fa-arrows-spin"></i></div><h3 data-t="farm_title"></h3></div>
     <div class="card-sub" data-t="farm_sub"></div>
     <div class="card-b">
@@ -378,14 +480,6 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
       <div class="card-h"><div class="ico"><i class="fa-solid fa-toggle-on"></i></div><h3 data-t="quick_tasks"></h3></div>
       <div class="card-sub" data-t="quick_tasks_sub"></div>
       <div class="card-b" id="quickTasks"></div>
-    </div>
-    <div class="card">
-      <div class="card-h"><div class="ico"><i class="fa-solid fa-chart-simple"></i></div><h3 data-t="session_summary"></h3><div class="tools"><button class="btn sm" onclick="showTab('res')" data-t="details"></button></div></div>
-      <div class="card-sub" data-t="session_summary_sub"></div>
-      <div class="card-b">
-        <div class="kpis" id="dashKpis"></div>
-        <div id="dashLog" class="log" style="height:190px"></div>
-      </div>
     </div>
   </div>
 </section>
@@ -818,18 +912,12 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
 </main>
 
 <div class="banner" id="unsaved"><i class="fa-solid fa-triangle-exclamation"></i><span data-t="unsaved"></span></div>
-<footer>
-  <div class="emu"><i class="fa-solid fa-desktop"></i><span data-t="emulator"></span>
-    <select class="in" data-app="emulator"><option value="bluestacks">BlueStacks</option><option value="ldplayer">LDPlayer</option><option value="mumu">MuMu Player</option></select></div>
-  <div class="pill" id="footStatus"><span class="dot"></span><span id="footStatusText"></span></div>
-  <div class="mid">
-    <button class="btn go" id="btnStart" onclick="startBot()"><i class="fa-solid fa-play"></i><span data-t="start_bot"></span></button>
-    <button class="btn stop" id="btnStop" onclick="stopBot()"><i class="fa-solid fa-stop"></i><span data-t="stop"></span></button>
-    <button class="btn gold" id="btnWake" onclick="runNow()"><i class="fa-solid fa-bolt"></i><span data-t="run_now"></span></button>
-  </div>
-  <span class="unit" id="saveState" style="min-width:120px;text-align:center"></span>
-  <button class="btn ghost" onclick="discardChanges()" title=""><i class="fa-solid fa-rotate-left"></i></button>
-  <button class="btn primary" id="btnSave" onclick="saveAll()"><i class="fa-solid fa-floppy-disk"></i><span data-t="save_settings"></span></button>
+<footer class="statusbar">
+  <span class="pill" id="footStatus"><span class="dot"></span><span id="footStatusText"></span></span>
+  <span class="sep">|</span>
+  <span id="fbEmu">—</span>
+  <span class="grow"></span>
+  <span dir="ltr">CoC Bot • v<span id="fbVer"></span></span>
 </footer>
 
 <!-- setup screen (shown first) -->
@@ -948,6 +1036,7 @@ ar:{
  one_err:"خطأ", one_warn:"تحذير",
  brand_sub:"أتمتة كلاش أوف كلانس",
  as_plans:"التشكيلات",
+ dash_panel:"لوحة تحكم البوت", acc_cards:"بطاقات الحسابات", last_logs:"آخر السجلات", no_accounts:"مفيش حسابات لسه",
  pl_wave_sub2:"دوس على صور التعاويذ اللي تتأجل للموجة التانية (مثلًا العلاج). البوت بيتعرّف على الكروت من الصور — أو اكتب أرقام الكروت من الشمال: 1،2،3",
  ug_title:"صور الوحوش والتعاويذ", ug_sub:"الصور اللي رفعتها على المشروع. البوت بيستخدمها عشان يعرف اسم كل كارت في شريط المعركة (بيكتبه في السجل: \"شريط الجيش\").",
  ug_troops:"الوحوش", ug_spells:"التعاويذ", ug_sieges:"آلات الحصار", ug_pets:"الحيوانات الأليفة", ug_none:"مفيش صور في المشروع",
@@ -1109,6 +1198,7 @@ en:{
  one_err:"Error", one_warn:"Warning",
  brand_sub:"Clash of Clans automation",
  as_plans:"Loadouts",
+ dash_panel:"Bot control panel", acc_cards:"Account cards", last_logs:"Latest logs", no_accounts:"No accounts yet",
  pl_wave_sub2:"Tap the spells to hold back for the second wave (e.g. healing) — or type card numbers from the left: 1,2,3",
  ug_title:"Troop & spell pictures", ug_sub:"The pictures uploaded to the project. The bot uses them to name every card in the battle bar (logged as \"Troop bar\").",
  ug_troops:"Troops", ug_spells:"Spells", ug_sieges:"Siege machines", ug_pets:"Pets", ug_none:"No pictures in the project",
@@ -1880,7 +1970,35 @@ function renderState(){
   $("#btnWake").disabled = !a.running || k === "running";
   renderAccounts();
 }
+function toggleSide(){ document.body.classList.toggle("side-mini"); try { localStorage.setItem("sideMini", document.body.classList.contains("side-mini") ? "1" : ""); } catch(e) {} }
+try { if (localStorage.getItem("sideMini")) document.body.classList.add("side-mini"); } catch(e) {}
+async function quickPause(){
+  const a = acc(CUR);
+  if (!a || !a.running) return toast(t("need_running"), true);
+  const paused = a.end_time && a.end_time > STATE.current_time;
+  await accAction(CUR, "pause", {minutes: paused ? 0 : 30});
+}
+function renderHeaderInfo(){
+  if (!APP) return;
+  $("#accAv").textContent = (CUR || "?").slice(0, 1).toUpperCase();
+  $("#accNum").textContent = Math.max(1, APP.accounts.indexOf(CUR) + 1);
+  const a = acc(CUR), paused = a && a.end_time && STATE && a.end_time > STATE.current_time;
+  $("#btnPauseTxt").textContent = t(paused ? "resume_now" : "pause_title");
+  if (STATE) $("#fbVer").textContent = STATE.version || "";
+  const box = $("#homeAccs"); if (!box) return;
+  box.innerHTML = APP.accounts.map((id, n) => { const x = acc(id), k = statusKey(x);
+    return `<div class="hacc ${id === CUR ? "cur" : ""}" data-id="${esc(id)}"><div class="av">${esc(id.slice(0, 1).toUpperCase())}</div>
+      <div class="nm"><b>${esc(id)}</b><small>${n + 1} · <span class="pill st-${k}" style="padding:1px 8px"><span class="dot"></span>${t("st_" + k)}</span></small></div>
+      ${x.running ? `<button class="btn sm stop" data-a="stop"><i class="fa-solid fa-stop"></i></button>` : `<button class="btn sm go" data-a="start"><i class="fa-solid fa-play"></i></button>`}</div>`; }).join("")
+    || `<div class="empty" data-t="no_accounts">${t("no_accounts")}</div>`;
+  box.querySelectorAll(".hacc").forEach(el => {
+    el.onclick = e => { if (!e.target.closest("button")) switchAccount(el.dataset.id); };
+    const b = el.querySelector("button"); if (b) b.onclick = () => accAction(el.dataset.id, b.dataset.a);
+  });
+}
+setInterval(() => { const c = $("#accClock"); if (c) c.textContent = new Date().toTimeString().slice(0, 8); }, 1000);
 function renderAccounts(){
+  renderHeaderInfo();
   const box = $("#accList"); if (!APP) return;
   box.innerHTML = "";
   APP.accounts.forEach(id => {
@@ -2300,6 +2418,7 @@ async function loadSystem(){
     const k = statusKey(acc(CUR));
     $("#syPhase").textContent = (k === "running" && r.phase) ? t("ph_" + r.phase) : t("st_" + k);
     $("#sideState").textContent = t("st_" + k);
+    $("#fbEmu").textContent = `${({bluestacks:"BlueStacks", mumu:"MuMu", ldplayer:"LDPlayer"}[r.emulator] || r.emulator || "—")} • ${r.adb || "—"}`;
   } catch(e) {}
 }
 
