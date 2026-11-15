@@ -86,10 +86,11 @@ class Attacker:
                         surrendered = True
             # results screen -> back to the village
             if self._click_return_home(timeout=0):
-                time.sleep(2)
-                for _ in range(10):
+                logger.info("Battle over, returning home")
+                time.sleep(0.8)
+                for _ in range(40): # the village usually shows within 2-4 s
                     if game_ready(): return
-                    time.sleep(1)
+                    time.sleep(0.3)
                 break
             # optional early end: End Battle -> confirm
             if not surrendered and (surrender_after > 0 or leave) and time.monotonic() - start > surrender_after:
@@ -100,11 +101,11 @@ class Attacker:
             # results screen not recognised yet -> once the battle is over (no End Battle button),
             # find "Return Home" by its text and learn it
             if time.monotonic() - start > 15 and not self.in_battle() and Auto_Learn.learn_button("return_home", tap=True, min_interval=12):
-                time.sleep(2)
-                for _ in range(10):
+                time.sleep(0.8)
+                for _ in range(40):
                     if game_ready(): return
-                    time.sleep(1)
-            time.sleep(0.4 if surrendered else 1)
+                    time.sleep(0.3)
+            time.sleep(0.4 if surrendered else 0.6) # notice the results screen quickly
         # (no Android back key here: in the village it opens the "exit game?" dialog)
         if game_ready(): return
         logger.warning("Battle end not detected, reopening the game")

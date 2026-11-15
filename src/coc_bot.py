@@ -39,8 +39,13 @@ class CoC_Bot:
         checks = [(res.get(k) or 0) >= int(f.get(k, 0)) for k in ("gold", "elixir") if int(f.get(k, 0)) > 0]
         return bool(checks) and all(checks)
 
-    def read_and_record_resources(self, builder_base=False):
+    def read_and_record_resources(self, builder_base=False, max_age=0):
+        import time
+        cache = getattr(self, "_res_cache", None)
+        if max_age and cache and cache[0] == builder_base and time.monotonic() - cache[1] < max_age:
+            return cache[2]
         res = read_resources(builder_base=builder_base)
+        self._res_cache = (builder_base, time.monotonic(), res)
         if res is not None and not builder_base: self.last_res = res
         if res is not None and not builder_base:
             stats.record(_utils.INSTANCE_ID, "resources", **res)
@@ -50,7 +55,9 @@ class CoC_Bot:
     def attack_with_loot(self, base, attack_fn):
         """Run one attack and record the loot as the storage difference before/after."""
         builder = base == "builder"
-        before = self.read_and_record_resources(builder_base=builder)
+        import time
+        before = self.read_and_record_resources(builder_base=builder, max_age=20) # just read after the last attack
+        t0 = time.monotonic()
         attack_fn()
         try:
             (to_builder_base if builder else to_home_base)()
@@ -65,6 +72,7 @@ class CoC_Bot:
         stats.record(_utils.INSTANCE_ID, "attack", base=base, **loot, **extra)
         self.session_attacks += 1
         logger.info(f"Attack ({base}) loot: gold={loot['gold']} elixir={loot['elixir']} dark={loot['dark']}")
+        logger.info(f"Attack took {time.monotonic() - t0:.0f}s")
 
     def run_routines(self, s):
         """Tap the taught buttons of every enabled routine, in order (missing steps are skipped)."""
@@ -216,9 +224,12 @@ class CoC_Bot:
                     self.upgrader.wall_budget = max(0, int(walls["max_per_run"])) if wall_turn else 0
                     self.upgrader.budget = s["budget"] if s["budget"]["enabled"] else None
 
+                    up_turn = self.cycle_count % max(1, int(s["upgrades"].get("every_cycles", 1))) == 0 or self.cycle_count == 1
                     def home_upgrades_wanted():
+                        if not up_turn: return False
                         return not (self.excluded("home_base") and self.excluded("home_lab") and self.excluded("pet_house"))
                     def builder_upgrades_wanted():
+                        if not up_turn: return False
                         return not (self.excluded("builder_base") and self.excluded("builder_lab"))
 
                     # ---- Home village

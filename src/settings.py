@@ -62,6 +62,7 @@ def default_settings():
         },
         "upgrades": {
             "max_per_cycle": _cfg("MAX_UPGRADES_PER_CHECK", 10),
+            "every_cycles": 1,       # look for upgrades every N cycles (attacks run every cycle)
             "open_home_builders": _cfg("OPEN_HOME_BUILDERS", 0),
             "open_builder_builders": _cfg("OPEN_BUILDER_BUILDERS", 0),
             "start_from_menu_top": _cfg("START_FROM_MENU_TOP", True),

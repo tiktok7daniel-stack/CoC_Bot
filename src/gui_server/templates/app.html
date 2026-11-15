@@ -423,6 +423,7 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
           <div class="row"><div class="lbl" data-t="t_builder_apprentice"></div><label class="sw"><input type="checkbox" data-bind="tasks.builder_apprentice"><span></span></label></div>
           <div class="row"><div class="lbl"><span data-t="use_priority"></span><small data-t="use_priority_sub"></small></div><label class="sw"><input type="checkbox" data-bind="tasks.home_base_priority"><span></span></label></div>
           <div class="row"><div class="lbl" data-t="max_upgrades_cycle"></div><input class="in" type="number" min="1" data-bind="upgrades.max_per_cycle" data-type="int"></div>
+          <div class="row"><div class="lbl"><span data-t="up_every"></span><small data-t="up_every_sub"></small></div><input class="in" type="number" min="1" data-bind="upgrades.every_cycles" data-type="int"><span class="unit" data-t="cycles"></span></div>
           <div class="row"><div class="lbl"><span data-t="open_builders"></span><small data-t="open_builders_sub"></small></div><input class="in" type="number" min="0" data-bind="upgrades.open_home_builders" data-type="int"></div>
           <div class="row"><div class="lbl" data-t="from_top"></div><label class="sw"><input type="checkbox" data-bind="upgrades.start_from_menu_top"><span></span></label></div>
         </div>
@@ -884,7 +885,7 @@ ar:{
  sn_general:"عام", sn_err:"الأخطاء والفحص",
  preset_title:"إعدادات جاهزة", preset_sub:"اختار مستوى واحد والبوت يظبط كل حاجة لوحده. تقدر تغيّر أي حاجة بعدين من الإعدادات", pr_now:"الحالي", pr_rec:"مُوصى بيه", pr_applied:"تم التطبيق",
  pr_safe:"آمن", pr_balanced:"متوازن", pr_fast:"أقصى سرعة", pr_custom:"مخصص",
- prd_safe:"هجمة واحدة كل ربع ساعة، واستراحات طويلة. أبطأ بس أأمن على الحساب", prd_balanced:"هجمتين كل 5 دقايق، وتخطّي القرى الفقيرة، واستراحة صغيرة كل ساعتين. أفضل توازن", prd_fast:"يدخل وينزّل الجيش ويخرج على طول، والهجمة اللي بعدها فورًا من غير انتظار ولا استراحات. أسرع حاجة بس أكتر لفت للنظر",
+ prd_safe:"هجمة واحدة كل ربع ساعة، واستراحات طويلة. أبطأ بس أأمن على الحساب", prd_balanced:"هجمتين كل 5 دقايق، وتخطّي القرى الفقيرة، واستراحة صغيرة كل ساعتين. أفضل توازن", prd_fast:"المعركة بتخلص عادي، وبعدها يرجع بسرعة ويدخل الهجمة اللي بعدها فورًا من غير انتظار ولا استراحات، والترقيات كل 3 دورات. أسرع فارم بس أكتر لفت للنظر",
  sub_dash:"نظرة عامة على البوت", sub_upg:"ترقيات القرية", sub_bb:"ترقيات قاعدة البنّاء", sub_atk:"الهجوم وجمع الموارد", sub_sch:"أوقات تشغيل البوت", sub_acc:"إدارة الحسابات", sub_res:"نتائج ونشاط البوت", sub_set:"إعدادات البرنامج",
  st_stopped:"متوقف", st_starting:"جاري التشغيل…", st_running:"يعمل الآن", st_idle:"في الانتظار", st_paused:"إيقاف مؤقت", st_scheduled:"خارج الجدول", st_error:"حدث خطأ",
  bot_status:"حالة البوت", bot_status_sub:"تتحدث تلقائيًا كل بضع ثوانٍ", account:"الحساب", state:"الحالة", last_cycle:"آخر دورة انتهت", next_cycle:"الدورة القادمة تقريبًا", schedule:"الجدول الزمني",
@@ -1026,6 +1027,7 @@ ar:{
  smart_end_after:"ينهيها لو اللوت وقف لمدة", smart_end_after_sub:"كل ما تقلّ أسرع، بس ممكن ينهيها قبل ما الوحوش توصل لمخزن بعيد (15 مناسب)",
  be_leave:"⚡ ادخل ونزّل واخرج على طول (أسرع حاجة)",
  leave_after:"يخرج بعد ما ينزّل الجيش بـ", leave_after_sub:"لما تختار \"ادخل ونزّل واخرج\": 0 = يخرج فورًا. اللوت بيتحسب بس لحد ما تخرج، فلو عايز لوت أكتر خليها 10–20 ثانية",
+ up_every:"يدوّر على ترقيات كل", up_every_sub:"البحث عن ترقيات بياخد وقت — لو خليتها 3 الهجمات هتمشي أسرع والترقيات كل 3 دورات",
  be_wait:"انتظار نهاية المعركة (اللعبة تفضل مفتوحة)", be_restart:"إعادة تشغيل اللعبة (أسرع)", surrender_after:"إنهاء المعركة بعد", surrender_after_sub:"يدوس End Battle بعد الوقت ده عشان يوفّر وقت (0 = يستنى للآخر)",
  saved:"تم حفظ الإعدادات ✓", save_err:"فشل الحفظ", started:"تم تشغيل البوت", stopped_t:"تم إيقاف البوت", paused_t:"تم الإيقاف المؤقت", resumed:"تم الاستئناف", need_running:"شغّل البوت الأول",
  confirm_remove:"حذف الحساب من القائمة؟ (الإعدادات والنتائج هتفضل محفوظة)", confirm_reset:"تصفير نتائج الجلسة؟", copied:"تم النسخ", added:"تمت الإضافة — احفظ الإعدادات", invalid_name:"اسم غير صالح (حروف إنجليزي وأرقام و - _ فقط)",
@@ -1037,7 +1039,7 @@ en:{
  sn_general:"General", sn_err:"Errors & check",
  preset_title:"Ready-made settings", preset_sub:"Pick one level and the bot sets everything. You can still change anything later in Settings", pr_now:"Current", pr_rec:"recommended", pr_applied:"Applied",
  pr_safe:"Safe", pr_balanced:"Balanced", pr_fast:"Max speed", pr_custom:"Custom",
- prd_safe:"One attack every 15 minutes, long breaks. Slower but safer for the account", prd_balanced:"Two attacks every 5 minutes, skips poor bases, a short break every 2 hours. Best balance", prd_fast:"Deploy and leave at once, next attack right away, no breaks. Fastest but more noticeable",
+ prd_safe:"One attack every 15 minutes, long breaks. Slower but safer for the account", prd_balanced:"Two attacks every 5 minutes, skips poor bases, a short break every 2 hours. Best balance", prd_fast:"Battles end normally, then the next attack starts right away; no breaks, upgrades every 3 cycles. Fastest farming but more noticeable",
  sub_dash:"Bot overview", sub_upg:"Village upgrades", sub_bb:"Builder base upgrades", sub_atk:"Attacking & farming", sub_sch:"When the bot runs", sub_acc:"Manage accounts", sub_res:"Bot results & activity", sub_set:"App settings",
  st_stopped:"Stopped", st_starting:"Starting…", st_running:"Running", st_idle:"Waiting", st_paused:"Paused", st_scheduled:"Outside schedule", st_error:"Error",
  bot_status:"Bot status", bot_status_sub:"Updates automatically every few seconds", account:"Account", state:"State", last_cycle:"Last cycle finished", next_cycle:"Next cycle (approx.)", schedule:"Schedule",
@@ -1177,6 +1179,7 @@ en:{
  smart_end_after:"End when loot is unchanged for", smart_end_after_sub:"Lower is faster but may end before troops reach a far storage (15 is good)",
  be_leave:"⚡ Deploy and leave right away (fastest)",
  leave_after:"Leave after deploying by", leave_after_sub:"With \"deploy and leave\": 0 = leave at once. Loot only counts until you leave",
+ up_every:"Look for upgrades every", up_every_sub:"Upgrading takes time — 3 makes attacking faster",
  be_wait:"Wait for the battle to end (game stays open)", be_restart:"Restart the game (faster)", surrender_after:"End the battle after", surrender_after_sub:"Presses End Battle after this time to save time (0 = wait until the end)",
  saved:"Settings saved ✓", save_err:"Save failed", started:"Bot started", stopped_t:"Bot stopped", paused_t:"Paused", resumed:"Resumed", need_running:"Start the bot first",
  confirm_remove:"Remove this account from the list? (settings and results are kept)", confirm_reset:"Reset session results?", copied:"Copied", added:"Added — save settings", invalid_name:"Invalid name (English letters, digits, - _ only)",
@@ -1202,6 +1205,8 @@ const LOG_AR = [
  [/^Pre-flight check passed.*/, "✅ الفحص خلص: كل حاجة جاهزة — البوت بيبدأ"],
  [/^Pre-flight problem: (.*)/, "❌ مشكلة: $1"],
  [/^Army deployed, leaving the battle right away/, "⚡ نزّل الجيش — خرج من المعركة على طول"],
+ [/^Battle over, returning home/, "✓ المعركة خلصت — راجع القرية"],
+ [/^Attack took (\d+)s/, "⏱ الهجمة خدت $1 ثانية"],
  [/^Loot stopped for (\d+)s, ending the battle early/, "⚡ اللوت وقف $1 ثانية — البوت أنهى المعركة بدري عشان يوفّر وقت"],
  [/^Bot starting: preparing the emulator/, "🚀 البوت بيبدأ: بيجهّز المحاكي…"],
  [/^Emulator already running, using it/, "✓ المحاكي شغال أصلًا — هيستخدمه زي ما هو"],
@@ -1626,7 +1631,7 @@ const PRESETS = {
     "attack.home_attacks_per_cycle":4, "attack.builder_attacks_per_cycle":2, "schedule.check_interval":0,
     "breaks.enabled":false, "walls.max_per_run":10, "walls.every_cycles":1,
     "attack.loot_filter.enabled":true, "attack.loot_filter.min_gold":350000, "attack.loot_filter.min_elixir":350000, "attack.loot_filter.mode":"any",
-    "game.keep_open":true, "game.anti_idle":true, "attack.battle_end":"leave", "attack.leave_after":0, "attack.hero_retap":5}},
+    "game.keep_open":true, "game.anti_idle":true, "attack.battle_end":"wait", "attack.hero_retap":5, "upgrades.every_cycles":3}},
 };
 function presetMatch(){
   for (const [k, p] of Object.entries(PRESETS)) if (Object.entries(p.v).every(([path, val]) => getPath(S, path) === val)) return k;
