@@ -240,6 +240,55 @@ def api_report(id):
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
+# ---------------------------------------------------------------- teach the bot
+
+@app.route("/api/teach", methods=["GET"])
+def api_teach():
+    import teach
+    return jsonify({"catalog": teach.CATALOG, "taught": teach.load_meta()})
+
+@app.route("/api/teach/capture/<id>", methods=["GET", "POST"])
+def api_teach_capture(id):
+    from flask import send_file
+    import teach
+    if not valid_id(id): abort(404)
+    if request.method == "POST":
+        if id not in instances: return jsonify({"ok": False, "error": "not_running"})
+        teach.request_capture(id)
+        return jsonify({"ok": True})
+    p = teach.capture_path(id)
+    if not p.exists(): abort(404)
+    r = send_file(str(p), mimetype="image/png")
+    r.headers["Cache-Control"] = "no-store"
+    return r
+
+@app.route("/api/teach/save", methods=["POST"])
+def api_teach_save():
+    import teach
+    d = request.json or {}
+    if not valid_id(d.get("id", "")): abort(404)
+    try:
+        e = teach.teach(d.get("key", ""), d.get("rect", [0, 0, 0, 0]), teach.capture_path(d["id"]))
+        return jsonify({"ok": True, "entry": e})
+    except Exception as ex:
+        return jsonify({"ok": False, "error": str(ex)})
+
+@app.route("/api/teach/forget", methods=["POST"])
+def api_teach_forget():
+    import teach
+    teach.forget((request.json or {}).get("key", ""))
+    return jsonify({"ok": True})
+
+@app.route("/api/teach/template/<key>", methods=["GET"])
+def api_teach_template(key):
+    from flask import send_file
+    import teach
+    p = teach.template_path(key)
+    if not p.exists(): abort(404)
+    r = send_file(str(p), mimetype="image/png")
+    r.headers["Cache-Control"] = "no-store"
+    return r
+
 # ---------------------------------------------------------------- GitHub error reports
 
 def _sanitize(text):

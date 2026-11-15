@@ -2213,3 +2213,63 @@ def install_error_reporter():
         for old in shots[:-60]: old.unlink()
     except OSError:
         pass
+
+# ======================================================================
+# Taught templates (see teach.py): find / tap / read what the user taught
+# ======================================================================
+def find_taught(key, multi=False, thresh=0.82, frame=None):
+    """Positions (x, y fractions) of a taught button on screen. [] if not taught / not found."""
+    import teach
+    tpl = teach.template(key)
+    if tpl is None: return []
+    if frame is None: frame = Frame_Handler.get_frame(grayscale=False)
+    if not multi:
+        x, y = Frame_Handler.locate(tpl, frame, grayscale=False, thresh=thresh)
+        return [] if x is None else [(x, y)]
+    hits = Frame_Handler.locate(tpl, frame, grayscale=False, thresh=thresh, return_all=True, return_confidence=True)
+    out = []
+    for x, y, c in hits: # best first; drop neighbours of an accepted hit
+        if x is None: continue
+        if all(abs(x - ox) > 0.025 or abs(y - oy) > 0.035 for ox, oy in out): out.append((x, y))
+    return out
+
+def tap_taught(key, multi=False, timeout=3, thresh=0.82):
+    """Tap a taught button (all matches when multi). Returns how many taps were made."""
+    import time
+    end = time.time() + timeout
+    while True:
+        pts = find_taught(key, multi=multi, thresh=thresh)
+        if pts or time.time() >= end: break
+        time.sleep(0.4)
+    for x, y in pts:
+        Input_Handler.click(x, y)
+        time.sleep(0.35)
+    return len(pts)
+
+def read_taught_number(key, frame=None):
+    """Read the number inside a taught region (e.g. the opponent's loot)."""
+    import teach
+    r = teach.region(key)
+    if r is None: return None
+    if frame is None: frame = Frame_Handler.get_frame(grayscale=False)
+    crop = Frame_Handler.high_contrast(Frame_Handler.crop(frame, *r), thresh=190)
+    return OCR_Handler.get_number(crop)
+
+def start_capture_service():
+    """Serve "take a screenshot" requests from the GUI's Teach tab (polls a request file)."""
+    import threading, time, teach
+    def loop():
+        while True:
+            time.sleep(1)
+            try:
+                req = teach.capture_request_path(INSTANCE_ID)
+                if not req.exists(): continue
+                req.unlink()
+                import cv2
+                frame = Frame_Handler.get_frame(grayscale=False)
+                out = teach.capture_path(INSTANCE_ID)
+                out.parent.mkdir(parents=True, exist_ok=True)
+                cv2.imwrite(str(out), cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+            except Exception:
+                pass
+    threading.Thread(target=loop, daemon=True, name="capture").start()

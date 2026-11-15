@@ -11,6 +11,7 @@ class Attacker:
         self.assets = Asset_Manager.attacker_assets
         self.misc_assets = Asset_Manager.misc_assets
         self.deployed_heroes = []
+        self.loot_filter = None      # {"enabled", "min_gold", "min_elixir", "min_dark", "mode", "max_skips"}
         self.strategy = "funnel"   # "funnel" | "line" | "two_sides" | "auto" (learns the best)
         self.last_strategy = "funnel"
         self.hero_delay = 1.0      # seconds between the army and the heroes
@@ -58,6 +59,7 @@ class Attacker:
     # ============================================================
     
     def _click_okay(self, timeout=5):
+        if tap_taught("okay_button", timeout=timeout): return True # taught from the user's screen wins
         return click_with_timeout(
             lambda: Frame_Handler.locate(self.assets["okay"], thresh=0.9),
             timeout=timeout,
@@ -70,12 +72,14 @@ class Attacker:
         )
     
     def _click_end_battle(self, timeout=5):
+        if tap_taught("end_battle", timeout=timeout): return True # taught from the user's screen wins
         return click_with_timeout(
             lambda: Frame_Handler.locate(self.assets["end_battle"], thresh=0.9),
             timeout=timeout
         )
     
     def _click_return_home(self, timeout=5):
+        if tap_taught("return_home", timeout=timeout): return True # taught from the user's screen wins
         return click_with_timeout(
             lambda: Frame_Handler.locate(self.assets["return_home"], thresh=0.9),
             timeout=timeout
@@ -119,13 +123,51 @@ class Attacker:
             return False
 
         # Wait until "end battle" button is found
+        if not self.wait_for_base(timeout):
+            logger.error("Failed to search for attack")
+            return False
+        return self.apply_loot_filter()
+
+    def wait_for_base(self, timeout=60):
+        """Wait for an opponent's village (End Battle button visible)."""
+        import time
         start_time = time.time()
         while time.time() - start_time < timeout:
+            if find_taught("end_battle"): return True
             x, y = Frame_Handler.locate(self.assets["end_battle"], thresh=0.9)
             if x is not None and y is not None: return True
-            time.sleep(0.1)
-        logger.error("Failed to search for attack")
+            time.sleep(0.3)
         return False
+
+    def apply_loot_filter(self):
+        """
+        Skip bases with too little loot (needs the Next button and the loot numbers taught).
+        Returns True when a good base is on screen.
+        """
+        import time, teach
+        f = getattr(self, "loot_filter", None)
+        if not f or not f.get("enabled"): return True
+        if not teach.taught("next_button") or not (teach.taught("enemy_gold") or teach.taught("enemy_elixir")):
+            logger.warning("Loot filter is on but the Next button / loot numbers aren't taught yet")
+            return True
+        need = {"gold": int(f.get("min_gold", 0)), "elixir": int(f.get("min_elixir", 0)), "dark": int(f.get("min_dark", 0))}
+        for skip in range(max(0, int(f.get("max_skips", 30))) + 1):
+            if not running(): return False
+            time.sleep(0.8) # loot numbers count up for a moment
+            frame = Frame_Handler.get_frame(grayscale=False)
+            loot = {k: read_taught_number(f"enemy_{k}", frame) for k in need}
+            checks = [(loot[k] or 0) >= v for k, v in need.items() if v > 0 and (k != "dark" or teach.taught("enemy_dark"))]
+            ok = (all(checks) if f.get("mode", "all") == "all" else any(checks)) if checks else True
+            logger.info(f"Base loot: gold={loot['gold']} elixir={loot['elixir']} dark={loot['dark']} -> {'attack' if ok else 'next'}")
+            if ok: return True
+            if skip == int(f.get("max_skips", 30)): break
+            if not tap_taught("next_button", timeout=2):
+                logger.warning("Next button not found, attacking this base")
+                return True
+            time.sleep(1.5)
+            if not self.wait_for_base(20): return False
+        logger.info("No base passed the loot filter, attacking the last one")
+        return True
     
     def start_builder_attack(self, timeout=60):
         import time

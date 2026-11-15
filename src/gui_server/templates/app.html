@@ -205,6 +205,19 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
 .tagp{background:#1d3463;border-radius:7px;padding:0 8px;font-weight:700}
 #shotModal .modal{width:min(1100px,95vw)}
 #shotModal img{width:100%;border-radius:10px;display:block}
+.shot-wrap{position:relative;user-select:none;border-radius:12px;overflow:hidden;border:1px solid var(--line2);background:#060c1c;min-height:200px;cursor:crosshair}
+.shot-wrap img{display:block;width:100%}
+.sel{position:absolute;border:2px solid var(--gold);background:rgba(255,200,61,.18);pointer-events:none;display:none}
+.sel.old{border-color:var(--ok);background:rgba(47,207,122,.12);border-style:dashed}
+.titem{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line2);border-radius:10px;background:#0f1b38;margin-bottom:8px;cursor:pointer}
+.titem.cur{border-color:var(--gold);box-shadow:0 0 0 2px rgba(255,200,61,.25)}
+.titem .nm{flex:1}
+.titem .nm small{display:block;color:var(--muted);font-size:12px}
+.titem img{height:30px;max-width:80px;border-radius:5px;border:1px solid var(--line2);background:#000}
+.tgroup{color:var(--gold);font-weight:800;margin:10px 0 6px}
+.step{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px dashed var(--line2);border-radius:9px;margin-bottom:6px;font-size:13.5px}
+.step .k{flex:1}
+.ok-dot{color:var(--ok)} .no-dot{color:var(--bad)}
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-thumb{background:#2a4173;border-radius:10px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -249,6 +262,7 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
   <button data-tab="sch"><i class="fa-regular fa-calendar-check"></i><span data-t="tab_sch"></span></button>
   <button data-tab="acc"><i class="fa-solid fa-users"></i><span data-t="tab_acc"></span></button>
   <button data-tab="res"><i class="fa-solid fa-chart-line"></i><span data-t="tab_res"></span></button>
+  <button data-tab="teach"><i class="fa-solid fa-graduation-cap"></i><span data-t="tab_teach"></span></button>
   <button data-tab="err" style="position:relative"><i class="fa-solid fa-bug"></i><span data-t="tab_err"></span><span class="badge" id="errBadge"></span></button>
   <button data-tab="set"><i class="fa-solid fa-gear"></i><span data-t="tab_set"></span></button>
 </nav>
@@ -469,6 +483,18 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
       </div>
     </div>
     <div class="card span2">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-filter-circle-dollar"></i></div><h3 data-t="lf_title"></h3></div>
+      <div class="card-sub" data-t="lf_sub"></div>
+      <div class="card-b">
+        <div class="row"><div class="lbl"><span data-t="lf_enabled"></span><small id="lfReq"></small></div><label class="sw"><input type="checkbox" data-bind="attack.loot_filter.enabled"><span></span></label></div>
+        <div class="row"><div class="lbl" style="display:flex;align-items:center;gap:8px"><svg width="20" height="20"><use href="#i-gold"/></svg><span data-t="lf_min_gold"></span></div><input class="in" type="number" min="0" step="50000" data-bind="attack.loot_filter.min_gold" data-type="int"></div>
+        <div class="row"><div class="lbl" style="display:flex;align-items:center;gap:8px"><svg width="20" height="20"><use href="#i-elixir"/></svg><span data-t="lf_min_elixir"></span></div><input class="in" type="number" min="0" step="50000" data-bind="attack.loot_filter.min_elixir" data-type="int"></div>
+        <div class="row"><div class="lbl" style="display:flex;align-items:center;gap:8px"><svg width="20" height="20"><use href="#i-dark"/></svg><span data-t="lf_min_dark"></span></div><input class="in" type="number" min="0" step="1000" data-bind="attack.loot_filter.min_dark" data-type="int"></div>
+        <div class="row"><div class="lbl" data-t="lf_mode"></div><select class="in" data-bind="attack.loot_filter.mode"><option value="all" data-t="lf_all"></option><option value="any" data-t="lf_any"></option></select></div>
+        <div class="row"><div class="lbl" data-t="lf_skips"></div><input class="in" type="number" min="0" max="200" data-bind="attack.loot_filter.max_skips" data-type="int"></div>
+      </div>
+    </div>
+    <div class="card span2">
       <div class="card-h"><div class="ico"><i class="fa-solid fa-seedling"></i></div><h3 data-t="farm_title"></h3></div>
       <div class="card-sub" data-t="farm_sub"></div>
       <div class="card-b">
@@ -562,6 +588,32 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
     <div class="card span2">
       <div class="card-h"><div class="ico"><i class="fa-solid fa-arrow-up-right-dots"></i></div><h3 data-t="recent_upgrades"></h3></div>
       <div class="card-b"><div class="tablewrap"><table><thead><tr><th data-t="time"></th><th data-t="kind"></th><th data-t="name"></th></tr></thead><tbody id="upgTable"></tbody></table></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ TEACH ============================ -->
+<section class="page" id="p-teach">
+  <div class="grid" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)">
+    <div class="card">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-crop-simple"></i></div><h3 data-t="teach_title"></h3>
+        <div class="tools"><button class="btn sm gold" onclick="captureShot()"><i class="fa-solid fa-camera"></i><span data-t="capture"></span></button></div></div>
+      <div class="card-sub" data-t="teach_sub"></div>
+      <div class="card-b">
+        <div class="shot-wrap" id="shotWrap"><img id="teachImg" alt=""><div class="sel old" id="oldSel"></div><div class="sel" id="newSel"></div><div class="empty" id="shotEmpty" data-t="no_shot"></div></div>
+        <div class="row"><div class="lbl"><b id="curItemName">—</b><small id="curItemHelp"></small></div><button class="btn primary" onclick="saveTeach()"><i class="fa-solid fa-floppy-disk"></i><span data-t="save_sel"></span></button></div>
+        <div class="note" id="teachNote"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-list-check"></i></div><h3 data-t="teach_items"></h3></div>
+      <div class="card-sub" data-t="teach_items_sub"></div>
+      <div class="card-b" id="teachList" style="max-height:calc(100vh - 330px);overflow:auto"></div>
+    </div>
+    <div class="card" style="grid-column:1 / -1">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-route"></i></div><h3 data-t="routines_title"></h3></div>
+      <div class="card-sub" data-t="routines_sub"></div>
+      <div class="card-b grid three" id="routineBox"></div>
     </div>
   </div>
 </section>
@@ -702,7 +754,7 @@ ar:{
  bb_upgrades:"ترقيات قاعدة البنّاء", bb_upgrades_sub:"المباني ومختبر النجوم", t_builder_base:"ترقية مباني قاعدة البنّاء", t_builder_lab:"ترقية مختبر النجوم", use_priority_bb:"مباني قاعدة البنّاء حسب الأولوية", use_priority_bl:"مختبر النجوم حسب الأولوية", bb_priority:"أولوية مباني قاعدة البنّاء", bl_priority:"أولوية مختبر النجوم",
  attack_title:"الهجوم", attack_sub:"عدد الهجمات في كل دورة", t_home_attacks:"هجوم القرية الرئيسية", home_attacks_n:"هجمات القرية الرئيسية لكل دورة", home_attacks_n_sub:"أكتر من هجمة = فارم أسرع", t_builder_attacks:"هجوم قاعدة البنّاء", builder_attacks_n:"هجمات قاعدة البنّاء لكل دورة", attacks_unit:"هجمات",
  army_title:"الجيش والإنزال", army_sub:"طريقة إنزال الجنود", deploy_time:"وقت إنزال كل نوع جنود", deploy_time_sub:"الوقت اللي البوت ماسك فيه على الشاشة لكل نوع", seconds:"ثانية", slot_range:"خانات الجيش المستخدمة", slot_range_sub:"من خانة لخانة (أول خانة = 0)", to:"إلى", exclude_cc:"عدم استخدام جنود القلعة",
- farm_title:"الفارم", farm_sub:"جمع الموارد وصرفها", farm_note:"تخطّي القرى قليلة الغنيمة محتاج صورة لشاشة البحث عن خصم عشان يتظبط على شاشتك.",
+ farm_title:"الفارم", farm_sub:"جمع الموارد وصرفها", farm_note:"جمع الموارد وتدريب الجيش بقوا روتينات في تبويب \"تعليم البوت\".",
  sch_title:"الجدول الزمني", sch_sub:"البوت يشتغل بس في الأوقات دي", sch_enabled:"تفعيل الجدول الزمني", from:"من الساعة", until:"إلى الساعة", until_sub:"لو وقت النهاية أصغر من البداية يبقى بيعدّي نص الليل", days:"الأيام",
  interval_title:"الفاصل بين الدورات", interval_sub:"البوت بيفتح اللعبة كل فترة ويعمل كل المهام", check_interval:"كل", minutes:"دقيقة", interval_note:"مدة أقل = شغل أكتر، بس استهلاك أعلى للجهاز واحتمال أكبر إن اللعبة تلاحظ.",
  sched_now_in:"الوقت الحالي داخل الجدول — البوت يقدر يشتغل", sched_now_out:"الوقت الحالي خارج الجدول — البوت هيستنى", sched_off:"الجدول متقفل — البوت شغال طول الوقت",
@@ -723,6 +775,21 @@ ar:{
  unsaved:"تغييرات غير محفوظة. اضغط على حفظ الإعدادات لتطبيقها على البوت.", start_bot:"بدء البوت", save_settings:"حفظ الإعدادات",
  one_err:"خطأ", one_warn:"تحذير",
  st_limit:"وصل للحد", st_break:"في استراحة",
+ tab_teach:"تعليم البوت", sub_teach:"علّم البوت أشكال لعبتك", teach_title:"صورة من المحاكي", teach_sub:"افتح الشاشة في اللعبة ← التقط صورة ← اختار العنصر من القايمة ← ارسم مربع حواليه بالماوس ← حفظ",
+ capture:"التقاط صورة", no_shot:"اضغط \"التقاط صورة\" (البوت لازم يكون شغال)", save_sel:"حفظ التحديد", teach_items:"الحاجات اللي البوت يتعلّمها", teach_items_sub:"✓ = اتعلّمها. كل ميزة بتشتغل لوحدها أول ما الحاجات بتاعتها تتعلّم",
+ pick_item:"اختار عنصر من القايمة", draw_box:"ارسم مربع على الصورة الأول", taught_ok:"البوت اتعلّمها ✓", capturing:"جاري التقاط صورة من المحاكي…", captured:"تم ✓ — ارسم مربع حوالين العنصر", capture_fail:"الصورة ما وصلتش — اتأكد إن البوت شغال والمحاكي مفتوح",
+ kind_button:"زرار / شكل", kind_region:"منطقة أرقام", kind_multi:"ممكن يلاقي أكتر من واحد", not_taught:"لسه ما اتعلّمش", all_matches:"الكل",
+ tg_farm:"🔎 تخطّي القرى الفقيرة", tg_army:"⚔️ الجيش", tg_collect:"💰 جمع الموارد", tg_battle:"🏁 نهاية المعركة", tg_general:"🧭 عام", tg_custom:"⭐ حاجات إضافية (هدايا، باس، أحداث…)",
+ tk_next_button:"زرار Next (القرية الجاية)", tk_enemy_gold:"رقم ذهب الخصم", tk_enemy_elixir:"رقم إكسير الخصم", tk_enemy_dark:"رقم دارك الخصم", tk_army_button:"زرار الجيش", tk_hero_add:"خانة بطل فاضية (إضافة بطل)", tk_train_button:"زرار التدريب (Train / Quick Train)", tk_close_button:"زرار الإغلاق X",
+ tk_collector_full:"علامة المجمّع المليان", tk_loot_cart:"عربة الغنيمة", tk_collect_button:"زرار Collect", tk_return_home:"زرار Return Home", tk_end_battle:"زرار End Battle", tk_okay_button:"زرار Okay", tk_custom:"عنصر إضافي",
+ th_next_button:"في شاشة البحث عن خصم: ارسم على زرار Next.", th_enemy_gold:"في شاشة الخصم: ارسم على رقم الذهب اللي فوق على الشمال (الرقم بس).", th_enemy_elixir:"ارسم على رقم الإكسير بتاع الخصم.", th_enemy_dark:"ارسم على رقم الدارك بتاع الخصم.",
+ th_army_button:"في القرية: ارسم على زرار الجيش (تحت على الشمال).", th_hero_add:"في شاشة الجيش: ارسم على خانة البطل الفاضية اللي بتضيف بطل.", th_train_button:"ارسم على زرار التدريب.", th_close_button:"ارسم على علامة X بتاعة أي نافذة.",
+ th_collector_full:"ارسم على الأيقونة اللي بتظهر فوق المجمّع لما يتملي.", th_loot_cart:"ارسم على عربة الغنيمة جنب القرية.", th_collect_button:"ارسم على زرار Collect في نافذة العربة.", th_return_home:"في شاشة نهاية المعركة: ارسم على Return Home.", th_end_battle:"أثناء المعركة: ارسم على End Battle.", th_okay_button:"ارسم على زرار Okay.", th_custom:"أي زرار عايز البوت يدوس عليه (هدية، مكافأة…)، وبعدين ضيفه في روتين.",
+ routines_title:"الروتينات", routines_sub:"خطوات بيعملها البوت أول كل دورة: بيدوس على الحاجات اللي علّمتها بالترتيب. الخطوة اللي ما اتعلّمتش بيتخطاها",
+ rt_army:"⚔️ تدريب الجيش وإضافة الأبطال", rtd_army:"يفتح الجيش، يضيف الأبطال الفاضيين، يدرّب، ويقفل", rt_collect:"💰 جمع الموارد", rtd_collect:"يلم المجمّعات المليانة وعربة الغنيمة", rt_custom:"⭐ روتين خاص", rtd_custom:"ضيف أي خطوات إنت عايزها (هدايا، Season Pass…)",
+ lf_title:"فلتر الغنيمة (تخطّي القرى الفقيرة)", lf_sub:"البوت يقرا غنيمة الخصم ويدوس Next لو قليلة", lf_enabled:"تفعيل فلتر الغنيمة", lf_min_gold:"أقل ذهب", lf_min_elixir:"أقل إكسير", lf_min_dark:"أقل دارك", lf_mode:"الشرط", lf_all:"كل الشروط", lf_any:"أي شرط واحد", lf_skips:"أقصى عدد تخطّي",
+ lf_ready:"جاهز", lf_need:"محتاج تعلّمه زرار Next ورقم الذهب أو الإكسير من تبويب \"تعليم البوت\"",
+ ph_routine_army:"روتين الجيش", ph_routine_collect:"روتين جمع الموارد", ph_routine_custom:"الروتين الخاص",
  strat_title:"خطة الهجوم", strat_sub:"إزاي البوت ينزّل الجيش", strategy:"الخطة", strategy_sub:"\"تلقائي\" بيجرّب الخطط ويتعلّم أنهي واحدة بتجيب غنيمة أكتر ويستخدمها",
  st_auto:"تلقائي (يتعلّم الأفضل) 🧠", st_funnel:"نقطة واحدة (قمع)", st_line:"على خط الحافة", st_two_sides:"من جهتين",
  hero_delay:"تأخير الأبطال", hero_delay_sub:"الأبطال بينزلوا بعد الجيش بالوقت ده عشان الجيش ياخد ضرب الدفاعات الأول", hero_retap:"تفعيل قدرة الأبطال بعد", hero_retap_sub:"يدوس على كارت البطل تاني عشان يشغّل القدرة (0 = مقفول)",
@@ -788,6 +855,21 @@ en:{
  unsaved:"Unsaved changes. Click Save settings to apply them to the bot.", start_bot:"Start bot", save_settings:"Save settings",
  one_err:"Error", one_warn:"Warning",
  st_limit:"Limit reached", st_break:"On a break",
+ tab_teach:"Teach the bot", sub_teach:"Teach the bot your game's screens", teach_title:"Emulator screenshot", teach_sub:"Open the screen in the game → capture → pick the item → drag a box around it → save",
+ capture:"Capture", no_shot:"Click \"Capture\" (the bot must be running)", save_sel:"Save selection", teach_items:"Things the bot can learn", teach_items_sub:"✓ = learned. Each feature turns on as soon as its items are taught",
+ pick_item:"Pick an item from the list", draw_box:"Drag a box on the screenshot first", taught_ok:"Learned ✓", capturing:"Capturing from the emulator…", captured:"Done ✓ — drag a box around the item", capture_fail:"No screenshot — check the bot is running and the emulator is open",
+ kind_button:"Button / shape", kind_region:"Number area", kind_multi:"can match several", not_taught:"not taught yet", all_matches:"All",
+ tg_farm:"🔎 Skip poor bases", tg_army:"⚔️ Army", tg_collect:"💰 Collecting", tg_battle:"🏁 Battle end", tg_general:"🧭 General", tg_custom:"⭐ Extra (gifts, pass, events…)",
+ tk_next_button:"Next button", tk_enemy_gold:"Enemy gold number", tk_enemy_elixir:"Enemy elixir number", tk_enemy_dark:"Enemy dark number", tk_army_button:"Army button", tk_hero_add:"Empty hero slot", tk_train_button:"Train button", tk_close_button:"Close X button",
+ tk_collector_full:"Full collector icon", tk_loot_cart:"Loot cart", tk_collect_button:"Collect button", tk_return_home:"Return Home button", tk_end_battle:"End Battle button", tk_okay_button:"Okay button", tk_custom:"Extra item",
+ th_next_button:"On the search screen: box the Next button.", th_enemy_gold:"On an enemy base: box the gold number at the top left (digits only).", th_enemy_elixir:"Box the enemy elixir number.", th_enemy_dark:"Box the enemy dark elixir number.",
+ th_army_button:"In the village: box the army button (bottom left).", th_hero_add:"In the army screen: box the empty hero slot.", th_train_button:"Box the train button.", th_close_button:"Box the X of any window.",
+ th_collector_full:"Box the icon shown above a full collector.", th_loot_cart:"Box the loot cart next to the village.", th_collect_button:"Box the Collect button in the cart window.", th_return_home:"On the results screen: box Return Home.", th_end_battle:"During a battle: box End Battle.", th_okay_button:"Box the Okay button.", th_custom:"Any button you want tapped (gift, reward…), then add it to a routine.",
+ routines_title:"Routines", routines_sub:"Steps run at the start of every cycle: taps the taught items in order. Untaught steps are skipped",
+ rt_army:"⚔️ Train army & add heroes", rtd_army:"Opens the army, adds empty heroes, trains, closes", rt_collect:"💰 Collect resources", rtd_collect:"Collects full collectors and the loot cart", rt_custom:"⭐ Custom routine", rtd_custom:"Add any steps you want (gifts, Season Pass…)",
+ lf_title:"Loot filter (skip poor bases)", lf_sub:"Reads the enemy loot and presses Next when it's too low", lf_enabled:"Enable loot filter", lf_min_gold:"Min gold", lf_min_elixir:"Min elixir", lf_min_dark:"Min dark", lf_mode:"Condition", lf_all:"All conditions", lf_any:"Any one", lf_skips:"Max skips",
+ lf_ready:"ready", lf_need:"Teach the Next button and the gold or elixir number in \"Teach the bot\"",
+ ph_routine_army:"Army routine", ph_routine_collect:"Collect routine", ph_routine_custom:"Custom routine",
  strat_title:"Attack plan", strat_sub:"How the bot deploys the army", strategy:"Strategy", strategy_sub:"\"Auto\" tries the plans and learns which one brings the most loot",
  st_auto:"Auto (learns the best) 🧠", st_funnel:"Single point (funnel)", st_line:"Along the edge", st_two_sides:"Two sides",
  hero_delay:"Hero delay", hero_delay_sub:"Heroes go in after the army so the troops take the first hits", hero_retap:"Fire hero abilities after", hero_retap_sub:"Taps the hero card again to use its ability (0 = off)",
@@ -815,6 +897,13 @@ const LOG_AR = [
  [/^CoC already open/, "اللعبة مفتوحة بالفعل — هيكمّل عليها ✓"],
  [/^Settings changed, applying now/, "الإعدادات اتغيّرت — جاري التطبيق دلوقتي"],
  [/^Run now requested/, "تم طلب تشغيل دورة الآن"],
+ [/^Base loot: gold=(\S+) elixir=(\S+) dark=(\S+) -> attack/, "غنيمة القرية: ذهب $1 — إكسير $2 — دارك $3 ← هيهاجم ✓"],
+ [/^Base loot: gold=(\S+) elixir=(\S+) dark=(\S+) -> next/, "غنيمة القرية: ذهب $1 — إكسير $2 — دارك $3 ← قليلة، القرية الجاية"],
+ [/^Routine army: (\d+) taps/, "روتين الجيش خلص ($1 ضغطة)"],
+ [/^Routine collect: (\d+) taps/, "روتين جمع الموارد خلص ($1 ضغطة)"],
+ [/^Routine (\S+): (\d+) taps/, "روتين $1 خلص ($2 ضغطة)"],
+ [/^Loot filter is on but.*/, "فلتر الغنيمة شغال بس لسه ما علّمتش البوت زرار Next ورقم الغنيمة"],
+ [/^No base passed the loot filter.*/, "مفيش قرية عدّت الفلتر — هيهاجم آخر واحدة"],
  [/^Attack strategy: funnel/, "خطة الهجوم: نقطة واحدة (قمع)"],
  [/^Attack strategy: line/, "خطة الهجوم: على خط الحافة"],
  [/^Attack strategy: two_sides/, "خطة الهجوم: من جهتين"],
@@ -917,6 +1006,7 @@ function showTab(name){
   if (name === "res") { loadStats(); loadLog(); }
   if (name === "err") loadErrors();
   if (name === "set") checkTess();
+  if (name === "teach") loadTeach();
 }
 function showSub(name){
   curSub = name;
@@ -939,6 +1029,7 @@ function fillInputs(){
     if (el.type === "checkbox") el.checked = !!v; else el.value = v ?? "";
   });
   buildDays(); buildQuickTasks(); renderPrio(); updateWallLabel(); updateSchedNote();
+  if (TEACH.catalog.length) renderRoutines();
 }
 document.addEventListener("input", e => onEdit(e.target));
 document.addEventListener("change", e => onEdit(e.target));
@@ -1360,6 +1451,102 @@ function renderErrors(){
     </div>${shot}</div>`;
   }).join("");
 }
+/* =====================================================================
+   Teach the bot
+   ===================================================================== */
+let TEACH = {catalog:[], taught:{}}, curItem = null, selRect = null;
+const TGROUPS = {farm:"tg_farm", army:"tg_army", collect:"tg_collect", battle:"tg_battle", general:"tg_general", custom:"tg_custom"};
+const tname = k => t("tk_" + k) !== "tk_" + k ? t("tk_" + k) : (k.startsWith("custom_") ? `${t("tk_custom")} ${k.split("_")[1]}` : k);
+async function loadTeach(){
+  try { TEACH = await api("/api/teach"); } catch(e) { return; }
+  renderTeachList(); renderRoutines(); updateLfReq();
+  const img = $("#teachImg");
+  if (!img.src) { img.onerror = () => { img.removeAttribute("src"); $("#shotEmpty").style.display = ""; }; img.onload = () => { $("#shotEmpty").style.display = "none"; drawOld(); }; img.src = `/api/teach/capture/${encodeURIComponent(CUR)}?t=${Date.now()}`; }
+}
+function renderTeachList(){
+  const box = $("#teachList"); box.innerHTML = "";
+  let lastGroup = "";
+  TEACH.catalog.forEach(c => {
+    if (c.group !== lastGroup) { lastGroup = c.group; const g = document.createElement("div"); g.className = "tgroup"; g.textContent = t(TGROUPS[c.group]); box.appendChild(g); }
+    const done = !!TEACH.taught[c.key];
+    const d = document.createElement("div"); d.className = "titem" + (curItem === c.key ? " cur" : "");
+    d.innerHTML = `<i class="fa-solid ${done ? "fa-circle-check ok-dot" : "fa-circle-xmark no-dot"}"></i>
+      <div class="nm">${tname(c.key)}<small>${c.kind === "region" ? t("kind_region") : t("kind_button")}${c.multi ? " · " + t("kind_multi") : ""}</small></div>
+      ${done && c.kind === "button" ? `<img src="/api/teach/template/${c.key}?t=${TEACH.taught[c.key].time}">` : ""}
+      ${done ? `<button class="ibtn" title="${t("remove")}"><i class="fa-solid fa-trash"></i></button>` : ""}`;
+    d.onclick = e => { if (e.target.closest(".ibtn")) return; curItem = c.key; selRect = null; $("#newSel").style.display = "none"; renderTeachList(); drawOld(); };
+    const rm = d.querySelector(".ibtn"); if (rm) rm.onclick = async () => { await api("/api/teach/forget", {method:"POST", body:{key:c.key}}); loadTeach(); };
+    box.appendChild(d);
+  });
+  $("#curItemName").textContent = curItem ? tname(curItem) : t("pick_item");
+  $("#curItemHelp").textContent = curItem ? (t("th_" + curItem) !== "th_" + curItem ? t("th_" + curItem) : t("th_custom")) : "";
+}
+function placeBox(el, r){
+  if (!r) { el.style.display = "none"; return; }
+  el.style.display = "block";
+  el.style.left = (r[0] * 100) + "%"; el.style.top = (r[1] * 100) + "%";
+  el.style.width = ((r[2] - r[0]) * 100) + "%"; el.style.height = ((r[3] - r[1]) * 100) + "%";
+}
+function drawOld(){ placeBox($("#oldSel"), curItem && TEACH.taught[curItem] ? TEACH.taught[curItem].rect : null); }
+(function initSelect(){
+  const wrap = $("#shotWrap"); let start = null;
+  const frac = e => { const b = $("#teachImg").getBoundingClientRect(); return [Math.min(1, Math.max(0, (e.clientX - b.left) / b.width)), Math.min(1, Math.max(0, (e.clientY - b.top) / b.height))]; };
+  wrap.addEventListener("mousedown", e => { if (!$("#teachImg").src) return; start = frac(e); selRect = null; e.preventDefault(); });
+  window.addEventListener("mousemove", e => { if (!start) return; const p = frac(e); selRect = [Math.min(start[0], p[0]), Math.min(start[1], p[1]), Math.max(start[0], p[0]), Math.max(start[1], p[1])]; placeBox($("#newSel"), selRect); });
+  window.addEventListener("mouseup", () => { start = null; });
+})();
+async function captureShot(){
+  if (!acc(CUR).running) { toast(t("need_running"), true); return; }
+  $("#teachNote").textContent = t("capturing");
+  await api(`/api/teach/capture/${encodeURIComponent(CUR)}`, {method:"POST", body:{}});
+  for (let i = 0; i < 25; i++) {
+    await new Promise(r => setTimeout(r, 700));
+    const r = await fetch(`/api/teach/capture/${encodeURIComponent(CUR)}?t=${Date.now()}`, {method:"HEAD"});
+    if (r.ok) { $("#teachImg").src = `/api/teach/capture/${encodeURIComponent(CUR)}?t=${Date.now()}`; $("#teachNote").textContent = t("captured"); return; }
+  }
+  $("#teachNote").textContent = t("capture_fail");
+}
+async function saveTeach(){
+  if (!curItem) { toast(t("pick_item"), true); return; }
+  if (!selRect) { toast(t("draw_box"), true); return; }
+  const r = await api("/api/teach/save", {method:"POST", body:{id:CUR, key:curItem, rect:selRect}});
+  if (!r.ok) { toast(r.error, true); return; }
+  toast(t("taught_ok")); selRect = null; $("#newSel").style.display = "none"; loadTeach();
+}
+function updateLfReq(){
+  const ok = TEACH.taught.next_button && (TEACH.taught.enemy_gold || TEACH.taught.enemy_elixir);
+  const el = $("#lfReq"); if (!el) return;
+  el.innerHTML = ok ? `<span class="ok-dot">✓ ${t("lf_ready")}</span>` : `<span class="no-dot">${t("lf_need")}</span>`;
+}
+function renderRoutines(){
+  if (!S) return;
+  const box = $("#routineBox"); box.innerHTML = "";
+  const buttons = TEACH.catalog.filter(c => c.kind === "button");
+  S.routines.forEach((r, ri) => {
+    const card = document.createElement("div"); card.className = "lvl";
+    card.innerHTML = `<div class="lvl-h"><b style="color:var(--text);font-size:15px">${t("rt_" + r.name) !== "rt_" + r.name ? t("rt_" + r.name) : r.name}</b>
+        <div class="tools"><label class="sw"><input type="checkbox" ${r.enabled ? "checked" : ""}><span></span></label></div></div>
+      <div class="note" style="margin:0 0 8px">${t("rtd_" + r.name) !== "rtd_" + r.name ? t("rtd_" + r.name) : ""}</div>
+      <div class="steps"></div>
+      <div class="add-tag"><select class="in">${buttons.map(b => `<option value="${b.key}">${tname(b.key)}</option>`).join("")}</select><button class="btn sm primary"><i class="fa-solid fa-plus"></i></button></div>`;
+    card.querySelector(".lvl-h input").onchange = e => { r.enabled = e.target.checked; markDirty(); };
+    const steps = card.querySelector(".steps");
+    r.steps.forEach((st, si) => {
+      const ok = !!TEACH.taught[st.key];
+      const d = document.createElement("div"); d.className = "step";
+      d.innerHTML = `<span class="num-badge" style="background:var(--accent);color:#04122e;border-radius:7px;padding:0 7px;font-weight:800">${si + 1}</span>
+        <span class="k">${tname(st.key)} ${ok ? '<i class="fa-solid fa-check ok-dot"></i>' : `<small class="no-dot">(${t("not_taught")})</small>`}</span>
+        <label title="${t("kind_multi")}" style="font-size:12px;color:var(--muted)"><input type="checkbox" ${st.multi ? "checked" : ""}> ${t("all_matches")}</label>
+        <button class="ibtn"><i class="fa-solid fa-xmark"></i></button>`;
+      d.querySelector("input").onchange = e => { st.multi = e.target.checked; markDirty(); };
+      d.querySelector(".ibtn").onclick = () => { r.steps.splice(si, 1); markDirty(); renderRoutines(); };
+      steps.appendChild(d);
+    });
+    card.querySelector(".add-tag button").onclick = () => { r.steps.push({key: card.querySelector(".add-tag select").value, multi:false, wait:0.6}); markDirty(); renderRoutines(); };
+    box.appendChild(card);
+  });
+}
+
 async function githubReport(){
   $("#reportNote").textContent = "…";
   const r = await api(`/api/github/report/${encodeURIComponent(CUR)}`, {method:"POST", body:{}});

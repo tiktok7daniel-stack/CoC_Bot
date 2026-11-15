@@ -75,6 +75,10 @@ def default_settings():
             "strategy": "auto",      # "auto" (learns the best) | "funnel" | "line" | "two_sides"
             "hero_delay": 1.0,       # seconds between the army and the heroes
             "hero_retap": 6,         # seconds after deploying to fire hero abilities (0 = off)
+            "loot_filter": {         # skip bases with little loot (needs Next button + loot numbers taught)
+                "enabled": False, "min_gold": 300000, "min_elixir": 300000, "min_dark": 0,
+                "mode": "all", "max_skips": 30,
+            },
             "battle_end": "wait",    # "wait" (game stays open) | "restart" (reopen game, faster)
             "surrender_after": 0,    # seconds after deployment to end the battle early (0 = wait for the end)
         },
@@ -87,6 +91,20 @@ def default_settings():
             "every_minutes": 90,
             "length_minutes": 15,
         },
+        # Routines: taught buttons tapped in order at the start of every cycle (home village)
+        "routines": [
+            {"name": "army", "enabled": False, "steps": [
+                {"key": "army_button", "multi": False, "wait": 1.0},
+                {"key": "hero_add", "multi": True, "wait": 0.5},
+                {"key": "train_button", "multi": False, "wait": 0.8},
+                {"key": "close_button", "multi": False, "wait": 0.5}]},
+            {"name": "collect", "enabled": False, "steps": [
+                {"key": "collector_full", "multi": True, "wait": 0.3},
+                {"key": "loot_cart", "multi": False, "wait": 1.0},
+                {"key": "collect_button", "multi": False, "wait": 0.8},
+                {"key": "close_button", "multi": False, "wait": 0.5}]},
+            {"name": "custom", "enabled": False, "steps": []},
+        ],
         "game": {
             "keep_open": True,       # don't close the game between cycles
             "apply_instantly": True, # start a cycle right after settings change while idle

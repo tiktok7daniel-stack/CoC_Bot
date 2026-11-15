@@ -57,6 +57,22 @@ class CoC_Bot:
         self.session_attacks += 1
         logger.info(f"Attack ({base}) loot: gold={loot['gold']} elixir={loot['elixir']} dark={loot['dark']}")
 
+    def run_routines(self, s):
+        """Tap the taught buttons of every enabled routine, in order (missing steps are skipped)."""
+        import time, teach
+        for r in s.get("routines", []):
+            if not r.get("enabled") or not r.get("steps"): continue
+            set_phase("routine_" + r.get("name", "custom"))
+            done = 0
+            for step in r["steps"]:
+                key = step.get("key", "")
+                if not teach.taught(key): continue
+                n = tap_taught(key, multi=bool(step.get("multi")), timeout=2)
+                done += n
+                time.sleep(max(0.0, float(step.get("wait", 0.5))))
+            logger.info(f"Routine {r.get('name')}: {done} taps")
+            to_home_base()
+
     def excluded(self, task):
         """Fresh read of the GUI toggle, so changes made mid-cycle apply to the next step."""
         return Task_Handler.excluded(task)
@@ -151,6 +167,7 @@ class CoC_Bot:
                     # Battle / wall / budget settings for this cycle
                     self.attacker.battle_end = s["attack"]["battle_end"]
                     self.attacker.strategy = s["attack"]["strategy"]
+                    self.attacker.loot_filter = s["attack"]["loot_filter"]
                     self.attacker.hero_delay = max(0.0, float(s["attack"]["hero_delay"]))
                     self.attacker.hero_retap = max(0.0, float(s["attack"]["hero_retap"]))
                     self.attacker.surrender_after = max(0, int(s["attack"]["surrender_after"]))
@@ -170,6 +187,9 @@ class CoC_Bot:
                         to_home_base(ref_cache=True)
                         set_phase("read_resources")
                         self.read_and_record_resources()
+
+                    if running():
+                        self.run_routines(s)
 
                     if running() and home_upgrades_wanted():
                         set_phase("home_upgrades")
