@@ -422,12 +422,10 @@ def api_syscheck(id):
     v = sys.version_info
     add("python", "ok" if v >= (3, 11) else "bad", f"{v.major}.{v.minor}.{v.micro}")
 
-    # ADB program
-    adb = None
-    if app_cfg.get("emulator") == "bluestacks" and sys.platform == "win32":
-        p = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "BlueStacks_nxt" / "HD-Adb.exe"
-        if p.exists(): adb = str(p)
-    adb = adb or shutil.which("adb")
+    # ADB program: the same one the bot uses (LDPlayer's / BlueStacks' own, else adb on PATH)
+    from gui_server import emu_setup
+    ld_con = emu_setup.ld_console(app_cfg) if app_cfg.get("emulator") == "ldplayer" else None
+    adb = emu_setup.adb_exe(app_cfg, ld_con)
     add("adb", "ok" if adb else "bad", adb or "")
 
     # Other programs running their own ADB (they kill each other's connection)
@@ -438,7 +436,10 @@ def api_syscheck(id):
             name = (proc.info.get("name") or "").lower()
             if name in ("adb.exe", "hd-adb.exe", "adb"):
                 paths.add(proc.info.get("exe") or name)
-        others = [x for x in paths if not adb or str(Path(x)).lower() != str(Path(adb)).lower()]
+        # LDPlayer / BlueStacks start their own adb: that is the one the bot uses, not a conflict
+        own_dirs = {str(Path(adb).parent).lower()} if adb else set()
+        others = [x for x in paths if str(Path(x).parent).lower() not in own_dirs
+                  and not (adb and str(Path(x)).lower() == str(Path(adb)).lower())]
         add("adb_conflict", "warn" if others else "ok", " | ".join(sorted(others)))
     except Exception as e:
         add("adb_conflict", "warn", e)
@@ -461,6 +462,22 @@ def api_syscheck(id):
                 w, h = get("fb_width"), get("fb_height")
                 if w and h: add("resolution", "ok" if (w, h) == ("1920", "1080") else "bad", f"{w}×{h}")
                 if get("enable_adb_access") == "0": add("bs_adb_setting", "bad", "")
+
+    # LDPlayer copy linked to this account, its port, resolution and connection
+    if app_cfg.get("emulator") == "ldplayer":
+        cps = emu_setup.ld_instances(ld_con)
+        c = emu_setup.link_for(id, cps, app_cfg.get("emulator_links", {}) or {})
+        if not ld_con: add("ld_found", "bad", "")
+        elif c is None: add("bs_instance", "bad", ", ".join(x["title"] for x in cps) or "-")
+        else:
+            port = str(5555 + 2 * int(c["index"]))
+            add("bs_instance", "ok", f"{id} → {c['title']}, ADB 127.0.0.1:{port}")
+            if c.get("width"):
+                tw, th, td = emu_setup.target(app_cfg)
+                ok = emu_setup.good_res(app_cfg, c["width"], c["height"], c.get("dpi"))
+                add("resolution", "ok" if ok else "bad", f"{c['width']}×{c['height']} · {c.get('dpi')} DPI")
+            if not c["running"]: add("emu_running", "bad", c["title"])
+            else: emu_setup.adb_state(adb, f"127.0.0.1:{port}") # connect so the state below is real
 
     # Device state
     if adb and port:
