@@ -45,10 +45,16 @@ class Attacker:
                 break
             # optional early end: End Battle -> confirm
             if not surrendered and self.surrender_after > 0 and time.monotonic() - start > self.surrender_after:
-                if self._click_end_battle(timeout=0):
+                if self._click_end_battle(timeout=0) or Auto_Learn.learn_button("end_battle", tap=True):
                     time.sleep(0.7)
-                    self._click_okay(timeout=3)
+                    if not self._click_okay(timeout=3): Auto_Learn.learn_button("okay_button", tap=True, min_interval=0)
                     surrendered = True
+            # results screen not recognised yet -> find "Return Home" by its text and learn it
+            if time.monotonic() - start > 25 and Auto_Learn.learn_button("return_home", tap=True, min_interval=12):
+                time.sleep(2)
+                for _ in range(10):
+                    if game_ready(): return
+                    time.sleep(1)
             time.sleep(1)
         logger.warning("Battle end not detected, reopening the game")
         if restart: start_coc(force_restart=True)
@@ -145,6 +151,11 @@ class Attacker:
         Returns True when a good base is on screen.
         """
         import time, teach
+        # learn the search screen by itself (once), even when the filter is off
+        if not (teach.taught("enemy_gold") and teach.taught("next_button")):
+            frame = Frame_Handler.get_frame(grayscale=False)
+            Auto_Learn.learn_enemy_loot(frame)
+            if not teach.taught("next_button"): Auto_Learn.learn_button("next_button", frame)
         f = getattr(self, "loot_filter", None)
         if not f or not f.get("enabled"): return True
         if not teach.taught("next_button") or not (teach.taught("enemy_gold") or teach.taught("enemy_elixir")):
@@ -161,7 +172,7 @@ class Attacker:
             logger.info(f"Base loot: gold={loot['gold']} elixir={loot['elixir']} dark={loot['dark']} -> {'attack' if ok else 'next'}")
             if ok: return True
             if skip == int(f.get("max_skips", 30)): break
-            if not tap_taught("next_button", timeout=2):
+            if not tap_taught("next_button", timeout=2) and not Auto_Learn.learn_button("next_button", tap=True, min_interval=0):
                 logger.warning("Next button not found, attacking this base")
                 return True
             time.sleep(1.5)
@@ -485,6 +496,7 @@ class Attacker:
                 time.sleep(0.3)
             if not found:
                 logger.error("Not in home base. Aborting home attack.")
+                Auto_Learn.handle_unknown_screen("home_attack")
                 return
             
             # Complete an attack
@@ -509,6 +521,7 @@ class Attacker:
                 time.sleep(0.3)
             if not found:
                 logger.error("Not in builder base. Aborting builder attack.")
+                Auto_Learn.handle_unknown_screen("builder_attack")
                 return
             
             # Complete an attack

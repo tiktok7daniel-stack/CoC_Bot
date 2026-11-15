@@ -66,7 +66,11 @@ class CoC_Bot:
             done = 0
             for step in r["steps"]:
                 key = step.get("key", "")
-                if not teach.taught(key): continue
+                if not teach.taught(key):
+                    # buttons with a word on them can be learned on the spot
+                    if Auto_Learn.learn_button(key, tap=True, min_interval=0): done += 1
+                    time.sleep(max(0.0, float(step.get("wait", 0.5))))
+                    continue
                 n = tap_taught(key, multi=bool(step.get("multi")), timeout=2)
                 done += n
                 time.sleep(max(0.0, float(step.get("wait", 0.5))))
@@ -168,6 +172,7 @@ class CoC_Bot:
                     self.attacker.battle_end = s["attack"]["battle_end"]
                     self.attacker.strategy = s["attack"]["strategy"]
                     self.attacker.loot_filter = s["attack"]["loot_filter"]
+                    Auto_Learn.enabled = bool(s["game"].get("auto_learn", True))
                     self.attacker.hero_delay = max(0.0, float(s["attack"]["hero_delay"]))
                     self.attacker.hero_retap = max(0.0, float(s["attack"]["hero_retap"]))
                     self.attacker.surrender_after = max(0, int(s["attack"]["surrender_after"]))

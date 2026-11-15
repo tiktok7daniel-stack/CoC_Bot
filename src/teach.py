@@ -88,6 +88,52 @@ def teach(key, rect, source_png, label=""):
     save_meta(meta)
     return entry
 
+def teach_array(key, rect, img_rgb, auto=True):
+    """Save a template / region straight from a frame (used by automatic learning)."""
+    import cv2
+    if key not in KEYS: raise ValueError("unknown item")
+    h, w = img_rgb.shape[:2]
+    x1, y1, x2, y2 = [max(0.0, min(1.0, v)) for v in rect]
+    meta = load_meta()
+    entry = {"kind": KEYS[key]["kind"], "rect": [x1, y1, x2, y2], "time": time.time(), "label": "", "auto": auto}
+    if KEYS[key]["kind"] == "button":
+        TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
+        crop = img_rgb[int(y1 * h):int(y2 * h), int(x1 * w):int(x2 * w)]
+        if crop.size == 0: raise ValueError("empty crop")
+        cv2.imwrite(str(template_path(key)), cv2.cvtColor(crop, cv2.COLOR_RGB2BGR))
+    meta[key] = entry
+    save_meta(meta)
+    return entry
+
+DISCOVERED_DIR = APP_DATA_DIR / "discovered"
+
+def record_discovery(id, frame_rgb, words, phase, action):
+    """Remember a screen the bot didn't understand (screenshot + the words it read + what it did)."""
+    import cv2
+    d = DISCOVERED_DIR / _safe(id)
+    d.mkdir(parents=True, exist_ok=True)
+    name = time.strftime("%Y%m%d_%H%M%S") + ".jpg"
+    small = cv2.resize(frame_rgb, (960, 540))
+    cv2.imwrite(str(d / name), cv2.cvtColor(small, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 75])
+    big = d / ("full_" + name.replace(".jpg", ".png"))
+    cv2.imwrite(str(big), cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR))
+    with open(d / "index.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps({"t": time.time(), "shot": name, "full": big.name, "words": words[:40], "phase": phase, "action": action}, ensure_ascii=False) + "\n")
+    # keep the folder small
+    shots = sorted(d.glob("*.jpg"))
+    for old in shots[:-40]:
+        try: old.unlink(); (d / ("full_" + old.name.replace(".jpg", ".png"))).unlink()
+        except OSError: pass
+
+def discoveries(id, limit=40):
+    p = DISCOVERED_DIR / _safe(id) / "index.jsonl"
+    if not p.exists(): return []
+    out = []
+    for line in p.read_text(encoding="utf-8").splitlines()[-limit:]:
+        try: out.append(json.loads(line))
+        except ValueError: pass
+    return list(reversed(out))
+
 def forget(key):
     meta = load_meta()
     meta.pop(key, None)

@@ -611,6 +611,12 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
       <div class="card-b" id="teachList" style="max-height:calc(100vh - 330px);overflow:auto"></div>
     </div>
     <div class="card" style="grid-column:1 / -1">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-wand-magic-sparkles"></i></div><h3 data-t="auto_title"></h3>
+        <div class="tools"><span class="unit" data-t="auto_on"></span><label class="sw"><input type="checkbox" data-bind="game.auto_learn"><span></span></label></div></div>
+      <div class="card-sub" data-t="auto_sub"></div>
+      <div class="card-b"><div class="grid three" id="discBox"></div></div>
+    </div>
+    <div class="card" style="grid-column:1 / -1">
       <div class="card-h"><div class="ico"><i class="fa-solid fa-route"></i></div><h3 data-t="routines_title"></h3></div>
       <div class="card-sub" data-t="routines_sub"></div>
       <div class="card-b grid three" id="routineBox"></div>
@@ -775,6 +781,9 @@ ar:{
  unsaved:"تغييرات غير محفوظة. اضغط على حفظ الإعدادات لتطبيقها على البوت.", start_bot:"بدء البوت", save_settings:"حفظ الإعدادات",
  one_err:"خطأ", one_warn:"تحذير",
  st_limit:"وصل للحد", st_break:"في استراحة",
+ auto_title:"التعلّم التلقائي 🤖", auto_on:"شغّال", auto_badge:"اتعلّمها لوحده",
+ auto_sub:"البوت بيقرا الشاشة: بيتعلّم الأزرار المكتوب عليها (Next، Return Home، Okay، Collect، Train…) وأماكن غنيمة الخصم لوحده. وأي شاشة مش فاهمها بيسجّلها هنا، ويدوس على زرار آمن (Later / Close / Okay…) عشان يكمّل",
+ disc_empty:"لسه البوت ما قابلش شاشات غريبة 👍", disc_pressed:"داس على", disc_none:"ما لقاش زرار آمن", disc_words:"الكلام اللي قراه", disc_teach:"علّمه من الصورة دي",
  tab_teach:"تعليم البوت", sub_teach:"علّم البوت أشكال لعبتك", teach_title:"صورة من المحاكي", teach_sub:"افتح الشاشة في اللعبة ← التقط صورة ← اختار العنصر من القايمة ← ارسم مربع حواليه بالماوس ← حفظ",
  capture:"التقاط صورة", no_shot:"اضغط \"التقاط صورة\" (البوت لازم يكون شغال)", save_sel:"حفظ التحديد", teach_items:"الحاجات اللي البوت يتعلّمها", teach_items_sub:"✓ = اتعلّمها. كل ميزة بتشتغل لوحدها أول ما الحاجات بتاعتها تتعلّم",
  pick_item:"اختار عنصر من القايمة", draw_box:"ارسم مربع على الصورة الأول", taught_ok:"البوت اتعلّمها ✓", capturing:"جاري التقاط صورة من المحاكي…", captured:"تم ✓ — ارسم مربع حوالين العنصر", capture_fail:"الصورة ما وصلتش — اتأكد إن البوت شغال والمحاكي مفتوح",
@@ -789,7 +798,7 @@ ar:{
  rt_army:"⚔️ تدريب الجيش وإضافة الأبطال", rtd_army:"يفتح الجيش، يضيف الأبطال الفاضيين، يدرّب، ويقفل", rt_collect:"💰 جمع الموارد", rtd_collect:"يلم المجمّعات المليانة وعربة الغنيمة", rt_custom:"⭐ روتين خاص", rtd_custom:"ضيف أي خطوات إنت عايزها (هدايا، Season Pass…)",
  lf_title:"فلتر الغنيمة (تخطّي القرى الفقيرة)", lf_sub:"البوت يقرا غنيمة الخصم ويدوس Next لو قليلة", lf_enabled:"تفعيل فلتر الغنيمة", lf_min_gold:"أقل ذهب", lf_min_elixir:"أقل إكسير", lf_min_dark:"أقل دارك", lf_mode:"الشرط", lf_all:"كل الشروط", lf_any:"أي شرط واحد", lf_skips:"أقصى عدد تخطّي",
  lf_ready:"جاهز", lf_need:"محتاج تعلّمه زرار Next ورقم الذهب أو الإكسير من تبويب \"تعليم البوت\"",
- ph_routine_army:"روتين الجيش", ph_routine_collect:"روتين جمع الموارد", ph_routine_custom:"الروتين الخاص",
+ ph_to_home:"الرجوع للقرية الرئيسية", ph_routine_army:"روتين الجيش", ph_routine_collect:"روتين جمع الموارد", ph_routine_custom:"الروتين الخاص",
  strat_title:"خطة الهجوم", strat_sub:"إزاي البوت ينزّل الجيش", strategy:"الخطة", strategy_sub:"\"تلقائي\" بيجرّب الخطط ويتعلّم أنهي واحدة بتجيب غنيمة أكتر ويستخدمها",
  st_auto:"تلقائي (يتعلّم الأفضل) 🧠", st_funnel:"نقطة واحدة (قمع)", st_line:"على خط الحافة", st_two_sides:"من جهتين",
  hero_delay:"تأخير الأبطال", hero_delay_sub:"الأبطال بينزلوا بعد الجيش بالوقت ده عشان الجيش ياخد ضرب الدفاعات الأول", hero_retap:"تفعيل قدرة الأبطال بعد", hero_retap_sub:"يدوس على كارت البطل تاني عشان يشغّل القدرة (0 = مقفول)",
@@ -855,6 +864,9 @@ en:{
  unsaved:"Unsaved changes. Click Save settings to apply them to the bot.", start_bot:"Start bot", save_settings:"Save settings",
  one_err:"Error", one_warn:"Warning",
  st_limit:"Limit reached", st_break:"On a break",
+ auto_title:"Automatic learning 🤖", auto_on:"On", auto_badge:"self-learned",
+ auto_sub:"The bot reads the screen: it learns buttons with words on them (Next, Return Home, Okay, Collect, Train…) and where the enemy loot is by itself. Any screen it doesn't understand is recorded here, and it presses a safe button (Later / Close / Okay…) to carry on",
+ disc_empty:"No unknown screens so far 👍", disc_pressed:"Pressed", disc_none:"No safe button found", disc_words:"Words it read", disc_teach:"Teach from this screenshot",
  tab_teach:"Teach the bot", sub_teach:"Teach the bot your game's screens", teach_title:"Emulator screenshot", teach_sub:"Open the screen in the game → capture → pick the item → drag a box around it → save",
  capture:"Capture", no_shot:"Click \"Capture\" (the bot must be running)", save_sel:"Save selection", teach_items:"Things the bot can learn", teach_items_sub:"✓ = learned. Each feature turns on as soon as its items are taught",
  pick_item:"Pick an item from the list", draw_box:"Drag a box on the screenshot first", taught_ok:"Learned ✓", capturing:"Capturing from the emulator…", captured:"Done ✓ — drag a box around the item", capture_fail:"No screenshot — check the bot is running and the emulator is open",
@@ -897,6 +909,10 @@ const LOG_AR = [
  [/^CoC already open/, "اللعبة مفتوحة بالفعل — هيكمّل عليها ✓"],
  [/^Settings changed, applying now/, "الإعدادات اتغيّرت — جاري التطبيق دلوقتي"],
  [/^Run now requested/, "تم طلب تشغيل دورة الآن"],
+ [/^Learned '(.*?)' automatically/, "🤖 البوت اتعلّم ($1) لوحده"],
+ [/^Learned enemy loot positions automatically \((\d+) numbers\)/, "🤖 البوت اتعلّم مكان غنيمة الخصم لوحده ($1 أرقام)"],
+ [/^Unknown screen recorded \((\d+) words\), pressed '(.*?)'/, "🤖 شاشة غريبة اتسجّلت ($1 كلمة) — داس على \"$2\""],
+ [/^Unknown screen recorded \((\d+) words\)/, "🤖 شاشة غريبة اتسجّلت ($1 كلمة)"],
  [/^Base loot: gold=(\S+) elixir=(\S+) dark=(\S+) -> attack/, "غنيمة القرية: ذهب $1 — إكسير $2 — دارك $3 ← هيهاجم ✓"],
  [/^Base loot: gold=(\S+) elixir=(\S+) dark=(\S+) -> next/, "غنيمة القرية: ذهب $1 — إكسير $2 — دارك $3 ← قليلة، القرية الجاية"],
  [/^Routine army: (\d+) taps/, "روتين الجيش خلص ($1 ضغطة)"],
@@ -1459,7 +1475,7 @@ const TGROUPS = {farm:"tg_farm", army:"tg_army", collect:"tg_collect", battle:"t
 const tname = k => t("tk_" + k) !== "tk_" + k ? t("tk_" + k) : (k.startsWith("custom_") ? `${t("tk_custom")} ${k.split("_")[1]}` : k);
 async function loadTeach(){
   try { TEACH = await api("/api/teach"); } catch(e) { return; }
-  renderTeachList(); renderRoutines(); updateLfReq();
+  renderTeachList(); renderRoutines(); updateLfReq(); loadDiscovered();
   const img = $("#teachImg");
   if (!img.src) { img.onerror = () => { img.removeAttribute("src"); $("#shotEmpty").style.display = ""; }; img.onload = () => { $("#shotEmpty").style.display = "none"; drawOld(); }; img.src = `/api/teach/capture/${encodeURIComponent(CUR)}?t=${Date.now()}`; }
 }
@@ -1471,7 +1487,7 @@ function renderTeachList(){
     const done = !!TEACH.taught[c.key];
     const d = document.createElement("div"); d.className = "titem" + (curItem === c.key ? " cur" : "");
     d.innerHTML = `<i class="fa-solid ${done ? "fa-circle-check ok-dot" : "fa-circle-xmark no-dot"}"></i>
-      <div class="nm">${tname(c.key)}<small>${c.kind === "region" ? t("kind_region") : t("kind_button")}${c.multi ? " · " + t("kind_multi") : ""}</small></div>
+      <div class="nm">${tname(c.key)}${done && TEACH.taught[c.key].auto ? ` <span class="tagp" style="font-size:11px">🤖 ${t("auto_badge")}</span>` : ""}<small>${c.kind === "region" ? t("kind_region") : t("kind_button")}${c.multi ? " · " + t("kind_multi") : ""}</small></div>
       ${done && c.kind === "button" ? `<img src="/api/teach/template/${c.key}?t=${TEACH.taught[c.key].time}">` : ""}
       ${done ? `<button class="ibtn" title="${t("remove")}"><i class="fa-solid fa-trash"></i></button>` : ""}`;
     d.onclick = e => { if (e.target.closest(".ibtn")) return; curItem = c.key; selRect = null; $("#newSel").style.display = "none"; renderTeachList(); drawOld(); };
@@ -1512,6 +1528,24 @@ async function saveTeach(){
   const r = await api("/api/teach/save", {method:"POST", body:{id:CUR, key:curItem, rect:selRect}});
   if (!r.ok) { toast(r.error, true); return; }
   toast(t("taught_ok")); selRect = null; $("#newSel").style.display = "none"; loadTeach();
+}
+async function loadDiscovered(){
+  let items = [];
+  try { items = (await api(`/api/discovered/${encodeURIComponent(CUR)}`)).items; } catch(e) {}
+  const box = $("#discBox");
+  if (!items.length) { box.innerHTML = `<div class="empty" style="grid-column:1/-1">${t("disc_empty")}</div>`; return; }
+  box.innerHTML = items.slice(0, 12).map(d => `<div class="lvl">
+      <img src="/api/discovered/${encodeURIComponent(CUR)}/img/${d.shot}" style="width:100%;border-radius:8px;cursor:zoom-in" onclick="showShot(this.src)">
+      <div class="top note" style="margin:6px 0 4px"><span class="num">${new Date(d.t * 1000).toLocaleString("en-GB")}</span>${d.phase ? ` · ${t("during")}: ${t("ph_" + d.phase)}` : ""}</div>
+      <div style="font-size:13px">${d.action ? `<span class="ok-dot">✓ ${t("disc_pressed")} "${esc(d.action.slice(4))}"</span>` : `<span class="no-dot">${t("disc_none")}</span>`}</div>
+      <details style="font-size:12px;color:var(--muted)"><summary>${t("disc_words")} (${d.words.length})</summary><div class="num" style="direction:ltr;text-align:left">${esc(d.words.join(" · "))}</div></details>
+      <button class="btn sm" style="margin-top:6px" onclick="useDiscovered('${d.full}')"><i class="fa-solid fa-graduation-cap"></i>${t("disc_teach")}</button></div>`).join("");
+}
+async function useDiscovered(full){
+  await api(`/api/discovered/${encodeURIComponent(CUR)}/use`, {method:"POST", body:{full}});
+  $("#teachImg").src = `/api/teach/capture/${encodeURIComponent(CUR)}?t=${Date.now()}`;
+  $("#teachNote").textContent = t("captured");
+  document.querySelector("#p-teach").scrollIntoView({behavior:"smooth"});
 }
 function updateLfReq(){
   const ok = TEACH.taught.next_button && (TEACH.taught.enemy_gold || TEACH.taught.enemy_elixir);

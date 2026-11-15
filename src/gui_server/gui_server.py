@@ -289,6 +289,31 @@ def api_teach_template(key):
     r.headers["Cache-Control"] = "no-store"
     return r
 
+@app.route("/api/discovered/<id>", methods=["GET"])
+def api_discovered(id):
+    import teach
+    if not valid_id(id): abort(404)
+    return jsonify({"items": teach.discoveries(id)})
+
+@app.route("/api/discovered/<id>/img/<name>", methods=["GET"])
+def api_discovered_img(id, name):
+    from flask import send_from_directory
+    import teach
+    if not valid_id(id) or "/" in name or "\\" in name or ".." in name: abort(404)
+    return send_from_directory(teach.DISCOVERED_DIR / teach._safe(id), name)
+
+@app.route("/api/discovered/<id>/use", methods=["POST"])
+def api_discovered_use(id):
+    """Load a recorded screen into the Teach tab so the user can teach from it."""
+    import shutil, teach
+    name = (request.json or {}).get("full", "")
+    if not valid_id(id) or "/" in name or "\\" in name or ".." in name: abort(404)
+    src = teach.DISCOVERED_DIR / teach._safe(id) / name
+    if not src.exists(): return jsonify({"ok": False})
+    teach.CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(src, teach.capture_path(id))
+    return jsonify({"ok": True})
+
 # ---------------------------------------------------------------- GitHub error reports
 
 def _sanitize(text):

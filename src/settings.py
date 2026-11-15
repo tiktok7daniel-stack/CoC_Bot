@@ -108,6 +108,7 @@ def default_settings():
         "game": {
             "keep_open": True,       # don't close the game between cycles
             "apply_instantly": True, # start a cycle right after settings change while idle
+            "auto_learn": True,      # learn buttons / loot numbers by reading the screen, record unknown screens
         },
         "schedule": {
             "enabled": False,

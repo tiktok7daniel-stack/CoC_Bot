@@ -546,6 +546,8 @@ def to_home_base(ref_cache=False):
             Input_Handler.click(x, y)
             time.sleep(2)
             return
+    # couldn't find the way home: something unknown is on the screen
+    Auto_Learn.handle_unknown_screen("to_home")
 
 # Storage counters in the top-right corner (fractions of a 1920x1080 frame).
 # Each band holds one number; dark elixir only exists in the home village (TH7+).
@@ -648,6 +650,8 @@ def start_coc(timeout=60, detailed=False, force_restart=False):
                 if x is not None and y is not None:
                     Input_Handler.click(x, y)
             
+            # stuck on something unknown (popup, offer, event)? read it, record it, press a safe button
+            if i in (5, 9): Auto_Learn.handle_unknown_screen("start_game")
             # the update-popup check is slow (uiautomator dump), so only do it now and then
             if i % 5 == 4: update_coc(timeout=3, from_in_game=True)
             else: time.sleep(0.3)
@@ -2273,3 +2277,146 @@ def start_capture_service():
             except Exception:
                 pass
     threading.Thread(target=loop, daemon=True, name="capture").start()
+
+# ======================================================================
+# Automatic learning: read the screen with word positions, learn buttons
+# by their text, learn the enemy loot numbers, and record unknown screens.
+# ======================================================================
+AUTO_WORDS = {
+    "next_button":    ["next"],
+    "return_home":    ["return home", "return"],
+    "end_battle":     ["end battle", "surrender"],
+    "okay_button":    ["okay"],
+    "collect_button": ["collect"],
+    "train_button":   ["quick train", "train again", "train"],
+}
+# words on popups that are safe to press to get out of the way
+DISMISS_WORDS = ["later", "not now", "close", "okay", "continue", "claim", "collect", "got it", "tap to continue"]
+
+def ocr_boxes(frame):
+    """[(text, x1, y1, x2, y2, conf)] with fractions of the frame. easyocr first, Tesseract TSV fallback."""
+    import numpy as np
+    h, w = frame.shape[:2]
+    out = []
+    try:
+        if not hasattr(OCR_Handler, "reader"):
+            import easyocr
+            OCR_Handler.reader = easyocr.Reader(['en'], gpu=True)
+        for pts, text, conf in OCR_Handler.reader.readtext(frame, detail=1):
+            xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+            if text.strip(): out.append((text.strip(), min(xs) / w, min(ys) / h, max(xs) / w, max(ys) / h, float(conf)))
+        return out
+    except (KeyboardInterrupt, SystemExit): raise
+    except Exception:
+        pass
+    try: # Tesseract: one word per row
+        import subprocess, cv2
+        exe = Tesseract.find()
+        if not exe: return out
+        ok, png = cv2.imencode(".png", cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY) if frame.ndim == 3 else frame)
+        res = subprocess.run([exe, "stdin", "stdout", "--psm", "11", "tsv"], input=png.tobytes(), capture_output=True, timeout=20, **_no_window())
+        for row in res.stdout.decode("utf-8", "ignore").splitlines()[1:]:
+            c = row.split("\t")
+            if len(c) < 12 or not c[11].strip(): continue
+            x, y, bw, bh, conf = int(c[6]), int(c[7]), int(c[8]), int(c[9]), float(c[10])
+            out.append((c[11].strip(), x / w, y / h, (x + bw) / w, (y + bh) / h, conf / 100))
+    except Exception:
+        pass
+    return out
+
+def _word_hit(text, word):
+    from rapidfuzz import fuzz
+    t = text.lower().strip()
+    return word in t or (len(word) >= 4 and fuzz.ratio(t, word) >= 80)
+
+class Auto_Learn:
+    """Learns taught-template items by itself, so the user doesn't have to."""
+    enabled = True
+    tried = {}            # key -> last attempt time (don't OCR the same thing over and over)
+
+    @classmethod
+    def learn_button(cls, key, frame=None, tap=False, min_interval=20):
+        """Find the button by the word written on it; save its image; optionally tap it."""
+        import time, teach
+        if not cls.enabled or key not in AUTO_WORDS: return None
+        if time.time() - cls.tried.get(key, 0) < min_interval: return None
+        cls.tried[key] = time.time()
+        if frame is None: frame = Frame_Handler.get_frame(grayscale=False)
+        boxes = ocr_boxes(frame)
+        for word in AUTO_WORDS[key]:
+            for text, x1, y1, x2, y2, conf in boxes:
+                if conf < 0.3 or not _word_hit(text, word): continue
+                # the button is a bit bigger than its label
+                bw, bh = x2 - x1, y2 - y1
+                rect = (x1 - bw * 0.25, y1 - bh * 0.6, x2 + bw * 0.25, y2 + bh * 0.6)
+                try:
+                    if not teach.taught(key) or teach.load_meta().get(key, {}).get("auto"):
+                        teach.teach_array(key, rect, frame, auto=True)
+                        logger.info(f"Learned '{key}' automatically")
+                except Exception:
+                    pass
+                cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+                if tap: Input_Handler.click(cx, cy)
+                return (cx, cy)
+        return None
+
+    @classmethod
+    def learn_enemy_loot(cls, frame=None):
+        """On an enemy base: find "Available Loot" and the numbers under it (gold, elixir, dark)."""
+        import re, time, teach
+        if not cls.enabled: return False
+        if all(teach.taught(k) for k in ("enemy_gold", "enemy_elixir")): return True
+        if time.time() - cls.tried.get("enemy_loot", 0) < 30: return False
+        cls.tried["enemy_loot"] = time.time()
+        if frame is None: frame = Frame_Handler.get_frame(grayscale=False)
+        h, w = frame.shape[:2]
+        left = frame[:int(h * 0.5), :int(w * 0.35)] # loot is always in the top-left corner
+        boxes = ocr_boxes(left)
+        boxes = [(t, x1 * 0.35, y1 * 0.5, x2 * 0.35, y2 * 0.5, c) for t, x1, y1, x2, y2, c in boxes]
+        label = next((b for b in boxes if "loot" in b[0].lower() or "available" in b[0].lower()), None)
+        nums = []
+        for text, x1, y1, x2, y2, conf in boxes:
+            digits = re.sub(r"[^0-9]", "", fix_digits(text))
+            if len(digits) < 2 or len(digits) < len(text.replace(" ", "")) * 0.6: continue
+            if label and y1 < label[2]: continue
+            nums.append((y1, (x1, y1, x2, y2)))
+        nums.sort()
+        names = ["enemy_gold", "enemy_elixir", "enemy_dark"]
+        for name, (_, (x1, y1, x2, y2)) in zip(names, nums[:3]):
+            pad = (y2 - y1) * 0.25
+            try:
+                if not teach.taught(name) or teach.load_meta().get(name, {}).get("auto"):
+                    teach.teach_array(name, (x1 - pad, y1 - pad, x2 + pad * 3, y2 + pad), frame, auto=True)
+            except Exception:
+                pass
+        if nums: logger.info(f"Learned enemy loot positions automatically ({min(3, len(nums))} numbers)")
+        return len(nums) >= 2
+
+    @classmethod
+    def handle_unknown_screen(cls, phase=""):
+        """
+        The bot doesn't recognise the screen: read it, record it for the user,
+        and press a harmless button (Later / Close / Okay / Continue…) if there is one.
+        """
+        import time, teach
+        if not cls.enabled: return False
+        if time.time() - cls.tried.get("unknown", 0) < 15: return False
+        cls.tried["unknown"] = time.time()
+        try:
+            frame = Frame_Handler.get_frame(grayscale=False)
+            boxes = ocr_boxes(frame)
+            words = [b[0] for b in boxes if b[5] > 0.3]
+            action = ""
+            for word in DISMISS_WORDS:
+                hit = next((b for b in boxes if b[5] > 0.4 and _word_hit(b[0], word)), None)
+                if hit:
+                    Input_Handler.click((hit[1] + hit[3]) / 2, (hit[2] + hit[4]) / 2)
+                    action = f"tap:{hit[0]}"
+                    break
+            teach.record_discovery(INSTANCE_ID, frame, words, phase or TEMP_CACHE.get("phase", ""), action)
+            logger.info(f"Unknown screen recorded ({len(words)} words){', pressed ' + repr(action[4:]) if action else ''}")
+            return bool(action)
+        except (KeyboardInterrupt, SystemExit): raise
+        except Exception:
+            logger.warning("Could not analyse the unknown screen")
+            return False
