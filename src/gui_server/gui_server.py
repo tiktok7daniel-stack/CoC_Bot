@@ -352,7 +352,9 @@ def github_report(id, since=0):
         r = requests.post(f"https://api.github.com/repos/{UPDATE_REPO}/issues",
                           headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
                           json={"title": title, "body": body}, timeout=20)
-    if r.status_code >= 300: return {"ok": False, "error": f"GitHub {r.status_code}: {r.text[:200]}"}
+    if r.status_code >= 300:
+        reasons = {401: "bad_token", 403: "no_permission", 404: "no_permission", 410: "issues_disabled"}
+        return {"ok": False, "error": reasons.get(r.status_code, f"GitHub {r.status_code}: {r.text[:200]}")}
     return {"ok": True, "url": r.json().get("html_url")}
 
 @app.route("/api/github/report/<id>", methods=["POST"])

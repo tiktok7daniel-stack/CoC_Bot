@@ -807,7 +807,8 @@ ar:{
  breaks:"استراحات طبيعية", breaks_sub:"يقفل اللعبة شوية كل فترة بوقت عشوائي — أأمن من اللعب المتواصل", break_every:"استراحة كل حوالي", break_len:"مدة الاستراحة حوالي",
  gh_upload:"رفع الأخطاء على GitHub", gh_title:"تقارير الأخطاء على GitHub", gh_sub:"الأخطاء بتترفع كـ Issue في مستودع البوت عشان تتصلح في التحديث الجاي",
  gh_token:"توكن GitHub", gh_token_sub:"Fine-grained token على مستودع البوت بس، بصلاحية Issues: Read and write", gh_auto:"رفع تلقائي كل 6 ساعات", gh_auto_sub:"لو فيه أخطاء جديدة بس",
- gh_warn:"لو المستودع عام (Public) أي حد يقدر يشوف التقارير. البوت بيشيل مسارات جهازك والمفاتيح قبل الرفع.", gh_done:"اترفع ✓", gh_need_token:"حط توكن GitHub في الإعدادات الأول", tab_err:"الأخطاء", sub_err:"تشخيص المشاكل", err_title:"سجل الأخطاء", err_sub:"كل خطأ بيتسجّل بالخطوة اللي البوت كان فيها، وشرح بالعربي، وصورة من المحاكي لحظة الخطأ",
+ gh_warn:"لو المستودع عام (Public) أي حد يقدر يشوف التقارير. البوت بيشيل مسارات جهازك والمفاتيح قبل الرفع.", gh_done:"اترفع ✓", gh_need_token:"حط توكن GitHub في الإعدادات الأول",
+ gh_bad_token:"❌ المفتاح غلط أو انتهى — اعمل مفتاح جديد وانسخه كامل", gh_no_perm:"❌ المفتاح مش ليه صلاحية — لازم يكون على مستودع CoC_Bot وبصلاحية Issues: Read and write", gh_issues_off:"❌ الـ Issues مقفولة في المستودع — افتح Settings في المستودع وعلّم على Issues", tab_err:"الأخطاء", sub_err:"تشخيص المشاكل", err_title:"سجل الأخطاء", err_sub:"كل خطأ بيتسجّل بالخطوة اللي البوت كان فيها، وشرح بالعربي، وصورة من المحاكي لحظة الخطأ",
  save_report:"حفظ تقرير للمطوّر", open_folder:"فتح فولدر الصور", errors_k:"أخطاء", warnings_k:"تحذيرات", last_error:"آخر خطأ", no_errors:"مفيش أخطاء 🎉 البوت شغال تمام",
  report_saved:"التقرير اتحفظ على سطح المكتب:", during:"أثناء", fix:"الحل", tech:"تفاصيل تقنية", confirm_clear_err:"مسح قائمة الأخطاء؟",
  ph_start_game:"فتح اللعبة", ph_to_home:"الرجوع للقرية الرئيسية", ph_read_resources:"قراءة الموارد", ph_home_upgrades:"ترقيات القرية الرئيسية", ph_home_attack:"هجوم القرية الرئيسية", ph_walls_farming:"ترقية الجدران أثناء الفارم", ph_to_builder:"الانتقال لقاعدة البنّاء", ph_builder_upgrades:"ترقيات قاعدة البنّاء", ph_builder_attack:"هجوم قاعدة البنّاء", ph_finish:"إنهاء الدورة", ph_idle:"الانتظار بين الدورات",
@@ -890,7 +891,8 @@ en:{
  breaks:"Humanized breaks", breaks_sub:"Closes the game for a while at random intervals — safer than nonstop play", break_every:"Break about every", break_len:"Break length about",
  gh_upload:"Upload errors to GitHub", gh_title:"Error reports on GitHub", gh_sub:"Errors are uploaded as Issues in the bot repository so the next update can fix them",
  gh_token:"GitHub token", gh_token_sub:"Fine-grained token for the bot repo only, with Issues: Read and write", gh_auto:"Upload automatically every 6 hours", gh_auto_sub:"Only when there are new errors",
- gh_warn:"If the repository is public anyone can read the reports. Paths and keys are removed before upload.", gh_done:"Uploaded ✓", gh_need_token:"Add a GitHub token in Settings first", tab_err:"Errors", sub_err:"Troubleshooting", err_title:"Error log", err_sub:"Every error is saved with the step the bot was on, an explanation and an emulator screenshot",
+ gh_warn:"If the repository is public anyone can read the reports. Paths and keys are removed before upload.", gh_done:"Uploaded ✓", gh_need_token:"Add a GitHub token in Settings first",
+ gh_bad_token:"❌ Bad or expired token — create a new one and copy all of it", gh_no_perm:"❌ The token lacks permission — it must be for the CoC_Bot repo with Issues: Read and write", gh_issues_off:"❌ Issues are disabled in the repository — enable them in the repo Settings", tab_err:"Errors", sub_err:"Troubleshooting", err_title:"Error log", err_sub:"Every error is saved with the step the bot was on, an explanation and an emulator screenshot",
  save_report:"Save report for developer", open_folder:"Open screenshots folder", errors_k:"Errors", warnings_k:"Warnings", last_error:"Last error", no_errors:"No errors 🎉 the bot is running fine",
  report_saved:"Report saved to the Desktop:", during:"During", fix:"Fix", tech:"Technical details", confirm_clear_err:"Clear the error list?",
  ph_start_game:"Opening the game", ph_to_home:"Going to home village", ph_read_resources:"Reading resources", ph_home_upgrades:"Home upgrades", ph_home_attack:"Home attack", ph_walls_farming:"Walls while farming", ph_to_builder:"Going to builder base", ph_builder_upgrades:"Builder base upgrades", ph_builder_attack:"Builder base attack", ph_finish:"Finishing cycle", ph_idle:"Waiting between cycles",
@@ -1588,7 +1590,7 @@ async function githubReport(){
   const r = await api(`/api/github/report/${encodeURIComponent(CUR)}`, {method:"POST", body:{}});
   if (r.ok && r.url) $("#reportNote").innerHTML = `${t("gh_done")} <span class="num">${esc(r.url)}</span>`;
   else if (r.ok) $("#reportNote").textContent = t("no_errors");
-  else $("#reportNote").textContent = r.error === "no_token" ? t("gh_need_token") : r.error;
+  else $("#reportNote").textContent = {no_token:t("gh_need_token"), bad_token:t("gh_bad_token"), no_permission:t("gh_no_perm"), issues_disabled:t("gh_issues_off")}[r.error] || r.error;
 }
 function showShot(src){ $("#shotImg").src = src; $("#shotModal").classList.add("show"); }
 async function saveReport(){
