@@ -24,15 +24,15 @@ def _run(cmd, timeout=20):
 # ---------------------------------------------------------------- LDPlayer
 
 def ld_console(app):
-    custom = app.get("ldplayer_path", "")
+    custom = str(app.get("ldplayer_path", "") or "").strip().strip('"')
     cands = []
     if custom:
         p = Path(custom)
-        cands += [p] if p.suffix.lower() == ".exe" else [p / "ldconsole.exe", p / "dnconsole.exe"]
+        cands += ([p] if p.suffix.lower() == ".exe" else []) + [p / "ldconsole.exe", p / "dnconsole.exe", p.parent / "ldconsole.exe"]
     for d in LD_DIRS: cands += [Path(d) / "ldconsole.exe", Path(d) / "dnconsole.exe"]
     for c in cands:
         try:
-            if c.exists(): return str(c)
+            if c.is_file(): return str(c)
         except OSError:
             continue
     return None

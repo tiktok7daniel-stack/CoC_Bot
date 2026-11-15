@@ -1367,16 +1367,20 @@ class LDPlayer_Manager(_Emulator_Manager):
 
     @classproperty
     def console(cls):
-        if cls._console is not None and Path(cls._console).exists():
+        if cls._console is not None and Path(cls._console).is_file():
             return cls._console
-        custom = getattr(configs, "LDPLAYER_BIN_PATH", "")
-        candidates = [custom] if custom else []
+        custom = str(getattr(configs, "LDPLAYER_BIN_PATH", "") or "").strip().strip('"')
+        candidates = []
+        if custom: # the setting may be the LDPlayer folder or ldconsole.exe itself
+            cp = Path(custom)
+            candidates += [str(cp)] if cp.suffix.lower() == ".exe" else []
+            candidates += [str(cp / "ldconsole.exe"), str(cp / "dnconsole.exe"), str(cp.parent / "ldconsole.exe")]
         for d in cls.COMMON_DIRS:
             candidates += [str(Path(d) / "ldconsole.exe"), str(Path(d) / "dnconsole.exe")]
         found = None
         for c in candidates:
             try:
-                if c and Path(c).exists(): found = c; break
+                if c and Path(c).is_file(): found = c; break # a folder can't be run ("Access is denied")
             except OSError: # e.g. a BitLocker-locked drive
                 continue
         if found is None: found = file_search("/", "ldconsole.exe", ["ldplayer"])

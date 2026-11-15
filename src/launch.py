@@ -29,6 +29,7 @@ def launch_proc(args):
             break
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
+            if attempt == 1: logger.exception("Bot start failed (details):")
             logger.error(f"Bot start failed: {type(e).__name__}: {e}")
             update_status("error")
             time.sleep(min(60, 10 * attempt))
