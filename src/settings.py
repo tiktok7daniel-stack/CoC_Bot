@@ -153,7 +153,8 @@ def default_app_settings():
         "accounts": list(_cfg("INSTANCE_IDS", ["main"])),
         "emulator_links": {},        # account -> emulator copy (LDPlayer index / BlueStacks instance) chosen on the setup screen
         "show_setup": True,          # show the setup screen when the app opens
-        "display_w": 860, "display_h": 732, "display_dpi": 300, # emulator display the bot checks / sets
+        "display_w": 1920, "display_h": 1080, "display_dpi": 240, # emulator display the bot checks / sets
+        "display_reset_1920": False, # one-time move back to 1920x1080 (3.8.0)
     }
 
 def _merge(base, override):
@@ -190,6 +191,10 @@ def save(id, data):
 
 def load_app():
     data = _merge(default_app_settings(), _read(GLOBAL_PATH))
+    if not data.get("display_reset_1920"): # the bot's images and positions are made for 1920x1080
+        data.update(display_w=1920, display_h=1080, display_dpi=240, display_reset_1920=True)
+        try: _write(GLOBAL_PATH, data)
+        except Exception: pass
     # every account listed in configs is always available
     for i in getattr(configs, "INSTANCE_IDS", []):
         if i not in data["accounts"]: data["accounts"].append(i)
@@ -213,7 +218,7 @@ def apply_app_settings():
     configs.TESSERACT_PATH = app["tesseract_path"]
     configs.LDPLAYER_BIN_PATH = app.get("ldplayer_path", "")
     configs.EMULATOR_LINKS = app.get("emulator_links", {}) or {}
-    configs.DISPLAY_TARGET = (int(app.get("display_w", 860)), int(app.get("display_h", 732)), int(app.get("display_dpi", 300)))
+    configs.DISPLAY_TARGET = (int(app.get("display_w", 1920)), int(app.get("display_h", 1080)), int(app.get("display_dpi", 240)))
     _push_globals({k: getattr(configs, k) for k in (
         "INSTANCE_IDS", "EMULATOR_TYPE", "TELEGRAM_BOT_TOKEN", "GROQ_API_KEY",
         "SUSPEND_EMULATOR_ON_IDLE", "AUTO_START_EMULATOR", "TESSERACT_PATH")})

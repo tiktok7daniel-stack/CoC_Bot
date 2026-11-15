@@ -1356,7 +1356,7 @@ function showSub(name){
 $$("#tabs button").forEach(b => b.onclick = () => b.dataset.soon ? toast(t("soon_msg")) : showTab(b.dataset.tab));
 /* setup screen */
 let SU = null, suTimer = null, suBusy = false;
-function suFillDisp(){ $("#suW").value = APP.display_w || 860; $("#suH").value = APP.display_h || 732; $("#suD").value = APP.display_dpi || 300;
+function suFillDisp(){ $("#suW").value = APP.display_w || 1920; $("#suH").value = APP.display_h || 1080; $("#suD").value = APP.display_dpi || 240;
   $("#suDispWarn").style.display = (+$("#suW").value === 1920 && +$("#suH").value === 1080) ? "none" : ""; }
 function suDefaultDisp(){ $("#suW").value = 1920; $("#suH").value = 1080; $("#suD").value = 240; suFillWarn(); }
 function suFillWarn(){ $("#suDispWarn").style.display = (+$("#suW").value === 1920 && +$("#suH").value === 1080) ? "none" : ""; }

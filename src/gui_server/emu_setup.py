@@ -113,7 +113,7 @@ def wm_size(adb, addr):
 
 def target(app):
     """The display size / DPI chosen on the setup screen (default 1920x1080 240 DPI)."""
-    return int(app.get("display_w", 860)), int(app.get("display_h", 732)), int(app.get("display_dpi", 300))
+    return int(app.get("display_w", 1920)), int(app.get("display_h", 1080)), int(app.get("display_dpi", 240))
 
 def good_res(app, w, h, dpi):
     tw, th, td = target(app)
