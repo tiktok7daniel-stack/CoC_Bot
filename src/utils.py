@@ -1395,6 +1395,38 @@ class DeviceProxy:
         
         return attr
 
+MINITOUCH_PATH = "/data/local/tmp/minitouch"
+MINITOUCH_URL = "https://github.com/williamfzc/stf-binaries/raw/master/node_modules/minitouch-prebuilt/prebuilt/{abi}/bin/minitouch"
+
+def ensure_minitouch(device):
+    """
+    Install a working minitouch binary on the device ourselves.
+    pyminitouch detects the CPU ABI with an unquoted shell command, which breaks when the
+    adb path contains spaces (e.g. C:\\Program Files\\BlueStacks_nxt\\HD-Adb.exe): it then
+    downloads an error page instead of the binary and pushes that, causing
+    "minitouch[N]: syntax error". This also repairs a device that already has that bad file.
+    """
+    import io, requests
+    import pyminitouch.connection as mnt_conn
+
+    abi = device.getprop("ro.product.cpu.abi").strip()
+    # make pyminitouch's own (buggy) ABI lookup harmless
+    mnt_conn.MNTInstaller.get_abi = lambda self: abi
+
+    check = device.shell(f"[ -f {MINITOUCH_PATH} ] && {MINITOUCH_PATH} -h 2>&1 | head -n 1")
+    if "Usage" in check: return
+
+    logger.info(f"Installing minitouch for ABI '{abi}'...")
+    device.shell(f"rm -f {MINITOUCH_PATH}")
+    res = requests.get(MINITOUCH_URL.format(abi=abi), timeout=30)
+    if res.status_code != 200 or not res.content.startswith(b"\x7fELF"):
+        raise RuntimeError(f"Could not download minitouch for ABI '{abi}' (HTTP {res.status_code})")
+    device.sync.push(io.BytesIO(res.content), MINITOUCH_PATH, mode=0o755)
+    device.shell(f"chmod 755 {MINITOUCH_PATH}")
+    if "Usage" not in device.shell(f"{MINITOUCH_PATH} -h 2>&1 | head -n 1"):
+        raise RuntimeError("minitouch was installed but does not run on this device")
+    logger.info("minitouch installed.")
+
 class ADB_Manager:
     import uiautomator2 as u2
     from adbutils import AdbDevice
@@ -1454,12 +1486,14 @@ class ADB_Manager:
         devices = []
         try:
             d1 = adbutils.device(addr)
+            ensure_minitouch(d1)
             d2 = MNTDevice(addr)
             d3 = u2.connect(addr)
             devices = [d1, d2, d3]
             Exit_Handler.register(d2.stop)
         except (KeyboardInterrupt, SystemExit): raise
-        except:
+        except Exception as e:
+            logger.error(f"ADB device setup failed: {e}")
             reset_adb()
             raise Exception("Failed to get ADB device.")
         cls._adbutils_device, cls._minitouch_device, cls._uiautomator_device = devices
