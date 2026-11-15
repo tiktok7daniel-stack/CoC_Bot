@@ -1076,6 +1076,11 @@ class BlueStacks_Manager(_Emulator_Manager):
             if not Path(cls._conf_path).exists():
                 cls._conf_path = file_search("/", "bluestacks.conf", ["bluestacks"])
 
+        link = str((getattr(configs, "EMULATOR_LINKS", {}) or {}).get(instance_id, ""))
+        if link:
+            cls._internal_instance_name = link
+            return link
+
         if cls._conf_path is not None and Path(cls._conf_path).exists():
             pattern = re.compile(r'^bst\.instance\.([^.]+)\.display_name="?(.*?)"?$')
             for line in Path(cls._conf_path).read_text().splitlines():
@@ -1392,7 +1397,9 @@ class LDPlayer_Manager(_Emulator_Manager):
         if cls._index is not None: return cls._index
         instance_id = instance_id if instance_id is not None else INSTANCE_ID
         inst = cls.instances()
-        match = [i for i, title, _, _ in inst if title == instance_id]
+        link = str((getattr(configs, "EMULATOR_LINKS", {}) or {}).get(instance_id, ""))
+        match = [i for i, title, _, _ in inst if str(i) == link] if link else []
+        match = match or [i for i, title, _, _ in inst if title == instance_id]
         if match:
             cls._index = match[0]
         elif len(inst) == 1:

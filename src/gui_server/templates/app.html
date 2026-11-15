@@ -221,6 +221,25 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
 .err img{width:150px;height:84px;object-fit:cover;border-radius:8px;border:1px solid var(--line2);cursor:zoom-in;flex:none}
 .tagp{background:#1d3463;border-radius:7px;padding:0 8px;font-weight:700}
 #shotModal .modal{width:min(1100px,95vw)}
+/* ---------- setup screen ---------- */
+#setupModal{z-index:60;background:rgba(5,10,25,.88)}
+#setupModal .modal{width:min(1000px,96vw);max-height:94vh;display:flex;flex-direction:column}
+#setupModal .modal-b{overflow:auto}
+.su-top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+.su-sum{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;background:#0f1b38;border:1px solid var(--line2);margin-bottom:12px;font-weight:700}
+.su-sum.ok{border-color:rgba(47,207,122,.5)} .su-sum.bad{border-color:rgba(255,93,108,.5)}
+.su-acc{background:#0f1b38;border:1px solid var(--line2);border-radius:14px;padding:12px 14px;margin-bottom:12px}
+.su-acc.ready{border-color:rgba(47,207,122,.55)}
+.su-acc-h{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:10px}
+.su-acc-h b{font-size:18px}
+.su-steps{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+@media (max-width:760px){.su-steps{grid-template-columns:repeat(2,1fr)}}
+.su-step{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:var(--panel);border:1px solid var(--line);font-size:13px}
+.su-step i{font-size:16px} .su-step small{display:block;color:var(--muted);font-size:11px}
+.su-step.ok{border-color:rgba(47,207,122,.6);background:rgba(47,207,122,.08)} .su-step.bad{border-color:rgba(255,93,108,.6);background:rgba(255,93,108,.08)}
+.su-step.ok i{color:var(--ok)} .su-step.bad i{color:var(--bad)} .su-step.wait i{color:var(--warn)}
+.su-btns{display:flex;flex-wrap:wrap;gap:8px}
+.su-hint{color:var(--warn);font-size:13px;margin-top:8px}
 #shotModal img{width:100%;border-radius:10px;display:block}
 .shot-wrap{position:relative;user-select:none;border-radius:12px;overflow:hidden;border:1px solid var(--line2);background:#060c1c;min-height:200px;cursor:crosshair}
 .shot-wrap img{display:block;width:100%}
@@ -266,6 +285,7 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
     <div class="chip"><svg class="ic"><use href="#i-elixir"/></svg><div><label data-t="elixir"></label><b class="num" id="resElixir">—</b></div></div>
     <div class="chip"><svg class="ic"><use href="#i-dark"/></svg><div><label data-t="dark"></label><b class="num" id="resDark">—</b></div></div>
   </div>
+  <button class="hbtn" onclick="openSetup()"><i class="fa-solid fa-plug-circle-check"></i><span data-t="su_title"></span></button>
   <button class="hbtn" onclick="refreshAll(true)"><i class="fa-solid fa-rotate"></i><span data-t="refresh"></span></button>
   <div class="acc-select"><i class="fa-solid fa-user-shield" style="color:var(--gold)"></i><select id="accSel" onchange="switchAccount(this.value)"></select></div>
   <div class="pill" id="statusPill"><span class="dot"></span><span id="statusText"></span></div>
@@ -790,6 +810,36 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
   <button class="btn primary" id="btnSave" onclick="saveAll()"><i class="fa-solid fa-floppy-disk"></i><span data-t="save_settings"></span></button>
 </footer>
 
+<!-- setup screen (shown first) -->
+<div class="modal-bg" id="setupModal">
+  <div class="modal">
+    <div class="modal-h"><i class="fa-solid fa-plug-circle-check" style="font-size:22px;color:var(--accent)"></i><h3 data-t="su_title"></h3>
+      <button class="btn sm ghost x" onclick="closeSetup()"><i class="fa-solid fa-xmark"></i></button></div>
+    <div class="modal-b">
+      <div class="card-sub" style="margin:0 0 12px" data-t="su_sub"></div>
+      <div class="su-top">
+        <span data-t="emulator"></span>
+        <select class="in" id="suEmu"><option value="ldplayer">LDPlayer</option><option value="bluestacks">BlueStacks</option><option value="mumu">MuMu Player</option></select>
+        <input class="in" id="suLdPath" dir="ltr" style="flex:1;min-width:220px" placeholder="D:\LDPlayer\LDPlayer9">
+        <button class="btn" onclick="suSaveEmu()"><i class="fa-solid fa-floppy-disk"></i> <span data-t="su_save"></span></button>
+        <button class="btn" onclick="loadSetup()"><i class="fa-solid fa-rotate"></i> <span data-t="su_refresh"></span></button>
+      </div>
+      <div class="su-sum" id="suSum"></div>
+      <div id="suAccs"></div>
+      <div class="su-acc">
+        <div class="su-acc-h"><i class="fa-solid fa-user-plus"></i><b style="font-size:15px" data-t="su_add"></b></div>
+        <div class="su-btns"><input class="in" id="suNewName" style="width:160px" placeholder="main2">
+          <select class="in" id="suNewCopy"></select>
+          <button class="btn" onclick="suAddAccount()"><i class="fa-solid fa-plus"></i> <span data-t="su_add_btn"></span></button></div>
+      </div>
+    </div>
+    <div class="modal-f">
+      <button class="btn go" onclick="suStartReady()"><i class="fa-solid fa-play"></i> <span data-t="su_start_all"></span></button>
+      <button class="btn primary" onclick="closeSetup()"><i class="fa-solid fa-arrow-left"></i> <span data-t="su_enter"></span></button>
+      <label style="margin-inline-start:auto;display:flex;gap:6px;align-items:center;color:var(--muted);font-size:13px"><input type="checkbox" id="suShow"> <span data-t="su_show"></span></label>
+    </div>
+  </div>
+</div>
 <!-- wall type modal -->
 <div class="modal-bg" id="wallModal">
   <div class="modal">
@@ -866,6 +916,22 @@ ar:{
  one_err:"خطأ", one_warn:"تحذير",
  brand_sub:"أتمتة كلاش أوف كلانس",
  as_plans:"التشكيلات",
+ su_title:"تجهيز البوت", su_sub:"هنا بتتأكد إن كل حاجة جاهزة قبل ما تشغّل: المحاكي، الاتصال، الدقة، واللعبة — لكل حساب. لما كله يبقى أخضر دوس \"ابدأ البوت\".",
+ su_save:"حفظ", su_refresh:"تحديث", su_copies:"نسخ المحاكي", su_accounts:"حسابات البوت", su_ready:"جاهز",
+ su_not_found:"مش لاقي {e} على الجهاز — اكتب مكان الفولدر بتاعه (اللي فيه ldconsole.exe) ودوس حفظ",
+ su_auto:"تلقائي (نفس الاسم)", su_linked:"مربوط بـ:", su_no_copy:"مش مربوط", su_bot_on:"البوت شغال", su_bot_off:"البوت واقف",
+ su_s_emu:"المحاكي شغال", su_s_adb:"متصل بالبوت", su_s_res:"الدقة 1920×1080", su_s_game:"اللعبة مفتوحة",
+ su_b_launch:"شغّل المحاكي", su_b_res:"صلّح الدقة", su_b_game:"افتح اللعبة", su_b_start:"ابدأ البوت", su_working:"استنى…",
+ su_h_link:"اختار نسخة المحاكي بتاعة الحساب ده من \"مربوط بـ\"", su_h_launch:"دوس \"شغّل المحاكي\" واستنى دقيقة",
+ su_h_adb_ld:"المحاكي شغال بس مش متصل: في LDPlayer افتح الإعدادات ← أخرى ← تصحيح ADB واختار \"فتح الاتصال المحلي\"، وبعدين اقفل المحاكي وافتحه",
+ su_h_adb:"المحاكي شغال بس مش متصل: فعّل ADB من إعدادات المحاكي", su_h_boot:"المحاكي لسه بيفتح… استنى شوية",
+ su_h_res:"الدقة غلط — دوس \"صلّح الدقة\" (المحاكي هيتقفل ويفتح تاني)", su_h_game:"دوس \"افتح اللعبة\" أو افتحها بإيدك",
+ su_add:"إضافة حساب", su_add_btn:"إضافة", su_need_name:"اكتب اسم للحساب",
+ su_start_all:"ابدأ كل الحسابات الجاهزة", su_enter:"دخول للبرنامج", su_show:"اعرض الشاشة دي كل ما افتح البرنامج",
+ su_none_ready:"مفيش حساب جاهز لسه — كمّل الخطوات اللي باللون الأحمر", su_start_anyway:"الحساب ده لسه مش جاهز. تشغّل البوت برضه؟ (البوت هيحاول يشغّل المحاكي واللعبة لوحده)",
+ su_res_confirm:"المحاكي هيتقفل ويتغيّر للدقة 1920×1080 ويفتح تاني. موافق؟",
+ su_done_launch:"بيشغّل المحاكي… استنى دقيقة", su_done_fix_res:"اتغيّرت الدقة والمحاكي بيفتح تاني", su_done_open_game:"بيفتح اللعبة…",
+ su_err_no_copy:"الحساب مش مربوط بنسخة محاكي", su_err_no_adb:"المحاكي مش متصل لسه", su_err_no_emulator:"مش لاقي المحاكي", su_err_manual:"افتحها بإيدك في المحاكي ده", su_err_x:"حصلت مشكلة",
  rec_title:"تسجيل معركة (البوت يقلّدك)", rec_sub:"اكتب اسم للتسجيل ودوس تسجيل، وبعدين ادخل هجوم بنفسك في اللعبة. البوت بيسجّل كل ضغطة ووقتها، وبعدين تختار التسجيل ده في أي تشكيلة فيعيد هجومك بالظبط.",
  rec_name:"اسم التسجيل", rec_name_sub:"مثلًا اسم التشكيلة أو رقم الفريق", rec_start:"ابدأ التسجيل",
  rec_taps:"ضغطة", rec_delete:"مسح", rec_empty:"مفيش تسجيلات لسه", rec_confirm:"تمسح التسجيل ده؟",
@@ -990,6 +1056,22 @@ en:{
  one_err:"Error", one_warn:"Warning",
  brand_sub:"Clash of Clans automation",
  as_plans:"Loadouts",
+ su_title:"Setup", su_sub:"Check the emulator, connection, resolution and game for every account, then start the bot.",
+ su_save:"Save", su_refresh:"Refresh", su_copies:"Emulator copies", su_accounts:"Bot accounts", su_ready:"Ready",
+ su_not_found:"{e} not found — enter its folder (with ldconsole.exe) and save",
+ su_auto:"Auto (same name)", su_linked:"Linked to:", su_no_copy:"Not linked", su_bot_on:"Bot running", su_bot_off:"Bot stopped",
+ su_s_emu:"Emulator on", su_s_adb:"Connected", su_s_res:"1920×1080", su_s_game:"Game open",
+ su_b_launch:"Start emulator", su_b_res:"Fix resolution", su_b_game:"Open game", su_b_start:"Start bot", su_working:"Wait…",
+ su_h_link:"Pick this account's emulator copy", su_h_launch:"Press Start emulator and wait a minute",
+ su_h_adb_ld:"Running but not connected: LDPlayer Settings → Other → ADB debugging → Open local connection, then restart it",
+ su_h_adb:"Running but not connected: enable ADB in the emulator settings", su_h_boot:"Emulator still booting…",
+ su_h_res:"Wrong resolution — press Fix resolution", su_h_game:"Press Open game",
+ su_add:"Add account", su_add_btn:"Add", su_need_name:"Enter a name",
+ su_start_all:"Start all ready accounts", su_enter:"Enter the app", su_show:"Show this screen on start",
+ su_none_ready:"No account is ready yet", su_start_anyway:"This account isn't ready. Start anyway?",
+ su_res_confirm:"The emulator will restart at 1920×1080. OK?",
+ su_done_launch:"Starting the emulator…", su_done_fix_res:"Resolution changed, restarting", su_done_open_game:"Opening the game…",
+ su_err_no_copy:"Account not linked", su_err_no_adb:"Not connected yet", su_err_no_emulator:"Emulator not found", su_err_manual:"Do it by hand in this emulator", su_err_x:"Something went wrong",
  rec_title:"Battle recording", rec_sub:"Name it, press record, then attack by hand. Every tap is recorded and replayed by loadouts that use it.",
  rec_name:"Recording name", rec_name_sub:"e.g. loadout name", rec_start:"Start recording",
  rec_taps:"taps", rec_delete:"Delete", rec_empty:"No recordings yet", rec_confirm:"Delete this recording?",
@@ -1231,6 +1313,103 @@ function showSub(name){
   $$("#p-upg .sub").forEach(s => s.style.display = s.dataset.sub === name ? "" : "none");
 }
 $$("#tabs button").forEach(b => b.onclick = () => b.dataset.soon ? toast(t("soon_msg")) : showTab(b.dataset.tab));
+/* setup screen */
+let SU = null, suTimer = null, suBusy = false;
+function openSetup(){ $("#setupModal").classList.add("show"); $("#suEmu").value = APP.emulator; $("#suLdPath").value = APP.ldplayer_path || "";
+  $("#suShow").checked = APP.show_setup !== false; loadSetup(); clearInterval(suTimer); suTimer = setInterval(loadSetup, 5000); }
+async function closeSetup(){
+  clearInterval(suTimer); $("#setupModal").classList.remove("show");
+  const show = $("#suShow").checked;
+  if (APP.show_setup !== show) { APP.show_setup = show; await api("/api/app_settings", {method:"POST", body:APP}); savedAPP = JSON.stringify(APP); }
+}
+async function suSaveEmu(){
+  APP.emulator = $("#suEmu").value; APP.ldplayer_path = $("#suLdPath").value.trim();
+  APP = await api("/api/app_settings", {method:"POST", body:APP}); delete APP.platform; delete APP.warning; savedAPP = JSON.stringify(APP);
+  fillInputs(); toast(t("saved")); loadSetup();
+}
+async function loadSetup(){
+  if (suBusy) return; suBusy = true;
+  $("#suLdPath").style.display = $("#suEmu").value === "ldplayer" ? "" : "none";
+  try { SU = await api("/api/setup/status"); } catch(e) { suBusy = false; return; }
+  suBusy = false; renderSetup();
+}
+function suReady(a){ return a.emu_running && a.adb === "device" && a.res_ok !== false && a.game; }
+function renderSetup(){
+  if (!SU) return;
+  const emuName = {ldplayer:"LDPlayer", bluestacks:"BlueStacks", mumu:"MuMu"}[SU.emulator] || SU.emulator;
+  const sum = $("#suSum");
+  if (!SU.found) { sum.className = "su-sum bad"; sum.innerHTML = `<i class="fa-solid fa-circle-xmark" style="color:var(--bad)"></i> ${t("su_not_found").replace("{e}", emuName)}`; }
+  else {
+    const ready = SU.accounts.filter(suReady).length;
+    sum.className = "su-sum " + (ready === SU.accounts.length && ready ? "ok" : "");
+    const copies = SU.emulator === "mumu" ? "" : ` · ${t("su_copies")}: <b class="num">${SU.copies.length}</b> ${SU.copies.length ? "(" + SU.copies.map(c => esc(c.title) + (c.running ? " 🟢" : "")).join("، ") + ")" : ""}`;
+    sum.innerHTML = `<i class="fa-solid fa-circle-check" style="color:var(--ok)"></i> ${emuName}${copies} · ${t("su_accounts")}: <b class="num">${SU.accounts.length}</b> · ${t("su_ready")}: <b class="num">${ready}</b>`;
+  }
+  const copyOpts = (sel) => `<option value="">${t("su_auto")}</option>` + SU.copies.map(c => `<option value="${esc(String(c.index))}" ${String(sel) === String(c.index) ? "selected" : ""}>${esc(c.title)}</option>`).join("");
+  $("#suNewCopy").innerHTML = copyOpts("");
+  $("#suNewCopy").style.display = SU.copies.length ? "" : "none";
+  const step = (ok, icon, label, info) => `<div class="su-step ${ok === true ? "ok" : ok === false ? "bad" : "wait"}"><i class="fa-solid ${ok === true ? "fa-circle-check" : ok === false ? "fa-circle-xmark" : "fa-circle-minus"}"></i><div>${label}<small>${info || ""}</small></div></div>`;
+  const links = APP.emulator_links || {};
+  $("#suAccs").innerHTML = SU.accounts.map(a => {
+    const ready = suReady(a);
+    let hint = "";
+    if (SU.emulator !== "mumu" && !a.copy) hint = t("su_h_link");
+    else if (!a.emu_running) hint = t("su_h_launch");
+    else if (a.adb !== "device") hint = SU.emulator === "ldplayer" ? t("su_h_adb_ld") : t("su_h_adb");
+    else if (!a.boot) hint = t("su_h_boot");
+    else if (a.res_ok === false) hint = t("su_h_res");
+    else if (!a.game) hint = t("su_h_game");
+    return `<div class="su-acc ${ready ? "ready" : ""}" data-acc="${esc(a.id)}">
+      <div class="su-acc-h"><i class="fa-solid fa-user"></i><b>${esc(a.id)}</b>
+        ${SU.emulator !== "mumu" ? `<span style="color:var(--muted)">${t("su_linked")}</span><select class="in" data-link>${copyOpts(links[a.id] ?? "")}</select>` : ""}
+        <span class="pill ${a.bot ? "st-running" : ""}" style="margin-inline-start:auto"><span class="dot"></span>${t(a.bot ? "su_bot_on" : "su_bot_off")}</span></div>
+      <div class="su-steps">
+        ${step(SU.emulator === "mumu" ? (a.emu_running || null) : !!a.copy && a.emu_running, "", t("su_s_emu"), a.copy ? esc(a.copy) : t("su_no_copy"))}
+        ${step(a.adb === "device" && a.boot, "", t("su_s_adb"), a.address || "")}
+        ${step(a.res_ok === undefined || a.res_ok === null ? null : a.res_ok, "", t("su_s_res"), a.resolution || "")}
+        ${step(a.adb === "device" ? a.game : null, "", t("su_s_game"), "")}
+      </div>
+      <div class="su-btns">
+        <button class="btn" data-do="launch" ${a.emu_running || SU.emulator === "mumu" ? "disabled" : ""}><i class="fa-solid fa-power-off"></i> ${t("su_b_launch")}</button>
+        ${SU.emulator === "ldplayer" ? `<button class="btn" data-do="fix_res" ${a.res_ok === false ? "" : "disabled"}><i class="fa-solid fa-expand"></i> ${t("su_b_res")}</button>` : ""}
+        <button class="btn" data-do="open_game" ${a.adb === "device" && !a.game ? "" : "disabled"}><i class="fa-solid fa-gamepad"></i> ${t("su_b_game")}</button>
+        <button class="btn ${ready && !a.bot ? "go" : ""}" data-do="start" ${a.bot ? "disabled" : ""}><i class="fa-solid fa-play"></i> ${t("su_b_start")}</button>
+      </div>
+      ${hint && !ready ? `<div class="su-hint"><i class="fa-solid fa-lightbulb"></i> ${hint}</div>` : ""}
+    </div>`;
+  }).join("");
+  $$("#suAccs .su-acc").forEach(card => {
+    const id = card.dataset.acc;
+    const ln = card.querySelector("[data-link]");
+    if (ln) ln.onchange = async () => { await api("/api/setup/link", {method:"POST", body:{account:id, copy:ln.value}}); await loadApp(); loadSetup(); };
+    card.querySelectorAll("[data-do]").forEach(b => b.onclick = () => suDo(b.dataset.do, id, b));
+  });
+}
+async function suDo(action, id, btn){
+  if (action === "start") {
+    const a = SU.accounts.find(x => x.id === id);
+    if (!suReady(a) && !confirm(t("su_start_anyway"))) return;
+    await accAction(id, "start"); return loadSetup();
+  }
+  if (action === "fix_res" && !confirm(t("su_res_confirm"))) return;
+  btn.disabled = true; btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${t("su_working")}`;
+  const r = await api(`/api/setup/${action}`, {method:"POST", body:{account:id}});
+  toast(r.ok ? t("su_done_" + action) : t("su_err_" + (r.result || "x")), !r.ok);
+  setTimeout(loadSetup, 1500);
+}
+async function suAddAccount(){
+  const name = $("#suNewName").value.trim();
+  if (!name) return toast(t("su_need_name"), true);
+  await api("/api/setup/add_account", {method:"POST", body:{name, copy:$("#suNewCopy").value}});
+  $("#suNewName").value = ""; await loadApp(); fillInputs(); renderState(); toast(t("saved")); loadSetup();
+}
+async function suStartReady(){
+  if (!SU) return;
+  const ready = SU.accounts.filter(a => suReady(a) && !a.bot);
+  if (!ready.length) return toast(t("su_none_ready"), true);
+  for (const a of ready) await accAction(a.id, "start");
+  closeSetup();
+}
 /* battle recordings */
 let RECS = [];
 async function loadRecordings(){
@@ -1999,6 +2178,7 @@ async function refreshAll(user){
   setInterval(loadState, 3000);
   loadSystem(); setInterval(() => { if (curTab === "dash") loadSystem(); }, 3000);
   showAtk("plans"); loadRecordings();
+  if (APP.show_setup !== false) openSetup();
   setInterval(() => { loadStats(); if (curTab === "res" || curTab === "dash") loadLog(); if (curTab === "err") loadErrors(); updateSchedNote(); }, 5000);
 })();
 </script>

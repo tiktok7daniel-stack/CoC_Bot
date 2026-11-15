@@ -240,6 +240,40 @@ def api_report(id):
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
+# ---------------------------------------------------------------- setup screen (emulator / accounts)
+
+@app.route("/api/setup/status", methods=["GET"])
+def api_setup_status():
+    from gui_server import emu_setup
+    return jsonify(emu_setup.status(bot_settings.load_app(), list(instances.keys())))
+
+@app.route("/api/setup/<action>", methods=["POST"])
+def api_setup_action(action):
+    from gui_server import emu_setup
+    data = request.json or {}
+    app_cfg = bot_settings.load_app()
+    acc = str(data.get("account", ""))
+    if action == "link": # account -> emulator copy
+        links = dict(app_cfg.get("emulator_links", {}) or {})
+        if str(data.get("copy", "")) == "": links.pop(acc, None)
+        else: links[acc] = data["copy"]
+        app_cfg["emulator_links"] = links
+        bot_settings.save_app(app_cfg); bot_settings.apply_app_settings()
+        return jsonify({"ok": True})
+    if action == "add_account":
+        name = bot_settings._safe_id(data.get("name", ""))
+        if not name: return jsonify({"ok": False, "error": "no_name"}), 400
+        if name not in app_cfg["accounts"]: app_cfg["accounts"].append(name)
+        if str(data.get("copy", "")) != "":
+            app_cfg.setdefault("emulator_links", {})[name] = data["copy"]
+        bot_settings.save_app(app_cfg); bot_settings.apply_app_settings()
+        return jsonify({"ok": True})
+    if acc not in app_cfg["accounts"]: return jsonify({"ok": False, "error": "invalid_id"}), 400
+    fn = {"launch": emu_setup.launch, "fix_res": emu_setup.fix_resolution, "open_game": emu_setup.open_game}.get(action)
+    if fn is None: abort(404)
+    r = fn(app_cfg, acc)
+    return jsonify({"ok": r == "ok", "result": r})
+
 # ---------------------------------------------------------------- battle recordings
 
 @app.route("/api/recordings", methods=["GET"])

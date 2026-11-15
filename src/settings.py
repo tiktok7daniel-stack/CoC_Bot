@@ -151,13 +151,15 @@ def default_app_settings():
         "suspend_emulator_on_idle": _cfg("SUSPEND_EMULATOR_ON_IDLE", False),
         "auto_start_emulator": _cfg("AUTO_START_EMULATOR", True),
         "accounts": list(_cfg("INSTANCE_IDS", ["main"])),
+        "emulator_links": {},        # account -> emulator copy (LDPlayer index / BlueStacks instance) chosen on the setup screen
+        "show_setup": True,          # show the setup screen when the app opens
     }
 
 def _merge(base, override):
     """Recursively overlay saved values on top of defaults (new keys keep their default)."""
     out = copy.deepcopy(base)
     for k, v in (override or {}).items():
-        if k in out and isinstance(out[k], dict) and isinstance(v, dict):
+        if k in out and isinstance(out[k], dict) and isinstance(v, dict) and out[k]:
             out[k] = _merge(out[k], v)
         elif k in out:
             out[k] = v
@@ -209,6 +211,7 @@ def apply_app_settings():
     configs.AUTO_START_EMULATOR = app["auto_start_emulator"]
     configs.TESSERACT_PATH = app["tesseract_path"]
     configs.LDPLAYER_BIN_PATH = app.get("ldplayer_path", "")
+    configs.EMULATOR_LINKS = app.get("emulator_links", {}) or {}
     _push_globals({k: getattr(configs, k) for k in (
         "INSTANCE_IDS", "EMULATOR_TYPE", "TELEGRAM_BOT_TOKEN", "GROQ_API_KEY",
         "SUSPEND_EMULATOR_ON_IDLE", "AUTO_START_EMULATOR", "TESSERACT_PATH")})
