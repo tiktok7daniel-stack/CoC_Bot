@@ -1,0 +1,301 @@
+{
+  "schema": 3,
+  "name": "التنانين",
+  "description": "",
+  "base_resolution": [
+    860,
+    732
+  ],
+  "steps": [
+    {
+      "id": "step_1",
+      "enabled": true,
+      "kind": "troop",
+      "label": "جندي",
+      "slot": 1,
+      "mode": "line",
+      "taps": 17,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          286,
+          127
+        ],
+        [
+          158,
+          225
+        ]
+      ]
+    },
+    {
+      "id": "step_2",
+      "enabled": true,
+      "kind": "troop",
+      "label": "جندي",
+      "slot": 2,
+      "mode": "point",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          381,
+          47
+        ]
+      ]
+    },
+    {
+      "id": "step_3",
+      "enabled": true,
+      "kind": "siege",
+      "label": "آلة حصار",
+      "slot": 3,
+      "mode": "point",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          202,
+          182
+        ]
+      ]
+    },
+    {
+      "id": "step_4",
+      "enabled": true,
+      "kind": "hero",
+      "label": "بطل",
+      "slot": 4,
+      "mode": "point",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          255,
+          149
+        ]
+      ]
+    },
+    {
+      "id": "step_5",
+      "enabled": true,
+      "kind": "hero",
+      "label": "بطل",
+      "slot": 5,
+      "mode": "point",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          236,
+          167
+        ]
+      ]
+    },
+    {
+      "id": "step_6",
+      "enabled": true,
+      "kind": "hero",
+      "label": "بطل",
+      "slot": 6,
+      "mode": "point",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          211,
+          191
+        ]
+      ]
+    },
+    {
+      "id": "step_7",
+      "enabled": true,
+      "kind": "hero",
+      "label": "بطل",
+      "slot": 7,
+      "mode": "point",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          188,
+          197
+        ]
+      ]
+    },
+    {
+      "id": "step_8",
+      "enabled": true,
+      "kind": "ability",
+      "label": "قدرة بطل",
+      "slot": 4,
+      "mode": "none",
+      "taps": 1,
+      "delay_before": 10.0,
+      "interval": 0.06,
+      "delay_before_min": 10.0,
+      "delay_before_max": 10.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": []
+    },
+    {
+      "id": "step_9",
+      "enabled": true,
+      "kind": "ability",
+      "label": "قدرة بطل",
+      "slot": 5,
+      "mode": "none",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": []
+    },
+    {
+      "id": "step_10",
+      "enabled": true,
+      "kind": "ability",
+      "label": "قدرة بطل",
+      "slot": 6,
+      "mode": "none",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": []
+    },
+    {
+      "id": "step_11",
+      "enabled": true,
+      "kind": "ability",
+      "label": "قدرة بطل",
+      "slot": 7,
+      "mode": "none",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": []
+    },
+    {
+      "id": "step_12",
+      "enabled": true,
+      "kind": "spell",
+      "label": "تعويذة",
+      "slot": 8,
+      "mode": "points",
+      "taps": 11,
+      "delay_before": 0.0,
+      "interval": 2.0,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 2.0,
+      "interval_max": 2.0,
+      "points": [
+        [
+          481,
+          189
+        ],
+        [
+          394,
+          256
+        ],
+        [
+          324,
+          310
+        ],
+        [
+          509,
+          231
+        ],
+        [
+          481,
+          299
+        ],
+        [
+          351,
+          376
+        ],
+        [
+          565,
+          277
+        ],
+        [
+          465,
+          344
+        ],
+        [
+          394,
+          410
+        ],
+        [
+          544,
+          337
+        ],
+        [
+          452,
+          442
+        ]
+      ]
+    }
+  ],
+  "builtin": true,
+  "image": "assets/strategies/dragon.png",
+  "humanize": {
+    "enabled": true,
+    "tap_interval_min": 0.045,
+    "tap_interval_max": 0.135,
+    "step_pause_min": 0.04,
+    "step_pause_max": 0.22,
+    "position_jitter_px": 3,
+    "verify_troop_drop": true,
+    "retry_on_no_change": true,
+    "retry_limit": 1,
+    "verification_wait_seconds": 0.18
+  }
+}

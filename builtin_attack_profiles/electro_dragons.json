@@ -1,0 +1,358 @@
+{
+  "schema": 3,
+  "name": "التنانين الكهربائية",
+  "description": "",
+  "base_resolution": [
+    860,
+    732
+  ],
+  "steps": [
+    {
+      "id": "step_1",
+      "enabled": true,
+      "kind": "troop",
+      "label": "جندي",
+      "slot": 1,
+      "mode": "points",
+      "taps": 11,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          402,
+          54
+        ],
+        [
+          402,
+          54
+        ],
+        [
+          49,
+          301
+        ],
+        [
+          49,
+          301
+        ],
+        [
+          104,
+          260
+        ],
+        [
+          140,
+          235
+        ],
+        [
+          176,
+          215
+        ],
+        [
+          204,
+          197
+        ],
+        [
+          231,
+          179
+        ],
+        [
+          254,
+          157
+        ],
+        [
+          279,
+          140
+        ]
+      ]
+    },
+    {
+      "id": "step_2",
+      "enabled": true,
+      "kind": "troop",
+      "label": "جندي",
+      "slot": 2,
+      "mode": "point",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          232,
+          160
+        ]
+      ]
+    },
+    {
+      "id": "step_3",
+      "enabled": true,
+      "kind": "troop",
+      "label": "جندي",
+      "slot": 3,
+      "mode": "point",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          261,
+          146
+        ]
+      ]
+    },
+    {
+      "id": "step_4",
+      "enabled": true,
+      "kind": "siege",
+      "label": "آلة حصار",
+      "slot": 4,
+      "mode": "point",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          202,
+          182
+        ]
+      ]
+    },
+    {
+      "id": "step_5",
+      "enabled": true,
+      "kind": "hero",
+      "label": "بطل",
+      "slot": 5,
+      "mode": "point",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          185,
+          199
+        ]
+      ]
+    },
+    {
+      "id": "step_6",
+      "enabled": true,
+      "kind": "hero",
+      "label": "بطل",
+      "slot": 6,
+      "mode": "point",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          292,
+          131
+        ]
+      ]
+    },
+    {
+      "id": "step_7",
+      "enabled": true,
+      "kind": "hero",
+      "label": "بطل",
+      "slot": 7,
+      "mode": "point",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          235,
+          162
+        ]
+      ]
+    },
+    {
+      "id": "step_8",
+      "enabled": true,
+      "kind": "hero",
+      "label": "بطل",
+      "slot": 8,
+      "mode": "point",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          272,
+          140
+        ]
+      ]
+    },
+    {
+      "id": "step_9",
+      "enabled": true,
+      "kind": "ability",
+      "label": "قدرة بطل",
+      "slot": 5,
+      "mode": "none",
+      "taps": 1,
+      "delay_before": 10.0,
+      "interval": 0.06,
+      "delay_before_min": 10.0,
+      "delay_before_max": 10.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": []
+    },
+    {
+      "id": "step_10",
+      "enabled": true,
+      "kind": "ability",
+      "label": "قدرة بطل",
+      "slot": 6,
+      "mode": "none",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": []
+    },
+    {
+      "id": "step_11",
+      "enabled": true,
+      "kind": "ability",
+      "label": "قدرة بطل",
+      "slot": 7,
+      "mode": "none",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": []
+    },
+    {
+      "id": "step_12",
+      "enabled": true,
+      "kind": "ability",
+      "label": "قدرة بطل",
+      "slot": 8,
+      "mode": "none",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": []
+    },
+    {
+      "id": "step_13",
+      "enabled": true,
+      "kind": "spell",
+      "label": "تعويذة",
+      "slot": 9,
+      "mode": "points",
+      "taps": 11,
+      "delay_before": 0.0,
+      "interval": 2.0,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 2.0,
+      "interval_max": 2.0,
+      "points": [
+        [
+          481,
+          179
+        ],
+        [
+          399,
+          245
+        ],
+        [
+          296,
+          304
+        ],
+        [
+          519,
+          224
+        ],
+        [
+          440,
+          290
+        ],
+        [
+          361,
+          341
+        ],
+        [
+          568,
+          257
+        ],
+        [
+          491,
+          324
+        ],
+        [
+          419,
+          390
+        ],
+        [
+          341,
+          401
+        ],
+        [
+          476,
+          351
+        ]
+      ]
+    }
+  ],
+  "builtin": true,
+  "image": "assets/strategies/electro_dragons.png",
+  "humanize": {
+    "enabled": true,
+    "tap_interval_min": 0.045,
+    "tap_interval_max": 0.135,
+    "step_pause_min": 0.04,
+    "step_pause_max": 0.22,
+    "position_jitter_px": 3,
+    "verify_troop_drop": true,
+    "retry_on_no_change": true,
+    "retry_limit": 1,
+    "verification_wait_seconds": 0.18
+  }
+}
