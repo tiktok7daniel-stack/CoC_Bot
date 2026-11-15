@@ -240,6 +240,46 @@ def api_report(id):
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
+# ---------------------------------------------------------------- tesseract (fast number OCR)
+
+def _find_tesseract():
+    import shutil
+    app_path = bot_settings.load_app().get("tesseract_path", "")
+    candidates = [app_path, shutil.which("tesseract") or "",
+                  r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+                  r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+                  str(Path.home() / "AppData" / "Local" / "Programs" / "Tesseract-OCR" / "tesseract.exe"),
+                  "/opt/homebrew/bin/tesseract", "/usr/local/bin/tesseract", "/usr/bin/tesseract"]
+    return next((c for c in candidates if c and Path(c).exists()), None)
+
+@app.route("/api/tesseract", methods=["GET"])
+def api_tesseract():
+    import subprocess
+    exe = _find_tesseract()
+    version = None
+    if exe:
+        try:
+            kw = {"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform == "win32" else {}
+            out = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=10, **kw)
+            version = (out.stdout or out.stderr).splitlines()[0].strip()
+        except Exception:
+            pass
+    return jsonify({"found": bool(exe), "path": exe, "version": version, "platform": sys.platform})
+
+@app.route("/api/tesseract/install", methods=["POST"])
+def api_tesseract_install():
+    """Open a console running the official Windows installer through winget (user sees progress / UAC)."""
+    import subprocess
+    if sys.platform != "win32":
+        return jsonify({"ok": False, "error": "windows_only"})
+    try:
+        cmd = ('winget install -e --id UB-Mannheim.TesseractOCR --accept-package-agreements '
+               '--accept-source-agreements & echo. & echo Done - you can close this window & pause')
+        subprocess.Popen(["cmd", "/c", cmd], creationflags=subprocess.CREATE_NEW_CONSOLE)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
 # ---------------------------------------------------------------- updates
 
 @app.route("/api/update/check", methods=["GET"])

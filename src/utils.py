@@ -581,7 +581,7 @@ def read_resources(builder_base=False, save_debug=False):
         for name, (x1, y1, x2, y2) in (BUILDER_RESOURCE_BANDS if builder_base else RESOURCE_BANDS).items():
             crop = Frame_Handler.high_contrast(Frame_Handler.crop(frame, x1, y1, x2, y2), thresh=190)
             if save_debug or configs.DEBUG: Frame_Handler.save_frame(crop, f"resource_{name}.png")
-            value = _parse_resource(OCR_Handler.get_text(crop))
+            value = OCR_Handler.get_number(crop)
             out[name] = value if value is not None and 0 <= value <= RESOURCE_LIMITS[name] else None
         if all(v is None for v in out.values()): return None
         return out
@@ -1294,9 +1294,80 @@ class Task_Handler:
             logger.error(f"Task_Handler.excluded: {e}")
             return not getattr(configs, cls.task_defaults[task_name], False)
 
+class Tesseract:
+    """
+    Fast OCR for numbers through the Tesseract program (called directly, no extra Python package).
+    Used for resource counters; easyocr stays the fallback and the engine for words.
+    """
+    path = None
+    checked = False
+
+    COMMON_PATHS = [
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+        r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+        str(Path.home() / "AppData" / "Local" / "Programs" / "Tesseract-OCR" / "tesseract.exe"),
+        "/opt/homebrew/bin/tesseract", "/usr/local/bin/tesseract", "/usr/bin/tesseract",
+    ]
+
+    @classmethod
+    def find(cls, refresh=False):
+        import shutil
+        if cls.checked and not refresh: return cls.path
+        cls.checked = True
+        candidates = [getattr(configs, "TESSERACT_PATH", "") or "", shutil.which("tesseract") or ""] + cls.COMMON_PATHS
+        cls.path = next((c for c in candidates if c and Path(c).exists()), None)
+        return cls.path
+
+    @classmethod
+    def version(cls):
+        import subprocess
+        exe = cls.find(refresh=True)
+        if not exe: return None
+        try:
+            out = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=10, **_no_window())
+            return (out.stdout or out.stderr).splitlines()[0].strip()
+        except Exception:
+            return None
+
+    @classmethod
+    def read(cls, img, digits=False, psm=7):
+        """img: grayscale/RGB array. Returns the recognised text or None if Tesseract isn't available."""
+        import subprocess, cv2, numpy as np
+        exe = cls.find()
+        if not exe: return None
+        g = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY) if img.ndim == 3 else img
+        # game digits are white with a dark outline -> black text on white, upscaled, with margin
+        if g.mean() < 128: g = 255 - g
+        g = cv2.resize(g, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+        g = cv2.copyMakeBorder(g, 12, 12, 12, 12, cv2.BORDER_CONSTANT, value=255)
+        ok, png = cv2.imencode(".png", g)
+        if not ok: return None
+        args = [exe, "stdin", "stdout", "--psm", str(psm)]
+        if digits: args += ["-c", "tessedit_char_whitelist=0123456789"]
+        try:
+            out = subprocess.run(args, input=png.tobytes(), capture_output=True, timeout=10, **_no_window())
+            return out.stdout.decode("utf-8", errors="ignore").strip()
+        except Exception:
+            return None
+
+def _no_window():
+    """Hide the console window flash of helper programs on Windows."""
+    import subprocess
+    return {"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform == "win32" else {}
+
 class OCR_Handler:
     
     backoff_time = 0
+
+    @classmethod
+    def get_number(cls, frame):
+        """Read one integer: Tesseract first (fast), then the normal OCR as fallback."""
+        import re
+        text = Tesseract.read(frame, digits=True)
+        if text:
+            digits = re.sub(r"[^0-9]", "", text)
+            if digits: return int(digits)
+        return _parse_resource(cls.get_text(frame))
     
     @classmethod
     def get_text(cls, frame):

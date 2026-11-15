@@ -96,6 +96,7 @@ def default_app_settings():
         "start_with_windows": False,
         "telegram_bot_token": _cfg("TELEGRAM_BOT_TOKEN", ""),
         "groq_api_key": _cfg("GROQ_API_KEY", ""),
+        "tesseract_path": _cfg("TESSERACT_PATH", ""),  # empty = find automatically
         "suspend_emulator_on_idle": _cfg("SUSPEND_EMULATOR_ON_IDLE", False),
         "auto_start_emulator": _cfg("AUTO_START_EMULATOR", True),
         "accounts": list(_cfg("INSTANCE_IDS", ["main"])),
@@ -155,9 +156,10 @@ def apply_app_settings():
     configs.GROQ_API_KEY = app["groq_api_key"]
     configs.SUSPEND_EMULATOR_ON_IDLE = app["suspend_emulator_on_idle"]
     configs.AUTO_START_EMULATOR = app["auto_start_emulator"]
+    configs.TESSERACT_PATH = app["tesseract_path"]
     _push_globals({k: getattr(configs, k) for k in (
         "INSTANCE_IDS", "EMULATOR_TYPE", "TELEGRAM_BOT_TOKEN", "GROQ_API_KEY",
-        "SUSPEND_EMULATOR_ON_IDLE", "AUTO_START_EMULATOR")})
+        "SUSPEND_EMULATOR_ON_IDLE", "AUTO_START_EMULATOR", "TESSERACT_PATH")})
     return app
 
 def _push_globals(values):

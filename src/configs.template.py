@@ -12,6 +12,9 @@ TELEGRAM_BOT_TOKEN = "" # (e.g. 123456789:ABCdefGHIjkl-MNO_pqrSTUvwxYZ)
 # OPTIONAL: Groq API key for faster/more accurate OCR (enter empty string to default to easyocr or native MacOS native OCR which run locally)
 GROQ_API_KEY = ""
 
+# OPTIONAL: Tesseract OCR for fast number reading (leave empty to find it automatically)
+TESSERACT_PATH = "" # (e.g. C:\\Program Files\\Tesseract-OCR\\tesseract.exe)
+
 # REQUIRED: Instance Settings
 INSTANCE_IDS = ["main"] # one ID per account/emulator instance (e.g. ["main", "alt1", "alt2"])
 DEFAULT_INSTANCE_ID = INSTANCE_IDS[0]
