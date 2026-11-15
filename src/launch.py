@@ -24,6 +24,8 @@ def launch_proc(args):
     install_error_reporter()
     start_capture_service()
     start_record_service()
+    from utils import preflight
+    preflight()
     bot = CoC_Bot()
     bot.run()
 

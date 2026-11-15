@@ -2545,6 +2545,92 @@ def start_capture_service():
                 pass
     threading.Thread(target=loop, daemon=True, name="capture").start()
 
+# ======================================================================
+# Pre-flight: before the first cycle make sure the emulator is connected, the display is
+# exactly what the images/positions were made for, the game is installed and screenshots
+# and touches work. Fixes what it can by itself, otherwise waits and says what to change.
+# ======================================================================
+TARGET_SIZE = (1920, 1080)
+TARGET_DPI = 240 # BlueStacks' default for 1920x1080 (the device profile the templates come from)
+
+def display_info():
+    """-> (width, height, dpi) the game really sees (override values win over physical ones)."""
+    import re
+    sh = lambda c: ADB_Manager.adbutils_device.shell(c)
+    sizes = re.findall(r"(\d+)x(\d+)", sh("wm size"))
+    dens = re.findall(r"(\d+)", sh("wm density"))
+    w, h = map(int, sizes[-1]) if sizes else (None, None)
+    return w, h, int(dens[-1]) if dens else None
+
+def display_ok(w, h, d):
+    return w is not None and {w, h} == set(TARGET_SIZE) and d == TARGET_DPI
+
+def fix_display(w, h, d):
+    """LDPlayer: change the copy's resolution + DPI (restart). Others: fix the DPI live if only that is off."""
+    import time
+    if Emulator_Manager is LDPlayer_Manager:
+        idx = str(LDPlayer_Manager.index)
+        logger.info(f"Pre-flight: setting LDPlayer to 1920x1080 {TARGET_DPI} DPI (the emulator restarts)")
+        try: LDPlayer_Manager.stop()
+        except Exception: pass
+        LDPlayer_Manager._run("modify", "--index", idx, "--resolution", f"{TARGET_SIZE[0]},{TARGET_SIZE[1]},{TARGET_DPI}")
+        LDPlayer_Manager.start()
+        time.sleep(5)
+        ADB_Manager.connect(timeout=180)
+        return True
+    if w is not None and {w, h} == set(TARGET_SIZE) and d != TARGET_DPI:
+        ADB_Manager.adbutils_device.shell(f"wm density {TARGET_DPI}")
+        logger.info(f"Pre-flight: DPI changed from {d} to {TARGET_DPI}")
+        return True
+    return False
+
+def preflight():
+    import time
+    logger.info("Pre-flight check: starting")
+    warned = 0
+    while True:
+        problems = []
+        try:
+            ADB_Manager.connect(timeout=120)
+            for _ in range(120):
+                if ADB_Manager.boot_completed(): break
+                time.sleep(1)
+            logger.info("Pre-flight: emulator connected ✓")
+
+            w, h, d = display_info()
+            if not display_ok(w, h, d):
+                logger.warning(f"Pre-flight: display is {w}x{h} {d} DPI, needs 1920x1080 {TARGET_DPI} DPI")
+                if fix_display(w, h, d): w, h, d = display_info()
+            if display_ok(w, h, d): logger.info(f"Pre-flight: display 1920x1080 {TARGET_DPI} DPI ✓")
+            else: problems.append(f"display is {w}x{h} {d} DPI, needs 1920x1080 {TARGET_DPI} DPI")
+
+            if "com.supercell.clashofclans" in ADB_Manager.adbutils_device.shell("pm list packages com.supercell.clashofclans"):
+                logger.info("Pre-flight: Clash of Clans installed ✓")
+            else:
+                problems.append("Clash of Clans is not installed")
+
+            frame = Frame_Handler.get_frame(grayscale=False)
+            fh, fw = frame.shape[:2]
+            if (fw, fh) == TARGET_SIZE: logger.info("Pre-flight: screenshots 1920x1080 ✓")
+            else: problems.append(f"screenshots are {fw}x{fh} (landscape 1920x1080 needed)")
+
+            conn = ADB_Manager.minitouch_device.connection
+            if int(conn.max_x) > 0 and int(conn.max_y) > 0: logger.info("Pre-flight: touch ready ✓")
+            else: problems.append("touch not ready")
+        except (KeyboardInterrupt, SystemExit): raise
+        except Exception as e:
+            problems.append(f"{type(e).__name__}: {e}")
+
+        if not problems:
+            logger.info("Pre-flight check passed: everything is ready ✓")
+            return True
+        if time.monotonic() - warned > 60:
+            for p in problems: logger.error(f"Pre-flight problem: {p}")
+            logger.error("Pre-flight: the bot waits until this is fixed (checks again every 20 seconds)")
+            warned = time.monotonic()
+        update_status("error")
+        time.sleep(20)
+
 def start_record_service():
     """Serve "record a battle" requests from the GUI: wait for the user's own attack and record their touches."""
     import threading, time, recorder

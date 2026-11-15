@@ -45,7 +45,7 @@ def parse_list2(text):
         if len(c) < 6 or not c[0].strip().isdigit(): continue
         num = lambda i: int(c[i]) if len(c) > i and c[i].strip().lstrip("-").isdigit() else None
         out.append({"index": int(c[0]), "title": c[1], "running": c[4].strip() == "1", "pid": num(5),
-                    "width": num(7), "height": num(8)})
+                    "width": num(7), "height": num(8), "dpi": num(9)})
     return out
 
 def ld_instances(console):
@@ -111,8 +111,14 @@ def wm_size(adb, addr):
     sizes = re.findall(r"(\d+)x(\d+)", out)
     return tuple(map(int, sizes[-1])) if sizes else None # override size is listed last
 
-def good_res(w, h):
-    return w is not None and h is not None and {w, h} == {1920, 1080}
+TARGET_DPI = 240
+
+def good_res(w, h, dpi=TARGET_DPI):
+    return w is not None and h is not None and {w, h} == {1920, 1080} and dpi == TARGET_DPI
+
+def wm_density(adb, addr):
+    d = re.findall(r"(\d+)", shell(adb, addr, "wm density"))
+    return int(d[-1]) if d else None
 
 # ---------------------------------------------------------------- status of everything
 
@@ -150,14 +156,14 @@ def status(app, running_accounts=()):
         else: a["emu_running"] = state == "device"
         if state == "device":
             a["boot"] = shell(adb, addr, "getprop sys.boot_completed").strip() == "1"
-            size = wm_size(adb, addr)
-            a["resolution"] = f"{size[0]}x{size[1]}" if size else None
-            a["res_ok"] = bool(size and good_res(*size))
+            size, dpi = wm_size(adb, addr), wm_density(adb, addr)
+            a["resolution"] = f"{size[0]}x{size[1]} · {dpi} DPI" if size else None
+            a["res_ok"] = bool(size and good_res(*size, dpi))
             a["game"] = game_open(adb, addr)
         else:
             a["boot"] = False
-            a["resolution"] = f"{c['width']}x{c['height']}" if c and c.get("width") else None
-            a["res_ok"] = bool(c and good_res(c.get("width"), c.get("height"))) if c and c.get("width") else None
+            a["resolution"] = f"{c['width']}x{c['height']} · {c.get('dpi')} DPI" if c and c.get("width") else None
+            a["res_ok"] = bool(good_res(c.get("width"), c.get("height"), c.get("dpi"))) if c and c.get("width") and c.get("dpi") else None
             a["game"] = False
         res["accounts"].append(a)
     return res
@@ -183,7 +189,15 @@ def launch(app, acc):
     return "manual"
 
 def fix_resolution(app, acc):
-    """LDPlayer only: set 1920x1080 (the copy is closed, changed and opened again)."""
+    """LDPlayer: set 1920x1080 + 240 DPI (the copy is closed, changed and opened again).
+    Other emulators: only the DPI can be fixed live (wm density) when the size is already right."""
+    if app.get("emulator") != "ldplayer":
+        con, c = _account_copy(app, acc)
+        addr, adb = address(app, c), adb_exe(app, con)
+        if addr and adb_state(adb, addr) == "device" and wm_size(adb, addr) and set(wm_size(adb, addr)) == {1920, 1080}:
+            shell(adb, addr, f"wm density {TARGET_DPI}")
+            return "ok"
+        return "manual"
     if app.get("emulator") != "ldplayer": return "manual"
     con, c = _account_copy(app, acc)
     if c is None: return "no_copy"
@@ -193,7 +207,7 @@ def fix_resolution(app, acc):
         for _ in range(30):
             time.sleep(1)
             if not any(x["index"] == c["index"] and x["running"] for x in ld_instances(con)): break
-    _run([con, "modify", "--index", idx, "--resolution", "1920,1080,280"], timeout=60)
+    _run([con, "modify", "--index", idx, "--resolution", f"1920,1080,{TARGET_DPI}"], timeout=60)
     _run([con, "launch", "--index", idx], timeout=60)
     return "ok"
 
