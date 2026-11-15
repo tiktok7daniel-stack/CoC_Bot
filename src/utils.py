@@ -2503,6 +2503,17 @@ class Auto_Learn:
             boxes = ocr_boxes(frame)
             words = [b[0] for b in boxes if b[5] > 0.3]
             action = ""
+            # never confirm leaving the game: on an exit/quit dialog press Cancel (or nothing)
+            text_all = " ".join(words).lower()
+            danger = any(w in text_all for w in ("exit", "quit", "leave", "log out", "logout", "disconnect", "sign out", "delete", "buy", "purchase", "gems"))
+            if danger:
+                cancel = next((b for b in boxes if b[5] > 0.4 and (_word_hit(b[0], "cancel") or _word_hit(b[0], "no") or _word_hit(b[0], "close"))), None)
+                if cancel:
+                    Input_Handler.click((cancel[1] + cancel[3]) / 2, (cancel[2] + cancel[4]) / 2)
+                    action = f"tap:{cancel[0]}"
+                teach.record_discovery(INSTANCE_ID, frame, words, phase or TEMP_CACHE.get("phase", ""), action)
+                logger.info(f"Unknown screen recorded ({len(words)} words){', pressed ' + repr(action[4:]) if action else ''}")
+                return bool(action)
             for word in DISMISS_WORDS:
                 hit = next((b for b in boxes if b[5] > 0.4 and _word_hit(b[0], word)), None)
                 if hit:

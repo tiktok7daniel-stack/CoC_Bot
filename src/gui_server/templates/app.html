@@ -207,8 +207,8 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
 #shotModal img{width:100%;border-radius:10px;display:block}
 .shot-wrap{position:relative;user-select:none;border-radius:12px;overflow:hidden;border:1px solid var(--line2);background:#060c1c;min-height:200px;cursor:crosshair}
 .shot-wrap img{display:block;width:100%}
-.sel{position:absolute;border:2px solid var(--gold);background:rgba(255,200,61,.18);pointer-events:none;display:none}
-.sel.old{border-color:var(--ok);background:rgba(47,207,122,.12);border-style:dashed}
+.selbox{position:absolute;border:2px solid var(--gold);background:rgba(255,200,61,.18);pointer-events:none;display:none}
+.selbox.old{border-color:var(--ok);background:rgba(47,207,122,.12);border-style:dashed}
 .titem{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line2);border-radius:10px;background:#0f1b38;margin-bottom:8px;cursor:pointer}
 .titem.cur{border-color:var(--gold);box-shadow:0 0 0 2px rgba(255,200,61,.25)}
 .titem .nm{flex:1}
@@ -255,21 +255,29 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
 </header>
 
 <nav class="tabs" id="tabs">
-  <button data-tab="dash"><i class="fa-solid fa-gauge-high"></i><span data-t="tab_dash"></span></button>
-  <button data-tab="upg"><i class="fa-solid fa-hammer"></i><span data-t="tab_upg"></span></button>
-  <button data-tab="bb"><i class="fa-solid fa-chess-rook"></i><span data-t="tab_bb"></span></button>
-  <button data-tab="atk"><i class="fa-solid fa-khanda"></i><span data-t="tab_atk"></span></button>
-  <button data-tab="sch"><i class="fa-regular fa-calendar-check"></i><span data-t="tab_sch"></span></button>
+  <button data-tab="dash"><i class="fa-solid fa-gamepad"></i><span data-t="tab_dash"></span></button>
   <button data-tab="acc"><i class="fa-solid fa-users"></i><span data-t="tab_acc"></span></button>
   <button data-tab="res"><i class="fa-solid fa-chart-line"></i><span data-t="tab_res"></span></button>
   <button data-tab="teach"><i class="fa-solid fa-graduation-cap"></i><span data-t="tab_teach"></span></button>
-  <button data-tab="err" style="position:relative"><i class="fa-solid fa-bug"></i><span data-t="tab_err"></span><span class="badge" id="errBadge"></span></button>
-  <button data-tab="set"><i class="fa-solid fa-gear"></i><span data-t="tab_set"></span></button>
+  <button data-tab="set" style="position:relative"><i class="fa-solid fa-gear"></i><span data-t="tab_set"></span><span class="badge" id="errBadge"></span></button>
 </nav>
 
 <main>
+<div class="subtabs" id="setNav" style="display:none">
+  <button data-sub="set"><i class="fa-solid fa-sliders"></i> <span data-t="sn_general"></span></button>
+  <button data-sub="upg"><i class="fa-solid fa-hammer"></i> <span data-t="tab_upg"></span></button>
+  <button data-sub="bb"><i class="fa-solid fa-chess-rook"></i> <span data-t="tab_bb"></span></button>
+  <button data-sub="atk"><i class="fa-solid fa-khanda"></i> <span data-t="tab_atk"></span></button>
+  <button data-sub="sch"><i class="fa-regular fa-clock"></i> <span data-t="tab_sch"></span></button>
+  <button data-sub="err"><i class="fa-solid fa-stethoscope"></i> <span data-t="sn_err"></span></button>
+</div>
 <!-- ============================ DASHBOARD ============================ -->
 <section class="page" id="p-dash">
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-h"><div class="ico"><i class="fa-solid fa-wand-magic-sparkles"></i></div><h3 data-t="preset_title"></h3><div class="tools"><span class="pill" id="presetNow"></span></div></div>
+    <div class="card-sub" data-t="preset_sub"></div>
+    <div class="card-b"><div class="opt-cards" style="grid-template-columns:repeat(3,1fr)" id="presetBox"></div></div>
+  </div>
   <div class="grid">
     <div class="card">
       <div class="card-h"><div class="ico"><i class="fa-solid fa-robot"></i></div><h3 data-t="bot_status"></h3></div>
@@ -587,7 +595,7 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
         <div class="tools"><button class="btn sm gold" onclick="captureShot()"><i class="fa-solid fa-camera"></i><span data-t="capture"></span></button></div></div>
       <div class="card-sub" data-t="teach_sub"></div>
       <div class="card-b">
-        <div class="shot-wrap" id="shotWrap"><img id="teachImg" alt=""><div class="sel old" id="oldSel"></div><div class="sel" id="newSel"></div><div class="empty" id="shotEmpty" data-t="no_shot"></div></div>
+        <div class="shot-wrap" id="shotWrap"><img id="teachImg" alt=""><div class="selbox old" id="oldSel"></div><div class="selbox" id="newSel"></div><div class="empty" id="shotEmpty" data-t="no_shot"></div></div>
         <div class="row"><div class="lbl"><b id="curItemName">—</b><small id="curItemHelp"></small></div><button class="btn primary" onclick="saveTeach()"><i class="fa-solid fa-floppy-disk"></i><span data-t="save_sel"></span></button></div>
         <div class="note" id="teachNote"></div>
       </div>
@@ -731,7 +739,11 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
 const I18N = {
 ar:{
  gold:"الذهب", elixir:"الإكسير", dark:"إكسير الظلام", refresh:"تحديث",
- tab_dash:"لوحة التحكم", tab_upg:"الترقيات", tab_bb:"قاعدة البنّاء", tab_atk:"الهجوم والفارم", tab_sch:"الجدول الزمني", tab_acc:"الحسابات", tab_res:"النتائج والسجل", tab_set:"الإعدادات",
+ tab_dash:"لوحة التحكم", tab_upg:"الترقيات", tab_bb:"قاعدة البنّاء", tab_atk:"الهجوم", tab_sch:"الوقت والجدول", tab_acc:"الحسابات", tab_res:"النتائج", tab_set:"الإعدادات",
+ sn_general:"عام", sn_err:"الأخطاء والفحص",
+ preset_title:"إعدادات جاهزة", preset_sub:"اختار مستوى واحد والبوت يظبط كل حاجة لوحده. تقدر تغيّر أي حاجة بعدين من الإعدادات", pr_now:"الحالي", pr_rec:"مُوصى بيه", pr_applied:"تم التطبيق",
+ pr_safe:"آمن", pr_balanced:"متوازن", pr_fast:"أقصى سرعة", pr_custom:"مخصص",
+ prd_safe:"هجمة واحدة كل ربع ساعة، واستراحات طويلة. أبطأ بس أأمن على الحساب", prd_balanced:"هجمتين كل 5 دقايق، وتخطّي القرى الفقيرة، واستراحة صغيرة كل ساعتين. أفضل توازن", prd_fast:"4 هجمات كل دقيقتين، من غير استراحات، وجدران كتير. أسرع فارم بس أكتر لفت للنظر",
  sub_dash:"نظرة عامة على البوت", sub_upg:"ترقيات القرية", sub_bb:"ترقيات قاعدة البنّاء", sub_atk:"الهجوم وجمع الموارد", sub_sch:"أوقات تشغيل البوت", sub_acc:"إدارة الحسابات", sub_res:"نتائج ونشاط البوت", sub_set:"إعدادات البرنامج",
  st_stopped:"متوقف", st_starting:"جاري التشغيل…", st_running:"يعمل الآن", st_idle:"في الانتظار", st_paused:"إيقاف مؤقت", st_scheduled:"خارج الجدول", st_error:"حدث خطأ",
  bot_status:"حالة البوت", bot_status_sub:"تتحدث تلقائيًا كل بضع ثوانٍ", account:"الحساب", state:"الحالة", last_cycle:"آخر دورة انتهت", next_cycle:"الدورة القادمة تقريبًا", schedule:"الجدول الزمني",
@@ -826,7 +838,11 @@ ar:{
 },
 en:{
  gold:"Gold", elixir:"Elixir", dark:"Dark Elixir", refresh:"Refresh",
- tab_dash:"Dashboard", tab_upg:"Upgrades", tab_bb:"Builder Base", tab_atk:"Attack & Farm", tab_sch:"Schedule", tab_acc:"Accounts", tab_res:"Results & Log", tab_set:"Settings",
+ tab_dash:"Control", tab_upg:"Upgrades", tab_bb:"Builder Base", tab_atk:"Attack", tab_sch:"Time & schedule", tab_acc:"Accounts", tab_res:"Results", tab_set:"Settings",
+ sn_general:"General", sn_err:"Errors & check",
+ preset_title:"Ready-made settings", preset_sub:"Pick one level and the bot sets everything. You can still change anything later in Settings", pr_now:"Current", pr_rec:"recommended", pr_applied:"Applied",
+ pr_safe:"Safe", pr_balanced:"Balanced", pr_fast:"Max speed", pr_custom:"Custom",
+ prd_safe:"One attack every 15 minutes, long breaks. Slower but safer for the account", prd_balanced:"Two attacks every 5 minutes, skips poor bases, a short break every 2 hours. Best balance", prd_fast:"4 attacks every 2 minutes, no breaks, many walls. Fastest farming but more noticeable",
  sub_dash:"Bot overview", sub_upg:"Village upgrades", sub_bb:"Builder base upgrades", sub_atk:"Attacking & farming", sub_sch:"When the bot runs", sub_acc:"Manage accounts", sub_res:"Bot results & activity", sub_set:"App settings",
  st_stopped:"Stopped", st_starting:"Starting…", st_running:"Running", st_idle:"Waiting", st_paused:"Paused", st_scheduled:"Outside schedule", st_error:"Error",
  bot_status:"Bot status", bot_status_sub:"Updates automatically every few seconds", account:"Account", state:"State", last_cycle:"Last cycle finished", next_cycle:"Next cycle (approx.)", schedule:"Schedule",
@@ -1037,7 +1053,7 @@ function applyLang(){
   $$("[data-t]").forEach(el => el.textContent = t(el.dataset.t));
   $$("[data-tph]").forEach(el => el.placeholder = t(el.dataset.tph));
   $$(".flip").forEach(el => el.className = "fa-solid flip " + (LANG === "ar" ? "fa-chevron-left" : "fa-chevron-right"));
-  buildDays(); buildQuickTasks(); renderPrio(); updateWallLabel();
+  buildDays(); buildQuickTasks(); renderPrio(); updateWallLabel(); renderPresets();
   $("#pageTitle").textContent = t("sub_" + curTab);
   renderState(); renderStats(); renderLog(); updateSchedNote();
 }
@@ -1046,9 +1062,13 @@ function setLang(v){ LANG = v; applyLang(); markDirty(); }
 /* =====================================================================
    Tabs
    ===================================================================== */
+const SET_GROUP = ["set", "upg", "bb", "atk", "sch", "err"];
 function showTab(name){
   curTab = name;
-  $$("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  const inSet = SET_GROUP.includes(name);
+  $$("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === (inSet ? "set" : name)));
+  $("#setNav").style.display = inSet ? "" : "none";
+  $$("#setNav button").forEach(b => b.classList.toggle("active", b.dataset.sub === name));
   $$(".page").forEach(p => p.classList.toggle("active", p.id === "p-" + name));
   $("#pageTitle").textContent = t("sub_" + name);
   try { localStorage.setItem("tab", name); } catch(e) {}
@@ -1063,6 +1083,7 @@ function showSub(name){
   $$("#p-upg .sub").forEach(s => s.style.display = s.dataset.sub === name ? "" : "none");
 }
 $$("#tabs button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+$$("#setNav button").forEach(b => b.onclick = () => showTab(b.dataset.sub));
 $$("#upgSub button").forEach(b => b.onclick = () => showSub(b.dataset.sub));
 
 /* =====================================================================
@@ -1077,7 +1098,7 @@ function fillInputs(){
     const v = APP[el.dataset.app];
     if (el.type === "checkbox") el.checked = !!v; else el.value = v ?? "";
   });
-  buildDays(); buildQuickTasks(); renderPrio(); updateWallLabel(); updateSchedNote();
+  buildDays(); buildQuickTasks(); renderPrio(); updateWallLabel(); updateSchedNote(); renderPresets();
   if (TEACH.catalog.length) renderRoutines();
 }
 document.addEventListener("input", e => onEdit(e.target));
@@ -1092,6 +1113,7 @@ function onEdit(el){
     $$(`[data-bind="${el.dataset.bind}"]`).forEach(o => { if (o !== el) { if (o.type === "checkbox") o.checked = el.checked; else o.value = el.value; } });
     if (el.dataset.bind.startsWith("tasks.")) buildQuickTasks();
     if (el.dataset.bind.startsWith("schedule.")) updateSchedNote();
+    renderPresets();
     markDirty();
   } else if (el.dataset.app && APP) {
     APP[el.dataset.app] = el.type === "checkbox" ? el.checked : el.value;
@@ -1111,6 +1133,43 @@ function markDirty(){
   }
 }
 const APP_AUTOSAVE = true;
+
+/* ready-made settings */
+const PRESETS = {
+  safe: {icon:"fa-shield-halved", color:"var(--ok)", v:{
+    "attack.home_attacks_per_cycle":1, "attack.builder_attacks_per_cycle":1, "schedule.check_interval":15,
+    "breaks.enabled":true, "breaks.every_minutes":90, "breaks.length_minutes":20, "walls.max_per_run":3, "walls.every_cycles":2,
+    "attack.loot_filter.enabled":false, "game.keep_open":true, "game.anti_idle":true, "attack.battle_end":"wait", "attack.hero_retap":6}},
+  balanced: {icon:"fa-scale-balanced", color:"var(--accent2)", v:{
+    "attack.home_attacks_per_cycle":2, "attack.builder_attacks_per_cycle":1, "schedule.check_interval":5,
+    "breaks.enabled":true, "breaks.every_minutes":120, "breaks.length_minutes":10, "walls.max_per_run":5, "walls.every_cycles":1,
+    "attack.loot_filter.enabled":true, "attack.loot_filter.min_gold":250000, "attack.loot_filter.min_elixir":250000, "attack.loot_filter.mode":"any",
+    "game.keep_open":true, "game.anti_idle":true, "attack.battle_end":"wait", "attack.hero_retap":6}},
+  fast: {icon:"fa-rocket", color:"var(--gold)", v:{
+    "attack.home_attacks_per_cycle":4, "attack.builder_attacks_per_cycle":2, "schedule.check_interval":2,
+    "breaks.enabled":false, "walls.max_per_run":10, "walls.every_cycles":1,
+    "attack.loot_filter.enabled":true, "attack.loot_filter.min_gold":350000, "attack.loot_filter.min_elixir":350000, "attack.loot_filter.mode":"any",
+    "game.keep_open":true, "game.anti_idle":true, "attack.battle_end":"wait", "attack.hero_retap":5}},
+};
+function presetMatch(){
+  for (const [k, p] of Object.entries(PRESETS)) if (Object.entries(p.v).every(([path, val]) => getPath(S, path) === val)) return k;
+  return "custom";
+}
+function renderPresets(){
+  if (!S) return;
+  const cur = presetMatch();
+  $("#presetNow").innerHTML = `<span class="dot" style="background:${cur === "custom" ? "var(--warn)" : "var(--ok)"}"></span>${t("pr_now")}: ${t("pr_" + cur)}`;
+  $("#presetBox").innerHTML = Object.entries(PRESETS).map(([k, p]) => `
+    <div class="opt ${cur === k ? "sel" : ""}" onclick="applyPreset('${k}')" style="min-height:0">
+      <div class="chk"><i class="fa-solid fa-check"></i></div>
+      <div class="t"><b><i class="fa-solid ${p.icon}" style="color:${p.color}"></i> ${t("pr_" + k)}${k === "balanced" ? ` <span class="tagp" style="font-size:11px">${t("pr_rec")}</span>` : ""}</b><small>${t("prd_" + k)}</small></div>
+    </div>`).join("");
+}
+function applyPreset(k){
+  Object.entries(PRESETS[k].v).forEach(([path, val]) => setPath(S, path, val));
+  S.preset = k;
+  fillInputs(); markDirty(); toast(`${t("pr_applied")}: ${t("pr_" + k)}`);
+}
 
 /* quick task toggles on the dashboard */
 const QUICK = ["home_base","heroes","walls","home_lab","pet_house","home_attacks","builder_base","builder_lab","builder_attacks","keep_open"];

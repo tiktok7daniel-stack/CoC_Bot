@@ -66,11 +66,7 @@ class Attacker:
                     if game_ready(): return
                     time.sleep(1)
             time.sleep(1)
-        # last tries before reopening the game: the Android back key leaves the results screen
-        for _ in range(3):
-            if game_ready(): return
-            ADB_Manager.adbutils_device.shell("input keyevent KEYCODE_BACK")
-            time.sleep(2)
+        # (no Android back key here: in the village it opens the "exit game?" dialog)
         if game_ready(): return
         logger.warning("Battle end not detected, reopening the game")
         if restart: start_coc(force_restart="results screen not recognised")

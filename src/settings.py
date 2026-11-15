@@ -23,6 +23,7 @@ def _cfg(name, default):
 
 def default_settings():
     return {
+        "preset": "balanced",        # "safe" | "balanced" | "fast" | "custom"
         "tasks": {
             "home_base": _cfg("UPGRADE_HOME_BASE", True),
             "heroes": _cfg("UPGRADE_HEROES", True),
@@ -66,7 +67,7 @@ def default_settings():
             "start_from_menu_top": _cfg("START_FROM_MENU_TOP", True),
         },
         "attack": {
-            "home_attacks_per_cycle": 1,
+            "home_attacks_per_cycle": 2,
             "builder_attacks_per_cycle": 1,
             "troop_deploy_time": _cfg("TROOP_DEPLOY_TIME", 2),
             "slot_first": _cfg("ATTACK_SLOT_RANGE", (0, 100))[0],
@@ -87,9 +88,9 @@ def default_settings():
             "max_hours": 0,          # stop after running this many hours (0 = no limit)
         },
         "breaks": {
-            "enabled": False,        # humanized breaks: close the game for a while now and then
-            "every_minutes": 90,
-            "length_minutes": 15,
+            "enabled": True,         # humanized breaks: close the game for a while now and then
+            "every_minutes": 120,
+            "length_minutes": 10,
         },
         # Routines: taught buttons tapped in order at the start of every cycle (home village)
         "routines": [
@@ -116,7 +117,7 @@ def default_settings():
             "start": "00:00",
             "end": "23:59",
             "days": [0, 1, 2, 3, 4, 5, 6],  # 0 = Monday
-            "check_interval": _cfg("CHECK_INTERVAL", 5),
+            "check_interval": 5,
         },
     }
 
