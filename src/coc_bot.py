@@ -31,8 +31,17 @@ class CoC_Bot:
         self.settings = s
         return s
 
+    def storages_full(self, s):
+        """User-set "storages full" levels reached -> skip attacking (nothing more to store)."""
+        f = s["attack"].get("skip_when_full", {})
+        res = getattr(self, "last_res", None)
+        if not f.get("enabled") or not res: return False
+        checks = [(res.get(k) or 0) >= int(f.get(k, 0)) for k in ("gold", "elixir") if int(f.get(k, 0)) > 0]
+        return bool(checks) and all(checks)
+
     def read_and_record_resources(self, builder_base=False):
         res = read_resources(builder_base=builder_base)
+        if res is not None and not builder_base: self.last_res = res
         if res is not None and not builder_base:
             stats.record(_utils.INSTANCE_ID, "resources", **res)
             logger.info(f"Resources: gold={res['gold']} elixir={res['elixir']} dark={res['dark']}")
@@ -218,7 +227,9 @@ class CoC_Bot:
                         self.load_settings()
                         self.upgrader.run_home_base(self.excluded("home_base"), self.excluded("home_lab"), self.excluded("pet_house"))
 
-                    if running() and not self.excluded("home_attacks"):
+                    if running() and not self.excluded("home_attacks") and self.storages_full(self.settings):
+                        logger.info("Storages are full, skipping home attacks")
+                    elif running() and not self.excluded("home_attacks"):
                         n = max(1, int(self.settings["attack"]["home_attacks_per_cycle"]))
                         for i in range(n):
                             if not running() or self.excluded("home_attacks"): break

@@ -157,6 +157,19 @@ class Attacker:
             time.sleep(0.3)
         return False
 
+    def record_search(self, loot=None, accepted=True):
+        """Statistics: every base looked at during the search (loot read when the numbers are taught)."""
+        try:
+            import stats, teach, utils as _u
+            if loot is None and teach.taught("enemy_gold"):
+                frame = Frame_Handler.get_frame(grayscale=False)
+                loot = {k: read_taught_number(f"enemy_{k}", frame) for k in ("gold", "elixir", "dark")}
+            loot = loot or {}
+            stats.record(_u.INSTANCE_ID, "search", accepted=bool(accepted),
+                         gold=loot.get("gold"), elixir=loot.get("elixir"), dark=loot.get("dark"))
+        except Exception:
+            pass
+
     def apply_loot_filter(self):
         """
         Skip bases with too little loot (needs the Next button and the loot numbers taught).
@@ -169,7 +182,9 @@ class Attacker:
             Auto_Learn.learn_enemy_loot(frame)
             if not teach.taught("next_button"): Auto_Learn.learn_button("next_button", frame)
         f = getattr(self, "loot_filter", None)
-        if not f or not f.get("enabled"): return True
+        if not f or not f.get("enabled"):
+            self.record_search(None, accepted=True)
+            return True
         if not teach.taught("next_button") or not (teach.taught("enemy_gold") or teach.taught("enemy_elixir")):
             logger.warning("Loot filter is on but the Next button / loot numbers aren't taught yet")
             return True
@@ -182,6 +197,7 @@ class Attacker:
             checks = [(loot[k] or 0) >= v for k, v in need.items() if v > 0 and (k != "dark" or teach.taught("enemy_dark"))]
             ok = (all(checks) if f.get("mode", "all") == "all" else any(checks)) if checks else True
             logger.info(f"Base loot: gold={loot['gold']} elixir={loot['elixir']} dark={loot['dark']} -> {'attack' if ok else 'next'}")
+            self.record_search(loot, accepted=ok)
             if ok: return True
             if skip == int(f.get("max_skips", 30)): break
             if not tap_taught("next_button", timeout=2) and not Auto_Learn.learn_button("next_button", tap=True, min_interval=0):

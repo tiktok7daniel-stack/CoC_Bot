@@ -314,6 +314,33 @@ def api_discovered_use(id):
     shutil.copyfile(src, teach.capture_path(id))
     return jsonify({"ok": True})
 
+# ---------------------------------------------------------------- live system info (home page cards)
+
+@app.route("/api/system/<id>", methods=["GET"])
+def api_system(id):
+    import json
+    if not valid_id(id): abort(404)
+    out = {"cpu": None, "ram": None, "ram_mb": None, "uptime": None, "adb": None, "emulator": bot_settings.load_app().get("emulator"),
+           "phase": None, "phase_age": None}
+    try:
+        import psutil
+        out["cpu"] = psutil.cpu_percent(interval=0.2)
+        out["ram"] = psutil.virtual_memory().percent
+    except Exception:
+        pass
+    inst = instances.get(id)
+    if inst: out["uptime"] = time.time() - inst.started_at
+    p = Path.home() / ".CoC_Bot" / "phase" / f"{id}.json"
+    try:
+        d = json.loads(p.read_text())
+        out.update(adb=d.get("adb"), emulator=d.get("emulator") or out["emulator"], phase=d.get("phase"), phase_age=time.time() - d.get("t", 0))
+        if inst and d.get("pid"):
+            import psutil
+            out["ram_mb"] = int(psutil.Process(int(d["pid"])).memory_info().rss / 2**20)
+    except Exception:
+        pass
+    return jsonify(out)
+
 # ---------------------------------------------------------------- system check
 
 def _bluestacks_conf():

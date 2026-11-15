@@ -619,7 +619,28 @@ def _parse_resource(lines):
         if digits: return int(digits)
     return None
 
-def read_resources(builder_base=False, save_debug=False):
+def read_resources(builder_base=False, save_debug=False, samples=3):
+    """
+    Read the storages several times and keep the value the readings agree on
+    (stops after 2 readings when they already match).
+    """
+    import time
+    reads = []
+    for i in range(max(1, samples)):
+        r = _read_resources_once(builder_base, save_debug)
+        if r is not None: reads.append(r)
+        if len(reads) >= 2 and reads[-1] == reads[-2]: return reads[-1]
+        if i < samples - 1: time.sleep(0.25)
+    if not reads: return None
+    out = {}
+    for k in ("gold", "elixir", "dark"):
+        vals = [r[k] for r in reads if r.get(k) is not None]
+        if not vals: out[k] = None; continue
+        best = max(set(vals), key=vals.count)
+        out[k] = best if vals.count(best) > 1 else sorted(vals)[len(vals) // 2] # majority, else median
+    return out
+
+def _read_resources_once(builder_base=False, save_debug=False):
     """
     Read gold / elixir / dark elixir from the village screen with OCR.
     Returns {"gold": int|None, "elixir": int|None, "dark": int|None} or None if nothing was readable.
@@ -1301,7 +1322,140 @@ class MuMu_Manager(_Emulator_Manager):
 
         raise Exception("MuMu failed to stop.")
 
-Emulator_Manager = {"bluestacks": BlueStacks_Manager, "mumu": MuMu_Manager}[getattr(configs, "EMULATOR_TYPE", "bluestacks")]
+class LDPlayer_Manager(_Emulator_Manager):
+    """
+    LDPlayer, controlled through its ldconsole.exe. The instance whose title matches the bot
+    account ID is used (rename it in LDMultiPlayer); with a single instance it is used directly.
+    ADB port = 5555 + 2 * index.
+    """
+
+    _index = None
+    _console = None
+
+    COMMON_DIRS = [r"C:\LDPlayer\LDPlayer9", r"D:\LDPlayer\LDPlayer9", r"E:\LDPlayer\LDPlayer9",
+                   r"C:\LDPlayer\LDPlayer4.0", r"D:\LDPlayer\LDPlayer4.0",
+                   r"C:\Program Files\LDPlayer\LDPlayer9", r"C:\Program Files\ldplayer9box",
+                   r"D:\LDPlayer", r"C:\LDPlayer"]
+
+    @classmethod
+    def init(cls):
+        if sys.platform != "win32":
+            raise Exception("LDPlayer is only available on Windows.")
+        super().init()
+
+    @classproperty
+    def console(cls):
+        if cls._console is not None and Path(cls._console).exists():
+            return cls._console
+        custom = getattr(configs, "LDPLAYER_BIN_PATH", "")
+        candidates = [custom] if custom else []
+        for d in cls.COMMON_DIRS:
+            candidates += [str(Path(d) / "ldconsole.exe"), str(Path(d) / "dnconsole.exe")]
+        found = None
+        for c in candidates:
+            try:
+                if c and Path(c).exists(): found = c; break
+            except OSError: # e.g. a BitLocker-locked drive
+                continue
+        if found is None: found = file_search("/", "ldconsole.exe", ["ldplayer"])
+        assert found is not None and Path(found).exists(), "ldconsole.exe not found: set the LDPlayer folder in Settings"
+        cls._console = found
+        return cls._console
+
+    @classproperty
+    def adb_exe(cls):
+        """LDPlayer's own adb (same version as its adb server avoids connection fights)."""
+        try:
+            p = Path(cls.console).parent / "adb.exe"
+            return str(p) if p.exists() else None
+        except Exception:
+            return None
+
+    @classmethod
+    def _run(cls, *args):
+        import subprocess
+        res = subprocess.run([cls.console, *args], capture_output=True, text=True, timeout=60, **_no_window())
+        return res.stdout or ""
+
+    @classmethod
+    def instances(cls):
+        """[(index, title, running, pid)] from 'ldconsole list2'."""
+        out = []
+        for line in cls._run("list2").splitlines():
+            c = line.strip().split(",")
+            if len(c) < 6 or not c[0].strip().isdigit(): continue
+            out.append((int(c[0]), c[1], c[4].strip() == "1", int(c[5]) if c[5].strip().lstrip("-").isdigit() else -1))
+        return out
+
+    @classproperty
+    def index(cls, instance_id=None):
+        if cls._index is not None: return cls._index
+        instance_id = instance_id if instance_id is not None else INSTANCE_ID
+        inst = cls.instances()
+        match = [i for i, title, _, _ in inst if title == instance_id]
+        if match:
+            cls._index = match[0]
+        elif len(inst) == 1:
+            cls._index = inst[0][0]
+            logger.info(f"Using the only LDPlayer instance '{inst[0][1]}' for account '{instance_id}'")
+        else:
+            names = ", ".join(t for _, t, _, _ in inst) or "none"
+            raise Exception(f"No LDPlayer instance named '{instance_id}' (found: {names}). Rename it in LDMultiPlayer.")
+        return cls._index
+
+    @classproperty
+    def adb_port(cls):
+        if cls._adb_port is None: cls._adb_port = str(5555 + 2 * int(cls.index))
+        return cls._adb_port
+
+    @classproperty
+    def pid(cls):
+        for i, _, running, pid in cls.instances():
+            if i == cls.index and running and pid > 0:
+                cls._pid = pid
+                return pid
+        return None
+
+    @classmethod
+    def check(cls):
+        try:
+            return any(i == cls.index and running for i, _, running, _ in cls.instances())
+        except Exception:
+            return False
+
+    @classmethod
+    def start(cls, timeout=120):
+        import time
+        cls.wake()
+        if cls.check():
+            logger.info("LDPlayer already running.")
+            return
+        cls._run("launch", "--index", str(cls.index))
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            if cls.check():
+                logger.info("LDPlayer started.")
+                return
+            time.sleep(1)
+        raise Exception("LDPlayer failed to start.")
+
+    @classmethod
+    def stop(cls, timeout=60):
+        import time
+        if not cls.check():
+            logger.info("LDPlayer stopped.")
+            return
+        cls._run("quit", "--index", str(cls.index))
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            if not cls.check():
+                logger.info("LDPlayer stopped.")
+                return
+            time.sleep(1)
+        raise Exception("LDPlayer failed to stop.")
+
+Emulator_Manager = {"bluestacks": BlueStacks_Manager, "mumu": MuMu_Manager, "ldplayer": LDPlayer_Manager}.get(
+    getattr(configs, "EMULATOR_TYPE", "bluestacks"), BlueStacks_Manager)
 
 class Task_Handler:
     
@@ -1691,6 +1845,9 @@ class ADB_Manager:
         if sys.platform == "win32" and getattr(configs, "EMULATOR_TYPE", "bluestacks") == "bluestacks":
             bluestacks_adb = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "BlueStacks_nxt" / "HD-Adb.exe"
             if bluestacks_adb.exists(): adb_executable = str(bluestacks_adb)
+        if sys.platform == "win32" and getattr(configs, "EMULATOR_TYPE", "bluestacks") == "ldplayer":
+            ld_adb = LDPlayer_Manager.adb_exe
+            if ld_adb: adb_executable = ld_adb
         if adb_executable is None:
             raise FileNotFoundError("ADB executable not found. Set ADB_ABS_DIR to its directory.")
         os.environ["ADBUTILS_ADB_PATH"] = adb_executable
@@ -2252,8 +2409,18 @@ class Dev_Tools:
 ERRORS_DIR = APP_DATA_DIR / "errors"
 
 def set_phase(name):
-    """What the bot is doing right now (shown next to every error)."""
+    """What the bot is doing right now (shown next to every error and on the GUI home page)."""
+    import json, time
     TEMP_CACHE["phase"] = name
+    try:
+        d = APP_DATA_DIR / "phase"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"{INSTANCE_ID}.json").write_text(json.dumps({
+            "phase": name, "t": time.time(), "adb": ADB_ADDRESS,
+            "emulator": getattr(configs, "EMULATOR_TYPE", "bluestacks"), "pid": __import__("os").getpid(),
+        }))
+    except Exception:
+        pass
 
 def install_error_reporter():
     import threading, time, traceback

@@ -47,11 +47,28 @@ header{display:flex;align-items:center;gap:14px;padding:12px 18px;background:lin
 .st-error .dot{background:var(--bad);box-shadow:0 0 0 4px rgba(255,93,108,.18)}
 
 /* ---------- tabs ---------- */
-nav.tabs{display:flex;gap:6px;padding:10px 14px;background:#101c3a;border-bottom:1px solid var(--line);overflow-x:auto}
-nav.tabs button{flex:1;min-width:110px;display:flex;flex-direction:column;align-items:center;gap:4px;background:transparent;border:1px solid transparent;border-radius:14px;padding:8px 10px;color:var(--muted);cursor:pointer;font-weight:700}
-nav.tabs button i{font-size:18px}
+body{padding-inline-start:236px}
+nav.tabs{position:fixed;top:0;bottom:0;inset-inline-start:0;width:236px;display:flex;flex-direction:column;gap:4px;padding:14px 12px;background:linear-gradient(180deg,#121f40,#0c1630);border-inline-end:1px solid var(--line);overflow-y:auto;z-index:20}
+nav.tabs .side-brand{display:flex;align-items:center;gap:10px;padding:6px 8px 14px;margin-bottom:6px;border-bottom:1px solid var(--line)}
+nav.tabs .side-brand img{width:44px;height:44px}
+nav.tabs .side-brand b{display:block;font-size:19px;font-weight:800}
+nav.tabs .side-brand small{color:var(--muted);font-size:12px}
+nav.tabs button{position:relative;display:flex;align-items:center;gap:12px;background:transparent;border:1px solid transparent;border-radius:12px;padding:10px 12px;color:var(--muted);cursor:pointer;font-weight:700;text-align:start;font-size:15px}
+nav.tabs button i{font-size:17px;width:22px;text-align:center;color:var(--gold)}
 nav.tabs button:hover{color:var(--text);background:var(--panel)}
-nav.tabs button.active{color:#071430;background:linear-gradient(180deg,#9cc8ff,#5a9df5);box-shadow:0 6px 18px rgba(79,155,255,.35)}
+nav.tabs button.active{color:#fff;background:linear-gradient(90deg,#3a3f8f,#2a3270);border-color:#5560c9;box-shadow:inset 3px 0 0 #8b93ff}
+body:not(.ltr) nav.tabs button.active{box-shadow:inset -3px 0 0 #8b93ff}
+nav.tabs button.soon{opacity:.45}
+nav.tabs button .soon-tag{margin-inline-start:auto;font-size:10px;background:#2a3b62;border-radius:6px;padding:0 6px;color:var(--muted)}
+nav.tabs .side-foot{margin-top:auto;padding-top:10px;border-top:1px solid var(--line);text-align:center;color:var(--muted);font-weight:700}
+header .brand{display:none}
+.sys{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.sys .tile{background:#0f1b38;border:1px solid var(--line2);border-radius:12px;padding:10px 12px;border-top:4px solid var(--c,var(--accent))}
+.sys .tile span{display:block;color:var(--muted);font-size:12.5px;font-weight:700}
+.sys .tile b{display:block;font-size:17px;font-weight:800;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.quick{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.asec-hide{display:none !important}
+@media (max-width:1100px){body{padding-inline-start:0}nav.tabs{position:static;width:auto;flex-direction:row;flex-wrap:wrap}nav.tabs .side-brand,nav.tabs .side-foot{display:none}.sys{grid-template-columns:repeat(3,1fr)}}
 .subtabs{display:flex;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px;margin-bottom:14px;width:max-content;max-width:100%;overflow-x:auto}
 .subtabs button{background:transparent;border:0;border-radius:999px;padding:6px 18px;color:var(--muted);cursor:pointer;font-weight:700}
 .subtabs button.active{background:var(--accent);color:#04122e}
@@ -255,24 +272,44 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
 </header>
 
 <nav class="tabs" id="tabs">
-  <button data-tab="dash"><i class="fa-solid fa-gamepad"></i><span data-t="tab_dash"></span></button>
-  <button data-tab="acc"><i class="fa-solid fa-users"></i><span data-t="tab_acc"></span></button>
-  <button data-tab="res"><i class="fa-solid fa-chart-line"></i><span data-t="tab_res"></span></button>
-  <button data-tab="teach"><i class="fa-solid fa-graduation-cap"></i><span data-t="tab_teach"></span></button>
-  <button data-tab="set" style="position:relative"><i class="fa-solid fa-gear"></i><span data-t="tab_set"></span><span class="badge" id="errBadge"></span></button>
+  <div class="side-brand"><img src="{{ url_for('static', filename='logo.svg') }}" alt=""><div><b>CoC Bot</b><small data-t="brand_sub"></small></div></div>
+  <button data-tab="dash"><i class="fa-solid fa-trophy"></i><span data-t="nv_home"></span></button>
+  <button data-tab="acc"><i class="fa-solid fa-id-card"></i><span data-t="nv_acc"></span></button>
+  <button data-tab="atk"><i class="fa-solid fa-khanda"></i><span data-t="nv_atk"></span></button>
+  <button data-tab="bb"><i class="fa-solid fa-moon"></i><span data-t="nv_bb"></span></button>
+  <button class="soon" data-soon="1"><i class="fa-solid fa-chess-king"></i><span data-t="nv_capital"></span><span class="soon-tag" data-t="soon"></span></button>
+  <button data-tab="res"><i class="fa-solid fa-chart-column"></i><span data-t="nv_stats"></span></button>
+  <button class="soon" data-soon="1"><i class="fa-solid fa-shield-halved"></i><span data-t="nv_war"></span><span class="soon-tag" data-t="soon"></span></button>
+  <button data-tab="upg"><i class="fa-solid fa-house-chimney"></i><span data-t="nv_village"></span></button>
+  <button data-tab="teach"><i class="fa-solid fa-person-digging"></i><span data-t="nv_manager"></span></button>
+  <button data-tab="log"><i class="fa-solid fa-scroll"></i><span data-t="nv_log"></span><span class="badge" id="errBadge"></span></button>
+  <button data-tab="set"><i class="fa-solid fa-robot"></i><span data-t="nv_bot"></span></button>
+  <button class="soon" data-soon="1"><i class="fa-solid fa-comments"></i><span data-t="nv_chat"></span><span class="soon-tag" data-t="soon"></span></button>
+  <div class="side-foot" id="sideState"></div>
 </nav>
 
 <main>
 <div class="subtabs" id="setNav" style="display:none">
   <button data-sub="set"><i class="fa-solid fa-sliders"></i> <span data-t="sn_general"></span></button>
-  <button data-sub="upg"><i class="fa-solid fa-hammer"></i> <span data-t="tab_upg"></span></button>
-  <button data-sub="bb"><i class="fa-solid fa-chess-rook"></i> <span data-t="tab_bb"></span></button>
-  <button data-sub="atk"><i class="fa-solid fa-khanda"></i> <span data-t="tab_atk"></span></button>
   <button data-sub="sch"><i class="fa-regular fa-clock"></i> <span data-t="tab_sch"></span></button>
-  <button data-sub="err"><i class="fa-solid fa-stethoscope"></i> <span data-t="sn_err"></span></button>
 </div>
 <!-- ============================ DASHBOARD ============================ -->
 <section class="page" id="p-dash">
+  <div class="sys">
+    <div class="tile" style="--c:#4fd6ff"><span data-t="sy_cpu"></span><b class="num" id="syCpu">—</b></div>
+    <div class="tile" style="--c:#b18cff"><span data-t="sy_ram"></span><b class="num" id="syRam">—</b></div>
+    <div class="tile" style="--c:#ffc83d"><span data-t="sy_up"></span><b class="num" id="syUp">—</b></div>
+    <div class="tile" style="--c:#2fcf7a"><span>ADB</span><b class="num" id="syAdb">—</b></div>
+    <div class="tile" style="--c:#ff9d3d"><span data-t="sy_emu"></span><b id="syEmu">—</b></div>
+    <div class="tile" style="--c:#ff5da8"><span data-t="sy_status"></span><b id="syPhase">—</b></div>
+  </div>
+  <div class="quick">
+    <button class="btn" onclick="showTab('acc')"><i class="fa-solid fa-desktop"></i><span data-t="nv_acc"></span></button>
+    <button class="btn" onclick="showTab('log')"><i class="fa-solid fa-stethoscope"></i><span data-t="sc_title"></span></button>
+    <button class="btn" onclick="showTab('set')"><i class="fa-solid fa-cloud-arrow-down"></i><span data-t="updates"></span></button>
+    <button class="btn" onclick="showTab('log')"><i class="fa-solid fa-scroll"></i><span data-t="nv_log"></span></button>
+    <button class="btn" onclick="showTab('sch')"><i class="fa-regular fa-clock"></i><span data-t="tab_sch"></span></button>
+  </div>
   <div class="card" style="margin-bottom:14px">
     <div class="card-h"><div class="ico"><i class="fa-solid fa-wand-magic-sparkles"></i></div><h3 data-t="preset_title"></h3><div class="tools"><span class="pill" id="presetNow"></span></div></div>
     <div class="card-sub" data-t="preset_sub"></div>
@@ -445,8 +482,23 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
 
 <!-- ============================ ATTACK / FARM ============================ -->
 <section class="page" id="p-atk">
+  <div class="subtabs" id="atkNav">
+    <button data-asec="search"><i class="fa-solid fa-magnifying-glass"></i> <span data-t="as_search"></span></button>
+    <button data-asec="attack"><i class="fa-solid fa-khanda"></i> <span data-t="as_attack"></span></button>
+    <button data-asec="army"><i class="fa-solid fa-people-group"></i> <span data-t="as_army"></span></button>
+    <button data-asec="end"><i class="fa-solid fa-flag-checkered"></i> <span data-t="as_end"></span></button>
+  </div>
   <div class="grid">
-    <div class="card">
+    <div class="card span2" data-asec="search">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-box-archive"></i></div><h3 data-t="swf_title"></h3></div>
+      <div class="card-sub" data-t="swf_sub"></div>
+      <div class="card-b">
+        <div class="row"><div class="lbl" data-t="swf_enabled"></div><label class="sw"><input type="checkbox" data-bind="attack.skip_when_full.enabled"><span></span></label></div>
+        <div class="row"><div class="lbl" style="display:flex;align-items:center;gap:8px"><svg width="20" height="20"><use href="#i-gold"/></svg><span data-t="swf_gold"></span></div><input class="in" type="number" min="0" step="100000" data-bind="attack.skip_when_full.gold" data-type="int"></div>
+        <div class="row"><div class="lbl" style="display:flex;align-items:center;gap:8px"><svg width="20" height="20"><use href="#i-elixir"/></svg><span data-t="swf_elixir"></span></div><input class="in" type="number" min="0" step="100000" data-bind="attack.skip_when_full.elixir" data-type="int"></div>
+      </div>
+    </div>
+    <div class="card span2" data-asec="attack">
       <div class="card-h"><div class="ico"><i class="fa-solid fa-khanda"></i></div><h3 data-t="attack_title"></h3></div>
       <div class="card-sub" data-t="attack_sub"></div>
       <div class="card-b">
@@ -456,7 +508,7 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
         <div class="row"><div class="lbl" data-t="builder_attacks_n"></div><input class="in" type="number" min="1" max="50" data-bind="attack.builder_attacks_per_cycle" data-type="int"><span class="unit" data-t="attacks_unit"></span></div>
       </div>
     </div>
-    <div class="card">
+    <div class="card span2" data-asec="army">
       <div class="card-h"><div class="ico"><i class="fa-solid fa-people-group"></i></div><h3 data-t="army_title"></h3></div>
       <div class="card-sub" data-t="army_sub"></div>
       <div class="card-b">
@@ -467,7 +519,7 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
         <div class="row"><div class="lbl"><span data-t="hero_retap"></span><small data-t="hero_retap_sub"></small></div><input class="in" type="number" min="0" step="1" data-bind="attack.hero_retap" data-type="float"><span class="unit" data-t="seconds"></span></div>
       </div>
     </div>
-    <div class="card span2">
+    <div class="card span2" data-asec="end">
       <div class="card-h"><div class="ico"><i class="fa-solid fa-flag-checkered"></i></div><h3 data-t="battle_end_title"></h3></div>
       <div class="card-sub" data-t="battle_end_sub"></div>
       <div class="card-b">
@@ -476,7 +528,7 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
         <div class="row"><div class="lbl"><span data-t="surrender_after"></span><small data-t="surrender_after_sub"></small></div><input class="in" type="number" min="0" step="5" data-bind="attack.surrender_after" data-type="int"><span class="unit" data-t="seconds"></span></div>
       </div>
     </div>
-    <div class="card span2">
+    <div class="card span2" data-asec="search">
       <div class="card-h"><div class="ico"><i class="fa-solid fa-filter-circle-dollar"></i></div><h3 data-t="lf_title"></h3></div>
       <div class="card-sub" data-t="lf_sub"></div>
       <div class="card-b">
@@ -488,7 +540,7 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
         <div class="row"><div class="lbl" data-t="lf_skips"></div><input class="in" type="number" min="0" max="200" data-bind="attack.loot_filter.max_skips" data-type="int"></div>
       </div>
     </div>
-    <div class="card span2">
+    <div class="card span2" data-asec="attack">
       <div class="card-h"><div class="ico"><i class="fa-solid fa-seedling"></i></div><h3 data-t="farm_title"></h3></div>
       <div class="card-sub" data-t="farm_sub"></div>
       <div class="card-b">
@@ -567,7 +619,7 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
         </div>
       </div>
     </div>
-    <div class="card">
+    <div class="card" id="logCard" style="margin-bottom:14px">
       <div class="card-h"><div class="ico"><i class="fa-solid fa-terminal"></i></div><h3 data-t="bot_log"></h3>
         <div class="tools"><button class="btn sm" onclick="copyLog()"><i class="fa-regular fa-copy"></i><span data-t="copy"></span></button><button class="btn sm" onclick="clearLogView()"><i class="fa-solid fa-broom"></i><span data-t="clear"></span></button></div></div>
       <div class="card-sub" data-t="bot_log_sub"></div>
@@ -586,6 +638,9 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
     </div>
   </div>
 </section>
+
+<!-- ============================ LOG (log + errors + system check) ============================ -->
+<section class="page" id="p-log"><div id="logWrap"></div></section>
 
 <!-- ============================ TEACH ============================ -->
 <section class="page" id="p-teach">
@@ -652,7 +707,8 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
       <div class="card-sub" data-t="general_sub"></div>
       <div class="card-b">
         <div class="row"><div class="lbl"><i class="fa-solid fa-globe"></i> <span data-t="language"></span></div><select class="in" data-app="language" onchange="setLang(this.value)"><option value="ar">العربية</option><option value="en">English</option></select></div>
-        <div class="row"><div class="lbl"><span data-t="emulator"></span><small data-t="emulator_sub"></small></div><select class="in" data-app="emulator"><option value="bluestacks">BlueStacks</option><option value="mumu">MuMu Player</option></select></div>
+        <div class="row"><div class="lbl"><span data-t="emulator"></span><small data-t="emulator_sub"></small></div><select class="in" data-app="emulator"><option value="bluestacks">BlueStacks</option><option value="ldplayer">LDPlayer</option><option value="mumu">MuMu Player</option></select></div>
+        <div class="row"><div class="lbl"><span data-t="ld_path"></span><small data-t="ld_path_sub"></small></div><input class="in" style="width:50%" data-app="ldplayer_path" placeholder="D:\LDPlayer\LDPlayer9\ldconsole.exe"></div>
         <div class="row"><div class="lbl" data-t="auto_emulator"></div><label class="sw"><input type="checkbox" data-app="auto_start_emulator"><span></span></label></div>
         <div class="row"><div class="lbl"><span data-t="suspend_emulator"></span><small data-t="suspend_emulator_sub"></small></div><label class="sw"><input type="checkbox" data-app="suspend_emulator_on_idle"><span></span></label></div>
         <div class="row" id="autostartRow"><div class="lbl"><i class="fa-brands fa-windows"></i> <span data-t="start_windows"></span></div><label class="sw"><input type="checkbox" data-app="start_with_windows"><span></span></label></div>
@@ -700,7 +756,7 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
 <div class="banner" id="unsaved"><i class="fa-solid fa-triangle-exclamation"></i><span data-t="unsaved"></span></div>
 <footer>
   <div class="emu"><i class="fa-solid fa-desktop"></i><span data-t="emulator"></span>
-    <select class="in" data-app="emulator"><option value="bluestacks">BlueStacks</option><option value="mumu">MuMu Player</option></select></div>
+    <select class="in" data-app="emulator"><option value="bluestacks">BlueStacks</option><option value="ldplayer">LDPlayer</option><option value="mumu">MuMu Player</option></select></div>
   <div class="pill" id="footStatus"><span class="dot"></span><span id="footStatusText"></span></div>
   <div class="mid">
     <button class="btn go" id="btnStart" onclick="startBot()"><i class="fa-solid fa-play"></i><span data-t="start_bot"></span></button>
@@ -786,6 +842,15 @@ ar:{
  tess_found_at:"موجود في:", tess_hint:"اضغط \"تثبيت Tesseract\" — هتفتح نافذة سودا تثبّته لوحدها، وافق لو ويندوز سألك. لحد ما يتثبّت البوت بيستخدم easyocr عادي.", tess_installing:"جاري التثبيت في النافذة اللي اتفتحت… الحالة هتتحدث لوحدها لما يخلص.", groq_key:"مفتاح Groq API",
  unsaved:"تغييرات غير محفوظة. اضغط على حفظ الإعدادات لتطبيقها على البوت.", start_bot:"بدء البوت", save_settings:"حفظ الإعدادات",
  one_err:"خطأ", one_warn:"تحذير",
+ brand_sub:"أتمتة كلاش أوف كلانس", nv_home:"الرئيسية", nv_acc:"الحسابات", nv_atk:"الهجوم", nv_bb:"القرية الليلية", nv_capital:"عاصمة القبيلة", nv_stats:"الإحصائيات",
+ nv_war:"مباريات القبيلة", nv_village:"القرية", nv_manager:"مدير القرية", nv_log:"السجل", nv_bot:"البوت", nv_chat:"المحادثة", soon:"قريبًا", soon_msg:"الميزة دي لسه بتتعمل — قريبًا",
+ sub_log:"السجل والأخطاء وفحص النظام", sub_teach:"الروتينات وتعليم البوت",
+ as_search:"البحث", as_attack:"الهجوم", as_army:"الجيش", as_end:"نهاية الهجوم",
+ sy_cpu:"المعالج", sy_ram:"الذاكرة", sy_up:"مدة التشغيل", sy_emu:"المحاكي", sy_status:"حالة الهجوم",
+ swf_title:"حماية المخازن", swf_sub:"ما يهاجمش لما المخازن تقرّب تتملي — مفيش فايدة من غنيمة مش هتتخزن", swf_enabled:"ما تهاجمش لما المخازن مليانة", swf_gold:"لما الذهب يوصل لـ", swf_elixir:"والإكسير يوصل لـ",
+ searches_k:"عمليات بحث", skipped_k:"قرى اتخطّت", best_k:"أعلى غنيمة", worst_k:"أقل غنيمة",
+ ld_path:"مسار LDPlayer", ld_path_sub:"ملف ldconsole.exe — سيبه فاضي والبوت هيدوّر عليه",
+ ph_routine_army:"روتين الجيش",
  sc_title:"فحص النظام", sc_run:"افحص دلوقتي", sc_sub:"بيفحص كل حاجة البوت محتاجها ويقولك إيه السليم وإيه اللي محتاج تصليح", sc_hint:"دوس \"افحص دلوقتي\"", sc_running:"جاري الفحص… (ثواني)",
  sc_all_ok:"✅ كل حاجة سليمة", sc_some:"⚠️ فيه {n} حاجة محتاجة انتباه — اقرا الحل تحت كل واحدة",
  sc_python:"نسخة بايثون", sc_adb:"برنامج الاتصال بالمحاكي (ADB)", sc_adb_conflict:"برامج تانية بتستخدم ADB", sc_bs_instance:"نسخة المحاكي باسم الحساب", sc_resolution:"دقة شاشة المحاكي", sc_bs_adb_setting:"إعداد ADB في المحاكي",
@@ -885,6 +950,14 @@ en:{
  tess_found_at:"Found at:", tess_hint:"Click \"Install Tesseract\" — a console window installs it; accept if Windows asks. Until then the bot uses easyocr.", tess_installing:"Installing in the window that opened… the status updates when it's done.", groq_key:"Groq API key",
  unsaved:"Unsaved changes. Click Save settings to apply them to the bot.", start_bot:"Start bot", save_settings:"Save settings",
  one_err:"Error", one_warn:"Warning",
+ brand_sub:"Clash of Clans automation", nv_home:"Home", nv_acc:"Accounts", nv_atk:"Attack", nv_bb:"Builder base", nv_capital:"Clan capital", nv_stats:"Statistics",
+ nv_war:"Clan war", nv_village:"Village", nv_manager:"Village manager", nv_log:"Log", nv_bot:"Bot", nv_chat:"Chat", soon:"soon", soon_msg:"This feature is still being built — coming soon",
+ sub_log:"Log, errors and system check", sub_teach:"Routines and teaching",
+ as_search:"Search", as_attack:"Attack", as_army:"Army", as_end:"Battle end",
+ sy_cpu:"CPU", sy_ram:"RAM", sy_up:"Running time", sy_emu:"Emulator", sy_status:"Attack status",
+ swf_title:"Storage protection", swf_sub:"Don't attack when the storages are nearly full — loot that can't be stored is wasted", swf_enabled:"Don't attack when storages are full", swf_gold:"When gold reaches", swf_elixir:"and elixir reaches",
+ searches_k:"Searches", skipped_k:"Bases skipped", best_k:"Best loot", worst_k:"Lowest loot",
+ ld_path:"LDPlayer path", ld_path_sub:"ldconsole.exe — leave empty to find it automatically",
  sc_title:"System check", sc_run:"Check now", sc_sub:"Checks everything the bot needs and tells you what's fine and what needs fixing", sc_hint:"Click \"Check now\"", sc_running:"Checking… (a few seconds)",
  sc_all_ok:"✅ Everything is fine", sc_some:"⚠️ {n} item(s) need attention — read the fix under each",
  sc_python:"Python version", sc_adb:"Emulator connection program (ADB)", sc_adb_conflict:"Other programs using ADB", sc_bs_instance:"Emulator instance named like the account", sc_resolution:"Emulator resolution", sc_bs_adb_setting:"ADB setting in the emulator",
@@ -942,6 +1015,10 @@ const LOG_AR = [
  [/^CoC already open/, "اللعبة مفتوحة بالفعل — هيكمّل عليها ✓"],
  [/^Settings changed, applying now/, "الإعدادات اتغيّرت — جاري التطبيق دلوقتي"],
  [/^Run now requested/, "تم طلب تشغيل دورة الآن"],
+ [/^Storages are full, skipping home attacks/, "المخازن مليانة — مش هيهاجم في الدورة دي"],
+ [/^LDPlayer already running\./, "LDPlayer شغال بالفعل"],
+ [/^LDPlayer started\./, "LDPlayer اشتغل ✓"],
+ [/^Using the only LDPlayer instance '(.*?)'.*/, "بيستخدم نسخة LDPlayer الوحيدة ($1)"],
  [/^No troops could be deployed, ending the battle/, "الجيش ما نزلش خالص — أنهى المعركة على طول بدل ما يستنى"],
  [/^Could not verify the deployment/, "مقدرش يتأكد إن الجيش نزل"],
  [/^CoC reconnected/, "اللعبة كانت فاصلة — داس Reload ورجعت ✓"],
@@ -1062,8 +1139,9 @@ function setLang(v){ LANG = v; applyLang(); markDirty(); }
 /* =====================================================================
    Tabs
    ===================================================================== */
-const SET_GROUP = ["set", "upg", "bb", "atk", "sch", "err"];
+const SET_GROUP = ["set", "sch"];
 function showTab(name){
+  if (name === "err") name = "log";
   curTab = name;
   const inSet = SET_GROUP.includes(name);
   $$("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === (inSet ? "set" : name)));
@@ -1073,7 +1151,7 @@ function showTab(name){
   $("#pageTitle").textContent = t("sub_" + name);
   try { localStorage.setItem("tab", name); } catch(e) {}
   if (name === "res") { loadStats(); loadLog(); }
-  if (name === "err") loadErrors();
+  if (name === "log") { loadErrors(); loadLog(); }
   if (name === "set") checkTess();
   if (name === "teach") loadTeach();
 }
@@ -1082,7 +1160,15 @@ function showSub(name){
   $$("#upgSub button").forEach(b => b.classList.toggle("active", b.dataset.sub === name));
   $$("#p-upg .sub").forEach(s => s.style.display = s.dataset.sub === name ? "" : "none");
 }
-$$("#tabs button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+$$("#tabs button").forEach(b => b.onclick = () => b.dataset.soon ? toast(t("soon_msg")) : showTab(b.dataset.tab));
+function showAtk(sec){
+  $$("#atkNav button").forEach(b => b.classList.toggle("active", b.dataset.asec === sec));
+  $$("#p-atk .card[data-asec]").forEach(c => c.classList.toggle("asec-hide", c.dataset.asec !== sec));
+}
+$$("#atkNav button").forEach(b => b.onclick = () => showAtk(b.dataset.asec));
+// the log page gathers the log, the system check and the error list
+document.getElementById("logWrap").appendChild(document.getElementById("logCard"));
+[...$("#p-err").children].forEach(c => document.getElementById("logWrap").appendChild(c));
 $$("#setNav button").forEach(b => b.onclick = () => showTab(b.dataset.sub));
 $$("#upgSub button").forEach(b => b.onclick = () => showSub(b.dataset.sub));
 
@@ -1434,7 +1520,9 @@ function statCard(cls, icon, key){
   return `<div class="stat ${cls}"><div class="h"><svg class="ic"><use href="#${icon}"/></svg>${t(key)}</div>
     <div class="big num">${fmt(STATS.totals[key])}</div>
     <div class="sub"><span>${t("per_attack")}</span><b class="num">${fmt(STATS.per_attack[key])}</b></div>
-    <div class="sub"><span>${t("per_hour")}</span><b class="num">${fmt(STATS.per_hour[key])}</b></div></div>`;
+    <div class="sub"><span>${t("per_hour")}</span><b class="num">${fmt(STATS.per_hour[key])}</b></div>
+    <div class="sub"><span>${t("best_k")}</span><b class="num">${fmt((STATS.best || {})[key])}</b></div>
+    <div class="sub"><span>${t("worst_k")}</span><b class="num">${fmt((STATS.worst || {})[key])}</b></div></div>`;
 }
 function renderStats(){
   if (!STATS) return;
@@ -1443,6 +1531,8 @@ function renderStats(){
   $$(".res-chips .chip").forEach(c => c.title = `${t("res_updated")}: ${STATS.resources_time ? ago(STATS.resources_time) : t("never")}`);
   const kpis = `
     <div class="kpi"><b class="num">${STATS.attacks}</b><span>${t("attacks")}</span></div>
+    <div class="kpi"><b class="num">${STATS.searches || 0}</b><span>${t("searches_k")}</span></div>
+    <div class="kpi"><b class="num">${STATS.skipped || 0}</b><span>${t("skipped_k")}</span></div>
     <div class="kpi"><b class="num">${STATS.upgrades}</b><span>${t("upgrades_k")}</span></div>
     <div class="kpi"><b class="num">${STATS.walls}</b><span>${t("walls_k")}</span></div>
     <div class="kpi"><b class="num">${STATS.cycles}</b><span>${t("cycles_k")}</span></div>
@@ -1706,6 +1796,24 @@ async function clearErrors(){
 }
 
 /* =====================================================================
+   Live system tiles (home)
+   ===================================================================== */
+async function loadSystem(){
+  if (!CUR) return;
+  try {
+    const r = await api(`/api/system/${encodeURIComponent(CUR)}`);
+    $("#syCpu").textContent = r.cpu == null ? "—" : `${Math.round(r.cpu)}%`;
+    $("#syRam").textContent = r.ram == null ? "—" : `${Math.round(r.ram)}%${r.ram_mb ? ` • ${r.ram_mb} MB` : ""}`;
+    $("#syUp").textContent = r.uptime ? new Date(r.uptime * 1000).toISOString().substr(11, 8) : "—";
+    $("#syAdb").textContent = r.adb || "—";
+    $("#syEmu").textContent = {bluestacks:"BlueStacks", mumu:"MuMu", ldplayer:"LDPlayer"}[r.emulator] || r.emulator || "—";
+    const k = statusKey(acc(CUR));
+    $("#syPhase").textContent = (k === "running" && r.phase) ? t("ph_" + r.phase) : t("st_" + k);
+    $("#sideState").textContent = t("st_" + k);
+  } catch(e) {}
+}
+
+/* =====================================================================
    Tesseract
    ===================================================================== */
 async function checkTess(){
@@ -1764,6 +1872,8 @@ async function refreshAll(user){
   applyLang();
   loadStats(); loadLog();
   setInterval(loadState, 3000);
+  loadSystem(); setInterval(() => { if (curTab === "dash") loadSystem(); }, 3000);
+  showAtk("search");
   setInterval(() => { loadStats(); if (curTab === "res" || curTab === "dash") loadLog(); if (curTab === "err") loadErrors(); updateSchedNote(); }, 5000);
 })();
 </script>

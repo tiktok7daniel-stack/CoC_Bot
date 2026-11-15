@@ -80,6 +80,9 @@ def default_settings():
                 "enabled": False, "min_gold": 300000, "min_elixir": 300000, "min_dark": 0,
                 "mode": "all", "max_skips": 30,
             },
+            "skip_when_full": {      # don't attack while the storages are (nearly) full
+                "enabled": False, "gold": 0, "elixir": 0,
+            },
             "battle_end": "wait",    # "wait" (game stays open) | "restart" (reopen game, faster)
             "surrender_after": 0,    # seconds after deployment to end the battle early (0 = wait for the end)
         },
@@ -129,6 +132,7 @@ def default_app_settings():
         "telegram_bot_token": _cfg("TELEGRAM_BOT_TOKEN", ""),
         "groq_api_key": _cfg("GROQ_API_KEY", ""),
         "tesseract_path": _cfg("TESSERACT_PATH", ""),  # empty = find automatically
+        "ldplayer_path": _cfg("LDPLAYER_BIN_PATH", ""), # ldconsole.exe; empty = find automatically
         "github_token": "",          # fine-grained token with Issues: read & write on the bot repo
         "auto_report": False,        # upload new errors to GitHub Issues automatically
         "last_report": 0,
@@ -192,6 +196,7 @@ def apply_app_settings():
     configs.SUSPEND_EMULATOR_ON_IDLE = app["suspend_emulator_on_idle"]
     configs.AUTO_START_EMULATOR = app["auto_start_emulator"]
     configs.TESSERACT_PATH = app["tesseract_path"]
+    configs.LDPLAYER_BIN_PATH = app.get("ldplayer_path", "")
     _push_globals({k: getattr(configs, k) for k in (
         "INSTANCE_IDS", "EMULATOR_TYPE", "TELEGRAM_BOT_TOKEN", "GROQ_API_KEY",
         "SUSPEND_EMULATOR_ON_IDLE", "AUTO_START_EMULATOR", "TESSERACT_PATH")})

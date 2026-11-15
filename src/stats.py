@@ -89,6 +89,10 @@ def summary(id):
         "recent_attacks": list(reversed(attacks[-50:])),
         "recent_upgrades": list(reversed(upgrades[-50:])),
         "strategies": strategy_scores(events),
+        "searches": sum(1 for e in session if e["type"] == "search"),
+        "skipped": sum(1 for e in session if e["type"] == "search" and not e.get("accepted", True)),
+        "best": {k: max((int(e.get(k) or 0) for e in home), default=0) for k in ("gold", "elixir", "dark")},
+        "worst": {k: min((int(e.get(k) or 0) for e in home), default=0) for k in ("gold", "elixir", "dark")},
         "errors": sum(1 for e in session if e["type"] == "error"),
         "warnings": sum(1 for e in session if e["type"] == "warning"),
     }

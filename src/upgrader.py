@@ -18,7 +18,7 @@ class Upgrader:
     def budget_blocked(self):
         """True when both storages are under the reserve the user wants to keep."""
         if not self.budget: return False
-        res = read_resources()
+        res = read_resources(samples=1) # checked before every upgrade: one quick reading is enough
         if res is None: return False # can't read -> don't block
         gold_low = res["gold"] is not None and res["gold"] < self.budget.get("keep_gold", 0)
         elixir_low = res["elixir"] is not None and res["elixir"] < self.budget.get("keep_elixir", 0)
