@@ -202,6 +202,7 @@ class CoC_Bot:
                     # Battle / wall / budget settings for this cycle
                     self.attacker.battle_end = s["attack"]["battle_end"]
                     self.attacker.smart_end = s["attack"].get("smart_end", True)
+                    self.attacker.leave_after = max(0, float(s["attack"].get("leave_after", 0)))
                     self.attacker.smart_end_after = max(5, int(s["attack"].get("smart_end_after", 15)))
                     self.attacker.strategy = s["attack"]["strategy"]
                     self.attacker.loot_filter = s["attack"]["loot_filter"]

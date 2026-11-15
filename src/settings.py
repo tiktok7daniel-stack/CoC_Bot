@@ -83,7 +83,8 @@ def default_settings():
             "skip_when_full": {      # don't attack while the storages are (nearly) full
                 "enabled": False, "gold": 0, "elixir": 0,
             },
-            "battle_end": "wait",    # "wait" (game stays open) | "restart" (reopen game, faster)
+            "battle_end": "wait",    # "wait" (game stays open) | "restart" (reopen game) | "leave" (end right after deploying)
+            "leave_after": 0,        # "leave": seconds to wait after the army is down before ending
             "surrender_after": 0,    # seconds after deployment to end the battle early (0 = wait for the end)
             "smart_end": True,       # end the battle when the enemy loot stops going down
             "smart_end_after": 15,   # ... for this many seconds
@@ -261,7 +262,7 @@ def apply(s, wall_budget=None):
         "TROOP_DEPLOY_TIME": float(a["troop_deploy_time"]),
         "ATTACK_SLOT_RANGE": (int(a["slot_first"]), int(a["slot_last"])),
         "EXCLUDE_CLAN_TROOPS": bool(a["exclude_clan_troops"]),
-        "CHECK_INTERVAL": max(1, float(s["schedule"]["check_interval"])),
+        "CHECK_INTERVAL": max(0, float(s["schedule"]["check_interval"])), # 0 = next cycle right away
     }
     for k, v in values.items(): setattr(configs, k, v)
     _push_globals(values)

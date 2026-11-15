@@ -22,6 +22,7 @@ class Attacker:
         self.battle_end = "wait"    # "wait": stay in game until the battle ends | "restart": reopen the game (faster)
         self.surrender_after = 0    # seconds after deployment to end the battle early (0 = never)
         self.smart_end = True       # end the battle once the enemy loot stops going down
+        self.leave_after = 0        # battle_end "leave": seconds after deploying before ending
         self.smart_end_after = 15   # seconds without loot change before ending
 
     def in_battle(self):
@@ -48,7 +49,16 @@ class Attacker:
         import teach
         start = time.monotonic()
         surrendered = False
-        smart = self.smart_end and teach.taught("enemy_gold") and teach.taught("enemy_elixir")
+        leave = self.battle_end == "leave"
+        surrender_after = (self.leave_after if leave else self.surrender_after)
+        if leave:
+            if self.leave_after > 0: time.sleep(self.leave_after)
+            logger.info("Army deployed, leaving the battle right away")
+            if self._click_end_battle(timeout=2) or Auto_Learn.learn_button("end_battle", tap=True):
+                time.sleep(0.5)
+                if not self._click_okay(timeout=3): Auto_Learn.learn_button("okay_button", tap=True, min_interval=0)
+                surrendered = True
+        smart = self.smart_end and not leave and teach.taught("enemy_gold") and teach.taught("enemy_elixir")
         last_loot, last_change, next_read, dropped = None, time.monotonic(), 0, False
         while time.monotonic() - start < max_wait:
             if not running(): break
@@ -82,7 +92,7 @@ class Attacker:
                     time.sleep(1)
                 break
             # optional early end: End Battle -> confirm
-            if not surrendered and self.surrender_after > 0 and time.monotonic() - start > self.surrender_after:
+            if not surrendered and (surrender_after > 0 or leave) and time.monotonic() - start > surrender_after:
                 if self._click_end_battle(timeout=0) or Auto_Learn.learn_button("end_battle", tap=True):
                     time.sleep(0.7)
                     if not self._click_okay(timeout=3): Auto_Learn.learn_button("okay_button", tap=True, min_interval=0)
@@ -94,7 +104,7 @@ class Attacker:
                 for _ in range(10):
                     if game_ready(): return
                     time.sleep(1)
-            time.sleep(1)
+            time.sleep(0.4 if surrendered else 1)
         # (no Android back key here: in the village it opens the "exit game?" dialog)
         if game_ready(): return
         logger.warning("Battle end not detected, reopening the game")
@@ -689,10 +699,11 @@ class Attacker:
                     self._click_okay(timeout=3)
         except Exception:
             logger.warning("Could not verify the deployment")
-        try: self.activate_hero_abilities()
-        except Exception: logger.warning("Hero ability activation failed")
-        try: self.second_wave()
-        except Exception: logger.warning("Second spell wave failed")
+        if self.battle_end != "leave": # fast in / fast out skips the timed extras
+            try: self.activate_hero_abilities()
+            except Exception: logger.warning("Hero ability activation failed")
+            try: self.second_wave()
+            except Exception: logger.warning("Second spell wave failed")
         self.finish_battle(restart)
     
     def complete_builder_attack(self, restart=True):
