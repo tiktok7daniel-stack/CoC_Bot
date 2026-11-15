@@ -111,10 +111,13 @@ def wm_size(adb, addr):
     sizes = re.findall(r"(\d+)x(\d+)", out)
     return tuple(map(int, sizes[-1])) if sizes else None # override size is listed last
 
-TARGET_DPI = 240
+def target(app):
+    """The display size / DPI chosen on the setup screen (default 1920x1080 240 DPI)."""
+    return int(app.get("display_w", 1920)), int(app.get("display_h", 1080)), int(app.get("display_dpi", 240))
 
-def good_res(w, h, dpi=TARGET_DPI):
-    return w is not None and h is not None and {w, h} == {1920, 1080} and dpi == TARGET_DPI
+def good_res(app, w, h, dpi):
+    tw, th, td = target(app)
+    return w is not None and h is not None and {w, h} == {tw, th} and dpi == td
 
 def wm_density(adb, addr):
     d = re.findall(r"(\d+)", shell(adb, addr, "wm density"))
@@ -144,7 +147,7 @@ def status(app, running_accounts=()):
     links = app.get("emulator_links", {}) or {}
     res = {"emulator": emu, "found": bool(con) if emu == "ldplayer" else bool(cps) if emu == "bluestacks" else True,
            "console": con, "adb": adb, "copies": [{k: c.get(k) for k in ("index", "title", "running")} for c in cps],
-           "accounts": [], "platform": sys.platform}
+           "accounts": [], "platform": sys.platform, "target": list(target(app))}
     for acc in app.get("accounts", []):
         c = link_for(acc, cps, links) if emu in ("ldplayer", "bluestacks") else None
         a = {"id": acc, "copy": c["title"] if c else None, "copy_index": c["index"] if c else None,
@@ -158,13 +161,14 @@ def status(app, running_accounts=()):
             a["boot"] = shell(adb, addr, "getprop sys.boot_completed").strip() == "1"
             size, dpi = wm_size(adb, addr), wm_density(adb, addr)
             a["resolution"] = f"{size[0]}x{size[1]} · {dpi} DPI" if size else None
-            a["res_ok"] = bool(size and good_res(*size, dpi))
+            a["res_ok"] = bool(size and good_res(app, *size, dpi))
             a["game"] = game_open(adb, addr)
         else:
             a["boot"] = False
             a["resolution"] = f"{c['width']}x{c['height']} · {c.get('dpi')} DPI" if c and c.get("width") else None
-            a["res_ok"] = bool(good_res(c.get("width"), c.get("height"), c.get("dpi"))) if c and c.get("width") and c.get("dpi") else None
+            a["res_ok"] = bool(good_res(app, c.get("width"), c.get("height"), c.get("dpi"))) if c and c.get("width") and c.get("dpi") else None
             a["game"] = False
+        a["progress"] = PROGRESS.get(acc)
         res["accounts"].append(a)
     return res
 
@@ -189,17 +193,17 @@ def launch(app, acc):
     return "manual"
 
 def fix_resolution(app, acc):
-    """LDPlayer: set 1920x1080 + 240 DPI (the copy is closed, changed and opened again).
-    Other emulators: only the DPI can be fixed live (wm density) when the size is already right."""
-    if app.get("emulator") != "ldplayer":
-        con, c = _account_copy(app, acc)
-        addr, adb = address(app, c), adb_exe(app, con)
-        if addr and adb_state(adb, addr) == "device" and wm_size(adb, addr) and set(wm_size(adb, addr)) == {1920, 1080}:
-            shell(adb, addr, f"wm density {TARGET_DPI}")
-            return "ok"
-        return "manual"
-    if app.get("emulator") != "ldplayer": return "manual"
+    """LDPlayer: change the copy's size + DPI (it is closed, changed and opened again).
+    Other emulators: change them live with wm size / wm density."""
+    tw, th, td = target(app)
     con, c = _account_copy(app, acc)
+    if app.get("emulator") != "ldplayer":
+        addr, adb = address(app, c) if c else None, adb_exe(app, con)
+        if app.get("emulator") == "mumu" and not addr: addr = "127.0.0.1:16384"
+        if not addr or adb_state(adb, addr) != "device": return "no_adb"
+        shell(adb, addr, f"wm size {tw}x{th}")
+        shell(adb, addr, f"wm density {td}")
+        return "ok"
     if c is None: return "no_copy"
     idx = str(c["index"])
     if c["running"]:
@@ -207,8 +211,53 @@ def fix_resolution(app, acc):
         for _ in range(30):
             time.sleep(1)
             if not any(x["index"] == c["index"] and x["running"] for x in ld_instances(con)): break
-    _run([con, "modify", "--index", idx, "--resolution", f"1920,1080,{TARGET_DPI}"], timeout=60)
+    _run([con, "modify", "--index", idx, "--resolution", f"{tw},{th},{td}"], timeout=60)
     _run([con, "launch", "--index", idx], timeout=60)
+    return "ok"
+
+# ---------------------------------------------------------------- one button: do everything
+
+PROGRESS = {} # account -> text key shown on the setup screen while auto setup runs
+
+def auto_setup(app, acc):
+    """Size + DPI, start the emulator, wait until it is connected, open the game. Runs in a thread."""
+    import threading
+    if PROGRESS.get(acc) not in (None, "done", "failed"): return "busy"
+    def work():
+        try:
+            con, c = _account_copy(app, acc)
+            if app.get("emulator") in ("ldplayer", "bluestacks") and c is None:
+                PROGRESS[acc] = "failed_link"; return
+            addr, adb = address(app, c) if c else "127.0.0.1:16384", adb_exe(app, con)
+            tw, th, td = target(app)
+            if app.get("emulator") == "ldplayer":
+                fresh = {x["index"]: x for x in ld_instances(con)}.get(c["index"], c)
+                if not good_res(app, fresh.get("width"), fresh.get("height"), fresh.get("dpi")):
+                    PROGRESS[acc] = "p_res"; fix_resolution(app, acc)
+                elif not fresh["running"]:
+                    PROGRESS[acc] = "p_launch"; launch(app, acc)
+            elif adb_state(adb, addr) != "device":
+                PROGRESS[acc] = "p_launch"; launch(app, acc)
+            PROGRESS[acc] = "p_wait"
+            for _ in range(90): # up to ~3 minutes for the emulator to boot
+                if adb_state(adb, addr) == "device" and shell(adb, addr, "getprop sys.boot_completed").strip() == "1": break
+                time.sleep(2)
+            else:
+                PROGRESS[acc] = "failed_adb"; return
+            size, dpi = wm_size(adb, addr), wm_density(adb, addr)
+            if not (size and good_res(app, *size, dpi)):
+                PROGRESS[acc] = "p_res"
+                shell(adb, addr, f"wm size {tw}x{th}"); shell(adb, addr, f"wm density {td}")
+            if not game_open(adb, addr):
+                PROGRESS[acc] = "p_game"; open_game(app, acc)
+                for _ in range(30):
+                    if game_open(adb, addr): break
+                    time.sleep(2)
+            PROGRESS[acc] = "done"
+        except Exception:
+            PROGRESS[acc] = "failed"
+    PROGRESS[acc] = "p_start"
+    threading.Thread(target=work, daemon=True).start()
     return "ok"
 
 def open_game(app, acc):

@@ -269,7 +269,8 @@ def api_setup_action(action):
         bot_settings.save_app(app_cfg); bot_settings.apply_app_settings()
         return jsonify({"ok": True})
     if acc not in app_cfg["accounts"]: return jsonify({"ok": False, "error": "invalid_id"}), 400
-    fn = {"launch": emu_setup.launch, "fix_res": emu_setup.fix_resolution, "open_game": emu_setup.open_game}.get(action)
+    fn = {"launch": emu_setup.launch, "fix_res": emu_setup.fix_resolution, "open_game": emu_setup.open_game,
+          "auto": emu_setup.auto_setup}.get(action)
     if fn is None: abort(404)
     r = fn(app_cfg, acc)
     return jsonify({"ok": r == "ok", "result": r})

@@ -2553,6 +2553,10 @@ def start_capture_service():
 TARGET_SIZE = (1920, 1080)
 TARGET_DPI = 240 # BlueStacks' default for 1920x1080 (the device profile the templates come from)
 
+def _target():
+    w, h, d = getattr(configs, "DISPLAY_TARGET", None) or (*TARGET_SIZE, TARGET_DPI)
+    return (int(w), int(h)), int(d)
+
 def display_info():
     """-> (width, height, dpi) the game really sees (override values win over physical ones)."""
     import re
@@ -2563,30 +2567,32 @@ def display_info():
     return w, h, int(dens[-1]) if dens else None
 
 def display_ok(w, h, d):
-    return w is not None and {w, h} == set(TARGET_SIZE) and d == TARGET_DPI
+    size, dpi = _target()
+    return w is not None and {w, h} == set(size) and d == dpi
 
 def fix_display(w, h, d):
     """LDPlayer: change the copy's resolution + DPI (restart). Others: fix the DPI live if only that is off."""
     import time
+    (tw, th), td = _target()
     if Emulator_Manager is LDPlayer_Manager:
         idx = str(LDPlayer_Manager.index)
-        logger.info(f"Pre-flight: setting LDPlayer to 1920x1080 {TARGET_DPI} DPI (the emulator restarts)")
+        logger.info(f"Pre-flight: setting LDPlayer to {tw}x{th} {td} DPI (the emulator restarts)")
         try: LDPlayer_Manager.stop()
         except Exception: pass
-        LDPlayer_Manager._run("modify", "--index", idx, "--resolution", f"{TARGET_SIZE[0]},{TARGET_SIZE[1]},{TARGET_DPI}")
+        LDPlayer_Manager._run("modify", "--index", idx, "--resolution", f"{tw},{th},{td}")
         LDPlayer_Manager.start()
         time.sleep(5)
         ADB_Manager.connect(timeout=180)
         return True
-    if w is not None and {w, h} == set(TARGET_SIZE) and d != TARGET_DPI:
-        ADB_Manager.adbutils_device.shell(f"wm density {TARGET_DPI}")
-        logger.info(f"Pre-flight: DPI changed from {d} to {TARGET_DPI}")
-        return True
-    return False
+    ADB_Manager.adbutils_device.shell(f"wm size {tw}x{th}")
+    ADB_Manager.adbutils_device.shell(f"wm density {td}")
+    logger.info(f"Pre-flight: display changed from {w}x{h} {d} DPI to {tw}x{th} {td} DPI")
+    return True
 
 def preflight():
     import time
     logger.info("Pre-flight check: starting")
+    (tw, th), td = _target()
     warned = 0
     while True:
         problems = []
@@ -2599,10 +2605,10 @@ def preflight():
 
             w, h, d = display_info()
             if not display_ok(w, h, d):
-                logger.warning(f"Pre-flight: display is {w}x{h} {d} DPI, needs 1920x1080 {TARGET_DPI} DPI")
+                logger.warning(f"Pre-flight: display is {w}x{h} {d} DPI, needs {tw}x{th} {td} DPI")
                 if fix_display(w, h, d): w, h, d = display_info()
-            if display_ok(w, h, d): logger.info(f"Pre-flight: display 1920x1080 {TARGET_DPI} DPI ✓")
-            else: problems.append(f"display is {w}x{h} {d} DPI, needs 1920x1080 {TARGET_DPI} DPI")
+            if display_ok(w, h, d): logger.info(f"Pre-flight: display {tw}x{th} {td} DPI ✓")
+            else: problems.append(f"display is {w}x{h} {d} DPI, needs {tw}x{th} {td} DPI")
 
             if "com.supercell.clashofclans" in ADB_Manager.adbutils_device.shell("pm list packages com.supercell.clashofclans"):
                 logger.info("Pre-flight: Clash of Clans installed ✓")
@@ -2611,8 +2617,10 @@ def preflight():
 
             frame = Frame_Handler.get_frame(grayscale=False)
             fh, fw = frame.shape[:2]
-            if (fw, fh) == TARGET_SIZE: logger.info("Pre-flight: screenshots 1920x1080 ✓")
-            else: problems.append(f"screenshots are {fw}x{fh} (landscape 1920x1080 needed)")
+            if (fw, fh) == (tw, th): logger.info(f"Pre-flight: screenshots {fw}x{fh} ✓")
+            else: problems.append(f"screenshots are {fw}x{fh} (landscape {tw}x{th} needed)")
+            if (tw, th) != TARGET_SIZE:
+                logger.warning(f"Pre-flight: the bot's images are made for 1920x1080 - at {tw}x{th} finding buttons and deploying may fail")
 
             conn = ADB_Manager.minitouch_device.connection
             if int(conn.max_x) > 0 and int(conn.max_y) > 0: logger.info("Pre-flight: touch ready ✓")

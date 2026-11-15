@@ -153,6 +153,7 @@ def default_app_settings():
         "accounts": list(_cfg("INSTANCE_IDS", ["main"])),
         "emulator_links": {},        # account -> emulator copy (LDPlayer index / BlueStacks instance) chosen on the setup screen
         "show_setup": True,          # show the setup screen when the app opens
+        "display_w": 1920, "display_h": 1080, "display_dpi": 240, # emulator display the bot checks / sets
     }
 
 def _merge(base, override):
@@ -212,6 +213,7 @@ def apply_app_settings():
     configs.TESSERACT_PATH = app["tesseract_path"]
     configs.LDPLAYER_BIN_PATH = app.get("ldplayer_path", "")
     configs.EMULATOR_LINKS = app.get("emulator_links", {}) or {}
+    configs.DISPLAY_TARGET = (int(app.get("display_w", 1920)), int(app.get("display_h", 1080)), int(app.get("display_dpi", 240)))
     _push_globals({k: getattr(configs, k) for k in (
         "INSTANCE_IDS", "EMULATOR_TYPE", "TELEGRAM_BOT_TOKEN", "GROQ_API_KEY",
         "SUSPEND_EMULATOR_ON_IDLE", "AUTO_START_EMULATOR", "TESSERACT_PATH")})
