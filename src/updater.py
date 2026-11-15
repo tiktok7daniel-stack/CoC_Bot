@@ -10,21 +10,41 @@ KEEP = {".venv", ".git", "debug", "src/configs.py", "scripts/start.sh", "src/cac
 def _ver_tuple(v):
     return tuple(int(x) for x in re.findall(r"\d+", v)[:3]) or (0,)
 
+def _current_version():
+    """Read the version from disk (the running program may be older than the files after an update)."""
+    try:
+        m = re.search(r'VERSION\s*=\s*"([^"]+)"', (ROOT / "src" / "version.py").read_text(encoding="utf-8"))
+        return m.group(1) if m else VERSION
+    except OSError:
+        return VERSION
+
 def check():
-    import requests
-    url = f"https://raw.githubusercontent.com/{UPDATE_REPO}/{UPDATE_BRANCH}/src/version.py"
-    r = requests.get(url, timeout=10)
-    r.raise_for_status()
-    m = re.search(r'VERSION\s*=\s*"([^"]+)"', r.text)
-    latest = m.group(1) if m else VERSION
-    return {"current": VERSION, "latest": latest, "available": _ver_tuple(latest) > _ver_tuple(VERSION)}
+    import requests, time
+    # GitHub API first (not cached for minutes like raw files), raw file with a cache-buster as fallback
+    text = ""
+    try:
+        r = requests.get(f"https://api.github.com/repos/{UPDATE_REPO}/contents/src/version.py",
+                         params={"ref": UPDATE_BRANCH}, headers={"Accept": "application/vnd.github.raw"}, timeout=10)
+        if r.status_code == 200: text = r.text
+    except Exception:
+        pass
+    if "VERSION" not in text:
+        r = requests.get(f"https://raw.githubusercontent.com/{UPDATE_REPO}/{UPDATE_BRANCH}/src/version.py",
+                         params={"t": int(time.time())}, headers={"Cache-Control": "no-cache"}, timeout=10)
+        r.raise_for_status()
+        text = r.text
+    m = re.search(r'VERSION\s*=\s*"([^"]+)"', text)
+    current = _current_version()
+    latest = m.group(1) if m else current
+    return {"current": current, "latest": latest, "available": _ver_tuple(latest) > _ver_tuple(current)}
 
 def apply():
     if getattr(sys, "frozen", False):
         raise RuntimeError("Prebuilt app: download the new release instead")
     import requests
+    import time
     url = f"https://codeload.github.com/{UPDATE_REPO}/zip/refs/heads/{UPDATE_BRANCH}"
-    r = requests.get(url, timeout=120)
+    r = requests.get(url, params={"t": int(time.time())}, headers={"Cache-Control": "no-cache"}, timeout=120)
     r.raise_for_status()
     changed = 0
     with zipfile.ZipFile(io.BytesIO(r.content)) as z:
@@ -42,7 +62,7 @@ def apply():
             tmp.write_bytes(data)
             tmp.replace(dest)
             changed += 1
-    return {"changed": changed}
+    return {"changed": changed, "version": _current_version()}
 
 STARTUP_DIR = Path.home() / "AppData" / "Roaming" / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
 STARTUP_FILE = STARTUP_DIR / "CoC_Bot.bat"

@@ -667,9 +667,9 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
       <div class="card-h"><div class="ico"><i class="fa-solid fa-cloud-arrow-down"></i></div><h3 data-t="updates"></h3></div>
       <div class="card-sub" data-t="updates_sub"></div>
       <div class="card-b">
-        <div class="row"><div class="lbl" data-t="current_version"></div><b class="num">{{ version }}</b></div>
+        <div class="row"><div class="lbl" data-t="current_version"></div><b class="num" id="curVer">{{ version }}</b></div>
         <div class="row"><div class="lbl" data-t="latest_version"></div><b class="num" id="latestVer">—</b></div>
-        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn" onclick="checkUpdate()"><i class="fa-solid fa-magnifying-glass"></i><span data-t="check_updates"></span></button><button class="btn gold" id="applyUpd" onclick="applyUpdate()" disabled><i class="fa-solid fa-download"></i><span data-t="update_now"></span></button></div>
+        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn" onclick="checkUpdate()"><i class="fa-solid fa-magnifying-glass"></i><span data-t="check_updates"></span></button><button class="btn gold" id="applyUpd" onclick="applyUpdate()"><i class="fa-solid fa-download"></i><span data-t="update_now"></span></button></div>
         <div class="note" id="updNote"></div>
       </div>
     </div>
@@ -780,7 +780,8 @@ ar:{
  recent_upgrades:"آخر الترقيات", kind:"النوع", name:"الاسم", k_building:"مبنى", k_wall:"جدار", k_lab:"مختبر", k_pet:"حيوان", k_builder_base:"قاعدة البنّاء", k_builder_lab:"مختبر النجوم", no_log:"مفيش سجل لسه — شغّل البوت",
  general:"عام", general_sub:"اللغة والمحاكي وتشغيل البرنامج", language:"اللغة", emulator:"المحاكي", emulator_sub:"يتطبّق عند تشغيل البوت المرة الجاية", auto_emulator:"فتح المحاكي تلقائيًا", suspend_emulator:"تجميد المحاكي وقت الانتظار", suspend_emulator_sub:"يقلل استهلاك الجهاز بين الدورات", start_windows:"الفتح مع Windows",
  updates:"التحديثات", updates_sub:"حدّث البوت لآخر نسخة بضغطة (إعداداتك محفوظة)", current_version:"الإصدار الحالي", latest_version:"آخر إصدار", check_updates:"التحقق من التحديثات", update_now:"تحديث الآن",
- upd_none:"إنت على آخر إصدار ✓", upd_avail:"فيه تحديث جديد متاح!", upd_done:"تم التحديث ({n} ملف). اقفل البرنامج وافتحه تاني.", upd_err:"فشل التحقق: ",
+ upd_none:"إنت على آخر إصدار ✓ (لو عايز تتأكد دوس \"تحديث الآن\" برضه)", upd_avail:"فيه تحديث جديد متاح!", upd_done:"تم التحديث للإصدار {v} ({n} ملف) ✓ — اقفل البرنامج وافتحه تاني.",
+ upd_working:"جاري تنزيل التحديث…", upd_same:"كل الملفات عندك هي آخر نسخة ✓ مفيش حاجة تتغيّر.", upd_err:"فشل التحقق: ",
  notifications:"الإشعارات", notifications_sub:"ابعت إشعارات للتليجرام عند الترقيات والأخطاء", telegram_token:"توكن بوت التليجرام", ocr_title:"قراءة النصوص والأرقام (OCR)", ocr_sub:"Tesseract للأرقام (سريع جدًا) + easyocr للكلام (دقيق) — ولو واحد فشل التاني يكمّل",
  tess_sub:"قارئ الأرقام السريع", tess_ok:"متثبّت ✓", tess_missing:"مش متثبّت", tess_path:"مسار Tesseract", tess_path_sub:"سيبه فاضي والبوت هيلاقيه لوحده", tess_install:"تثبيت Tesseract", tess_check:"تحقق",
  tess_found_at:"موجود في:", tess_hint:"اضغط \"تثبيت Tesseract\" — هتفتح نافذة سودا تثبّته لوحدها، وافق لو ويندوز سألك. لحد ما يتثبّت البوت بيستخدم easyocr عادي.", tess_installing:"جاري التثبيت في النافذة اللي اتفتحت… الحالة هتتحدث لوحدها لما يخلص.", groq_key:"مفتاح Groq API",
@@ -873,7 +874,8 @@ en:{
  recent_upgrades:"Recent upgrades", kind:"Type", name:"Name", k_building:"Building", k_wall:"Wall", k_lab:"Lab", k_pet:"Pet", k_builder_base:"Builder base", k_builder_lab:"Star lab", no_log:"No log yet — start the bot",
  general:"General", general_sub:"Language, emulator and startup", language:"Language", emulator:"Emulator", emulator_sub:"Applies the next time the bot starts", auto_emulator:"Start emulator automatically", suspend_emulator:"Suspend emulator while idle", suspend_emulator_sub:"Reduces load between cycles", start_windows:"Start with Windows",
  updates:"Updates", updates_sub:"Update the bot in one click (your settings are kept)", current_version:"Current version", latest_version:"Latest version", check_updates:"Check for updates", update_now:"Update now",
- upd_none:"You're on the latest version ✓", upd_avail:"A new update is available!", upd_done:"Updated ({n} files). Close and reopen the app.", upd_err:"Check failed: ",
+ upd_none:"You're on the latest version ✓ (you can still click \"Update now\")", upd_avail:"A new update is available!", upd_done:"Updated to {v} ({n} files) ✓ — close and reopen the app.",
+ upd_working:"Downloading the update…", upd_same:"All your files are already the latest ✓ nothing to change.", upd_err:"Check failed: ",
  notifications:"Notifications", notifications_sub:"Send Telegram notifications for upgrades and errors", telegram_token:"Telegram bot token", ocr_title:"Text & number reading (OCR)", ocr_sub:"Tesseract for numbers (very fast) + easyocr for words (accurate) — each one backs up the other",
  tess_sub:"fast number reader", tess_ok:"Installed ✓", tess_missing:"Not installed", tess_path:"Tesseract path", tess_path_sub:"Leave empty to find it automatically", tess_install:"Install Tesseract", tess_check:"Check",
  tess_found_at:"Found at:", tess_hint:"Click \"Install Tesseract\" — a console window installs it; accept if Windows asks. Until then the bot uses easyocr.", tess_installing:"Installing in the window that opened… the status updates when it's done.", groq_key:"Groq API key",
@@ -1677,14 +1679,15 @@ async function checkUpdate(){
   $("#updNote").textContent = "…";
   const r = await api("/api/update/check");
   if (!r.ok) { $("#updNote").textContent = t("upd_err") + (r.error || ""); return; }
-  $("#latestVer").textContent = r.latest;
+  $("#latestVer").textContent = r.latest; $("#curVer").textContent = r.current;
   $("#updNote").textContent = t(r.available ? "upd_avail" : "upd_none");
-  $("#applyUpd").disabled = !r.available;
 }
 async function applyUpdate(){
-  $("#applyUpd").disabled = true; $("#updNote").textContent = "…";
+  $("#applyUpd").disabled = true; $("#updNote").textContent = t("upd_working");
   const r = await api("/api/update/apply", {method:"POST", body:{}});
-  $("#updNote").textContent = r.ok ? t("upd_done").replace("{n}", r.changed) : t("upd_err") + r.error;
+  $("#applyUpd").disabled = false;
+  if (!r.ok) { $("#updNote").textContent = t("upd_err") + r.error; return; }
+  $("#updNote").textContent = r.changed ? t("upd_done").replace("{n}", r.changed).replace("{v}", r.version || "") : t("upd_same");
 }
 
 /* =====================================================================
