@@ -11,6 +11,8 @@ def gui_disable_sleep():
     while True: time.sleep(1)
 
 def launch_proc(args):
+    import settings
+    settings.apply_app_settings() # accounts / emulator chosen in the GUI (before utils picks the emulator)
     from log import enable_logging
     from utils import parse_args, init_instance
     from coc_bot import CoC_Bot
@@ -87,7 +89,8 @@ def gui_launch(args):
     from copy import deepcopy
     
     procs = {}
-    pipe = init_gui(args.id)
+    preset = ([args.id] if args.id is not None else []) + [i for i in (args.ids or []) if i != args.id]
+    pipe = init_gui(preset)
     args.gui_port = get_gui().server_port
     
     sleep_proc = None
@@ -133,6 +136,8 @@ def gui_launch(args):
                 p.join()
 
 def launch():
+    import settings
+    settings.apply_app_settings()
     import utils
     args = utils.parse_args()
     if args.gui: gui_launch(args)

@@ -53,8 +53,9 @@ class Attacker:
             bx, by = Frame_Handler.locate(battle_temp, frame, thresh=0.9)
             if bx is None or by is None: return None, None
             xys = Frame_Handler.locate(find_a_match_temp, frame, thresh=0.9, return_all=True)
-            if xys == [[None, None]]: return None, None
-            xys = np.array(xys)
+            xys = [xy for xy in xys if xy[0] is not None and xy[1] is not None]
+            if len(xys) == 0: return None, None
+            xys = np.array(xys, dtype=float)
             dists = abs(xys[:, 0] - bx)
             if min(dists) > 0.01: return None, None
             x, y = xys[np.argmin(dists)]

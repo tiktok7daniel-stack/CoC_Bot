@@ -539,6 +539,46 @@ def to_home_base(ref_cache=False):
             time.sleep(2)
             return
 
+# Storage counters in the top-right corner (fractions of a 1920x1080 frame).
+# Each band holds one number; dark elixir only exists in the home village (TH7+).
+RESOURCE_BANDS = {
+    "gold":   (0.70, 0.035, 0.935, 0.105),
+    "elixir": (0.70, 0.120, 0.935, 0.190),
+    "dark":   (0.70, 0.205, 0.935, 0.275),
+}
+RESOURCE_LIMITS = {"gold": 60_000_000, "elixir": 60_000_000, "dark": 600_000}
+
+def _parse_resource(lines):
+    import re
+    for line in lines:
+        if "max" in line.lower() or ":" in line: continue # "Max: ..." storage-capacity labels
+        digits = re.sub(r"[^0-9]", "", fix_digits(line))
+        if digits: return int(digits)
+    return None
+
+def read_resources(builder_base=False, save_debug=False):
+    """
+    Read gold / elixir / dark elixir from the village screen with OCR.
+    Returns {"gold": int|None, "elixir": int|None, "dark": int|None} or None if nothing was readable.
+    """
+    try:
+        frame = Frame_Handler.get_frame(grayscale=False)
+        out = {}
+        for name, (x1, y1, x2, y2) in RESOURCE_BANDS.items():
+            if builder_base and name == "dark":
+                out[name] = None
+                continue
+            crop = Frame_Handler.high_contrast(Frame_Handler.crop(frame, x1, y1, x2, y2), thresh=190)
+            if save_debug or configs.DEBUG: Frame_Handler.save_frame(crop, f"resource_{name}.png")
+            value = _parse_resource(OCR_Handler.get_text(crop))
+            out[name] = value if value is not None and 0 <= value <= RESOURCE_LIMITS[name] else None
+        if all(v is None for v in out.values()): return None
+        return out
+    except (KeyboardInterrupt, SystemExit): raise
+    except Exception:
+        logger.exception("read_resources:")
+        return None
+
 def start_coc(timeout=60, detailed=False):
     import time
     
@@ -1182,6 +1222,12 @@ class Task_Handler:
         import requests
         
         if use_cached and cls.cache_valid:
+            return cls.cached_exclusions
+        if WEB_APP_URL == "":
+            # settings saved from the desktop GUI (per account), re-read every call
+            import settings as bot_settings
+            cls.cache_valid = True
+            cls.cached_exclusions = bot_settings.exclusions(bot_settings.load(INSTANCE_ID))
             return cls.cached_exclusions
         if WEB_APP_URL != "":
             res = requests.get(

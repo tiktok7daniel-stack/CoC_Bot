@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CoC Bot</title>
+<link rel="icon" href="{{ url_for('static', filename='logo.svg') }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+:root{
+  --bg:#0d1730; --bg2:#111e3d; --panel:#16264a; --panel2:#1b2e57; --line:#2a4173; --line2:#36528c;
+  --text:#e8eefc; --muted:#93a6cc; --dim:#6c80a8;
+  --accent:#4f9bff; --accent2:#7cb6ff; --gold:#ffc83d; --elixir:#e05cff; --dark:#9aa3b8;
+  --ok:#2fcf7a; --warn:#ffb020; --bad:#ff5d6c;
+  --radius:14px; --shadow:0 10px 30px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:"Cairo",system-ui,"Segoe UI",Tahoma,sans-serif;background:radial-gradient(1200px 600px at 80% -10%,#1e3a75 0%,transparent 60%),var(--bg);color:var(--text);font-size:15px;display:flex;flex-direction:column;overflow:hidden}
+body.ltr{direction:ltr}
+button,input,select{font-family:inherit;font-size:inherit;color:inherit}
+.num{font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate}
+
+/* ---------- header ---------- */
+header{display:flex;align-items:center;gap:14px;padding:12px 18px;background:linear-gradient(180deg,#16284f,#121f40);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:12px;min-width:220px}
+.brand img{width:48px;height:48px;filter:drop-shadow(0 4px 10px rgba(0,0,0,.4))}
+.brand h1{margin:0;font-size:22px;font-weight:800;letter-spacing:.5px}
+.brand small{display:block;color:var(--muted);font-size:13px;margin-top:-2px}
+.res-chips{display:flex;gap:10px;margin-inline-start:auto}
+.chip{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 12px;min-width:150px}
+.chip .ic{width:30px;height:30px;flex:none}
+.chip label{display:block;color:var(--muted);font-size:12px;line-height:1.1}
+.chip b{font-size:17px;font-weight:800}
+.hbtn{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 14px;cursor:pointer;white-space:nowrap}
+.hbtn:hover{border-color:var(--line2);background:var(--panel2)}
+.acc-select{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:4px 10px}
+.acc-select select{background:transparent;border:0;outline:0;font-weight:700;padding:4px}
+.acc-select option{background:var(--panel)}
+.pill{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:7px 14px;font-weight:700;border:1px solid var(--line);background:var(--panel)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--dim);flex:none}
+.st-running .dot{background:var(--ok);box-shadow:0 0 0 4px rgba(47,207,122,.18)}
+.st-idle .dot{background:var(--accent)}
+.st-paused .dot,.st-scheduled .dot{background:var(--warn)}
+.st-error .dot{background:var(--bad);box-shadow:0 0 0 4px rgba(255,93,108,.18)}
+
+/* ---------- tabs ---------- */
+nav.tabs{display:flex;gap:6px;padding:10px 14px;background:#101c3a;border-bottom:1px solid var(--line);overflow-x:auto}
+nav.tabs button{flex:1;min-width:110px;display:flex;flex-direction:column;align-items:center;gap:4px;background:transparent;border:1px solid transparent;border-radius:14px;padding:8px 10px;color:var(--muted);cursor:pointer;font-weight:700}
+nav.tabs button i{font-size:18px}
+nav.tabs button:hover{color:var(--text);background:var(--panel)}
+nav.tabs button.active{color:#071430;background:linear-gradient(180deg,#9cc8ff,#5a9df5);box-shadow:0 6px 18px rgba(79,155,255,.35)}
+.subtabs{display:flex;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px;margin-bottom:14px;width:max-content;max-width:100%;overflow-x:auto}
+.subtabs button{background:transparent;border:0;border-radius:999px;padding:6px 18px;color:var(--muted);cursor:pointer;font-weight:700}
+.subtabs button.active{background:var(--accent);color:#04122e}
+
+/* ---------- main ---------- */
+main{flex:1;overflow-y:auto;padding:16px 18px 24px}
+.page{display:none}
+.page.active{display:block;animation:fade .18s ease}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(2,minmax(0,1fr))}
+.grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.span2{grid-column:span 2}
+@media (max-width:1100px){.grid,.grid.three{grid-template-columns:1fr}.span2{grid-column:auto}.res-chips .chip{min-width:110px}}
+.card{background:linear-gradient(180deg,var(--panel),#142446);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.card-h{display:flex;align-items:center;gap:10px;padding:14px 16px 4px}
+.card-h h3{margin:0;font-size:17px;font-weight:800}
+.card-h .ico{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--panel2);color:var(--gold);flex:none}
+.card-h .tools{margin-inline-start:auto;display:flex;gap:8px}
+.card-sub{color:var(--muted);font-size:13px;padding:0 16px 10px;border-bottom:1px solid var(--line)}
+.card-b{padding:14px 16px}
+.row{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px dashed rgba(54,82,140,.45)}
+.row:last-child{border-bottom:0}
+.row .lbl{flex:1}
+.row .lbl small{display:block;color:var(--muted);font-size:12.5px}
+.note{color:var(--muted);font-size:12.5px;margin-top:8px}
+.note i{color:var(--accent2)}
+ul.feat{margin:6px 0 0;padding-inline-start:18px;color:var(--muted);font-size:13px;line-height:1.9}
+
+/* ---------- controls ---------- */
+.sw{position:relative;width:46px;height:26px;flex:none}
+.sw input{opacity:0;width:0;height:0}
+.sw span{position:absolute;inset:0;background:#2a3b62;border-radius:99px;transition:.15s;cursor:pointer;border:1px solid var(--line2)}
+.sw span:before{content:"";position:absolute;width:20px;height:20px;top:2px;inset-inline-start:2px;background:#cfd9ef;border-radius:50%;transition:.15s}
+.sw input:checked+span{background:var(--accent);border-color:var(--accent)}
+.sw input:checked+span:before{inset-inline-start:22px;background:#fff}
+input.in,select.in{background:#0f1b38;border:1px solid var(--line2);border-radius:10px;padding:7px 10px;outline:0;min-width:0}
+input.in:focus,select.in:focus{border-color:var(--accent)}
+input.in[type=number]{width:120px;text-align:center}
+input.in.wide{width:100%}
+.unit{color:var(--muted);font-size:13px;min-width:40px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:12px;padding:9px 16px;border:1px solid var(--line2);background:var(--panel2);cursor:pointer;font-weight:700;white-space:nowrap}
+.btn:hover{filter:brightness(1.12)}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:none}
+.btn.sm{padding:5px 10px;font-size:13px;border-radius:9px}
+.btn.primary{background:linear-gradient(180deg,#6fb0ff,#3d86ea);border-color:#3d86ea;color:#04122e}
+.btn.go{background:linear-gradient(180deg,#36d985,#1f9e5d);border-color:#1f9e5d;color:#03210f}
+.btn.stop{background:linear-gradient(180deg,#ff7a86,#d8414f);border-color:#d8414f;color:#2b0006}
+.btn.gold{background:linear-gradient(180deg,#ffd76a,#e0a526);border-color:#e0a526;color:#2b1a00}
+.btn.ghost{background:transparent}
+.choice{display:flex;align-items:center;gap:14px;width:100%;text-align:start;background:#13244a;border:1px solid var(--line2);border-radius:12px;padding:12px 14px;cursor:pointer}
+.choice:hover{border-color:var(--accent)}
+.choice .t{flex:1}
+.choice .t b{display:block}
+.choice .t small{color:var(--muted)}
+.days{display:flex;gap:6px;flex-wrap:wrap}
+.days label{cursor:pointer}
+.days input{display:none}
+.days span{display:inline-block;padding:6px 12px;border-radius:9px;border:1px solid var(--line2);background:#0f1b38;color:var(--muted);font-weight:700}
+.days input:checked+span{background:var(--accent);border-color:var(--accent);color:#04122e}
+
+/* ---------- priority editor ---------- */
+.prio{display:flex;flex-direction:column;gap:10px}
+.lvl{background:#0f1b38;border:1px solid var(--line2);border-radius:12px;padding:10px}
+.lvl-h{display:flex;align-items:center;gap:8px;margin-bottom:8px;color:var(--muted);font-weight:700;font-size:13px}
+.lvl-h .num-badge{background:var(--accent);color:#04122e;border-radius:8px;padding:0 9px;font-weight:800}
+.lvl-h .tools{margin-inline-start:auto;display:flex;gap:6px}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tag{display:inline-flex;align-items:center;gap:6px;background:#1d3463;border:1px solid var(--line2);border-radius:999px;padding:3px 6px 3px 12px;font-size:13.5px}
+body:not(.ltr) .tag{padding:3px 12px 3px 6px}
+.tag button{background:transparent;border:0;color:var(--muted);cursor:pointer;padding:0 4px}
+.tag button:hover{color:var(--bad)}
+.add-tag{display:flex;gap:6px;margin-top:8px}
+.add-tag input{flex:1}
+.ibtn{background:#1d3463;border:1px solid var(--line2);border-radius:8px;width:30px;height:28px;cursor:pointer;color:var(--muted)}
+.ibtn:hover{color:var(--text);border-color:var(--accent)}
+
+/* ---------- stats / tables / log ---------- */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stat{border-radius:12px;padding:10px 12px;background:#0f1b38;border:1px solid var(--line2)}
+.stat.g{border-color:rgba(255,200,61,.55)} .stat.e{border-color:rgba(224,92,255,.55)} .stat.d{border-color:rgba(154,163,184,.55)}
+.stat .h{display:flex;align-items:center;gap:8px;color:var(--muted);font-weight:700}
+.stat .h .ic{width:20px;height:20px}
+.stat .big{font-size:24px;font-weight:800;margin:2px 0}
+.stat.g .big{color:var(--gold)} .stat.e .big{color:var(--elixir)} .stat.d .big{color:#c9d1e3}
+.stat .sub{display:flex;justify-content:space-between;color:var(--muted);font-size:12.5px}
+.kpis{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:12px}
+.kpi b{font-size:26px;font-weight:800;display:block;line-height:1.1}
+.kpi span{color:var(--muted);font-size:12.5px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{color:var(--muted);font-weight:700;text-align:start;padding:8px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#142446}
+td{padding:8px;border-bottom:1px dashed rgba(54,82,140,.45)}
+.tablewrap{max-height:280px;overflow:auto}
+.c-g{color:var(--gold)} .c-e{color:var(--elixir)} .c-d{color:#c9d1e3}
+.log{background:#09122a;border:1px solid var(--line2);border-radius:12px;height:420px;overflow:auto;padding:10px 12px;font-size:13.5px;line-height:1.75}
+.log .ln{display:flex;gap:10px;border-bottom:1px solid rgba(42,65,115,.35);padding:2px 0}
+.log .tm{color:var(--dim);flex:none;font-size:12px;direction:ltr}
+.log .lv{flex:none;font-weight:800;font-size:12px;border-radius:6px;padding:0 6px;height:20px;margin-top:3px}
+.lv.INFO{background:rgba(79,155,255,.15);color:var(--accent2)}
+.lv.WARNING{background:rgba(255,176,32,.15);color:var(--warn)}
+.lv.ERROR,.lv.CRITICAL{background:rgba(255,93,108,.15);color:var(--bad)}
+.lv.DEBUG{background:rgba(147,166,204,.12);color:var(--muted)}
+.log .msg{white-space:pre-wrap;word-break:break-word}
+.log .orig{color:var(--dim);font-size:12px;direction:ltr;display:block}
+.log .trace{color:#7f8fb3;font-size:12px;direction:ltr;white-space:pre;padding-inline-start:16px}
+.empty{color:var(--muted);text-align:center;padding:30px 10px}
+.acc-row{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--line2);border-radius:12px;background:#0f1b38;margin-bottom:10px}
+.acc-row .name{font-weight:800;font-size:16px;flex:1}
+.acc-row .name small{display:block;color:var(--muted);font-weight:600;font-size:12.5px}
+
+/* ---------- footer ---------- */
+.banner{display:none;align-items:center;gap:10px;background:#3a2e10;border-top:1px solid #6b5216;color:#ffd77a;padding:9px 18px;font-weight:700}
+.banner.show{display:flex}
+footer{display:flex;align-items:center;gap:12px;padding:12px 18px;background:#0f1a36;border-top:1px solid var(--line)}
+footer .emu{display:flex;align-items:center;gap:8px;color:var(--muted)}
+footer .mid{display:flex;gap:10px;margin-inline:auto}
+footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
+
+/* ---------- modal / toast ---------- */
+.modal-bg{position:fixed;inset:0;background:rgba(5,10,25,.65);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;z-index:50}
+.modal-bg.show{display:flex}
+.modal{width:min(820px,92vw);background:linear-gradient(180deg,#1b2f5a,#142446);border:1px solid var(--line2);border-radius:18px;box-shadow:var(--shadow)}
+.modal-h{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line)}
+.modal-h h3{margin:0;font-size:20px}
+.modal-h .x{margin-inline-start:auto}
+.modal-b{padding:16px 20px}
+.modal-f{display:flex;gap:10px;align-items:center;padding:14px 20px;border-top:1px solid var(--line)}
+.opt-cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.opt{position:relative;border:2px solid var(--line2);border-radius:14px;padding:16px;background:#13244a;cursor:pointer;min-height:130px;display:flex;gap:12px}
+.opt.sel{border-color:var(--accent);background:#1b3466}
+.opt .chk{width:22px;height:22px;border-radius:50%;border:2px solid var(--line2);flex:none;display:grid;place-items:center}
+.opt.sel .chk{background:var(--accent);border-color:var(--accent);color:#04122e}
+.opt .t b{display:block;font-size:16px}
+.opt .t small{color:var(--muted)}
+.opt svg{margin-inline-start:auto;width:70px;height:70px;flex:none}
+#toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%) translateY(20px);background:#1d3463;border:1px solid var(--line2);border-radius:12px;padding:10px 18px;opacity:0;transition:.2s;z-index:60;font-weight:700;pointer-events:none;box-shadow:var(--shadow)}
+#toast.show{opacity:1;transform:translateX(-50%)}
+#toast.err{border-color:var(--bad);color:#ffc1c7}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#2a4173;border-radius:10px}
+::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+
+<!-- SVG icons (drawn for this app) -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <radialGradient id="gG" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#fff3b0"/><stop offset=".45" stop-color="#ffcc33"/><stop offset="1" stop-color="#c98a0c"/></radialGradient>
+    <radialGradient id="gE" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#ffd6ff"/><stop offset=".5" stop-color="#e05cff"/><stop offset="1" stop-color="#8e1fb3"/></radialGradient>
+    <radialGradient id="gD" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#8d93a8"/><stop offset=".5" stop-color="#2b2f3d"/><stop offset="1" stop-color="#0a0b10"/></radialGradient>
+    <symbol id="i-gold" viewBox="0 0 32 32"><circle cx="16" cy="16" r="13" fill="url(#gG)" stroke="#9a6608" stroke-width="1.5"/><circle cx="16" cy="16" r="8.5" fill="none" stroke="#b57b0e" stroke-width="1.5" opacity=".7"/></symbol>
+    <symbol id="i-elixir" viewBox="0 0 32 32"><path d="M16 3 C16 3 6 15 6 20.5 A10 10 0 0 0 26 20.5 C26 15 16 3 16 3Z" fill="url(#gE)" stroke="#7a1a99" stroke-width="1.5"/><ellipse cx="12" cy="18" rx="2.5" ry="4" fill="#fff" opacity=".45"/></symbol>
+    <symbol id="i-dark" viewBox="0 0 32 32"><path d="M16 3 C16 3 6 15 6 20.5 A10 10 0 0 0 26 20.5 C26 15 16 3 16 3Z" fill="url(#gD)" stroke="#000" stroke-width="1.5"/><ellipse cx="12" cy="18" rx="2.5" ry="4" fill="#fff" opacity=".25"/></symbol>
+    <symbol id="i-walls" viewBox="0 0 80 80"><g stroke="#3a2a10" stroke-width="2"><rect x="6" y="44" width="20" height="22" rx="3" fill="#b8a27a"/><rect x="30" y="34" width="20" height="32" rx="3" fill="#6f7c96"/><rect x="54" y="22" width="20" height="44" rx="3" fill="#e9b949"/></g><path d="M58 22 l6 -10 l6 10z" fill="#ffe27a" stroke="#3a2a10" stroke-width="2"/></symbol>
+    <symbol id="i-wall" viewBox="0 0 80 80"><g stroke="#1b2333" stroke-width="2"><rect x="22" y="26" width="36" height="42" rx="5" fill="#59647d"/><path d="M22 40 h36 M22 54 h36 M40 26 v14 M31 40 v14 M49 40 v14 M40 54 v14" fill="none"/></g><path d="M40 6 l12 14 h-24z" fill="#8fe3ff" stroke="#1b2333" stroke-width="2"/></symbol>
+  </defs>
+</svg>
+
+<header>
+  <div class="brand">
+    <img src="{{ url_for('static', filename='logo.svg') }}" alt="">
+    <div><h1>CoC Bot</h1><small id="pageTitle"></small></div>
+  </div>
+  <div class="res-chips">
+    <div class="chip"><svg class="ic"><use href="#i-gold"/></svg><div><label data-t="gold"></label><b class="num" id="resGold">—</b></div></div>
+    <div class="chip"><svg class="ic"><use href="#i-elixir"/></svg><div><label data-t="elixir"></label><b class="num" id="resElixir">—</b></div></div>
+    <div class="chip"><svg class="ic"><use href="#i-dark"/></svg><div><label data-t="dark"></label><b class="num" id="resDark">—</b></div></div>
+  </div>
+  <button class="hbtn" onclick="refreshAll(true)"><i class="fa-solid fa-rotate"></i><span data-t="refresh"></span></button>
+  <div class="acc-select"><i class="fa-solid fa-user-shield" style="color:var(--gold)"></i><select id="accSel" onchange="switchAccount(this.value)"></select></div>
+  <div class="pill" id="statusPill"><span class="dot"></span><span id="statusText"></span></div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="dash"><i class="fa-solid fa-gauge-high"></i><span data-t="tab_dash"></span></button>
+  <button data-tab="upg"><i class="fa-solid fa-hammer"></i><span data-t="tab_upg"></span></button>
+  <button data-tab="bb"><i class="fa-solid fa-chess-rook"></i><span data-t="tab_bb"></span></button>
+  <button data-tab="atk"><i class="fa-solid fa-khanda"></i><span data-t="tab_atk"></span></button>
+  <button data-tab="sch"><i class="fa-regular fa-calendar-check"></i><span data-t="tab_sch"></span></button>
+  <button data-tab="acc"><i class="fa-solid fa-users"></i><span data-t="tab_acc"></span></button>
+  <button data-tab="res"><i class="fa-solid fa-chart-line"></i><span data-t="tab_res"></span></button>
+  <button data-tab="set"><i class="fa-solid fa-gear"></i><span data-t="tab_set"></span></button>
+</nav>
+
+<main>
+<!-- ============================ DASHBOARD ============================ -->
+<section class="page" id="p-dash">
+  <div class="grid">
+    <div class="card">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-robot"></i></div><h3 data-t="bot_status"></h3></div>
+      <div class="card-sub" data-t="bot_status_sub"></div>
+      <div class="card-b">
+        <div class="row"><div class="lbl" data-t="account"></div><b id="dAcc"></b></div>
+        <div class="row"><div class="lbl" data-t="state"></div><b id="dState"></b></div>
+        <div class="row"><div class="lbl" data-t="last_cycle"></div><b id="dLast">—</b></div>
+        <div class="row"><div class="lbl" data-t="next_cycle"></div><b id="dNext">—</b></div>
+        <div class="row"><div class="lbl" data-t="schedule"></div><b id="dSched">—</b></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-pause"></i></div><h3 data-t="pause_title"></h3></div>
+      <div class="card-sub" data-t="pause_sub"></div>
+      <div class="card-b">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" onclick="pauseFor(5)">5 <span data-t="min"></span></button>
+          <button class="btn" onclick="pauseFor(15)">15 <span data-t="min"></span></button>
+          <button class="btn" onclick="pauseFor(30)">30 <span data-t="min"></span></button>
+          <button class="btn" onclick="pauseFor(60)">60 <span data-t="min"></span></button>
+        </div>
+        <div class="row" style="margin-top:8px"><div class="lbl" data-t="custom_minutes"></div><input class="in" type="number" min="1" id="pauseCustom" value="120"><button class="btn primary sm" onclick="pauseFor(+document.getElementById('pauseCustom').value)" data-t="pause"></button></div>
+        <div class="row"><div class="lbl"><span data-t="paused_until"></span> <b id="pauseLeft">—</b></div><button class="btn sm" onclick="pauseFor(0)" data-t="resume_now"></button></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-toggle-on"></i></div><h3 data-t="quick_tasks"></h3></div>
+      <div class="card-sub" data-t="quick_tasks_sub"></div>
+      <div class="card-b" id="quickTasks"></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-chart-simple"></i></div><h3 data-t="session_summary"></h3><div class="tools"><button class="btn sm" onclick="showTab('res')" data-t="details"></button></div></div>
+      <div class="card-sub" data-t="session_summary_sub"></div>
+      <div class="card-b">
+        <div class="kpis" id="dashKpis"></div>
+        <div id="dashLog" class="log" style="height:190px"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ UPGRADES ============================ -->
+<section class="page" id="p-upg">
+  <div class="subtabs" id="upgSub">
+    <button data-sub="walls" data-t="walls"></button>
+    <button data-sub="buildings" data-t="buildings"></button>
+    <button data-sub="lab" data-t="lab"></button>
+    <button data-sub="pets" data-t="pets"></button>
+  </div>
+
+  <div class="sub" data-sub="walls">
+    <div class="grid">
+      <div class="card">
+        <div class="card-h"><div class="ico"><i class="fa-solid fa-dungeon"></i></div><h3 data-t="wall_auto"></h3></div>
+        <div class="card-sub" data-t="wall_auto_sub"></div>
+        <div class="card-b">
+          <div class="row"><div class="lbl" data-t="wall_enabled"></div><label class="sw"><input type="checkbox" data-bind="walls.enabled"><span></span></label></div>
+          <div class="row"><div class="lbl"><span data-t="wall_farming"></span><small data-t="wall_farming_sub"></small></div><label class="sw"><input type="checkbox" data-bind="walls.during_farming"><span></span></label></div>
+          <div class="row" style="display:block"><div class="lbl" style="margin-bottom:8px" data-t="wall_types"></div>
+            <button class="choice" onclick="openWallModal()"><div class="t"><b data-t="choose_option"></b><small id="wallModeLbl"></small></div><svg width="70" height="44" id="wallModeIcon"><use href="#i-walls"/></svg><i class="fa-solid fa-chevron-left flip"></i></button>
+          </div>
+          <div class="row"><div class="lbl" data-t="run_every"></div><input class="in" type="number" min="1" data-bind="walls.every_cycles" data-type="int"><span class="unit" data-t="cycles"></span></div>
+          <div class="row"><div class="lbl" data-t="max_walls_run"></div><input class="in" type="number" min="0" data-bind="walls.max_per_run" data-type="int"><span class="unit" data-t="walls_unit"></span></div>
+          <div class="note"><i class="fa-solid fa-circle-info"></i> <span data-t="wall_note"></span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><div class="ico"><svg width="22" height="22"><use href="#i-gold"/></svg></div><h3 data-t="smart_budget"></h3></div>
+        <div class="card-sub" data-t="smart_budget_sub"></div>
+        <div class="card-b">
+          <div class="row"><div class="lbl" data-t="budget_enabled"></div><label class="sw"><input type="checkbox" data-bind="budget.enabled"><span></span></label></div>
+          <div class="row"><div class="lbl" style="display:flex;align-items:center;gap:8px"><svg width="20" height="20"><use href="#i-gold"/></svg><span data-t="keep_gold"></span></div><input class="in" type="number" min="0" step="10000" data-bind="budget.keep_gold" data-type="int"></div>
+          <div class="row"><div class="lbl" style="display:flex;align-items:center;gap:8px"><svg width="20" height="20"><use href="#i-elixir"/></svg><span data-t="keep_elixir"></span></div><input class="in" type="number" min="0" step="10000" data-bind="budget.keep_elixir" data-type="int"></div>
+          <ul class="feat"><li data-t="bf1"></li><li data-t="bf2"></li><li data-t="bf3"></li></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sub" data-sub="buildings">
+    <div class="grid">
+      <div class="card">
+        <div class="card-h"><div class="ico"><i class="fa-solid fa-house-chimney"></i></div><h3 data-t="home_upgrades"></h3></div>
+        <div class="card-sub" data-t="home_upgrades_sub"></div>
+        <div class="card-b">
+          <div class="row"><div class="lbl" data-t="t_home_base"></div><label class="sw"><input type="checkbox" data-bind="tasks.home_base"><span></span></label></div>
+          <div class="row"><div class="lbl" data-t="t_heroes"></div><label class="sw"><input type="checkbox" data-bind="tasks.heroes"><span></span></label></div>
+          <div class="row"><div class="lbl" data-t="t_builder_apprentice"></div><label class="sw"><input type="checkbox" data-bind="tasks.builder_apprentice"><span></span></label></div>
+          <div class="row"><div class="lbl"><span data-t="use_priority"></span><small data-t="use_priority_sub"></small></div><label class="sw"><input type="checkbox" data-bind="tasks.home_base_priority"><span></span></label></div>
+          <div class="row"><div class="lbl" data-t="max_upgrades_cycle"></div><input class="in" type="number" min="1" data-bind="upgrades.max_per_cycle" data-type="int"></div>
+          <div class="row"><div class="lbl"><span data-t="open_builders"></span><small data-t="open_builders_sub"></small></div><input class="in" type="number" min="0" data-bind="upgrades.open_home_builders" data-type="int"></div>
+          <div class="row"><div class="lbl" data-t="from_top"></div><label class="sw"><input type="checkbox" data-bind="upgrades.start_from_menu_top"><span></span></label></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><div class="ico"><i class="fa-solid fa-list-ol"></i></div><h3 data-t="priority_order"></h3></div>
+        <div class="card-sub" data-t="priority_sub"></div>
+        <div class="card-b"><div class="prio" data-prio="home_base" data-vocab="buildings/home-village,heroes"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sub" data-sub="lab">
+    <div class="grid">
+      <div class="card">
+        <div class="card-h"><div class="ico"><i class="fa-solid fa-flask"></i></div><h3 data-t="lab"></h3></div>
+        <div class="card-sub" data-t="lab_sub"></div>
+        <div class="card-b">
+          <div class="row"><div class="lbl" data-t="t_home_lab"></div><label class="sw"><input type="checkbox" data-bind="tasks.home_lab"><span></span></label></div>
+          <div class="row"><div class="lbl" data-t="t_lab_assistant"></div><label class="sw"><input type="checkbox" data-bind="tasks.lab_assistant"><span></span></label></div>
+          <div class="row"><div class="lbl"><span data-t="use_priority"></span><small data-t="use_priority_sub"></small></div><label class="sw"><input type="checkbox" data-bind="tasks.home_lab_priority"><span></span></label></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><div class="ico"><i class="fa-solid fa-list-ol"></i></div><h3 data-t="priority_order"></h3></div>
+        <div class="card-sub" data-t="priority_sub"></div>
+        <div class="card-b"><div class="prio" data-prio="home_lab" data-vocab="troops,spells,siege-machines"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sub" data-sub="pets">
+    <div class="grid">
+      <div class="card">
+        <div class="card-h"><div class="ico"><i class="fa-solid fa-paw"></i></div><h3 data-t="pets"></h3></div>
+        <div class="card-sub" data-t="pets_sub"></div>
+        <div class="card-b">
+          <div class="row"><div class="lbl" data-t="t_pet_house"></div><label class="sw"><input type="checkbox" data-bind="tasks.pet_house"><span></span></label></div>
+          <div class="row"><div class="lbl"><span data-t="use_priority"></span><small data-t="use_priority_sub"></small></div><label class="sw"><input type="checkbox" data-bind="tasks.pet_house_priority"><span></span></label></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><div class="ico"><i class="fa-solid fa-list-ol"></i></div><h3 data-t="priority_order"></h3></div>
+        <div class="card-sub" data-t="priority_sub"></div>
+        <div class="card-b"><div class="prio" data-prio="pet_house" data-vocab="pets"></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ BUILDER BASE ============================ -->
+<section class="page" id="p-bb">
+  <div class="grid">
+    <div class="card">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-chess-rook"></i></div><h3 data-t="bb_upgrades"></h3></div>
+      <div class="card-sub" data-t="bb_upgrades_sub"></div>
+      <div class="card-b">
+        <div class="row"><div class="lbl" data-t="t_builder_base"></div><label class="sw"><input type="checkbox" data-bind="tasks.builder_base"><span></span></label></div>
+        <div class="row"><div class="lbl" data-t="t_builder_lab"></div><label class="sw"><input type="checkbox" data-bind="tasks.builder_lab"><span></span></label></div>
+        <div class="row"><div class="lbl"><span data-t="use_priority_bb"></span><small data-t="use_priority_sub"></small></div><label class="sw"><input type="checkbox" data-bind="tasks.builder_base_priority"><span></span></label></div>
+        <div class="row"><div class="lbl"><span data-t="use_priority_bl"></span><small data-t="use_priority_sub"></small></div><label class="sw"><input type="checkbox" data-bind="tasks.builder_lab_priority"><span></span></label></div>
+        <div class="row"><div class="lbl"><span data-t="open_builders"></span><small data-t="open_builders_sub"></small></div><input class="in" type="number" min="0" data-bind="upgrades.open_builder_builders" data-type="int"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-list-ol"></i></div><h3 data-t="bb_priority"></h3></div>
+      <div class="card-sub" data-t="priority_sub"></div>
+      <div class="card-b"><div class="prio" data-prio="builder_base" data-vocab="buildings/builder-base"></div></div>
+    </div>
+    <div class="card span2">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-flask"></i></div><h3 data-t="bl_priority"></h3></div>
+      <div class="card-sub" data-t="priority_sub"></div>
+      <div class="card-b"><div class="prio" data-prio="builder_lab" data-vocab="troops"></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ ATTACK / FARM ============================ -->
+<section class="page" id="p-atk">
+  <div class="grid">
+    <div class="card">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-khanda"></i></div><h3 data-t="attack_title"></h3></div>
+      <div class="card-sub" data-t="attack_sub"></div>
+      <div class="card-b">
+        <div class="row"><div class="lbl" data-t="t_home_attacks"></div><label class="sw"><input type="checkbox" data-bind="tasks.home_attacks"><span></span></label></div>
+        <div class="row"><div class="lbl"><span data-t="home_attacks_n"></span><small data-t="home_attacks_n_sub"></small></div><input class="in" type="number" min="1" max="50" data-bind="attack.home_attacks_per_cycle" data-type="int"><span class="unit" data-t="attacks_unit"></span></div>
+        <div class="row"><div class="lbl" data-t="t_builder_attacks"></div><label class="sw"><input type="checkbox" data-bind="tasks.builder_attacks"><span></span></label></div>
+        <div class="row"><div class="lbl" data-t="builder_attacks_n"></div><input class="in" type="number" min="1" max="50" data-bind="attack.builder_attacks_per_cycle" data-type="int"><span class="unit" data-t="attacks_unit"></span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-people-group"></i></div><h3 data-t="army_title"></h3></div>
+      <div class="card-sub" data-t="army_sub"></div>
+      <div class="card-b">
+        <div class="row"><div class="lbl"><span data-t="deploy_time"></span><small data-t="deploy_time_sub"></small></div><input class="in" type="number" min="0.5" step="0.5" data-bind="attack.troop_deploy_time" data-type="float"><span class="unit" data-t="seconds"></span></div>
+        <div class="row"><div class="lbl"><span data-t="slot_range"></span><small data-t="slot_range_sub"></small></div>
+          <input class="in" type="number" min="0" style="width:80px" data-bind="attack.slot_first" data-type="int"><span class="unit" data-t="to"></span><input class="in" type="number" min="0" style="width:80px" data-bind="attack.slot_last" data-type="int"></div>
+        <div class="row"><div class="lbl" data-t="exclude_cc"></div><label class="sw"><input type="checkbox" data-bind="attack.exclude_clan_troops"><span></span></label></div>
+      </div>
+    </div>
+    <div class="card span2">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-seedling"></i></div><h3 data-t="farm_title"></h3></div>
+      <div class="card-sub" data-t="farm_sub"></div>
+      <div class="card-b">
+        <div class="row"><div class="lbl"><span data-t="wall_farming"></span><small data-t="wall_farming_sub"></small></div><label class="sw"><input type="checkbox" data-bind="walls.during_farming"><span></span></label></div>
+        <div class="note"><i class="fa-solid fa-circle-info"></i> <span data-t="farm_note"></span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ SCHEDULE ============================ -->
+<section class="page" id="p-sch">
+  <div class="grid">
+    <div class="card">
+      <div class="card-h"><div class="ico"><i class="fa-regular fa-clock"></i></div><h3 data-t="sch_title"></h3></div>
+      <div class="card-sub" data-t="sch_sub"></div>
+      <div class="card-b">
+        <div class="row"><div class="lbl" data-t="sch_enabled"></div><label class="sw"><input type="checkbox" data-bind="schedule.enabled"><span></span></label></div>
+        <div class="row"><div class="lbl" data-t="from"></div><input class="in" type="time" data-bind="schedule.start"></div>
+        <div class="row"><div class="lbl"><span data-t="until"></span><small data-t="until_sub"></small></div><input class="in" type="time" data-bind="schedule.end"></div>
+        <div class="row" style="display:block"><div class="lbl" style="margin-bottom:8px" data-t="days"></div><div class="days" id="daysBox"></div></div>
+        <div class="note" id="schedNow"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-hourglass-half"></i></div><h3 data-t="interval_title"></h3></div>
+      <div class="card-sub" data-t="interval_sub"></div>
+      <div class="card-b">
+        <div class="row"><div class="lbl" data-t="check_interval"></div><input class="in" type="number" min="1" data-bind="schedule.check_interval" data-type="float"><span class="unit" data-t="minutes"></span></div>
+        <div class="note"><i class="fa-solid fa-circle-info"></i> <span data-t="interval_note"></span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ ACCOUNTS ============================ -->
+<section class="page" id="p-acc">
+  <div class="grid">
+    <div class="card">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-users"></i></div><h3 data-t="acc_title"></h3>
+        <div class="tools"><button class="btn go sm" onclick="startAll()"><i class="fa-solid fa-play"></i><span data-t="start_all"></span></button><button class="btn stop sm" onclick="stopAll()"><i class="fa-solid fa-stop"></i><span data-t="stop_all"></span></button></div></div>
+      <div class="card-sub" data-t="acc_sub"></div>
+      <div class="card-b" id="accList"></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-user-plus"></i></div><h3 data-t="add_acc"></h3></div>
+      <div class="card-sub" data-t="add_acc_sub"></div>
+      <div class="card-b">
+        <div class="row"><input class="in wide" id="newAcc" placeholder="alt1" maxlength="30"><button class="btn primary" onclick="addAccount()"><i class="fa-solid fa-plus"></i><span data-t="add"></span></button></div>
+        <ul class="feat"><li data-t="acc_h1"></li><li data-t="acc_h2"></li><li data-t="acc_h3"></li></ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ RESULTS & LOG ============================ -->
+<section class="page" id="p-res">
+  <div class="grid">
+    <div class="card">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-chart-line"></i></div><h3 data-t="session_results"></h3>
+        <div class="tools"><button class="btn sm" onclick="loadStats()"><i class="fa-solid fa-rotate"></i><span data-t="refresh"></span></button><button class="btn sm" onclick="resetStats()"><i class="fa-solid fa-eraser"></i><span data-t="reset"></span></button></div></div>
+      <div class="card-sub" id="sessSince"></div>
+      <div class="card-b">
+        <div class="kpis" id="resKpis"></div>
+        <div class="stats" id="resStats"></div>
+        <div class="tablewrap" style="margin-top:12px">
+          <table><thead><tr><th>#</th><th data-t="time"></th><th data-t="base"></th><th data-t="gold"></th><th data-t="elixir"></th><th data-t="dark"></th></tr></thead><tbody id="atkTable"></tbody></table>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-terminal"></i></div><h3 data-t="bot_log"></h3>
+        <div class="tools"><button class="btn sm" onclick="copyLog()"><i class="fa-regular fa-copy"></i><span data-t="copy"></span></button><button class="btn sm" onclick="clearLogView()"><i class="fa-solid fa-broom"></i><span data-t="clear"></span></button></div></div>
+      <div class="card-sub" data-t="bot_log_sub"></div>
+      <div class="card-b">
+        <div class="row" style="padding-top:0">
+          <input class="in wide" id="logSearch" data-tph="search_log" oninput="renderLog()">
+          <select class="in" id="logLevel" style="min-width:140px" onchange="renderLog()"><option value="" data-t="all_levels"></option><option value="INFO" data-t="lv_info"></option><option value="WARNING" data-t="lv_warn"></option><option value="ERROR" data-t="lv_err"></option></select>
+          <label class="sw" title="original"><input type="checkbox" id="logOrig" onchange="renderLog()"><span></span></label><small class="unit" data-t="show_original"></small>
+        </div>
+        <div class="log" id="logBox"></div>
+      </div>
+    </div>
+    <div class="card span2">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-arrow-up-right-dots"></i></div><h3 data-t="recent_upgrades"></h3></div>
+      <div class="card-b"><div class="tablewrap"><table><thead><tr><th data-t="time"></th><th data-t="kind"></th><th data-t="name"></th></tr></thead><tbody id="upgTable"></tbody></table></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ SETTINGS ============================ -->
+<section class="page" id="p-set">
+  <div class="grid">
+    <div class="card">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-sliders"></i></div><h3 data-t="general"></h3></div>
+      <div class="card-sub" data-t="general_sub"></div>
+      <div class="card-b">
+        <div class="row"><div class="lbl"><i class="fa-solid fa-globe"></i> <span data-t="language"></span></div><select class="in" data-app="language" onchange="setLang(this.value)"><option value="ar">العربية</option><option value="en">English</option></select></div>
+        <div class="row"><div class="lbl"><span data-t="emulator"></span><small data-t="emulator_sub"></small></div><select class="in" data-app="emulator"><option value="bluestacks">BlueStacks</option><option value="mumu">MuMu Player</option></select></div>
+        <div class="row"><div class="lbl" data-t="auto_emulator"></div><label class="sw"><input type="checkbox" data-app="auto_start_emulator"><span></span></label></div>
+        <div class="row"><div class="lbl"><span data-t="suspend_emulator"></span><small data-t="suspend_emulator_sub"></small></div><label class="sw"><input type="checkbox" data-app="suspend_emulator_on_idle"><span></span></label></div>
+        <div class="row" id="autostartRow"><div class="lbl"><i class="fa-brands fa-windows"></i> <span data-t="start_windows"></span></div><label class="sw"><input type="checkbox" data-app="start_with_windows"><span></span></label></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-cloud-arrow-down"></i></div><h3 data-t="updates"></h3></div>
+      <div class="card-sub" data-t="updates_sub"></div>
+      <div class="card-b">
+        <div class="row"><div class="lbl" data-t="current_version"></div><b class="num">{{ version }}</b></div>
+        <div class="row"><div class="lbl" data-t="latest_version"></div><b class="num" id="latestVer">—</b></div>
+        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn" onclick="checkUpdate()"><i class="fa-solid fa-magnifying-glass"></i><span data-t="check_updates"></span></button><button class="btn gold" id="applyUpd" onclick="applyUpdate()" disabled><i class="fa-solid fa-download"></i><span data-t="update_now"></span></button></div>
+        <div class="note" id="updNote"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="ico"><i class="fa-brands fa-telegram"></i></div><h3 data-t="notifications"></h3></div>
+      <div class="card-sub" data-t="notifications_sub"></div>
+      <div class="card-b"><div class="row"><div class="lbl" data-t="telegram_token"></div><input class="in" style="width:60%" type="password" data-app="telegram_bot_token" placeholder="123456:ABC..."></div></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-eye"></i></div><h3 data-t="ocr_title"></h3></div>
+      <div class="card-sub" data-t="ocr_sub"></div>
+      <div class="card-b"><div class="row"><div class="lbl" data-t="groq_key"></div><input class="in" style="width:60%" type="password" data-app="groq_api_key" placeholder="gsk_..."></div></div>
+    </div>
+  </div>
+</section>
+</main>
+
+<div class="banner" id="unsaved"><i class="fa-solid fa-triangle-exclamation"></i><span data-t="unsaved"></span></div>
+<footer>
+  <div class="emu"><i class="fa-solid fa-desktop"></i><span data-t="emulator"></span>
+    <select class="in" data-app="emulator"><option value="bluestacks">BlueStacks</option><option value="mumu">MuMu Player</option></select></div>
+  <div class="pill" id="footStatus"><span class="dot"></span><span id="footStatusText"></span></div>
+  <div class="mid">
+    <button class="btn go" id="btnStart" onclick="startBot()"><i class="fa-solid fa-play"></i><span data-t="start_bot"></span></button>
+    <button class="btn stop" id="btnStop" onclick="stopBot()"><i class="fa-solid fa-stop"></i><span data-t="stop"></span></button>
+  </div>
+  <button class="btn ghost" onclick="discardChanges()" title=""><i class="fa-solid fa-rotate-left"></i></button>
+  <button class="btn primary" id="btnSave" onclick="saveAll()"><i class="fa-solid fa-floppy-disk"></i><span data-t="save_settings"></span></button>
+</footer>
+
+<!-- wall type modal -->
+<div class="modal-bg" id="wallModal">
+  <div class="modal">
+    <div class="modal-h"><h3 data-t="wall_types"></h3><button class="btn sm ghost x" onclick="closeWallModal()"><i class="fa-solid fa-xmark"></i></button></div>
+    <div class="modal-b">
+      <p class="note" style="margin-top:0" data-t="wall_modal_note"></p>
+      <div class="opt-cards">
+        <div class="opt" data-mode="multiple" onclick="pickWallMode('multiple')"><div class="chk"><i class="fa-solid fa-check"></i></div><div class="t"><b data-t="wall_multi"></b><small data-t="wall_multi_sub"></small></div><svg><use href="#i-walls"/></svg></div>
+        <div class="opt" data-mode="single" onclick="pickWallMode('single')"><div class="chk"><i class="fa-solid fa-check"></i></div><div class="t"><b data-t="wall_single"></b><small data-t="wall_single_sub"></small></div><svg><use href="#i-wall"/></svg></div>
+      </div>
+    </div>
+    <div class="modal-f"><button class="btn primary" onclick="applyWallMode()"><i class="fa-solid fa-check"></i><span data-t="apply_choice"></span></button><button class="btn" onclick="closeWallModal()" data-t="cancel"></button></div>
+  </div>
+</div>
+<div id="toast"></div>
+<datalist id="dl-prio"></datalist>
+
+<script>
+/* =====================================================================
+   Translations
+   ===================================================================== */
+const I18N = {
+ar:{
+ gold:"الذهب", elixir:"الإكسير", dark:"إكسير الظلام", refresh:"تحديث",
+ tab_dash:"لوحة التحكم", tab_upg:"الترقيات", tab_bb:"قاعدة البنّاء", tab_atk:"الهجوم والفارم", tab_sch:"الجدول الزمني", tab_acc:"الحسابات", tab_res:"النتائج والسجل", tab_set:"الإعدادات",
+ sub_dash:"نظرة عامة على البوت", sub_upg:"ترقيات القرية", sub_bb:"ترقيات قاعدة البنّاء", sub_atk:"الهجوم وجمع الموارد", sub_sch:"أوقات تشغيل البوت", sub_acc:"إدارة الحسابات", sub_res:"نتائج ونشاط البوت", sub_set:"إعدادات البرنامج",
+ st_stopped:"متوقف", st_starting:"جاري التشغيل…", st_running:"يعمل الآن", st_idle:"في الانتظار", st_paused:"إيقاف مؤقت", st_scheduled:"خارج الجدول", st_error:"حدث خطأ",
+ bot_status:"حالة البوت", bot_status_sub:"تتحدث تلقائيًا كل بضع ثوانٍ", account:"الحساب", state:"الحالة", last_cycle:"آخر دورة انتهت", next_cycle:"الدورة القادمة تقريبًا", schedule:"الجدول الزمني",
+ pause_title:"إيقاف مؤقت", pause_sub:"أوقف البوت مؤقتًا وأنت بتلعب بنفسك، وهيرجع يشتغل لوحده", min:"د", custom_minutes:"مدة مخصصة (دقائق)", pause:"إيقاف", paused_until:"متوقف مؤقتًا لمدة:", resume_now:"استئناف الآن",
+ quick_tasks:"المهام السريعة", quick_tasks_sub:"شغّل أو أوقف المهام الأساسية بضغطة (احفظ بعدها)", session_summary:"ملخص الجلسة", session_summary_sub:"آخر النتائج وآخر سطور السجل", details:"التفاصيل",
+ walls:"الجدران", buildings:"المباني", lab:"المختبر", pets:"الحيوانات",
+ wall_auto:"أتمتة الجدار", wall_auto_sub:"متى وكم عدد الجدران التي يرقيها البوت", wall_enabled:"تفعيل ترقية الجدران", wall_farming:"الترقية أثناء الزراعة", wall_farming_sub:"يصرف الغنيمة على الجدران بين كل هجمة والتانية",
+ wall_types:"أنواع الجدار", choose_option:"اختر الخيار", run_every:"تشغيل كل", cycles:"دورات", max_walls_run:"الحد الأقصى لكل تشغيل", walls_unit:"جدران",
+ wall_note:"تتوقف المهمة تلقائيًا عند عدم توفر موارد كافية. الجدران تتأخر عن المباني في الأولوية.",
+ wall_multi:"مستويات جدار متعددة", wall_multi_sub:"يطور عدة مستويات من الجدران.", wall_single:"مستوى جدار واحد", wall_single_sub:"يطور مستوى واحدًا من الجدران.",
+ wall_modal_note:"يغير هذا الاختيار هذا الحقل فقط. احفظ الإعدادات لتطبيقها على البوت.", apply_choice:"تطبيق الاختيار", cancel:"إلغاء",
+ smart_budget:"الميزانية الذكية", smart_budget_sub:"احتفظ بقدر من الموارد ولا تصرفه على الترقيات", budget_enabled:"تفعيل الميزانية الذكية", keep_gold:"احتفظ بالذهب أعلى من", keep_elixir:"احتفظ بالإكسير أعلى من",
+ bf1:"يقرأ رصيدك الفعلي من الشاشة قبل كل ترقية", bf2:"يوقف الترقيات لما الذهب والإكسير ينزلوا تحت الحد", bf3:"لو مقدرش يقرأ الرصيد بيكمّل عادي ومش بيوقف",
+ home_upgrades:"ترقيات القرية الرئيسية", home_upgrades_sub:"المباني والأبطال والبنّاء المساعد", t_home_base:"ترقية المباني", t_heroes:"ترقية الأبطال", t_builder_apprentice:"تعيين البنّاء المتدرب",
+ use_priority:"الترقية حسب الأولوية", use_priority_sub:"لو اتقفل، هيرقّي أي حاجة متاحة عشوائيًا", max_upgrades_cycle:"أقصى عدد ترقيات في الدورة", open_builders:"بنّائين فاضيين", open_builders_sub:"عدد البنّائين اللي يسيبهم من غير شغل", from_top:"ابدأ من أعلى قائمة الترقيات",
+ priority_order:"ترتيب الأولوية", priority_sub:"المستوى الأول يترقى الأول. جوه كل مستوى البوت بيختار عشوائيًا. لو مفيش حاجة متاحة هيرقّي أي حاجة.",
+ level:"المستوى", add_level:"إضافة مستوى", add_item_ph:"اكتب الاسم بالإنجليزي زي ما في اللعبة…", add:"إضافة",
+ lab_sub:"أبحاث الجنود والتعاويذ", t_home_lab:"ترقية المختبر", t_lab_assistant:"تعيين مساعد المختبر", pets_sub:"ترقيات بيت الحيوانات", t_pet_house:"ترقية الحيوانات",
+ bb_upgrades:"ترقيات قاعدة البنّاء", bb_upgrades_sub:"المباني ومختبر النجوم", t_builder_base:"ترقية مباني قاعدة البنّاء", t_builder_lab:"ترقية مختبر النجوم", use_priority_bb:"مباني قاعدة البنّاء حسب الأولوية", use_priority_bl:"مختبر النجوم حسب الأولوية", bb_priority:"أولوية مباني قاعدة البنّاء", bl_priority:"أولوية مختبر النجوم",
+ attack_title:"الهجوم", attack_sub:"عدد الهجمات في كل دورة", t_home_attacks:"هجوم القرية الرئيسية", home_attacks_n:"هجمات القرية الرئيسية لكل دورة", home_attacks_n_sub:"أكتر من هجمة = فارم أسرع", t_builder_attacks:"هجوم قاعدة البنّاء", builder_attacks_n:"هجمات قاعدة البنّاء لكل دورة", attacks_unit:"هجمات",
+ army_title:"الجيش والإنزال", army_sub:"طريقة إنزال الجنود", deploy_time:"وقت إنزال كل نوع جنود", deploy_time_sub:"الوقت اللي البوت ماسك فيه على الشاشة لكل نوع", seconds:"ثانية", slot_range:"خانات الجيش المستخدمة", slot_range_sub:"من خانة لخانة (أول خانة = 0)", to:"إلى", exclude_cc:"عدم استخدام جنود القلعة",
+ farm_title:"الفارم", farm_sub:"جمع الموارد وصرفها", farm_note:"قريبًا: تخطّي القرى قليلة الغنيمة تلقائيًا (محتاج صور من شاشة البحث عن خصم).",
+ sch_title:"الجدول الزمني", sch_sub:"البوت يشتغل بس في الأوقات دي", sch_enabled:"تفعيل الجدول الزمني", from:"من الساعة", until:"إلى الساعة", until_sub:"لو وقت النهاية أصغر من البداية يبقى بيعدّي نص الليل", days:"الأيام",
+ interval_title:"الفاصل بين الدورات", interval_sub:"البوت بيفتح اللعبة كل فترة ويعمل كل المهام", check_interval:"كل", minutes:"دقيقة", interval_note:"مدة أقل = شغل أكتر، بس استهلاك أعلى للجهاز واحتمال أكبر إن اللعبة تلاحظ.",
+ sched_now_in:"الوقت الحالي داخل الجدول — البوت يقدر يشتغل", sched_now_out:"الوقت الحالي خارج الجدول — البوت هيستنى", sched_off:"الجدول متقفل — البوت شغال طول الوقت",
+ d0:"الإثنين", d1:"الثلاثاء", d2:"الأربعاء", d3:"الخميس", d4:"الجمعة", d5:"السبت", d6:"الأحد",
+ acc_title:"الحسابات", acc_sub:"كل حساب = نسخة محاكي مستقلة بنفس الاسم", start_all:"تشغيل الكل", stop_all:"إيقاف الكل", add_acc:"إضافة حساب", add_acc_sub:"اسم الحساب لازم يطابق اسم نسخة المحاكي بالظبط",
+ acc_h1:"اعمل نسخة جديدة من Multi-Instance Manager وسمّيها بنفس الاسم", acc_h2:"ثبّت اللعبة وسجّل دخول في النسخة الجديدة", acc_h3:"كل حساب ليه إعداداته ونتائجه وسجله لوحده",
+ start:"تشغيل", stop:"إيقاف", remove:"حذف", open:"فتح", running_since:"شغال من", not_running:"غير مشغّل",
+ session_results:"نتائج الجلسة", reset:"تصفير", time:"الوقت", base:"القرية", home:"الرئيسية", builder:"البنّاء", attacks:"هجمات", upgrades_k:"ترقيات", walls_k:"جدران", cycles_k:"دورات", avg_cycle:"متوسط الدورة",
+ per_attack:"لكل هجمة", per_hour:"في الساعة", since:"الجلسة بدأت", no_attacks:"لسه مفيش هجمات مسجّلة",
+ bot_log:"سجل البوت", bot_log_sub:"كل خطوات البوت والأخطاء لحظة بلحظة", copy:"نسخ", clear:"مسح العرض", search_log:"ابحث في السجل…", all_levels:"كل المستويات", lv_info:"معلومات", lv_warn:"تحذيرات", lv_err:"أخطاء", show_original:"النص الأصلي",
+ recent_upgrades:"آخر الترقيات", kind:"النوع", name:"الاسم", k_building:"مبنى", k_wall:"جدار", k_lab:"مختبر", k_pet:"حيوان", k_builder_base:"قاعدة البنّاء", k_builder_lab:"مختبر النجوم", no_log:"مفيش سجل لسه — شغّل البوت",
+ general:"عام", general_sub:"اللغة والمحاكي وتشغيل البرنامج", language:"اللغة", emulator:"المحاكي", emulator_sub:"يتطبّق عند تشغيل البوت المرة الجاية", auto_emulator:"فتح المحاكي تلقائيًا", suspend_emulator:"تجميد المحاكي وقت الانتظار", suspend_emulator_sub:"يقلل استهلاك الجهاز بين الدورات", start_windows:"الفتح مع Windows",
+ updates:"التحديثات", updates_sub:"حدّث البوت لآخر نسخة بضغطة (إعداداتك محفوظة)", current_version:"الإصدار الحالي", latest_version:"آخر إصدار", check_updates:"التحقق من التحديثات", update_now:"تحديث الآن",
+ upd_none:"إنت على آخر إصدار ✓", upd_avail:"فيه تحديث جديد متاح!", upd_done:"تم التحديث ({n} ملف). اقفل البرنامج وافتحه تاني.", upd_err:"فشل التحقق: ",
+ notifications:"الإشعارات", notifications_sub:"ابعت إشعارات للتليجرام عند الترقيات والأخطاء", telegram_token:"توكن بوت التليجرام", ocr_title:"قراءة النصوص (OCR)", ocr_sub:"اختياري: مفتاح Groq لقراءة أسرع وأدق", groq_key:"مفتاح Groq API",
+ unsaved:"تغييرات غير محفوظة. اضغط على حفظ الإعدادات لتطبيقها على البوت.", start_bot:"بدء البوت", save_settings:"حفظ الإعدادات",
+ saved:"تم حفظ الإعدادات ✓", save_err:"فشل الحفظ", started:"تم تشغيل البوت", stopped_t:"تم إيقاف البوت", paused_t:"تم الإيقاف المؤقت", resumed:"تم الاستئناف", need_running:"شغّل البوت الأول",
+ confirm_remove:"حذف الحساب من القائمة؟ (الإعدادات والنتائج هتفضل محفوظة)", confirm_reset:"تصفير نتائج الجلسة؟", copied:"تم النسخ", added:"تمت الإضافة — احفظ الإعدادات", invalid_name:"اسم غير صالح (حروف إنجليزي وأرقام و - _ فقط)",
+ ago:"منذ", sec:"ث", mn:"د", hr:"س", now:"الآن", res_updated:"آخر قراءة للموارد", never:"لا يوجد",
+},
+en:{
+ gold:"Gold", elixir:"Elixir", dark:"Dark Elixir", refresh:"Refresh",
+ tab_dash:"Dashboard", tab_upg:"Upgrades", tab_bb:"Builder Base", tab_atk:"Attack & Farm", tab_sch:"Schedule", tab_acc:"Accounts", tab_res:"Results & Log", tab_set:"Settings",
+ sub_dash:"Bot overview", sub_upg:"Village upgrades", sub_bb:"Builder base upgrades", sub_atk:"Attacking & farming", sub_sch:"When the bot runs", sub_acc:"Manage accounts", sub_res:"Bot results & activity", sub_set:"App settings",
+ st_stopped:"Stopped", st_starting:"Starting…", st_running:"Running", st_idle:"Waiting", st_paused:"Paused", st_scheduled:"Outside schedule", st_error:"Error",
+ bot_status:"Bot status", bot_status_sub:"Updates automatically every few seconds", account:"Account", state:"State", last_cycle:"Last cycle finished", next_cycle:"Next cycle (approx.)", schedule:"Schedule",
+ pause_title:"Pause", pause_sub:"Pause the bot while you play yourself; it resumes on its own", min:"min", custom_minutes:"Custom (minutes)", pause:"Pause", paused_until:"Paused for:", resume_now:"Resume now",
+ quick_tasks:"Quick tasks", quick_tasks_sub:"Toggle the main tasks (then save)", session_summary:"Session summary", session_summary_sub:"Latest results and log lines", details:"Details",
+ walls:"Walls", buildings:"Buildings", lab:"Laboratory", pets:"Pets",
+ wall_auto:"Wall automation", wall_auto_sub:"When and how many walls the bot upgrades", wall_enabled:"Upgrade walls", wall_farming:"Upgrade while farming", wall_farming_sub:"Spend loot on walls between attacks",
+ wall_types:"Wall types", choose_option:"Choose option", run_every:"Run every", cycles:"cycles", max_walls_run:"Max per run", walls_unit:"walls",
+ wall_note:"Stops automatically when resources run out. Walls come after buildings in priority.",
+ wall_multi:"Multiple wall levels", wall_multi_sub:"Upgrades several wall levels.", wall_single:"Single wall level", wall_single_sub:"Upgrades one wall level.",
+ wall_modal_note:"This only changes this field. Save settings to apply it to the bot.", apply_choice:"Apply", cancel:"Cancel",
+ smart_budget:"Smart budget", smart_budget_sub:"Keep a reserve of resources unspent", budget_enabled:"Enable smart budget", keep_gold:"Keep gold above", keep_elixir:"Keep elixir above",
+ bf1:"Reads your actual storage from the screen before each upgrade", bf2:"Stops upgrading when gold and elixir drop below the reserve", bf3:"If the reading fails it keeps going instead of blocking",
+ home_upgrades:"Home village upgrades", home_upgrades_sub:"Buildings, heroes and builder apprentice", t_home_base:"Upgrade buildings", t_heroes:"Upgrade heroes", t_builder_apprentice:"Assign builder apprentice",
+ use_priority:"Upgrade by priority", use_priority_sub:"When off, any available upgrade is picked at random", max_upgrades_cycle:"Max upgrades per cycle", open_builders:"Idle builders", open_builders_sub:"Builders to leave free", from_top:"Start from top of upgrade list",
+ priority_order:"Priority order", priority_sub:"Level 1 goes first. Inside a level the bot picks randomly. If nothing is available, any upgrade is used.",
+ level:"Level", add_level:"Add level", add_item_ph:"Type the in-game English name…", add:"Add",
+ lab_sub:"Troop & spell research", t_home_lab:"Laboratory upgrades", t_lab_assistant:"Assign lab assistant", pets_sub:"Pet house upgrades", t_pet_house:"Pet upgrades",
+ bb_upgrades:"Builder base upgrades", bb_upgrades_sub:"Buildings and star laboratory", t_builder_base:"Builder base buildings", t_builder_lab:"Star laboratory", use_priority_bb:"Builder base by priority", use_priority_bl:"Star lab by priority", bb_priority:"Builder base priority", bl_priority:"Star laboratory priority",
+ attack_title:"Attacks", attack_sub:"Attacks per cycle", t_home_attacks:"Home village attacks", home_attacks_n:"Home attacks per cycle", home_attacks_n_sub:"More attacks = faster farming", t_builder_attacks:"Builder base attacks", builder_attacks_n:"Builder attacks per cycle", attacks_unit:"attacks",
+ army_title:"Army & deployment", army_sub:"How troops are deployed", deploy_time:"Deploy time per troop type", deploy_time_sub:"How long the bot holds per troop type", seconds:"sec", slot_range:"Army slots used", slot_range_sub:"From slot to slot (first = 0)", to:"to", exclude_cc:"Don't use clan castle troops",
+ farm_title:"Farming", farm_sub:"Collecting and spending resources", farm_note:"Coming soon: skip low-loot bases (needs screenshots of the search screen).",
+ sch_title:"Schedule", sch_sub:"The bot only runs during these times", sch_enabled:"Enable schedule", from:"From", until:"Until", until_sub:"If end is before start the window crosses midnight", days:"Days",
+ interval_title:"Cycle interval", interval_sub:"The bot opens the game periodically and runs every task", check_interval:"Every", minutes:"minutes", interval_note:"Shorter = more work, but more load and more noticeable.",
+ sched_now_in:"Now is inside the schedule — the bot may run", sched_now_out:"Now is outside the schedule — the bot waits", sched_off:"Schedule off — the bot runs all the time",
+ d0:"Mon", d1:"Tue", d2:"Wed", d3:"Thu", d4:"Fri", d5:"Sat", d6:"Sun",
+ acc_title:"Accounts", acc_sub:"Each account = an emulator instance with the same name", start_all:"Start all", stop_all:"Stop all", add_acc:"Add account", add_acc_sub:"The name must match the emulator instance name exactly",
+ acc_h1:"Create an instance in Multi-Instance Manager with the same name", acc_h2:"Install the game and log in on it", acc_h3:"Each account has its own settings, results and log",
+ start:"Start", stop:"Stop", remove:"Remove", open:"Open", running_since:"Running since", not_running:"Not running",
+ session_results:"Session results", reset:"Reset", time:"Time", base:"Base", home:"Home", builder:"Builder", attacks:"Attacks", upgrades_k:"Upgrades", walls_k:"Walls", cycles_k:"Cycles", avg_cycle:"Avg cycle",
+ per_attack:"per attack", per_hour:"per hour", since:"Session started", no_attacks:"No attacks recorded yet",
+ bot_log:"Bot log", bot_log_sub:"Every bot step and error in real time", copy:"Copy", clear:"Clear view", search_log:"Search the log…", all_levels:"All levels", lv_info:"Info", lv_warn:"Warnings", lv_err:"Errors", show_original:"Original text",
+ recent_upgrades:"Recent upgrades", kind:"Type", name:"Name", k_building:"Building", k_wall:"Wall", k_lab:"Lab", k_pet:"Pet", k_builder_base:"Builder base", k_builder_lab:"Star lab", no_log:"No log yet — start the bot",
+ general:"General", general_sub:"Language, emulator and startup", language:"Language", emulator:"Emulator", emulator_sub:"Applies the next time the bot starts", auto_emulator:"Start emulator automatically", suspend_emulator:"Suspend emulator while idle", suspend_emulator_sub:"Reduces load between cycles", start_windows:"Start with Windows",
+ updates:"Updates", updates_sub:"Update the bot in one click (your settings are kept)", current_version:"Current version", latest_version:"Latest version", check_updates:"Check for updates", update_now:"Update now",
+ upd_none:"You're on the latest version ✓", upd_avail:"A new update is available!", upd_done:"Updated ({n} files). Close and reopen the app.", upd_err:"Check failed: ",
+ notifications:"Notifications", notifications_sub:"Send Telegram notifications for upgrades and errors", telegram_token:"Telegram bot token", ocr_title:"Text reading (OCR)", ocr_sub:"Optional: Groq key for faster, more accurate reading", groq_key:"Groq API key",
+ unsaved:"Unsaved changes. Click Save settings to apply them to the bot.", start_bot:"Start bot", save_settings:"Save settings",
+ saved:"Settings saved ✓", save_err:"Save failed", started:"Bot started", stopped_t:"Bot stopped", paused_t:"Paused", resumed:"Resumed", need_running:"Start the bot first",
+ confirm_remove:"Remove this account from the list? (settings and results are kept)", confirm_reset:"Reset session results?", copied:"Copied", added:"Added — save settings", invalid_name:"Invalid name (English letters, digits, - _ only)",
+ ago:"ago", sec:"s", mn:"m", hr:"h", now:"now", res_updated:"Last resource reading", never:"never",
+}};
+
+/* Log message translations (regex on the original English text) */
+const LOG_AR = [
+ [/^Starting CoC\.\.\./, "جاري فتح اللعبة…"],
+ [/^CoC started/, "تم فتح اللعبة ✓"],
+ [/^Stopping CoC\.\.\./, "جاري إغلاق اللعبة…"],
+ [/^Upgrading home base/, "جاري ترقية القرية الرئيسية"],
+ [/^Upgrading builder base/, "جاري ترقية قاعدة البنّاء"],
+ [/^Attacking home base \((\d+)\/(\d+)\)/, "جاري الهجوم على القرية الرئيسية ($1 من $2)"],
+ [/^Attacking home base/, "جاري الهجوم على القرية الرئيسية"],
+ [/^Attacking builder base \((\d+)\/(\d+)\)/, "جاري الهجوم في قاعدة البنّاء ($1 من $2)"],
+ [/^Attacking builder base/, "جاري الهجوم في قاعدة البنّاء"],
+ [/^Cycle finished in (\d+)s/, "انتهت الدورة في $1 ثانية ✓"],
+ [/^Connected to ADB\./, "تم الاتصال بالمحاكي ✓"],
+ [/^Failed to connect to ADB\. Retrying\.\.\./, "فشل الاتصال بالمحاكي — جاري إعادة المحاولة…"],
+ [/^Failed to connect to ADB\./, "فشل الاتصال بالمحاكي"],
+ [/^ADB device setup failed: (.*)/, "فشل تجهيز المحاكي: $1"],
+ [/^Installing minitouch.*/, "جاري تثبيت أداة اللمس على المحاكي…"],
+ [/^minitouch installed\./, "تم تثبيت أداة اللمس ✓"],
+ [/^Resources: gold=(\S+) elixir=(\S+) dark=(\S+)/, "الموارد: ذهب $1 — إكسير $2 — إكسير ظلام $3"],
+ [/^Attack \(home\) loot: gold=(\S+) elixir=(\S+) dark=(\S+)/, "غنيمة الهجوم: ذهب $1 — إكسير $2 — إكسير ظلام $3"],
+ [/^Attack \(builder\) loot: gold=(\S+) elixir=(\S+) dark=(\S+)/, "غنيمة هجوم البنّاء: ذهب $1 — إكسير $2"],
+ [/^Budget reserve reached.*/, "وصلنا لحد الميزانية — تم إيقاف الترقيات في الدورة دي"],
+ [/^Not in home base\. Aborting home attack\./, "البوت مش في القرية الرئيسية — تم إلغاء الهجوم"],
+ [/^Not in builder base\. Aborting builder attack\./, "البوت مش في قاعدة البنّاء — تم إلغاء الهجوم"],
+ [/^Failed to click find a match button/, "مقدرش يلاقي زرار البحث عن خصم"],
+ [/^Failed to confirm attack/, "مقدرش يأكد الهجوم"],
+ [/^Failed to search for attack/, "البحث عن خصم أخد وقت طويل"],
+ [/^Started upgrading (.*)/, "بدأ ترقية $1"],
+ [/^Encountered an error while attempting to upgrade (.*)\. Retrying\.\.\./, "حصل خطأ أثناء ترقية $1 — جاري إعادة المحاولة"],
+ [/^Upgrader\.home_lab_available: Failed to get home lab availability/, "مقدرش يعرف حالة المختبر"],
+ [/^Bluestacks already running\./, "BlueStacks شغال بالفعل"],
+ [/^CoC_Bot\.run \(error #(\d+) in a row\):/, "خطأ في الدورة (رقم $1 على التوالي):"],
+ [/^Requesting accessibility permissions/, "جاري طلب الصلاحيات…"],
+];
+
+/* =====================================================================
+   State
+   ===================================================================== */
+let LANG = "ar";
+let S = null, savedS = "";          // account settings (edited copy + saved json)
+let APP = null, savedAPP = "";      // app settings
+let STATE = {accounts:[], current_time:Date.now()/1000};
+let CUR = null;                     // current account id
+let STATS = null, LOG = [];
+let VOCAB = {};
+let curTab = "dash", curSub = "walls";
+let wallPick = "multiple";
+
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const t = k => (I18N[LANG] && I18N[LANG][k]) || I18N.en[k] || k;
+const fmt = n => (n === null || n === undefined || isNaN(n)) ? "—" : Number(n).toLocaleString("en-US");
+
+async function api(url, opts){
+  const o = opts || {};
+  if (o.body && typeof o.body !== "string") { o.body = JSON.stringify(o.body); o.headers = {"Content-Type":"application/json"}; }
+  const r = await fetch(url, o);
+  return r.json();
+}
+function toast(msg, err){
+  const el = $("#toast"); el.textContent = msg; el.className = "show" + (err ? " err" : "");
+  clearTimeout(el._t); el._t = setTimeout(() => el.className = "", 2600);
+}
+function getPath(obj, path){ return path.split(".").reduce((o,k) => o == null ? o : o[k], obj); }
+function setPath(obj, path, val){ const ks = path.split("."); const last = ks.pop(); ks.reduce((o,k) => o[k], obj)[last] = val; }
+
+/* =====================================================================
+   i18n
+   ===================================================================== */
+function applyLang(){
+  document.documentElement.lang = LANG;
+  document.documentElement.dir = LANG === "ar" ? "rtl" : "ltr";
+  document.body.classList.toggle("ltr", LANG !== "ar");
+  $$("[data-t]").forEach(el => el.textContent = t(el.dataset.t));
+  $$("[data-tph]").forEach(el => el.placeholder = t(el.dataset.tph));
+  $$(".flip").forEach(el => el.className = "fa-solid flip " + (LANG === "ar" ? "fa-chevron-left" : "fa-chevron-right"));
+  buildDays(); buildQuickTasks(); renderPrio(); updateWallLabel();
+  $("#pageTitle").textContent = t("sub_" + curTab);
+  renderState(); renderStats(); renderLog(); updateSchedNote();
+}
+function setLang(v){ LANG = v; applyLang(); markDirty(); }
+
+/* =====================================================================
+   Tabs
+   ===================================================================== */
+function showTab(name){
+  curTab = name;
+  $$("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  $$(".page").forEach(p => p.classList.toggle("active", p.id === "p-" + name));
+  $("#pageTitle").textContent = t("sub_" + name);
+  try { localStorage.setItem("tab", name); } catch(e) {}
+  if (name === "res") { loadStats(); loadLog(); }
+}
+function showSub(name){
+  curSub = name;
+  $$("#upgSub button").forEach(b => b.classList.toggle("active", b.dataset.sub === name));
+  $$("#p-upg .sub").forEach(s => s.style.display = s.dataset.sub === name ? "" : "none");
+}
+$$("#tabs button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+$$("#upgSub button").forEach(b => b.onclick = () => showSub(b.dataset.sub));
+
+/* =====================================================================
+   Binding settings <-> inputs
+   ===================================================================== */
+function fillInputs(){
+  $$("[data-bind]").forEach(el => {
+    const v = getPath(S, el.dataset.bind);
+    if (el.type === "checkbox") el.checked = !!v; else el.value = v ?? "";
+  });
+  $$("[data-app]").forEach(el => {
+    const v = APP[el.dataset.app];
+    if (el.type === "checkbox") el.checked = !!v; else el.value = v ?? "";
+  });
+  buildDays(); buildQuickTasks(); renderPrio(); updateWallLabel(); updateSchedNote();
+}
+document.addEventListener("input", e => onEdit(e.target));
+document.addEventListener("change", e => onEdit(e.target));
+function onEdit(el){
+  if (el.dataset.bind && S) {
+    let v = el.type === "checkbox" ? el.checked : el.value;
+    if (el.dataset.type === "int") v = parseInt(v || "0", 10) || 0;
+    if (el.dataset.type === "float") v = parseFloat(v || "0") || 0;
+    setPath(S, el.dataset.bind, v);
+    // keep duplicated controls (e.g. wall farming on two pages) in sync
+    $$(`[data-bind="${el.dataset.bind}"]`).forEach(o => { if (o !== el) { if (o.type === "checkbox") o.checked = el.checked; else o.value = el.value; } });
+    if (el.dataset.bind.startsWith("tasks.")) buildQuickTasks();
+    if (el.dataset.bind.startsWith("schedule.")) updateSchedNote();
+    markDirty();
+  } else if (el.dataset.app && APP) {
+    APP[el.dataset.app] = el.type === "checkbox" ? el.checked : el.value;
+    $$(`[data-app="${el.dataset.app}"]`).forEach(o => { if (o !== el) { if (o.type === "checkbox") o.checked = el.checked; else o.value = el.value; } });
+    markDirty();
+  }
+}
+function isDirty(){ return S && APP && (JSON.stringify(S) !== savedS || JSON.stringify(APP) !== savedAPP); }
+function markDirty(){ $("#unsaved").classList.toggle("show", !!isDirty()); }
+
+/* quick task toggles on the dashboard */
+const QUICK = ["home_base","heroes","walls","home_lab","pet_house","home_attacks","builder_base","builder_lab","builder_attacks"];
+function buildQuickTasks(){
+  if (!S) return;
+  const box = $("#quickTasks"); box.innerHTML = "";
+  QUICK.forEach(k => {
+    const path = k === "walls" ? "walls.enabled" : "tasks." + k;
+    const label = k === "walls" ? t("wall_enabled") : t("t_" + k);
+    const row = document.createElement("div"); row.className = "row";
+    row.innerHTML = `<div class="lbl">${label}</div><label class="sw"><input type="checkbox" data-bind="${path}" ${getPath(S, path) ? "checked" : ""}><span></span></label>`;
+    box.appendChild(row);
+  });
+}
+function buildDays(){
+  if (!S) return;
+  const box = $("#daysBox"); box.innerHTML = "";
+  // show Saturday first for Arabic users
+  const order = LANG === "ar" ? [5,6,0,1,2,3,4] : [0,1,2,3,4,5,6];
+  order.forEach(d => {
+    const l = document.createElement("label");
+    l.innerHTML = `<input type="checkbox" ${S.schedule.days.includes(d) ? "checked" : ""}><span>${t("d" + d)}</span>`;
+    l.querySelector("input").onchange = e => {
+      const set = new Set(S.schedule.days);
+      e.target.checked ? set.add(d) : set.delete(d);
+      S.schedule.days = [...set].sort();
+      markDirty(); updateSchedNote();
+    };
+    box.appendChild(l);
+  });
+}
+function inSchedule(now){
+  const sc = S.schedule; if (!sc.enabled) return true;
+  const m = s => { const [h, mi] = (s || "0:0").split(":").map(Number); return h * 60 + mi; };
+  const cur = now.getHours() * 60 + now.getMinutes(), a = m(sc.start), b = m(sc.end);
+  const day = (now.getDay() + 6) % 7; // JS Sunday=0 -> Monday=0
+  if (a <= b) return sc.days.includes(day) && cur >= a && cur <= b;
+  if (cur >= a) return sc.days.includes(day);
+  return cur <= b && sc.days.includes((day + 6) % 7);
+}
+function updateSchedNote(){
+  if (!S) return;
+  const el = $("#schedNow");
+  if (!S.schedule.enabled) { el.innerHTML = `<i class="fa-solid fa-infinity"></i> ${t("sched_off")}`; return; }
+  const ok = inSchedule(new Date());
+  el.innerHTML = `<i class="fa-solid ${ok ? "fa-circle-check" : "fa-moon"}" style="color:${ok ? "var(--ok)" : "var(--warn)"}"></i> ${t(ok ? "sched_now_in" : "sched_now_out")}`;
+}
+
+/* =====================================================================
+   Priority editor
+   ===================================================================== */
+function vocabFor(cats){
+  const out = new Set();
+  cats.split(",").forEach(c => (VOCAB[c] || []).forEach(n => out.add(n)));
+  return [...out].sort();
+}
+function renderPrio(){
+  if (!S) return;
+  $$(".prio").forEach(box => {
+    const key = box.dataset.prio;
+    const levels = S.priorities[key];
+    const listId = "dl-" + key;
+    box.innerHTML = "";
+    let dl = document.getElementById(listId);
+    if (!dl) { dl = document.createElement("datalist"); dl.id = listId; document.body.appendChild(dl); }
+    dl.innerHTML = vocabFor(box.dataset.vocab).map(n => `<option value="${n}">`).join("");
+    levels.forEach((lvl, i) => {
+      const div = document.createElement("div"); div.className = "lvl";
+      div.innerHTML = `
+        <div class="lvl-h"><span class="num-badge">${i + 1}</span><span>${t("level")} ${i + 1}</span>
+          <div class="tools">
+            <button class="ibtn" title="up" ${i === 0 ? "disabled" : ""} data-a="up"><i class="fa-solid fa-arrow-up"></i></button>
+            <button class="ibtn" title="down" ${i === levels.length - 1 ? "disabled" : ""} data-a="down"><i class="fa-solid fa-arrow-down"></i></button>
+            <button class="ibtn" title="delete" data-a="del"><i class="fa-solid fa-trash"></i></button>
+          </div></div>
+        <div class="tags">${lvl.map((n, j) => `<span class="tag">${n}<button data-j="${j}"><i class="fa-solid fa-xmark"></i></button></span>`).join("")}</div>
+        <div class="add-tag"><input class="in" list="${listId}" placeholder="${t("add_item_ph")}"><button class="btn sm primary"><i class="fa-solid fa-plus"></i></button></div>`;
+      div.querySelectorAll(".tag button").forEach(b => b.onclick = () => { lvl.splice(+b.dataset.j, 1); markDirty(); renderPrio(); });
+      div.querySelector('[data-a="up"]').onclick = () => { [levels[i - 1], levels[i]] = [levels[i], levels[i - 1]]; markDirty(); renderPrio(); };
+      div.querySelector('[data-a="down"]').onclick = () => { [levels[i + 1], levels[i]] = [levels[i], levels[i + 1]]; markDirty(); renderPrio(); };
+      div.querySelector('[data-a="del"]').onclick = () => { levels.splice(i, 1); markDirty(); renderPrio(); };
+      const inp = div.querySelector(".add-tag input");
+      const add = () => { const v = inp.value.trim(); if (!v) return; if (!lvl.includes(v)) lvl.push(v); markDirty(); renderPrio(); };
+      div.querySelector(".add-tag button").onclick = add;
+      inp.onkeydown = e => { if (e.key === "Enter") add(); };
+      box.appendChild(div);
+    });
+    const addL = document.createElement("button"); addL.className = "btn sm"; addL.innerHTML = `<i class="fa-solid fa-layer-group"></i> ${t("add_level")}`;
+    addL.onclick = () => { levels.push([]); markDirty(); renderPrio(); };
+    box.appendChild(addL);
+  });
+}
+
+/* =====================================================================
+   Wall mode modal
+   ===================================================================== */
+function updateWallLabel(){
+  if (!S) return;
+  $("#wallModeLbl").textContent = t(S.walls.mode === "single" ? "wall_single" : "wall_multi");
+  $("#wallModeIcon").innerHTML = `<use href="#${S.walls.mode === "single" ? "i-wall" : "i-walls"}"/>`;
+}
+function openWallModal(){ wallPick = S.walls.mode; pickWallMode(wallPick); $("#wallModal").classList.add("show"); }
+function closeWallModal(){ $("#wallModal").classList.remove("show"); }
+function pickWallMode(m){ wallPick = m; $$(".opt").forEach(o => o.classList.toggle("sel", o.dataset.mode === m)); }
+function applyWallMode(){ S.walls.mode = wallPick; updateWallLabel(); markDirty(); closeWallModal(); }
+
+/* =====================================================================
+   Accounts / bot control
+   ===================================================================== */
+function acc(id){ return STATE.accounts.find(a => a.id === id) || {id, running:false, status:"stopped"}; }
+function statusKey(a){
+  if (!a || !a.running) return "stopped";
+  if (a.status === "paused") return "paused";
+  if (a.status === "scheduled") return "scheduled";
+  if (a.status === "error") return "error";
+  if (a.status === "now") return "running";
+  if (a.status === "starting" || a.status === "") return "starting";
+  if (!isNaN(parseFloat(a.status))) return "idle";
+  return "running";
+}
+function ago(ts){
+  if (!ts) return "—";
+  let s = Math.max(0, Math.round(STATE.current_time - ts));
+  if (s < 10) return t("now");
+  const parts = s >= 3600 ? `${Math.floor(s / 3600)} ${t("hr")} ${Math.floor(s % 3600 / 60)} ${t("mn")}` : s >= 60 ? `${Math.floor(s / 60)} ${t("mn")}` : `${s} ${t("sec")}`;
+  return LANG === "ar" ? `${t("ago")} ${parts}` : `${parts} ${t("ago")}`;
+}
+function dur(s){
+  s = Math.max(0, Math.round(s));
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+  return (h ? `${h} ${t("hr")} ` : "") + (m || h ? `${m} ${t("mn")} ` : "") + `${x} ${t("sec")}`;
+}
+function renderState(){
+  const sel = $("#accSel");
+  const ids = APP ? APP.accounts : STATE.accounts.map(a => a.id);
+  if (sel.options.length !== ids.length || [...sel.options].some((o, i) => o.value !== ids[i])) {
+    sel.innerHTML = ids.map(i => `<option value="${i}">${i}</option>`).join("");
+  }
+  if (CUR) sel.value = CUR;
+  const a = acc(CUR), k = statusKey(a);
+  [$("#statusPill"), $("#footStatus")].forEach(p => p.className = "pill st-" + k);
+  $("#statusText").textContent = t("st_" + k);
+  $("#footStatusText").textContent = t("st_" + k);
+  $("#dAcc").textContent = CUR || "—";
+  $("#dState").textContent = t("st_" + k);
+  const last = !isNaN(parseFloat(a.status)) ? parseFloat(a.status) : null;
+  $("#dLast").textContent = last ? ago(last) : (k === "running" ? t("now") : "—");
+  $("#dNext").textContent = (last && S) ? (() => { const r = last + S.schedule.check_interval * 60 - STATE.current_time; return r > 0 ? dur(r) : t("now"); })() : "—";
+  $("#dSched").textContent = S ? (S.schedule.enabled ? `${S.schedule.start} – ${S.schedule.end}` : t("sched_off")) : "—";
+  $("#pauseLeft").textContent = (a.end_time && a.end_time > STATE.current_time) ? dur(a.end_time - STATE.current_time) : "—";
+  $("#btnStart").disabled = !!a.running;
+  $("#btnStop").disabled = !a.running;
+  renderAccounts();
+}
+function renderAccounts(){
+  const box = $("#accList"); if (!APP) return;
+  box.innerHTML = "";
+  APP.accounts.forEach(id => {
+    const a = acc(id), k = statusKey(a);
+    const row = document.createElement("div"); row.className = "acc-row";
+    row.innerHTML = `<i class="fa-solid fa-user-shield" style="color:var(--gold);font-size:20px"></i>
+      <div class="name">${id}<small>${a.running ? `${t("running_since")} ${ago(a.started_at)}` : t("not_running")}</small></div>
+      <span class="pill st-${k}"><span class="dot"></span>${t("st_" + k)}</span>
+      ${a.running ? `<button class="btn stop sm" data-a="stop"><i class="fa-solid fa-stop"></i>${t("stop")}</button>` : `<button class="btn go sm" data-a="start"><i class="fa-solid fa-play"></i>${t("start")}</button>`}
+      <button class="btn sm" data-a="open"><i class="fa-solid fa-sliders"></i>${t("open")}</button>
+      <button class="btn sm ghost" data-a="rm" title="${t("remove")}"><i class="fa-solid fa-trash"></i></button>`;
+    row.querySelector('[data-a="open"]').onclick = () => { switchAccount(id); showTab("dash"); };
+    const s = row.querySelector('[data-a="start"]'); if (s) s.onclick = () => accAction(id, "start");
+    const st = row.querySelector('[data-a="stop"]'); if (st) st.onclick = () => accAction(id, "stop");
+    row.querySelector('[data-a="rm"]').onclick = () => removeAccount(id);
+    box.appendChild(row);
+  });
+}
+async function accAction(id, action, body){
+  const r = await api(`/api/account/${encodeURIComponent(id)}/${action}`, {method:"POST", body: body || {}});
+  if (!r.ok) { toast(t(r.error === "not_running" ? "need_running" : "save_err"), true); return; }
+  if (action === "start") toast(t("started"));
+  if (action === "stop") toast(t("stopped_t"));
+  await loadState();
+}
+async function startBot(){
+  if (isDirty()) await saveAll(true); // never start with stale settings
+  accAction(CUR, "start");
+}
+function stopBot(){ accAction(CUR, "stop"); }
+async function startAll(){ if (isDirty()) await saveAll(true); for (const id of APP.accounts) if (!acc(id).running) await accAction(id, "start"); }
+async function stopAll(){ for (const id of APP.accounts) if (acc(id).running) await accAction(id, "stop"); }
+async function pauseFor(m){
+  if (!acc(CUR).running) { toast(t("need_running"), true); return; }
+  await accAction(CUR, "pause", {minutes: m || 0});
+  toast(t(m ? "paused_t" : "resumed"));
+}
+function addAccount(){
+  const v = $("#newAcc").value.trim();
+  if (!/^[A-Za-z0-9_-]{1,30}$/.test(v)) { toast(t("invalid_name"), true); return; }
+  if (!APP.accounts.includes(v)) APP.accounts.push(v);
+  $("#newAcc").value = ""; markDirty(); renderState(); toast(t("added"));
+}
+function removeAccount(id){
+  if (APP.accounts.length <= 1 || !confirm(t("confirm_remove"))) return;
+  if (acc(id).running) accAction(id, "stop");
+  APP.accounts = APP.accounts.filter(a => a !== id);
+  if (CUR === id) switchAccount(APP.accounts[0]);
+  markDirty(); renderState();
+}
+async function switchAccount(id){
+  if (isDirty() && JSON.stringify(S) !== savedS && !confirm(t("unsaved"))) { $("#accSel").value = CUR; return; }
+  CUR = id;
+  try { localStorage.setItem("acc", id); } catch(e) {}
+  await loadSettings(); renderState(); loadStats(); loadLog();
+}
+
+/* =====================================================================
+   Save / load
+   ===================================================================== */
+async function loadSettings(){
+  S = await api(`/api/settings/${encodeURIComponent(CUR)}`);
+  savedS = JSON.stringify(S);
+  fillInputs(); markDirty();
+}
+async function loadApp(){
+  APP = await api("/api/app_settings");
+  delete APP.platform_hint;
+  const plat = APP.platform; delete APP.platform;
+  savedAPP = JSON.stringify(APP);
+  $("#autostartRow").style.display = plat === "win32" ? "" : "none";
+  LANG = APP.language || "ar";
+}
+async function saveAll(silent){
+  try {
+    const saved = await api(`/api/settings/${encodeURIComponent(CUR)}`, {method:"POST", body:S});
+    S = saved; savedS = JSON.stringify(S);
+    const app = await api("/api/app_settings", {method:"POST", body:APP});
+    const warn = app.warning; delete app.warning; delete app.platform;
+    APP = app; savedAPP = JSON.stringify(APP);
+    fillInputs(); markDirty(); renderState();
+    if (warn) toast(warn, true); else if (!silent) toast(t("saved"));
+  } catch(e) { toast(t("save_err"), true); }
+}
+async function discardChanges(){ await loadApp(); await loadSettings(); applyLang(); }
+async function loadState(){
+  try { STATE = await api("/api/state"); renderState(); } catch(e) {}
+}
+
+/* =====================================================================
+   Stats / log
+   ===================================================================== */
+async function loadStats(){
+  if (!CUR) return;
+  try { STATS = await api(`/api/stats/${encodeURIComponent(CUR)}`); renderStats(); } catch(e) {}
+}
+function statCard(cls, icon, key){
+  return `<div class="stat ${cls}"><div class="h"><svg class="ic"><use href="#${icon}"/></svg>${t(key)}</div>
+    <div class="big num">${fmt(STATS.totals[key])}</div>
+    <div class="sub"><span>${t("per_attack")}</span><b class="num">${fmt(STATS.per_attack[key])}</b></div>
+    <div class="sub"><span>${t("per_hour")}</span><b class="num">${fmt(STATS.per_hour[key])}</b></div></div>`;
+}
+function renderStats(){
+  if (!STATS) return;
+  const r = STATS.resources || {};
+  $("#resGold").textContent = fmt(r.gold); $("#resElixir").textContent = fmt(r.elixir); $("#resDark").textContent = fmt(r.dark);
+  $$(".res-chips .chip").forEach(c => c.title = `${t("res_updated")}: ${STATS.resources_time ? ago(STATS.resources_time) : t("never")}`);
+  const kpis = `
+    <div class="kpi"><b class="num">${STATS.attacks}</b><span>${t("attacks")}</span></div>
+    <div class="kpi"><b class="num">${STATS.upgrades}</b><span>${t("upgrades_k")}</span></div>
+    <div class="kpi"><b class="num">${STATS.walls}</b><span>${t("walls_k")}</span></div>
+    <div class="kpi"><b class="num">${STATS.cycles}</b><span>${t("cycles_k")}</span></div>
+    <div class="kpi"><b>${STATS.avg_cycle_seconds ? dur(STATS.avg_cycle_seconds) : "—"}</b><span>${t("avg_cycle")}</span></div>`;
+  $("#resKpis").innerHTML = kpis; $("#dashKpis").innerHTML = kpis;
+  $("#resStats").innerHTML = statCard("g", "i-gold", "gold") + statCard("e", "i-elixir", "elixir") + statCard("d", "i-dark", "dark");
+  $("#sessSince").textContent = `${t("since")}: ${new Date(STATS.session_start * 1000).toLocaleString(LANG === "ar" ? "ar-EG" : "en-US")}`;
+  const atk = STATS.recent_attacks;
+  $("#atkTable").innerHTML = atk.length ? atk.map((e, i) => `<tr><td class="num">${atk.length - i}</td><td class="num">${new Date(e.t * 1000).toLocaleTimeString("en-GB")}</td><td>${t(e.base === "builder" ? "builder" : "home")}</td><td class="num c-g">${fmt(e.gold)}</td><td class="num c-e">${fmt(e.elixir)}</td><td class="num c-d">${fmt(e.dark)}</td></tr>`).join("") : `<tr><td colspan="6" class="empty">${t("no_attacks")}</td></tr>`;
+  const up = STATS.recent_upgrades;
+  $("#upgTable").innerHTML = up.length ? up.map(e => `<tr><td class="num">${new Date(e.t * 1000).toLocaleString("en-GB")}</td><td>${t("k_" + e.kind)}</td><td>${e.name || ""}</td></tr>`).join("") : `<tr><td colspan="3" class="empty">—</td></tr>`;
+}
+async function resetStats(){ if (!confirm(t("confirm_reset"))) return; await api(`/api/stats/${encodeURIComponent(CUR)}/reset`, {method:"POST", body:{}}); loadStats(); }
+async function loadLog(){
+  if (!CUR) return;
+  try { const r = await api(`/api/log/${encodeURIComponent(CUR)}?n=600`); LOG = r.lines; renderLog(); } catch(e) {}
+}
+let logCleared = 0;
+function parseLog(lines){
+  const out = [];
+  lines.forEach(line => {
+    const m = line.match(/^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) \| (\w+)\s*\| (.*)$/);
+    if (m) out.push({time:m[1].slice(11), level:m[2], msg:m[3], trace:[]});
+    else if (out.length) out[out.length - 1].trace.push(line);
+  });
+  return out;
+}
+function translateMsg(msg){
+  if (LANG !== "ar") return msg;
+  for (const [re, ar] of LOG_AR) if (re.test(msg)) return msg.replace(re, ar);
+  return msg;
+}
+const esc = s => s.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+function logHtml(entries, withTrace){
+  if (!entries.length) return `<div class="empty">${t("no_log")}</div>`;
+  const lvName = {INFO:t("lv_info"), WARNING:t("lv_warn"), ERROR:t("lv_err"), CRITICAL:t("lv_err"), DEBUG:"debug"};
+  const orig = $("#logOrig").checked;
+  return entries.map(e => {
+    const tr = translateMsg(e.msg);
+    return `<div class="ln"><span class="tm">${e.time}</span><span class="lv ${e.level}">${LANG === "ar" ? (lvName[e.level] || e.level) : e.level}</span>
+      <span class="msg">${esc(tr)}${orig && tr !== e.msg ? `<span class="orig">${esc(e.msg)}</span>` : ""}${withTrace && e.trace.length ? `<div class="trace">${esc(e.trace.filter(x => x.trim()).slice(-12).join("\n"))}</div>` : ""}</span></div>`;
+  }).join("");
+}
+function renderLog(){
+  const all = parseLog(LOG);
+  const q = ($("#logSearch").value || "").toLowerCase(), lv = $("#logLevel").value;
+  const entries = all.filter((e, i) => i >= logCleared && (!lv || e.level === lv || (lv === "ERROR" && e.level === "CRITICAL")) && (!q || e.msg.toLowerCase().includes(q) || translateMsg(e.msg).toLowerCase().includes(q)));
+  const box = $("#logBox"), atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+  box.innerHTML = logHtml(entries, true);
+  if (atBottom) box.scrollTop = box.scrollHeight;
+  const dash = $("#dashLog"); dash.innerHTML = logHtml(all.slice(-15), false); dash.scrollTop = dash.scrollHeight;
+}
+function clearLogView(){ logCleared = parseLog(LOG).length; renderLog(); }
+function copyLog(){
+  const text = parseLog(LOG).map(e => `${e.time} | ${e.level} | ${e.msg}` + (e.trace.length ? "\n" + e.trace.join("\n") : "")).join("\n");
+  navigator.clipboard.writeText(text).then(() => toast(t("copied")), () => {
+    const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); toast(t("copied"));
+  });
+}
+
+/* =====================================================================
+   Updates
+   ===================================================================== */
+async function checkUpdate(){
+  $("#updNote").textContent = "…";
+  const r = await api("/api/update/check");
+  if (!r.ok) { $("#updNote").textContent = t("upd_err") + (r.error || ""); return; }
+  $("#latestVer").textContent = r.latest;
+  $("#updNote").textContent = t(r.available ? "upd_avail" : "upd_none");
+  $("#applyUpd").disabled = !r.available;
+}
+async function applyUpdate(){
+  $("#applyUpd").disabled = true; $("#updNote").textContent = "…";
+  const r = await api("/api/update/apply", {method:"POST", body:{}});
+  $("#updNote").textContent = r.ok ? t("upd_done").replace("{n}", r.changed) : t("upd_err") + r.error;
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+window.addEventListener("beforeunload", e => { if (isDirty()) { e.preventDefault(); e.returnValue = ""; } });
+document.addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); saveAll(); } if (e.key === "Escape") closeWallModal(); });
+async function refreshAll(user){
+  await loadState(); await loadStats();
+  if (curTab === "res" || curTab === "dash") await loadLog();
+  if (user) toast(t("refresh") + " ✓");
+}
+(async function boot(){
+  await loadApp();
+  try { VOCAB = await api("/api/vocab"); } catch(e) {}
+  STATE = await api("/api/state");
+  let saved = null; try { saved = localStorage.getItem("acc"); } catch(e) {}
+  const running = STATE.accounts.find(a => a.running);
+  CUR = (saved && APP.accounts.includes(saved)) ? saved : (running ? running.id : APP.accounts[0]);
+  await loadSettings();
+  let tab = "dash"; try { tab = localStorage.getItem("tab") || "dash"; } catch(e) {}
+  showTab(tab); showSub("walls");
+  applyLang();
+  loadStats(); loadLog();
+  setInterval(loadState, 3000);
+  setInterval(() => { loadStats(); if (curTab === "res" || curTab === "dash") loadLog(); updateSchedNote(); }, 5000);
+})();
+</script>
+</body>
+</html>

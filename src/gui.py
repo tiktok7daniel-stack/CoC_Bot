@@ -18,22 +18,17 @@ def run_gui(server_port, pipe, debug=False):
     window = webview.create_window(
         "CoC Bot",
         url=url,
-        width=400,
-        height=600,
-        min_size=(400, 600),
-        resizable=(sys.platform == "darwin"),
+        width=1320,
+        height=860,
+        min_size=(980, 680),
+        resizable=True,
+        background_color="#0d1730",
     )
     
     def on_closed():
         pipe.send(-1)
     
-    def set_aspect_ratio():
-        if sys.platform != "darwin": return
-        nswindow = window.native
-        nswindow.setAspectRatio_((2, 3))
-
     window.events.closed += on_closed
-    window.events.loaded += set_aspect_ratio
     webview.start(debug=debug)
 
 class GUI:
@@ -41,7 +36,6 @@ class GUI:
         from multiprocessing import Process, Pipe
         from gui_server.gui_server import start_server
         
-        if id is not None: assert id in configs.INSTANCE_IDS, f"Invalid instance ID"
         self.debug = debug
         self.id = id
         parent_conn, child_conn = Pipe()

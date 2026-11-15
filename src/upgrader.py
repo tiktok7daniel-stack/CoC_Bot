@@ -10,6 +10,19 @@ class Upgrader:
     def __init__(self):
         self.assets = Asset_Manager.upgrader_assets
         self.misc_assets = Asset_Manager.misc_assets
+        self.wall_budget = 10**9   # max wall upgrades this cycle (set by CoC_Bot from settings)
+        self.skip_walls = False
+        self.budget = None         # {"keep_gold": .., "keep_elixir": ..} when smart budget is on
+        self.on_upgrade = lambda kind, name: None
+
+    def budget_blocked(self):
+        """True when both storages are under the reserve the user wants to keep."""
+        if not self.budget: return False
+        res = read_resources()
+        if res is None: return False # can't read -> don't block
+        gold_low = res["gold"] is not None and res["gold"] < self.budget.get("keep_gold", 0)
+        elixir_low = res["elixir"] is not None and res["elixir"] < self.budget.get("keep_elixir", 0)
+        return gold_low and elixir_low
 
     # ============================================================
     # 📱 Screen Interaction
@@ -490,6 +503,8 @@ class Upgrader:
             town_hall_template = [render_text("Town Hall", "SupercellMagic", 17)]
             hero_templates = [render_text(text, "SupercellMagic", 17) for text in Cache_Manager.get("vocab", get_vocab())["heroes"]]
             seasonal_defense_template = [render_text("Crafting Station", "SupercellMagic", 17)]
+            if getattr(self, "skip_walls", False): # wall budget used up -> random pick must not choose walls
+                seasonal_defense_template.append(render_text("Wall", "SupercellMagic", 17))
             heros_excluded = Task_Handler.excluded("heroes")
             
             def locate_upgrade():
@@ -506,8 +521,8 @@ class Upgrader:
                 # Locate invalid upgrades
                 invalid_templates = town_hall_template + hero_templates + seasonal_defense_template
                 locs = Frame_Handler.batch_locate(invalid_templates, menu, thresh=0.75, ref="lc", null_val=-1, grayscale=True, normalize=False, return_all=True)
-                town_hall_loc, hero_locs, seasonal_defense_locs = chunk_list(locs, [1, len(hero_templates), 1])
-                invalid_locs = town_hall_loc[0] + seasonal_defense_locs[0]
+                town_hall_loc, hero_locs, seasonal_defense_locs = chunk_list(locs, [1, len(hero_templates), len(seasonal_defense_template)])
+                invalid_locs = town_hall_loc[0] + [loc for locs_ in seasonal_defense_locs for loc in locs_]
                 town_hall_loc = town_hall_loc[0][0]
                 if heros_excluded:
                     for locs in hero_locs: invalid_locs += locs
@@ -570,7 +585,7 @@ class Upgrader:
             
             # Hero upgrades go directly to confirm screen now
             in_hero_hall = upgrade_name in Cache_Manager.get("vocab", get_vocab())["heroes"]
-            if in_hero_hall and Task_Handler.excluded("heros"): return None
+            if in_hero_hall and Task_Handler.excluded("heroes"): return None
             
             # Click confirm button
             if not self._click_home_confirm(): return None
@@ -1472,23 +1487,43 @@ class Upgrader:
         # Building upgrades
         upgrades_started = []
         if not exclude_base:
+            base_priority = [list(lvl) for lvl in configs.HOME_BASE_UPGRADE_PRIORITY]
+            walls_done = 0
             counter = 0
             while counter < MAX_UPGRADES_PER_CHECK:
                 counter += 1
                 try:
+                    # Wall budget: once used up, walls are removed from both priority and random picks
+                    self.skip_walls = self.wall_budget - walls_done <= 0
+                    configs.HOME_BASE_UPGRADE_PRIORITY = [
+                        lvl for lvl in ([[x for x in l if x != "Wall"] for l in base_priority] if self.skip_walls else base_priority) if lvl
+                    ]
+                    # Smart budget: stop spending once storages fall under the reserve
+                    if self.budget_blocked():
+                        logger.info("Budget reserve reached, skipping further home upgrades")
+                        break
                     initial_builders = self.get_home_builders(1)
-                    if initial_builders <= max(0, OPEN_HOME_BUILDERS): break
+                    # walls don't need a free builder, so keep going while wall budget remains
+                    if initial_builders <= max(0, OPEN_HOME_BUILDERS) and self.skip_walls: break
                     upgraded = self.home_upgrade()
                     time.sleep(0.5)
                     final_builders = self.get_home_builders(1)
                     if upgraded is not None:
                         upgraded = upgraded.lower()
-                        if final_builders < initial_builders: upgrades_started.append(upgraded)
-                        elif final_builders == initial_builders and upgraded != "wall": break
+                        if upgraded == "wall":
+                            walls_done += 1
+                            self.on_upgrade("wall", "Wall")
+                            continue
+                        if final_builders < initial_builders:
+                            upgrades_started.append(upgraded)
+                            self.on_upgrade("building", upgraded)
+                        elif final_builders == initial_builders: break
                     else: break
                 except (KeyboardInterrupt, SystemExit): raise
                 except:
                     logger.warning("Encountered an error while attempting to upgrade home base. Retrying...")
+            configs.HOME_BASE_UPGRADE_PRIORITY = base_priority
+            self.skip_walls = False
         if not Task_Handler.excluded("builder_apprentice"):
             self.assign_builder_apprentice()
         
@@ -1499,7 +1534,9 @@ class Upgrader:
                 upgraded = self.home_lab_upgrade()
                 time.sleep(0.5)
                 final_lab_avail = self.home_lab_available(1)
-                if upgraded is not None and not final_lab_avail: lab_upgrades_started.append(upgraded.lower())
+                if upgraded is not None and not final_lab_avail:
+                    lab_upgrades_started.append(upgraded.lower())
+                    self.on_upgrade("lab", upgraded)
         except (KeyboardInterrupt, SystemExit): raise
         except:
             logger.warning("Encountered an error while attempting to upgrade home lab. Retrying...")
@@ -1513,7 +1550,9 @@ class Upgrader:
                 upgraded = self.pet_house_upgrade()
                 time.sleep(0.5)
                 final_pet_avail = self.pet_house_available(1)
-                if upgraded is not None and not final_pet_avail: pet_upgrades_started.append(upgraded.lower())
+                if upgraded is not None and not final_pet_avail:
+                    pet_upgrades_started.append(upgraded.lower())
+                    self.on_upgrade("pet", upgraded)
         except (KeyboardInterrupt, SystemExit): raise
         except: pass
 
@@ -1540,7 +1579,9 @@ class Upgrader:
                     final_builders = self.get_builder_builders(1)
                     if upgraded is not None:
                         upgraded = upgraded.lower()
-                        if final_builders < initial_builders: upgrades_started.append(upgraded)
+                        if final_builders < initial_builders:
+                            upgrades_started.append(upgraded)
+                            self.on_upgrade("builder_base", upgraded)
                         elif final_builders == initial_builders and upgraded != "wall": break
                     else: break
                 except (KeyboardInterrupt, SystemExit): raise
@@ -1554,7 +1595,9 @@ class Upgrader:
                 upgraded = self.builder_lab_upgrade()
                 time.sleep(0.5)
                 final_lab_avail = self.builder_lab_available(1)
-                if upgraded is not None and not final_lab_avail: lab_upgrades_started.append(upgraded.lower())
+                if upgraded is not None and not final_lab_avail:
+                    lab_upgrades_started.append(upgraded.lower())
+                    self.on_upgrade("builder_lab", upgraded)
         except (KeyboardInterrupt, SystemExit): raise
         except:
             logger.warning("Encountered an error while attempting to upgrade builder lab. Retrying...")
