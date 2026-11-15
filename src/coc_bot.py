@@ -143,10 +143,16 @@ class CoC_Bot:
                 s = self.load_settings()
 
                 if not online():
-                    time.sleep(1)
+                    if not getattr(self, "_offline_logged", False):
+                        logger.warning("No internet connection, waiting")
+                        self._offline_logged = True
+                    update_status("error")
+                    time.sleep(3)
                     continue
+                self._offline_logged = False
 
                 if not running():
+                    update_status("paused")
                     time.sleep(5)
                     continue
 

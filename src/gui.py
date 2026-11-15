@@ -66,8 +66,11 @@ def get_gui():
     return COC_BOT_GUI
 
 if __name__ == "__main__":
-    pipe = init_gui(None, debug=True)
-    while True:
-        try: print("GUI Received:", pipe.recv())
-        except EOFError: break
-    get_gui().stop()
+    # running gui.py directly used to open only the window (the "start bot" button then did nothing):
+    # start the full program with its window instead
+    import sys
+    from multiprocessing import freeze_support
+    freeze_support()
+    if "--gui" not in sys.argv: sys.argv.append("--gui")
+    from launch import launch
+    launch()

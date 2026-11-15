@@ -18,13 +18,23 @@ def launch_proc(args):
     from coc_bot import CoC_Bot
     
     parse_args(args.debug, args.id, args.gui, args.gui_port)
-    init_instance(args.id)
-    enable_logging(args.id)
-    from utils import install_error_reporter, start_capture_service, start_record_service
+    enable_logging(args.id) # first, so problems while starting the emulator are in the log
+    from log import logger
+    import time
+    from utils import install_error_reporter, start_capture_service, start_record_service, update_status, preflight
+    logger.info("Bot starting: preparing the emulator")
+    for attempt in range(1, 1000):
+        try:
+            init_instance(args.id)
+            break
+        except (KeyboardInterrupt, SystemExit): raise
+        except Exception as e:
+            logger.error(f"Bot start failed: {type(e).__name__}: {e}")
+            update_status("error")
+            time.sleep(min(60, 10 * attempt))
     install_error_reporter()
     start_capture_service()
     start_record_service()
-    from utils import preflight
     preflight()
     bot = CoC_Bot()
     bot.run()

@@ -193,9 +193,18 @@ def online(timeout=1):
         try:
             import ctypes
             flags = ctypes.c_ulong()
-            return bool(ctypes.windll.wininet.InternetGetConnectedState(ctypes.byref(flags), 0))
+            if ctypes.windll.wininet.InternetGetConnectedState(ctypes.byref(flags), 0): return True
         except Exception:
-            return False
+            pass
+        # Windows sometimes reports "offline" while the internet works (VPN, some adapters): ask the network itself
+        import socket
+        for host in (("8.8.8.8", 53), ("1.1.1.1", 53)):
+            try:
+                socket.create_connection(host, timeout=2).close()
+                return True
+            except OSError:
+                continue
+        return False
     return True
 
 def running():
@@ -987,7 +996,15 @@ class _Emulator_Manager:
     @classmethod
     def init(cls):
         Exit_Handler.register(cls.stop)
-        cls.restart()
+        # an emulator that is already running is used as it is (restarting it closed the game
+        # and made the start take minutes); only a stopped one is started
+        try: already = cls.check()
+        except Exception: already = False
+        if already:
+            logger.info("Emulator already running, using it")
+            return
+        logger.info("Starting the emulator…")
+        cls.start()
 
     @classmethod
     def check(cls):

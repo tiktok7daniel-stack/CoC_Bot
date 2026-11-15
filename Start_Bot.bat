@@ -1,0 +1,9 @@
+@echo off
+chcp 65001 >nul
+cd /d "%~dp0"
+if exist ".venv\Scripts\python.exe" (
+  ".venv\Scripts\python.exe" src\main.py --gui
+) else (
+  python src\main.py --gui
+)
+if errorlevel 1 pause
