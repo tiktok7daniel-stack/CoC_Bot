@@ -653,7 +653,7 @@ def game_ready():
     except Exception: pass
     return False
 
-def start_coc(timeout=60, detailed=False, force_restart=False):
+def start_coc(timeout=120, detailed=False, force_restart=False):
     import time
     
     try:
@@ -673,14 +673,21 @@ def start_coc(timeout=60, detailed=False, force_restart=False):
 
         i = 0
         start = time.time()
+        restarted_once = update_checked = False
+        last_unknown = 0
         while time.time() - start < timeout:
             if not running():
                 if not detailed: return False
                 else: return False, "paused"
 
-            # bring the game to front (starts it if closed); force a clean restart only when
-            # asked to or when it's stuck for a while
-            force = (force_restart and i == 0) or i == 12
+            elapsed = time.time() - start
+            # bring the game to front (starts it if closed). The game can take a long time to load,
+            # so never kill it while loading: a clean restart only when asked, or once if it's
+            # been stuck for more than 70 seconds.
+            force = (force_restart and i == 0) or (elapsed > 70 and not restarted_once)
+            if force and i > 0:
+                restarted_once = True
+                logger.info("Game stuck while starting, restarting it once")
             ADB_Manager.adbutils_device.shell(f"am start {'-S' if force else ''} -W -n com.supercell.clashofclans/com.supercell.titan.GameApp")
             Input_Handler.click_exit(x=0.99, y=0.01, n=4, delay=0.1)
             
@@ -698,11 +705,17 @@ def start_coc(timeout=60, detailed=False, force_restart=False):
                 if x is not None and y is not None:
                     Input_Handler.click(x, y)
             
-            # stuck on something unknown (popup, offer, event)? read it, record it, press a safe button
-            if i in (5, 9): Auto_Learn.handle_unknown_screen("start_game")
-            # the update-popup check is slow (uiautomator dump), so only do it now and then
-            if i % 5 == 4: update_coc(timeout=3, from_in_game=True)
-            else: time.sleep(0.3)
+            # stuck on something unknown (popup, offer, event) after the normal loading time?
+            # read it, record it, press a safe button
+            if elapsed > 25 and time.time() - last_unknown > 15:
+                last_unknown = time.time()
+                Auto_Learn.handle_unknown_screen("start_game")
+            # game update popup: checked once, late (the uiautomator helper can push the game
+            # to the background, which makes it drop its connection)
+            if elapsed > 45 and not update_checked:
+                update_checked = True
+                update_coc(timeout=3, from_in_game=True)
+            time.sleep(0.5)
             
             i += 1
         if time.time() - start > timeout:
