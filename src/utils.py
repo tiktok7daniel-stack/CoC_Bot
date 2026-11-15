@@ -2589,6 +2589,68 @@ def fix_display(w, h, d):
     logger.info(f"Pre-flight: display changed from {w}x{h} {d} DPI to {tw}x{th} {td} DPI")
     return True
 
+# ---------------------------------------------------------------- other screen sizes
+# The built-in images were cut from a 1920x1080 screen. On another size the game draws its
+# buttons smaller/bigger, so the bot measures that "UI scale" once (by finding the gold icon
+# of the village at many sizes) and shrinks every built-in image to match.
+UI_SCALE = 1.0
+_ORIGINAL_ASSETS = {}
+
+def detect_ui_scale(frame=None):
+    import cv2, numpy as np
+    if frame is None: frame = Frame_Handler.get_frame(grayscale=False)
+    if tuple(frame.shape[:2][::-1]) == TARGET_SIZE: return 1.0
+    best_v, best_s = 0, None
+    for name in ("home_gold", "builder_gold"):
+        tpl = (_ORIGINAL_ASSETS.get("upgrader") or Asset_Manager.upgrader_assets).get(name)
+        if tpl is None: continue
+        for s in np.arange(0.25, 1.05, 0.0125):
+            t = cv2.resize(tpl, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)
+            if t.shape[0] < 8 or t.shape[0] > frame.shape[0] or t.shape[1] > frame.shape[1]: continue
+            v = cv2.minMaxLoc(cv2.matchTemplate(frame, t, cv2.TM_CCOEFF_NORMED))[1]
+            if v > best_v: best_v, best_s = v, float(s)
+    return round(best_s, 4) if best_v >= 0.8 else None
+
+def apply_ui_scale(scale):
+    """Resize every built-in image (in place, so all holders see it) to the measured UI scale."""
+    global UI_SCALE
+    import cv2
+    groups = {"misc": Asset_Manager.misc_assets, "upgrader": Asset_Manager.upgrader_assets, "attacker": Asset_Manager.attacker_assets}
+    for g, d in groups.items():
+        orig = _ORIGINAL_ASSETS.setdefault(g, dict(d))
+        for k, img in orig.items():
+            d[k] = img if scale == 1.0 else cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    UI_SCALE = scale
+
+def _scale_file():
+    return Path.home() / ".CoC_Bot" / "ui_scale.json"
+
+def setup_ui_scale(size):
+    """Use the saved scale for this screen size, else measure it (the village must be on screen)."""
+    import json, time
+    key = f"{size[0]}x{size[1]}"
+    if tuple(size) == TARGET_SIZE:
+        apply_ui_scale(1.0); return 1.0
+    try: saved = json.loads(_scale_file().read_text()).get(key)
+    except (OSError, ValueError): saved = None
+    scale = None
+    for _ in range(12): # up to ~1 minute while the game loads
+        scale = detect_ui_scale()
+        if scale: break
+        time.sleep(5)
+    if scale:
+        try:
+            data = json.loads(_scale_file().read_text()) if _scale_file().exists() else {}
+            data[key] = scale
+            _scale_file().write_text(json.dumps(data))
+        except (OSError, ValueError): pass
+        logger.info(f"Pre-flight: game size measured, images scaled to {scale:.2f}")
+    else:
+        scale = saved or round(size[1] / TARGET_SIZE[1], 4)
+        logger.warning(f"Pre-flight: could not measure the game size (open the village screen); using {scale:.2f}")
+    apply_ui_scale(scale)
+    return scale
+
 def preflight():
     import time
     logger.info("Pre-flight check: starting")
@@ -2619,8 +2681,10 @@ def preflight():
             fh, fw = frame.shape[:2]
             if (fw, fh) == (tw, th): logger.info(f"Pre-flight: screenshots {fw}x{fh} ✓")
             else: problems.append(f"screenshots are {fw}x{fh} (landscape {tw}x{th} needed)")
-            if (tw, th) != TARGET_SIZE:
-                logger.warning(f"Pre-flight: the bot's images are made for 1920x1080 - at {tw}x{th} finding buttons and deploying may fail")
+            if (fw, fh) == (tw, th) and (tw, th) != TARGET_SIZE:
+                try: start_coc()
+                except Exception: pass
+                setup_ui_scale((fw, fh))
 
             conn = ADB_Manager.minitouch_device.connection
             if int(conn.max_x) > 0 and int(conn.max_y) > 0: logger.info("Pre-flight: touch ready ✓")

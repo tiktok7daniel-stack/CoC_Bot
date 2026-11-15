@@ -1186,6 +1186,8 @@ const LOG_AR = [
  [/^Pre-flight: touch ready/, "✓ الضغط على الشاشة جاهز"],
  [/^Pre-flight check passed.*/, "✅ الفحص خلص: كل حاجة جاهزة — البوت بيبدأ"],
  [/^Pre-flight problem: (.*)/, "❌ مشكلة: $1"],
+ [/^Pre-flight: game size measured, images scaled to ([\d.]+)/, "✓ البوت قاس حجم اللعبة وصغّر صوره على المقاس ده ($1)"],
+ [/^Pre-flight: could not measure the game size.*using ([\d.]+)/, "⚠ البوت ماقدرش يقيس حجم اللعبة — افتح شاشة القرية. هيستخدم مقاس تقريبي ($1)"],
  [/^Pre-flight: display (\d+x\d+) (\d+) DPI/, "✓ حجم الشاشة $1 و $2 DPI"],
  [/^Pre-flight: display changed from (.*?) to (.*)/, "اتغيّر حجم الشاشة من $1 لـ $2"],
  [/^Pre-flight: screenshots (\d+x\d+)/, "✓ تصوير الشاشة شغال $1"],
@@ -1354,7 +1356,7 @@ function showSub(name){
 $$("#tabs button").forEach(b => b.onclick = () => b.dataset.soon ? toast(t("soon_msg")) : showTab(b.dataset.tab));
 /* setup screen */
 let SU = null, suTimer = null, suBusy = false;
-function suFillDisp(){ $("#suW").value = APP.display_w || 1920; $("#suH").value = APP.display_h || 1080; $("#suD").value = APP.display_dpi || 240;
+function suFillDisp(){ $("#suW").value = APP.display_w || 860; $("#suH").value = APP.display_h || 732; $("#suD").value = APP.display_dpi || 300;
   $("#suDispWarn").style.display = (+$("#suW").value === 1920 && +$("#suH").value === 1080) ? "none" : ""; }
 function suDefaultDisp(){ $("#suW").value = 1920; $("#suH").value = 1080; $("#suD").value = 240; suFillWarn(); }
 function suFillWarn(){ $("#suDispWarn").style.display = (+$("#suW").value === 1920 && +$("#suH").value === 1080) ? "none" : ""; }
