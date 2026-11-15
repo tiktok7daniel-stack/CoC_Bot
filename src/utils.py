@@ -1651,7 +1651,7 @@ class ADB_Manager:
             Exit_Handler.register(d2.stop)
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
-            logger.error(f"ADB device setup failed: {e}")
+            logger.debug(f"ADB device setup failed: {e}")
             reset_adb()
             raise Exception("Failed to get ADB device.")
         cls._adbutils_device, cls._minitouch_device, cls._uiautomator_device = devices
@@ -1730,6 +1730,8 @@ class ADB_Manager:
     def connect(cls, timeout=60):
         import time
         start = time.time()
+        waiting_logged = False
+        last_error_log = 0
         while time.time() - start < timeout:
             try:
                 cls.connect_once()
@@ -1737,11 +1739,30 @@ class ADB_Manager:
                 cls.start_keepalive()
                 return True
             except (KeyboardInterrupt, SystemExit): raise
-            except Exception:
-                logger.error("Failed to connect to ADB. Retrying...")
-            time.sleep(0.5)
+            except Exception as e:
+                state = cls.device_state()
+                if state != "device" or not cls.boot_completed():
+                    # emulator still starting: normal, wait quietly instead of logging errors
+                    if not waiting_logged:
+                        logger.info("Waiting for the emulator to finish starting...")
+                        waiting_logged = True
+                    time.sleep(2)
+                    continue
+                if time.time() - last_error_log > 10:
+                    logger.warning(f"Connecting to the emulator failed ({type(e).__name__}), retrying...")
+                    last_error_log = time.time()
+            time.sleep(1)
         logger.error("Failed to connect to ADB.")
         return False
+
+    @classmethod
+    def boot_completed(cls):
+        """Android finished booting (the device can be 'online' before that)."""
+        import adbutils
+        try:
+            return adbutils.device(ADB_ADDRESS).getprop("sys.boot_completed").strip() == "1"
+        except Exception:
+            return False
 
     @classproperty
     def adbutils_device(cls):
