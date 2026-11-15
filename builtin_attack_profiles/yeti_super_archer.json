@@ -1,0 +1,374 @@
+{
+  "schema": 3,
+  "name": "يتي + رامية السهام الخارقة",
+  "description": "",
+  "base_resolution": [
+    860,
+    732
+  ],
+  "steps": [
+    {
+      "id": "step_1",
+      "enabled": true,
+      "kind": "troop",
+      "label": "جندي",
+      "slot": 1,
+      "mode": "points",
+      "taps": 10,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          411,
+          52
+        ],
+        [
+          49,
+          291
+        ],
+        [
+          296,
+          129
+        ],
+        [
+          275,
+          146
+        ],
+        [
+          261,
+          152
+        ],
+        [
+          241,
+          167
+        ],
+        [
+          228,
+          179
+        ],
+        [
+          215,
+          191
+        ],
+        [
+          190,
+          206
+        ],
+        [
+          164,
+          227
+        ]
+      ]
+    },
+    {
+      "id": "step_2",
+      "enabled": true,
+      "kind": "troop",
+      "label": "جندي",
+      "slot": 2,
+      "mode": "line",
+      "taps": 11,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          308,
+          117
+        ],
+        [
+          186,
+          206
+        ]
+      ]
+    },
+    {
+      "id": "step_3",
+      "enabled": true,
+      "kind": "troop",
+      "label": "جندي",
+      "slot": 3,
+      "mode": "points",
+      "taps": 5,
+      "delay_before": 0.0,
+      "interval": 1.0,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 1.0,
+      "interval_max": 1.0,
+      "points": [
+        [
+          286,
+          139
+        ],
+        [
+          264,
+          155
+        ],
+        [
+          248,
+          172
+        ],
+        [
+          226,
+          191
+        ],
+        [
+          184,
+          209
+        ]
+      ]
+    },
+    {
+      "id": "step_4",
+      "enabled": true,
+      "kind": "siege",
+      "label": "آلة حصار",
+      "slot": 4,
+      "mode": "point",
+      "taps": 5,
+      "delay_before": 0.0,
+      "interval": 0.0,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.0,
+      "interval_max": 0.0,
+      "points": [
+        [
+          250,
+          159
+        ]
+      ]
+    },
+    {
+      "id": "step_5",
+      "enabled": true,
+      "kind": "hero",
+      "label": "بطل",
+      "slot": 5,
+      "mode": "point",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.0,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.0,
+      "interval_max": 0.0,
+      "points": [
+        [
+          150,
+          235
+        ]
+      ]
+    },
+    {
+      "id": "step_6",
+      "enabled": true,
+      "kind": "hero",
+      "label": "بطل",
+      "slot": 6,
+      "mode": "point",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.0,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.0,
+      "interval_max": 0.0,
+      "points": [
+        [
+          206,
+          191
+        ]
+      ]
+    },
+    {
+      "id": "step_7",
+      "enabled": true,
+      "kind": "hero",
+      "label": "بطل",
+      "slot": 7,
+      "mode": "point",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.0,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.0,
+      "interval_max": 0.0,
+      "points": [
+        [
+          264,
+          155
+        ]
+      ]
+    },
+    {
+      "id": "step_8",
+      "enabled": true,
+      "kind": "hero",
+      "label": "بطل",
+      "slot": 8,
+      "mode": "point",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.0,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.0,
+      "interval_max": 0.0,
+      "points": [
+        [
+          246,
+          169
+        ]
+      ]
+    },
+    {
+      "id": "step_9",
+      "enabled": true,
+      "kind": "ability",
+      "label": "قدرة بطل",
+      "slot": 5,
+      "mode": "none",
+      "taps": 5,
+      "delay_before": 10.0,
+      "interval": 0.0,
+      "delay_before_min": 10.0,
+      "delay_before_max": 10.0,
+      "interval_min": 0.0,
+      "interval_max": 0.0,
+      "points": []
+    },
+    {
+      "id": "step_10",
+      "enabled": true,
+      "kind": "ability",
+      "label": "قدرة بطل",
+      "slot": 6,
+      "mode": "none",
+      "taps": 5,
+      "delay_before": 0.0,
+      "interval": 0.0,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.0,
+      "interval_max": 0.0,
+      "points": []
+    },
+    {
+      "id": "step_11",
+      "enabled": true,
+      "kind": "ability",
+      "label": "قدرة بطل",
+      "slot": 7,
+      "mode": "none",
+      "taps": 5,
+      "delay_before": 0.0,
+      "interval": 0.0,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.0,
+      "interval_max": 0.0,
+      "points": []
+    },
+    {
+      "id": "step_12",
+      "enabled": true,
+      "kind": "ability",
+      "label": "قدرة بطل",
+      "slot": 8,
+      "mode": "none",
+      "taps": 5,
+      "delay_before": 0.0,
+      "interval": 0.0,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.0,
+      "interval_max": 0.0,
+      "points": []
+    },
+    {
+      "id": "step_13",
+      "enabled": true,
+      "kind": "spell",
+      "label": "تعويذة",
+      "slot": 9,
+      "mode": "points",
+      "taps": 11,
+      "delay_before": 0.0,
+      "interval": 2.0,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 2.0,
+      "interval_max": 2.0,
+      "points": [
+        [
+          472,
+          145
+        ],
+        [
+          392,
+          225
+        ],
+        [
+          274,
+          294
+        ],
+        [
+          536,
+          209
+        ],
+        [
+          480,
+          254
+        ],
+        [
+          320,
+          336
+        ],
+        [
+          411,
+          305
+        ],
+        [
+          349,
+          392
+        ],
+        [
+          440,
+          366
+        ],
+        [
+          516,
+          305
+        ],
+        [
+          495,
+          377
+        ]
+      ]
+    }
+  ],
+  "builtin": true,
+  "image": "assets/strategies/yeti_super_archer.png",
+  "humanize": {
+    "enabled": true,
+    "tap_interval_min": 0.045,
+    "tap_interval_max": 0.135,
+    "step_pause_min": 0.04,
+    "step_pause_max": 0.22,
+    "position_jitter_px": 3,
+    "verify_troop_drop": true,
+    "retry_on_no_change": true,
+    "retry_limit": 1,
+    "verification_wait_seconds": 0.18
+  }
+}

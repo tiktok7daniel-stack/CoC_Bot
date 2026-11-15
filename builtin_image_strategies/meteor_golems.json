@@ -1,0 +1,466 @@
+{
+  "schema": 1,
+  "id": "meteor_golems",
+  "name_ar": "غولم النيازك",
+  "name_en": "Meteor Golems",
+  "description_ar": "صور هذه الاستراتيجية معزولة داخل templates/attack/meteor_golem. ينزل كامل الجيش وآلة الحصار وكل الأبطال في منتصف جهة الهجوم، ثم يشغّل القدرات ويرمي الطواطم على دفعات حماية: طوطمان أمام تقدّم الجيش كل 3.5 ثوانٍ.",
+  "description_en": "This strategy uses only templates/attack/meteor_golem. It deploys the full army, siege and all detected heroes through the middle of the selected edge, activates abilities, then escorts the push with two Totems every 3.5 seconds.",
+  "preview": "templates/attack/meteor_golem/troop_bar_anchor_meteor_golem.png",
+  "template_dir": "templates/attack/meteor_golem",
+  "detect_templates": [
+    "meteor_golem.png"
+  ],
+  "steps": [
+    {
+      "kind": "troop",
+      "label": "Meteor Golem",
+      "outcome_key": "meteor_golem.png",
+      "templates": [
+        "meteor_golem.png"
+      ],
+      "fixed_count": true,
+      "expected_taps": 6,
+      "batch_size": 6,
+      "reacquire_between_batches": false,
+      "points_left": [
+        [
+          190,
+          205
+        ],
+        [
+          196,
+          201
+        ],
+        [
+          202,
+          197
+        ],
+        [
+          208,
+          193
+        ],
+        [
+          214,
+          189
+        ],
+        [
+          202,
+          197
+        ]
+      ]
+    },
+    {
+      "kind": "troop",
+      "label": "Apprentice Warden",
+      "outcome_key": "apprentice_warden.png",
+      "templates": [
+        "apprentice_warden.png"
+      ],
+      "fixed_count": true,
+      "expected_taps": 1,
+      "batch_size": 1,
+      "reacquire_between_batches": false,
+      "points_left": [
+        [
+          190,
+          205
+        ],
+        [
+          196,
+          201
+        ],
+        [
+          202,
+          197
+        ],
+        [
+          208,
+          193
+        ],
+        [
+          214,
+          189
+        ],
+        [
+          202,
+          197
+        ]
+      ]
+    },
+    {
+      "kind": "troop",
+      "label": "Ice Golem",
+      "outcome_key": "ice_golem.png",
+      "templates": [
+        "ice_golem.png"
+      ],
+      "fixed_count": true,
+      "expected_taps": 1,
+      "batch_size": 1,
+      "reacquire_between_batches": false,
+      "points_left": [
+        [
+          190,
+          205
+        ],
+        [
+          196,
+          201
+        ],
+        [
+          202,
+          197
+        ],
+        [
+          208,
+          193
+        ],
+        [
+          214,
+          189
+        ],
+        [
+          202,
+          197
+        ]
+      ]
+    },
+    {
+      "kind": "troop",
+      "label": "Healer",
+      "outcome_key": "healer.png",
+      "templates": [
+        "healer.png"
+      ],
+      "fixed_count": true,
+      "expected_taps": 5,
+      "batch_size": 5,
+      "reacquire_between_batches": false,
+      "points_left": [
+        [
+          190,
+          205
+        ],
+        [
+          196,
+          201
+        ],
+        [
+          202,
+          197
+        ],
+        [
+          208,
+          193
+        ],
+        [
+          214,
+          189
+        ],
+        [
+          202,
+          197
+        ]
+      ]
+    },
+    {
+      "kind": "troop",
+      "label": "Balloon",
+      "outcome_key": "balloon.png",
+      "templates": [
+        "balloon.png"
+      ],
+      "fixed_count": true,
+      "expected_taps": 1,
+      "batch_size": 1,
+      "reacquire_between_batches": false,
+      "points_left": [
+        [
+          190,
+          205
+        ],
+        [
+          196,
+          201
+        ],
+        [
+          202,
+          197
+        ],
+        [
+          208,
+          193
+        ],
+        [
+          214,
+          189
+        ],
+        [
+          202,
+          197
+        ]
+      ]
+    },
+    {
+      "kind": "troop",
+      "label": "Wall Breaker",
+      "outcome_key": "wall_breaker.png",
+      "templates": [
+        "wall_breaker.png"
+      ],
+      "fixed_count": true,
+      "expected_taps": 1,
+      "batch_size": 1,
+      "reacquire_between_batches": false,
+      "points_left": [
+        [
+          190,
+          205
+        ],
+        [
+          196,
+          201
+        ],
+        [
+          202,
+          197
+        ],
+        [
+          208,
+          193
+        ],
+        [
+          214,
+          189
+        ],
+        [
+          202,
+          197
+        ]
+      ]
+    },
+    {
+      "kind": "siege",
+      "label": "Siege",
+      "templates": [
+        "troop_launcher.png",
+        "stone_slammer.png",
+        "battle_blimp.png",
+        "battle_drill.png",
+        "flame_flinger.png",
+        "log_launcher.png",
+        "siege_barracks.png",
+        "sky_wagon.png"
+      ],
+      "expected_taps": 1,
+      "batch_size": 1,
+      "recovery_taps": 0,
+      "points_left": [
+        [
+          202,
+          197
+        ]
+      ],
+      "outcome_key": "siege"
+    }
+  ],
+  "spells": [
+    {
+      "label": "Totem — Army",
+      "templates": [
+        "totem_spell.png"
+      ],
+      "card_selector": "leftmost",
+      "groups_left": [
+        [
+          [
+            245,
+            215
+          ],
+          [
+            275,
+            245
+          ]
+        ],
+        [
+          [
+            295,
+            230
+          ],
+          [
+            325,
+            260
+          ]
+        ],
+        [
+          [
+            340,
+            250
+          ],
+          [
+            370,
+            285
+          ]
+        ],
+        [
+          [
+            385,
+            275
+          ],
+          [
+            415,
+            310
+          ]
+        ],
+        [
+          [
+            430,
+            300
+          ],
+          [
+            460,
+            340
+          ]
+        ],
+        [
+          [
+            475,
+            330
+          ]
+        ]
+      ],
+      "between_groups_seconds": 3.5,
+      "tap_interval_ms": 320,
+      "after_spell_seconds": 3.5
+    },
+    {
+      "label": "Totem — Support",
+      "templates": [
+        "totem_spell.png"
+      ],
+      "card_selector": "rightmost",
+      "groups_left": [
+        [
+          [
+            495,
+            345
+          ],
+          [
+            525,
+            375
+          ]
+        ],
+        [
+          [
+            545,
+            365
+          ],
+          [
+            575,
+            400
+          ]
+        ]
+      ],
+      "between_groups_seconds": 3.5,
+      "tap_interval_ms": 320,
+      "after_spell_seconds": 0.2
+    }
+  ],
+  "abilities_phase": "before_spells",
+  "abilities_delay_seconds": 0.8,
+  "auto_discover_heroes": true,
+  "hero_points_left": [
+    [
+      190,
+      205
+    ],
+    [
+      196,
+      201
+    ],
+    [
+      202,
+      197
+    ],
+    [
+      208,
+      193
+    ],
+    [
+      214,
+      189
+    ],
+    [
+      202,
+      197
+    ]
+  ],
+  "ability_templates": [
+    "king_ability.png",
+    "queen_ability.png",
+    "royal_ability.png",
+    "grand_ability.png",
+    "hero_ability.png",
+    "duke_ability.png"
+  ],
+  "hero_ability_aliases": {
+    "king.png": "king_ability.png",
+    "archer_queen.png": "queen_ability.png",
+    "royal_champion.png": "royal_ability.png",
+    "grand_warden.png": "grand_ability.png",
+    "minion_hero.png": "hero_ability.png",
+    "dragon_duke.png": "duke_ability.png"
+  },
+  "event_troop_points_left": [
+    [
+      190,
+      205
+    ],
+    [
+      196,
+      201
+    ],
+    [
+      202,
+      197
+    ],
+    [
+      208,
+      193
+    ],
+    [
+      214,
+      189
+    ],
+    [
+      202,
+      197
+    ]
+  ],
+  "event_spell_points_left": [
+    [
+      465,
+      167
+    ],
+    [
+      506,
+      165
+    ],
+    [
+      443,
+      211
+    ],
+    [
+      390,
+      264
+    ],
+    [
+      302,
+      281
+    ],
+    [
+      214,
+      314
+    ]
+  ]
+}

@@ -1,0 +1,372 @@
+{
+  "schema": 3,
+  "name": "غولم النيازك",
+  "description": "",
+  "base_resolution": [
+    860,
+    732
+  ],
+  "steps": [
+    {
+      "id": "step_1",
+      "enabled": true,
+      "kind": "troop",
+      "label": "تنزيل الغولم",
+      "slot": 1,
+      "mode": "line",
+      "taps": 7,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          270,
+          135
+        ],
+        [
+          195,
+          190
+        ]
+      ]
+    },
+    {
+      "id": "step_2",
+      "enabled": true,
+      "kind": "troop",
+      "label": "تنزيل المسعف",
+      "slot": 2,
+      "mode": "line",
+      "taps": 2,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          244,
+          151
+        ],
+        [
+          229,
+          162
+        ]
+      ]
+    },
+    {
+      "id": "step_3",
+      "enabled": true,
+      "kind": "troop",
+      "label": "غولم جليدي",
+      "slot": 3,
+      "mode": "point",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          231,
+          159
+        ]
+      ]
+    },
+    {
+      "id": "step_4",
+      "enabled": true,
+      "kind": "troop",
+      "label": "بالون",
+      "slot": 4,
+      "mode": "point",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          219,
+          165
+        ]
+      ]
+    },
+    {
+      "id": "step_5",
+      "enabled": true,
+      "kind": "troop",
+      "label": "ساحر",
+      "slot": 5,
+      "mode": "line",
+      "taps": 3,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          50,
+          299
+        ],
+        [
+          72,
+          281
+        ]
+      ]
+    },
+    {
+      "id": "step_6",
+      "enabled": true,
+      "kind": "siege",
+      "label": "آلة حصار",
+      "slot": 6,
+      "mode": "point",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          228,
+          165
+        ]
+      ]
+    },
+    {
+      "id": "step_7",
+      "enabled": true,
+      "kind": "hero",
+      "label": "بطل",
+      "slot": 7,
+      "mode": "point",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          174,
+          196
+        ]
+      ]
+    },
+    {
+      "id": "step_8",
+      "enabled": true,
+      "kind": "hero",
+      "label": "بطل",
+      "slot": 8,
+      "mode": "point",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          210,
+          176
+        ]
+      ]
+    },
+    {
+      "id": "step_9",
+      "enabled": true,
+      "kind": "hero",
+      "label": "بطل",
+      "slot": 9,
+      "mode": "point",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          256,
+          145
+        ]
+      ]
+    },
+    {
+      "id": "step_10",
+      "enabled": true,
+      "kind": "hero",
+      "label": "بطل",
+      "slot": 10,
+      "mode": "point",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 0.06,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 0.06,
+      "interval_max": 0.06,
+      "points": [
+        [
+          289,
+          131
+        ]
+      ]
+    },
+    {
+      "id": "step_11",
+      "enabled": true,
+      "kind": "ability",
+      "label": "قدرة بطل",
+      "slot": 7,
+      "mode": "none",
+      "taps": 1,
+      "delay_before": 10.0,
+      "interval": 1.0,
+      "delay_before_min": 10.0,
+      "delay_before_max": 10.0,
+      "interval_min": 1.0,
+      "interval_max": 1.0,
+      "points": []
+    },
+    {
+      "id": "step_12",
+      "enabled": true,
+      "kind": "ability",
+      "label": "قدرة بطل",
+      "slot": 8,
+      "mode": "none",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 1.0,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 1.0,
+      "interval_max": 1.0,
+      "points": []
+    },
+    {
+      "id": "step_13",
+      "enabled": true,
+      "kind": "ability",
+      "label": "قدرة بطل",
+      "slot": 9,
+      "mode": "none",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 1.0,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 1.0,
+      "interval_max": 1.0,
+      "points": []
+    },
+    {
+      "id": "step_14",
+      "enabled": true,
+      "kind": "ability",
+      "label": "قدرة بطل",
+      "slot": 10,
+      "mode": "none",
+      "taps": 1,
+      "delay_before": 0.0,
+      "interval": 1.0,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 1.0,
+      "interval_max": 1.0,
+      "points": []
+    },
+    {
+      "id": "step_15",
+      "enabled": true,
+      "kind": "spell",
+      "label": "تعويذة",
+      "slot": 11,
+      "mode": "points",
+      "taps": 11,
+      "delay_before": 0.0,
+      "interval": 2.0,
+      "delay_before_min": 0.0,
+      "delay_before_max": 0.0,
+      "interval_min": 2.0,
+      "interval_max": 2.0,
+      "points": [
+        [
+          405,
+          227
+        ],
+        [
+          354,
+          262
+        ],
+        [
+          300,
+          305
+        ],
+        [
+          441,
+          262
+        ],
+        [
+          381,
+          302
+        ],
+        [
+          331,
+          362
+        ],
+        [
+          506,
+          287
+        ],
+        [
+          464,
+          334
+        ],
+        [
+          392,
+          393
+        ],
+        [
+          449,
+          401
+        ],
+        [
+          525,
+          354
+        ]
+      ]
+    }
+  ],
+  "builtin": true,
+  "image": "assets/strategies/meteor_golems.png",
+  "humanize": {
+    "enabled": true,
+    "tap_interval_min": 0.045,
+    "tap_interval_max": 0.135,
+    "step_pause_min": 0.04,
+    "step_pause_max": 0.22,
+    "position_jitter_px": 3,
+    "verify_troop_drop": true,
+    "retry_on_no_change": true,
+    "retry_limit": 1,
+    "verification_wait_seconds": 0.18
+  }
+}

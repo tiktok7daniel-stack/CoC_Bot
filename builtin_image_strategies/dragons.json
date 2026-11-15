@@ -1,0 +1,390 @@
+{
+  "schema": 1,
+  "id": "dragons",
+  "name_ar": "التنانين والمينيون",
+  "name_en": "Dragons & Minions",
+  "description_ar": "صور هذه الاستراتيجية معزولة داخل templates/attack/dragon. ينزل تنينًا على كل جناح، ثم 14 تنينًا و16 مينيون في المنتصف، وبعدها آلة الحصار وكل الأبطال الظاهرين، ويستخدم الغضب والتجميد وقدرات الأبطال بنفس نظام الكهرباء.",
+  "description_en": "This strategy uses only templates/attack/dragon. It deploys one Dragon on each wing, then 14 Dragons and 16 Minions through the center, followed by siege and every detected hero, with the same Rage, Freeze, and hero-ability flow as Electro Dragons.",
+  "preview": "templates/attack/dragon/troop_bar_anchor_dragon.png",
+  "template_dir": "templates/attack/dragon",
+  "detect_templates": [
+    "dragon.png"
+  ],
+  "steps": [
+    {
+      "kind": "troop",
+      "label": "Dragon — Wing A",
+      "outcome_key": "dragon.png",
+      "templates": [
+        "dragon.png"
+      ],
+      "fixed_count": true,
+      "expected_taps": 1,
+      "batch_size": 1,
+      "reacquire_between_batches": false,
+      "points_left": [
+        [
+          49,
+          301
+        ]
+      ]
+    },
+    {
+      "kind": "troop",
+      "label": "Dragon — Wing B",
+      "outcome_key": "dragon.png",
+      "templates": [
+        "dragon.png"
+      ],
+      "fixed_count": true,
+      "expected_taps": 1,
+      "batch_size": 1,
+      "reacquire_between_batches": false,
+      "points_left": [
+        [
+          279,
+          140
+        ]
+      ]
+    },
+    {
+      "kind": "troop",
+      "label": "Dragon — Center",
+      "outcome_key": "dragon.png",
+      "templates": [
+        "dragon.png"
+      ],
+      "fixed_count": true,
+      "expected_taps": 14,
+      "batch_size": 14,
+      "reacquire_between_batches": true,
+      "points_left": [
+        [
+          140,
+          235
+        ],
+        [
+          158,
+          225
+        ],
+        [
+          176,
+          215
+        ],
+        [
+          190,
+          205
+        ],
+        [
+          204,
+          197
+        ],
+        [
+          218,
+          188
+        ],
+        [
+          231,
+          179
+        ],
+        [
+          190,
+          205
+        ],
+        [
+          176,
+          215
+        ],
+        [
+          204,
+          197
+        ],
+        [
+          218,
+          188
+        ],
+        [
+          190,
+          205
+        ],
+        [
+          204,
+          197
+        ],
+        [
+          218,
+          188
+        ]
+      ]
+    },
+    {
+      "kind": "troop",
+      "label": "Minion — Center",
+      "outcome_key": "minion.png",
+      "templates": [
+        "minion.png"
+      ],
+      "fixed_count": true,
+      "expected_taps": 16,
+      "batch_size": 16,
+      "reacquire_between_batches": true,
+      "points_left": [
+        [
+          150,
+          228
+        ],
+        [
+          166,
+          218
+        ],
+        [
+          182,
+          208
+        ],
+        [
+          198,
+          198
+        ],
+        [
+          214,
+          188
+        ],
+        [
+          230,
+          179
+        ],
+        [
+          182,
+          208
+        ],
+        [
+          198,
+          198
+        ],
+        [
+          214,
+          188
+        ],
+        [
+          230,
+          179
+        ],
+        [
+          166,
+          218
+        ],
+        [
+          182,
+          208
+        ],
+        [
+          198,
+          198
+        ],
+        [
+          214,
+          188
+        ],
+        [
+          230,
+          179
+        ],
+        [
+          198,
+          198
+        ]
+      ]
+    },
+    {
+      "kind": "siege",
+      "label": "Siege",
+      "templates": [
+        "stone_slammer.png",
+        "battle_blimp.png",
+        "battle_drill.png",
+        "flame_flinger.png",
+        "log_launcher.png",
+        "siege_barracks.png",
+        "sky_wagon.png",
+        "troop_launcher.png"
+      ],
+      "expected_taps": 1,
+      "batch_size": 1,
+      "recovery_taps": 0,
+      "points_left": [
+        [
+          190,
+          205
+        ]
+      ],
+      "outcome_key": "siege"
+    }
+  ],
+  "spells": [
+    {
+      "label": "Rage",
+      "templates": [
+        "rage_spell.png"
+      ],
+      "groups_left": [
+        [
+          [
+            255,
+            346
+          ],
+          [
+            332,
+            264
+          ]
+        ],
+        [
+          [
+            415,
+            205
+          ],
+          [
+            370,
+            348
+          ]
+        ],
+        [
+          [
+            439,
+            297
+          ]
+        ]
+      ],
+      "between_groups_seconds": 0.15,
+      "tap_interval_ms": 220
+    },
+    {
+      "label": "Freeze",
+      "templates": [
+        "freeze_spell.png"
+      ],
+      "groups_left": [
+        [
+          [
+            519,
+            244
+          ],
+          [
+            403,
+            305
+          ]
+        ],
+        [
+          [
+            328,
+            388
+          ],
+          [
+            310,
+            331
+          ]
+        ],
+        [
+          [
+            417,
+            273
+          ]
+        ]
+      ],
+      "between_groups_seconds": 0.15,
+      "tap_interval_ms": 220
+    }
+  ],
+  "abilities_phase": "after_spells",
+  "abilities_delay_seconds": 0.8,
+  "auto_discover_heroes": true,
+  "hero_points_left": [
+    [
+      190,
+      205
+    ],
+    [
+      196,
+      201
+    ],
+    [
+      202,
+      197
+    ],
+    [
+      208,
+      193
+    ],
+    [
+      214,
+      189
+    ],
+    [
+      202,
+      197
+    ]
+  ],
+  "ability_templates": [
+    "king_ability.png",
+    "queen_ability.png",
+    "royal_ability.png",
+    "grand_ability.png",
+    "hero_ability.png",
+    "duke_ability.png"
+  ],
+  "hero_ability_aliases": {
+    "king.png": "king_ability.png",
+    "archer_queen.png": "queen_ability.png",
+    "royal_champion.png": "royal_ability.png",
+    "grand_warden.png": "grand_ability.png",
+    "minion_hero.png": "hero_ability.png",
+    "dragon_duke.png": "duke_ability.png"
+  },
+  "event_troop_points_left": [
+    [
+      150,
+      228
+    ],
+    [
+      166,
+      218
+    ],
+    [
+      182,
+      208
+    ],
+    [
+      198,
+      198
+    ],
+    [
+      214,
+      188
+    ],
+    [
+      230,
+      179
+    ]
+  ],
+  "event_spell_points_left": [
+    [
+      255,
+      346
+    ],
+    [
+      332,
+      264
+    ],
+    [
+      415,
+      205
+    ],
+    [
+      370,
+      348
+    ],
+    [
+      439,
+      297
+    ]
+  ]
+}
