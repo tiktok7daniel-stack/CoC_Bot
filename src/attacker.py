@@ -525,7 +525,9 @@ class Attacker:
         uses_sides = any(plan.get(k) in ("sides", "left", "right") for k in ("troops_where", "heroes_where", "clan_where"))
         order = {"troop": 0, "clan": 1, None: 1, "hero": 2, "spell": 3}
         idx = sorted([i for i in range(len(card_centers)) if available_slots[i]], key=lambda i: order.get(card_types[i], 1))
-        hold_back = set(int(x) for x in str(plan.get("second_wave_spells", "")).replace(" ", "").split(",") if x.isdigit())
+        wave = [x.strip().lower() for x in str(plan.get("second_wave_spells", "")).replace("،", ",").split(",") if x.strip()]
+        hold_back = set(int(x) for x in wave if x.isdigit())
+        hold_names = set(x for x in wave if not x.isdigit())
         hero_n = 0
         for i in idx:
             t = card_types[i]
@@ -559,7 +561,7 @@ class Attacker:
                 self.heroes_done_at = time.monotonic()
             elif t == "spell":
                 self.spell_no = getattr(self, "spell_no", 0) + 1
-                if self.spell_no in hold_back:
+                if self.spell_no in hold_back or (hold_names and (self.card_name(cx) or "") in hold_names):
                     self.held_spells.append((cx, card_counts[i]))
                     continue
                 if plan.get("spells_where", "center") == "none": continue
@@ -569,6 +571,30 @@ class Attacker:
                 Input_Handler.click(cx, 0.9)
                 self.cast_spell(card_counts[i])
         Input_Handler.click(0.01, 0.9)
+
+    def name_cards(self, bar_frame, boundaries, types):
+        """bar_frame: bottom strip (y 0.82..1.0). Remembers card center -> unit name and logs the bar once."""
+        import unit_icons
+        if not hasattr(self, "card_names"): self.card_names = {}
+        w = bar_frame.shape[1]
+        names = []
+        for k, t in enumerate(types):
+            x1, x2 = boundaries[2 * k], boundaries[2 * k + 1]
+            cx = round((x1 + x2) / 2, 3)
+            if cx in self.card_names: names.append(self.card_names[cx] or "?"); continue
+            if t == "hero": self.card_names[cx] = None; names.append("hero"); continue
+            crop = bar_frame[:, max(0, int(x1 * w)):int(x2 * w)]
+            groups = ("spells",) if t == "spell" else ("troops", "sieges")
+            name, _ = unit_icons.identify(crop, groups=groups, min_score=0.7)
+            self.card_names[cx] = name
+            names.append(name or "?")
+        if names: logger.info("Troop bar: " + ", ".join(names))
+
+    def card_name(self, cx):
+        names = getattr(self, "card_names", {}) or {}
+        if not names: return None
+        k = min(names, key=lambda c: abs(c - cx))
+        return names[k] if abs(k - cx) < 0.02 else None
 
     def cast_spell(self, n):
         import random
@@ -635,6 +661,7 @@ class Attacker:
         self.side_points = None
         self.held_spells = []
         self.spell_no = 0
+        self.card_names = {}
         self.troops_done_at = self.heroes_done_at = None
         if getattr(self, "plan", None): logger.info(f"Attack plan: {self.plan.get('name', '')}")
         if getattr(self, "plan", None) and self.plan.get("recording"):
@@ -673,6 +700,10 @@ class Attacker:
             available_slots[:max(0, ATTACK_SLOT_RANGE[0] - total_slots_seen)] = 0
             available_slots[max(0, ATTACK_SLOT_RANGE[1] + 1 - total_slots_seen):] = 0
             
+            # Put a name on each card from the uploaded unit pictures (troops / spells / sieges)
+            try: self.name_cards(frame, card_boundaries, card_types)
+            except Exception: logger.debug("Card naming failed", exc_info=True)
+
             # Deploy troops up until the last one visible
             total_slots_seen += len(card_centers) - 1
             self.deploy_troops(card_centers[:-1], available_slots[:-1], card_types[:-1], card_counts[:-1])

@@ -275,6 +275,21 @@ def api_setup_action(action):
     r = fn(app_cfg, acc)
     return jsonify({"ok": r == "ok", "result": r})
 
+# ---------------------------------------------------------------- unit pictures (uploaded to the project)
+
+@app.route("/api/units", methods=["GET"])
+def api_units():
+    import unit_icons
+    return jsonify(unit_icons.catalog())
+
+@app.route("/unit/<group>/<name>.png", methods=["GET"])
+def unit_picture(group, name):
+    import unit_icons
+    from flask import send_file
+    p = unit_icons.path(group, name)
+    if p is None: abort(404)
+    return send_file(str(p), mimetype="image/png", max_age=86400)
+
 # ---------------------------------------------------------------- battle recordings
 
 @app.route("/api/recordings", methods=["GET"])
