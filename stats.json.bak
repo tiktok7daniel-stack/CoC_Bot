@@ -1,0 +1,18 @@
+{
+  "attacks": 7,
+  "successful_returns": 7,
+  "searches": 11,
+  "gold_found": 3902719,
+  "elixir_found": 3970951,
+  "dark_found": 27978,
+  "last_attack_ts": 1794768020,
+  "session_attacks": 6,
+  "session_gold": 3147904,
+  "session_elixir": 3268939,
+  "session_dark": 24311,
+  "session_started_ts": 1794766749,
+  "stars_0": 4,
+  "stars_1": 3,
+  "stars_2": 0,
+  "stars_3": 0
+}

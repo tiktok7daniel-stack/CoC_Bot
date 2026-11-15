@@ -1,0 +1,4 @@
+BUNNY BOT
+Copyright (C) 2026 BUNNY BOT. All Rights Reserved.
+
+This source package is provided only under the terms supplied by its distributor.
