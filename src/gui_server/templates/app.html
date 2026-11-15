@@ -530,6 +530,7 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
         <div class="row"><div class="lbl" data-t="break_every"></div><input class="in" type="number" min="10" data-bind="breaks.every_minutes" data-type="int"><span class="unit" data-t="minutes"></span></div>
         <div class="row"><div class="lbl" data-t="break_len"></div><input class="in" type="number" min="1" data-bind="breaks.length_minutes" data-type="int"><span class="unit" data-t="minutes"></span></div>
         <div class="row"><div class="lbl"><span data-t="keep_open"></span><small data-t="keep_open_sub"></small></div><label class="sw"><input type="checkbox" data-bind="game.keep_open"><span></span></label></div>
+        <div class="row"><div class="lbl"><span data-t="anti_idle"></span><small data-t="anti_idle_sub"></small></div><label class="sw"><input type="checkbox" data-bind="game.anti_idle"><span></span></label></div>
         <div class="row"><div class="lbl"><span data-t="apply_instantly"></span><small data-t="apply_instantly_sub"></small></div><label class="sw"><input type="checkbox" data-bind="game.apply_instantly"><span></span></label></div>
         <div class="note"><i class="fa-solid fa-circle-info"></i> <span data-t="interval_note"></span></div>
       </div>
@@ -828,6 +829,7 @@ ar:{
  save_report:"حفظ تقرير للمطوّر", open_folder:"فتح فولدر الصور", errors_k:"أخطاء", warnings_k:"تحذيرات", last_error:"آخر خطأ", no_errors:"مفيش أخطاء 🎉 البوت شغال تمام",
  report_saved:"التقرير اتحفظ على سطح المكتب:", during:"أثناء", fix:"الحل", tech:"تفاصيل تقنية", confirm_clear_err:"مسح قائمة الأخطاء؟",
  ph_start_game:"فتح اللعبة", ph_to_home:"الرجوع للقرية الرئيسية", ph_read_resources:"قراءة الموارد", ph_home_upgrades:"ترقيات القرية الرئيسية", ph_home_attack:"هجوم القرية الرئيسية", ph_walls_farming:"ترقية الجدران أثناء الفارم", ph_to_builder:"الانتقال لقاعدة البنّاء", ph_builder_upgrades:"ترقيات قاعدة البنّاء", ph_builder_attack:"هجوم قاعدة البنّاء", ph_finish:"إنهاء الدورة", ph_idle:"الانتظار بين الدورات",
+ anti_idle:"منع فصل اللعبة وقت الانتظار", anti_idle_sub:"اللعبة بتفصل اللي ما يلمسش الشاشة كام دقيقة — البوت بيحرّك الخريطة حركة صغيرة كل دقيقة ونص",
  run_now:"شغّل دورة الآن", run_now_t:"البوت هيبدأ دورة دلوقتي", saving:"جاري الحفظ…", auto_saved:"اتحفظ تلقائيًا",
  keep_open:"خلّي اللعبة مفتوحة", keep_open_sub:"البوت مش هيقفل اللعبة بعد كل دورة، ولو لقاها مفتوحة هيكمّل عليها من غير ما يعيد تشغيلها", apply_instantly:"طبّق التغييرات فورًا", apply_instantly_sub:"لما تغيّر أي إعداد والبوت مستني، يبدأ دورة جديدة بعد ثواني",
  battle_end_title:"إنهاء الهجوم", battle_end_sub:"إزاي البوت يخلّص المعركة بعد ما ينزّل الجيش", battle_end:"طريقة إنهاء المعركة", battle_end_hint:"الانتظار بيخلّي اللعبة مفتوحة. إعادة التشغيل أسرع بس اللعبة بتتقفل وتتفتح",
@@ -922,6 +924,7 @@ en:{
  save_report:"Save report for developer", open_folder:"Open screenshots folder", errors_k:"Errors", warnings_k:"Warnings", last_error:"Last error", no_errors:"No errors 🎉 the bot is running fine",
  report_saved:"Report saved to the Desktop:", during:"During", fix:"Fix", tech:"Technical details", confirm_clear_err:"Clear the error list?",
  ph_start_game:"Opening the game", ph_to_home:"Going to home village", ph_read_resources:"Reading resources", ph_home_upgrades:"Home upgrades", ph_home_attack:"Home attack", ph_walls_farming:"Walls while farming", ph_to_builder:"Going to builder base", ph_builder_upgrades:"Builder base upgrades", ph_builder_attack:"Builder base attack", ph_finish:"Finishing cycle", ph_idle:"Waiting between cycles",
+ anti_idle:"Prevent idle disconnect", anti_idle_sub:"The game disconnects players who don't touch the screen for a few minutes — the bot nudges the map every ~1.5 min",
  run_now:"Run cycle now", run_now_t:"The bot will start a cycle now", saving:"Saving…", auto_saved:"Saved automatically",
  keep_open:"Keep the game open", keep_open_sub:"Don't close the game after each cycle; if it's already open in a village, continue without restarting it", apply_instantly:"Apply changes instantly", apply_instantly_sub:"When you change a setting while the bot waits, a new cycle starts within seconds",
  battle_end_title:"Ending the battle", battle_end_sub:"How the bot finishes a battle after deploying", battle_end:"Battle end method", battle_end_hint:"Waiting keeps the game open. Restarting is faster but closes and reopens the game",
@@ -937,6 +940,7 @@ const LOG_AR = [
  [/^CoC already open/, "اللعبة مفتوحة بالفعل — هيكمّل عليها ✓"],
  [/^Settings changed, applying now/, "الإعدادات اتغيّرت — جاري التطبيق دلوقتي"],
  [/^Run now requested/, "تم طلب تشغيل دورة الآن"],
+ [/^CoC reconnected/, "اللعبة كانت فاصلة — داس Reload ورجعت ✓"],
  [/^Game stuck while starting, restarting it once/, "اللعبة علّقت وهي بتفتح أكتر من دقيقة — هيعيد فتحها مرة واحدة"],
  [/^Waiting for the emulator to finish starting\.\.\./, "مستني المحاكي يخلّص تشغيل…"],
  [/^Connecting to the emulator failed.*/, "الاتصال بالمحاكي ما نجحش — بيعيد المحاولة…"],

@@ -666,6 +666,15 @@ def start_coc(timeout=120, detailed=False, force_restart=False):
             logger.info("CoC already open")
             if not detailed: return True
             else: return True, "running"
+        # game open but showing something (e.g. the "Reload" popup after being idle): press it first
+        if not force_restart and ADB_Manager.adbutils_device.shell("pidof com.supercell.clashofclans").strip():
+            if Auto_Learn.handle_unknown_screen("start_game"):
+                for _ in range(15):
+                    time.sleep(1)
+                    if game_ready():
+                        logger.info("CoC reconnected")
+                        if not detailed: return True
+                        else: return True, "running"
         if force_restart:
             logger.info(f"Restarting CoC ({force_restart if isinstance(force_restart, str) else 'requested'})")
             to_system_home()

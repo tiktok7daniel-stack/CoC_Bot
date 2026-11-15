@@ -86,12 +86,28 @@ class CoC_Bot:
         Wait between cycles, but wake up early when the user presses "run now"
         or changes settings in the GUI (applies them right away while the game is open).
         """
-        import time
+        import time, random
         start = time.monotonic()
         seen_mtime = bot_settings.mtime(_utils.INSTANCE_ID)
         changed_at = None
+        game = getattr(self, "settings", None) or {}
+        game = game.get("game", {})
+        # the game disconnects players who don't touch the screen for a few minutes:
+        # while the game is kept open, nudge the map now and then like a player would
+        anti_idle = game.get("keep_open", True) and game.get("anti_idle", True)
+        next_nudge = time.monotonic() + random.uniform(70, 110)
         while time.monotonic() - start < minutes * 60:
             time.sleep(2)
+            if anti_idle and time.monotonic() >= next_nudge and running():
+                next_nudge = time.monotonic() + random.uniform(70, 110)
+                try:
+                    if game_ready():
+                        dy = random.uniform(0.03, 0.06)
+                        Input_Handler.swipe(0.5, 0.5, 0.5, 0.5 + dy, duration=200)
+                        Input_Handler.swipe(0.5, 0.5 + dy, 0.5, 0.5, duration=200)
+                except (KeyboardInterrupt, SystemExit): raise
+                except Exception:
+                    pass
             if bot_settings.consume_wake(_utils.INSTANCE_ID):
                 logger.info("Run now requested")
                 return
