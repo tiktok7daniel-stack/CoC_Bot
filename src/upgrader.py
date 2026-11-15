@@ -1500,13 +1500,16 @@ class Upgrader:
         Input_Handler.zoom(dir="out")
         Input_Handler.swipe_down()
         
-        # Building upgrades
+        # Building upgrades (and walls: they need no builder and work even with buildings turned off)
         upgrades_started = []
-        if not exclude_base:
-            base_priority = [list(lvl) for lvl in configs.HOME_BASE_UPGRADE_PRIORITY]
+        base_priority = [list(lvl) for lvl in configs.HOME_BASE_UPGRADE_PRIORITY]
+        walls_wanted = any("Wall" in lvl for lvl in base_priority) and self.wall_budget > 0
+        if not exclude_base or walls_wanted:
             walls_done = 0
+            wall_misses = 0
             counter = 0
-            while counter < MAX_UPGRADES_PER_CHECK:
+            if walls_wanted: logger.info("Upgrading walls")
+            while counter < max(MAX_UPGRADES_PER_CHECK, min(self.wall_budget, 200) if walls_wanted else 0):
                 counter += 1
                 try:
                     # Wall budget: once used up, walls are removed from both priority and random picks
@@ -1521,25 +1524,47 @@ class Upgrader:
                     initial_builders = self.get_home_builders(1)
                     # walls don't need a free builder, so keep going while wall budget remains
                     if initial_builders <= max(0, OPEN_HOME_BUILDERS) and self.skip_walls: break
-                    upgraded = self.home_upgrade()
+                    walls_only = exclude_base or initial_builders <= max(0, OPEN_HOME_BUILDERS)
+                    if walls_only:
+                        if self.skip_walls: break
+                        upgraded = self.home_specified_upgrade(["Wall"]) # no builder / buildings off: walls only
+                    else:
+                        upgraded = self.home_upgrade()
                     time.sleep(0.5)
                     final_builders = self.get_home_builders(1)
                     if upgraded is not None:
                         upgraded = upgraded.lower()
                         if upgraded == "wall":
                             walls_done += 1
+                            wall_misses = 0
                             self.on_upgrade("wall", "Wall")
+                            logger.info(f"Wall upgraded ({walls_done})")
                             continue
                         if final_builders < initial_builders:
                             upgrades_started.append(upgraded)
                             self.on_upgrade("building", upgraded)
-                        elif final_builders == initial_builders: break
-                    else: break
+                        elif final_builders == initial_builders:
+                            if walls_wanted and not self.skip_walls and not walls_only:
+                                exclude_base = True # buildings can't go on: spend the rest on walls
+                                continue
+                            break
+                    elif walls_wanted and not self.skip_walls and not walls_only:
+                        exclude_base = True # no building to upgrade: try walls before giving up
+                        continue
+                    else:
+                        if walls_wanted and walls_only:
+                            logger.info("No more walls could be upgraded (not enough resources, or no wall in the builder menu)" if walls_done == 0
+                                        else f"Walls done: {walls_done} upgraded")
+                        break
                 except (KeyboardInterrupt, SystemExit): raise
                 except:
                     logger.warning("Encountered an error while attempting to upgrade home base. Retrying...")
             configs.HOME_BASE_UPGRADE_PRIORITY = base_priority
             self.skip_walls = False
+            if walls_wanted and walls_done > 0:
+                logger.info(f"Walls finished: {walls_done} upgraded")
+                try: send_notification(f"🧱 البوت خلّص الأسوار: طوّر {walls_done} سور")
+                except Exception: pass
         if not Task_Handler.excluded("builder_apprentice"):
             self.assign_builder_apprentice()
         

@@ -64,6 +64,7 @@ class CoC_Bot:
         except Exception:
             pass
         after = self.read_and_record_resources(builder_base=builder)
+        if not builder: self.learn_caps(before, after)
         loot = {}
         for k in ("gold", "elixir", "dark"):
             b, a = (before or {}).get(k), (after or {}).get(k)
@@ -73,6 +74,64 @@ class CoC_Bot:
         self.session_attacks += 1
         logger.info(f"Attack ({base}) loot: gold={loot['gold']} elixir={loot['elixir']} dark={loot['dark']}")
         logger.info(f"Attack took {time.monotonic() - t0:.0f}s")
+
+    # ---------------------------------------------------------------- farm until full
+    def _caps_path(self):
+        from pathlib import Path
+        return Path.home() / ".CoC_Bot" / f"caps_{_utils.INSTANCE_ID}.json"
+
+    def caps(self):
+        import json
+        if getattr(self, "_caps", None) is None:
+            try: self._caps = json.loads(self._caps_path().read_text())
+            except (OSError, ValueError): self._caps = {}
+        return self._caps
+
+    def learn_caps(self, before, after):
+        """A storage that didn't grow while the other one did is full: remember its size."""
+        import json
+        if not before or not after: return
+        caps = self.caps()
+        gained = {k: (after.get(k) or 0) - (before.get(k) or 0) for k in ("gold", "elixir")}
+        for k, other in (("gold", "elixir"), ("elixir", "gold")):
+            v = after.get(k)
+            if v and caps.get(k) and v > caps[k] * 1.02: # storage got bigger (upgraded)
+                caps.pop(k)
+                try: self._caps_path().write_text(json.dumps(caps))
+                except OSError: pass
+            if v and v >= 500000 and gained[k] <= 0 and gained[other] > 20000 and v > caps.get(k, 0) * 0.98:
+                caps[k] = v
+                logger.info(f"Learned the {k} storage size: {v}")
+                try: self._caps_path().write_text(json.dumps(caps))
+                except OSError: pass
+
+    def full_resources(self, s):
+        """Which storages are full now (user amount, else the learned storage size)."""
+        f = s["attack"].get("farm", {})
+        res = getattr(self, "last_res", None) or {}
+        caps, full = self.caps(), []
+        for k in ("gold", "elixir"):
+            v, limit = res.get(k), int(f.get(f"{k}_full", 0) or 0)
+            if not v: continue
+            if limit > 0 and v >= limit: full.append(k)
+            elif limit <= 0 and caps.get(k) and v >= caps[k] * 0.98: full.append(k)
+        return full
+
+    def spend_when_full(self, s):
+        """Walls first (all of them that can be paid), then the normal upgrades. True if anything was spent."""
+        before = dict(getattr(self, "last_res", None) or {})
+        logger.info("Storages full: upgrading walls and buildings")
+        set_phase("spend_full")
+        self.upgrader.wall_budget = 10**6
+        to_home_base()
+        try: self.upgrader.run_home_base(self.excluded("home_base"), self.excluded("home_lab"), self.excluded("pet_house"))
+        except (KeyboardInterrupt, SystemExit): raise
+        except Exception: logger.exception("Spending when full failed")
+        to_home_base()
+        after = self.read_and_record_resources() or {}
+        spent = any((before.get(k) or 0) - (after.get(k) or 0) > 1000 for k in ("gold", "elixir"))
+        logger.info("Spent the loot, back to attacking" if spent else "Nothing could be bought")
+        return spent
 
     def run_routines(self, s):
         """Tap the taught buttons of every enabled routine, in order (missing steps are skipped)."""
@@ -227,6 +286,7 @@ class CoC_Bot:
                     up_turn = self.cycle_count % max(1, int(s["upgrades"].get("every_cycles", 1))) == 0 or self.cycle_count == 1
                     def home_upgrades_wanted():
                         if not up_turn: return False
+                        if walls["enabled"] and self.upgrader.wall_budget > 0: return True # walls work even with buildings off
                         return not (self.excluded("home_base") and self.excluded("home_lab") and self.excluded("pet_house"))
                     def builder_upgrades_wanted():
                         if not up_turn: return False
@@ -248,7 +308,27 @@ class CoC_Bot:
                         self.load_settings()
                         self.upgrader.run_home_base(self.excluded("home_base"), self.excluded("home_lab"), self.excluded("pet_house"))
 
-                    if running() and not self.excluded("home_attacks") and self.storages_full(self.settings):
+                    farm = self.settings["attack"].get("farm", {})
+                    if running() and not self.excluded("home_attacks") and farm.get("enabled", True):
+                        # attack non-stop; when the storages are full spend them, then attack again
+                        attacks = 0
+                        while running() and not self.excluded("home_attacks") and attacks < 300:
+                            self.load_settings()
+                            if not self.settings["attack"].get("farm", {}).get("enabled", True): break
+                            if self.full_resources(self.settings):
+                                if self.spend_when_full(self.settings) and not self.full_resources(self.settings): continue
+                                rest = max(1, float(self.settings["attack"]["farm"].get("rest_minutes", 30)))
+                                logger.info(f"Storages full and nothing to spend on: closing the game for {rest:.0f} minutes")
+                                stop_coc(reason="storages full")
+                                update_status("break")
+                                self.idle(rest)
+                                break
+                            set_phase("home_attack")
+                            attacks += 1
+                            logger.info(f"Attacking home base (#{attacks})")
+                            self.attacker.choose_strategy([e for e in stats.read(_utils.INSTANCE_ID) if e["type"] == "attack" and e.get("base") == "home"][-60:])
+                            self.attack_with_loot("home", lambda: self.attacker.run_home_base(restart=True))
+                    elif running() and not self.excluded("home_attacks") and self.storages_full(self.settings):
                         logger.info("Storages are full, skipping home attacks")
                     elif running() and not self.excluded("home_attacks"):
                         n = max(1, int(self.settings["attack"]["home_attacks_per_cycle"]))

@@ -81,6 +81,12 @@ def default_settings():
                 "enabled": False, "min_gold": 300000, "min_elixir": 300000, "min_dark": 0,
                 "mode": "all", "max_skips": 30,
             },
+            "farm": {                # attack non-stop; when the storages are full spend on walls/upgrades, then attack again
+                "enabled": True,
+                "gold_full": 0,      # gold counts as full from this amount (0 = learn the storage size by itself)
+                "elixir_full": 0,
+                "rest_minutes": 30,  # full and nothing to spend on: close the game and rest this long
+            },
             "skip_when_full": {      # don't attack while the storages are (nearly) full
                 "enabled": False, "gold": 0, "elixir": 0,
             },

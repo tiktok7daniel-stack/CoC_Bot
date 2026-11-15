@@ -331,9 +331,14 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
     <button class="btn" onclick="showTab('sch')"><i class="fa-regular fa-clock"></i><span data-t="tab_sch"></span></button>
   </div>
   <div class="card" style="margin-bottom:14px">
-    <div class="card-h"><div class="ico"><i class="fa-solid fa-wand-magic-sparkles"></i></div><h3 data-t="preset_title"></h3><div class="tools"><span class="pill" id="presetNow"></span></div></div>
-    <div class="card-sub" data-t="preset_sub"></div>
-    <div class="card-b"><div class="opt-cards" style="grid-template-columns:repeat(3,1fr)" id="presetBox"></div></div>
+    <div class="card-h"><div class="ico"><i class="fa-solid fa-arrows-spin"></i></div><h3 data-t="farm_title"></h3></div>
+    <div class="card-sub" data-t="farm_sub"></div>
+    <div class="card-b">
+      <div class="row"><div class="lbl"><span data-t="farm_on"></span><small data-t="farm_on_sub"></small></div><label class="sw"><input type="checkbox" data-bind="attack.farm.enabled"><span></span></label></div>
+      <div class="row"><div class="lbl" style="display:flex;align-items:center;gap:8px"><svg width="20" height="20"><use href="#i-gold"/></svg><span><span data-t="farm_gold"></span><small data-t="farm_auto_sub"></small></span></div><input class="in" type="number" min="0" step="100000" data-bind="attack.farm.gold_full" data-type="int" style="width:150px"></div>
+      <div class="row"><div class="lbl" style="display:flex;align-items:center;gap:8px"><svg width="20" height="20"><use href="#i-elixir"/></svg><span><span data-t="farm_elixir"></span><small data-t="farm_auto_sub"></small></span></div><input class="in" type="number" min="0" step="100000" data-bind="attack.farm.elixir_full" data-type="int" style="width:150px"></div>
+      <div class="row"><div class="lbl"><span data-t="farm_rest"></span><small data-t="farm_rest_sub"></small></div><input class="in" type="number" min="1" data-bind="attack.farm.rest_minutes" data-type="float"><span class="unit" data-t="minutes"></span></div>
+    </div>
   </div>
   <div class="grid">
     <div class="card">
@@ -930,6 +935,10 @@ ar:{
  one_err:"خطأ", one_warn:"تحذير",
  brand_sub:"أتمتة كلاش أوف كلانس",
  as_plans:"التشكيلات",
+ farm_title:"طريقة اللعب", farm_sub:"البوت بيهاجم على طول. أول ما الدهب أو الإكسير يتملي، يوقف الهجوم ويصرفهم على الأسوار والترقيات لحد ما يخلصوا، وبعدين يرجع يهاجم تاني — وهكذا.",
+ farm_on:"هجوم مستمر + صرف على الأسوار لما يتملي", farm_on_sub:"لو قفلته البوت بيرجع يشتغل بالدورات العادية",
+ farm_gold:"الدهب يعتبر مليان من", farm_elixir:"الإكسير يعتبر مليان من", farm_auto_sub:"0 = البوت يعرف حجم المخزن لوحده (لما الهجمة تجيب لوت والمخزن ما يزيدش)",
+ farm_rest:"لو مليان ومفيش حاجة يصرف عليها", farm_rest_sub:"يقفل اللعبة ويستريح المدة دي وبعدين يرجع",
  su_title:"تجهيز البوت", su_sub:"هنا بتتأكد إن كل حاجة جاهزة قبل ما تشغّل: المحاكي، الاتصال، الدقة، واللعبة — لكل حساب. لما كله يبقى أخضر دوس \"ابدأ البوت\".",
  su_save:"حفظ", su_refresh:"تحديث", su_copies:"نسخ المحاكي", su_accounts:"حسابات البوت", su_ready:"جاهز",
  su_not_found:"مش لاقي {e} على الجهاز — اكتب مكان الفولدر بتاعه (اللي فيه ldconsole.exe) ودوس حفظ",
@@ -1084,6 +1093,10 @@ en:{
  one_err:"Error", one_warn:"Warning",
  brand_sub:"Clash of Clans automation",
  as_plans:"Loadouts",
+ farm_title:"How to play", farm_sub:"The bot attacks non-stop. When gold or elixir is full it upgrades walls and buildings until spent, then attacks again.",
+ farm_on:"Non-stop attacks + spend on walls when full", farm_on_sub:"Off = the normal cycles",
+ farm_gold:"Gold counts as full from", farm_elixir:"Elixir counts as full from", farm_auto_sub:"0 = learn the storage size by itself",
+ farm_rest:"Full and nothing to spend on", farm_rest_sub:"Close the game and rest this long",
  su_title:"Setup", su_sub:"Check the emulator, connection, resolution and game for every account, then start the bot.",
  su_save:"Save", su_refresh:"Refresh", su_copies:"Emulator copies", su_accounts:"Bot accounts", su_ready:"Ready",
  su_not_found:"{e} not found — enter its folder (with ldconsole.exe) and save",
@@ -1206,6 +1219,17 @@ const LOG_AR = [
  [/^Pre-flight problem: (.*)/, "❌ مشكلة: $1"],
  [/^Army deployed, leaving the battle right away/, "⚡ نزّل الجيش — خرج من المعركة على طول"],
  [/^Battle over, returning home/, "✓ المعركة خلصت — راجع القرية"],
+ [/^Attacking home base \(#(\d+)\)/, "⚔ هجمة رقم $1"],
+ [/^Learned the (gold|elixir) storage size: (\d+)/, (m, k, v) => `✓ عرف حجم مخزن ${k === "gold" ? "الدهب" : "الإكسير"}: ${(+v).toLocaleString("en")}`],
+ [/^Upgrading walls$/, "🧱 بيطوّر الأسوار…"],
+ [/^Walls finished: (\d+) upgraded/, "🎉 خلّص الأسوار: طوّر $1 سور"],
+ [/^Wall upgraded \((\d+)\)/, "✓ طوّر سور ($1)"],
+ [/^Walls done: (\d+) upgraded/, "✓ خلّص الأسوار: طوّر $1"],
+ [/^No more walls could be upgraded.*/, "مقدرش يطوّر أسوار — يا الفلوس مش كفاية، يا مالقاش السور في قايمة البنّاء"],
+ [/^Storages full: upgrading walls and buildings/, "💰 المخازن اتملت — بيطوّر الأسوار والمباني"],
+ [/^Spent the loot, back to attacking/, "✓ صرف الفلوس — راجع يهاجم تاني"],
+ [/^Nothing could be bought/, "مالقاش حاجة يشتريها"],
+ [/^Storages full and nothing to spend on: closing the game for (\d+) minutes/, "المخازن مليانة ومفيش حاجة يصرف عليها — قفل اللعبة وهيستريح $1 دقيقة"],
  [/^Attack took (\d+)s/, "⏱ الهجمة خدت $1 ثانية"],
  [/^Loot stopped for (\d+)s, ending the battle early/, "⚡ اللوت وقف $1 ثانية — البوت أنهى المعركة بدري عشان يوفّر وقت"],
  [/^Bot starting: preparing the emulator/, "🚀 البوت بيبدأ: بيجهّز المحاكي…"],
@@ -1638,7 +1662,7 @@ function presetMatch(){
   return "custom";
 }
 function renderPresets(){
-  if (!S) return;
+  if (!S || !$("#presetBox")) return; // presets were removed from the home page
   const cur = presetMatch();
   $("#presetNow").innerHTML = `<span class="dot" style="background:${cur === "custom" ? "var(--warn)" : "var(--ok)"}"></span>${t("pr_now")}: ${t("pr_" + cur)}`;
   $("#presetBox").innerHTML = Object.entries(PRESETS).map(([k, p]) => `
@@ -1946,9 +1970,32 @@ function renderStats(){
   $("#upgTable").innerHTML = up.length ? up.map(e => `<tr><td class="num">${new Date(e.t * 1000).toLocaleString("en-GB")}</td><td>${t("k_" + e.kind)}</td><td>${e.name || ""}</td></tr>`).join("") : `<tr><td colspan="3" class="empty">—</td></tr>`;
 }
 async function resetStats(){ if (!confirm(t("confirm_reset"))) return; await api(`/api/stats/${encodeURIComponent(CUR)}/reset`, {method:"POST", body:{}}); loadStats(); }
+let NOTIFIED = null;
 async function loadLog(){
   if (!CUR) return;
-  try { const r = await api(`/api/log/${encodeURIComponent(CUR)}?n=600`); LOG = r.lines; renderLog(); } catch(e) {}
+  try { const r = await api(`/api/log/${encodeURIComponent(CUR)}?n=600`); LOG = r.lines; renderLog(); notifyFromLog(); } catch(e) {}
+}
+/* pop-up when the bot finishes the walls (only for new log lines) */
+function notifyFromLog(){
+  const hits = LOG.filter(l => /Walls finished: \d+ upgraded/.test(l));
+  const last = hits[hits.length - 1] || "";
+  if (NOTIFIED === null) { NOTIFIED = last; return; } // lines already there when the app opened
+  if (last && last !== NOTIFIED) {
+    NOTIFIED = last;
+    const n = (last.match(/Walls finished: (\d+)/) || [])[1];
+    showBanner(`🧱 البوت خلّص الأسوار — طوّر ${n} سور`);
+    try { if (window.Notification && Notification.permission === "granted") new Notification("CoC Bot", {body: `البوت خلّص الأسوار — طوّر ${n} سور`}); } catch(e) {}
+  }
+}
+function showBanner(text){
+  let b = $("#doneBanner");
+  if (!b) {
+    b = document.createElement("div"); b.id = "doneBanner";
+    b.style.cssText = "position:fixed;top:90px;left:50%;transform:translateX(-50%);z-index:80;background:linear-gradient(180deg,#1f9d5a,#147a44);color:#fff;font-weight:800;font-size:18px;padding:14px 22px;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.4);display:flex;gap:14px;align-items:center";
+    document.body.appendChild(b);
+  }
+  b.innerHTML = `<span>${esc(text)}</span><button class="btn sm" onclick="this.parentNode.remove()">تمام</button>`;
+  try { const a = new (window.AudioContext || window.webkitAudioContext)(); const o = a.createOscillator(); o.frequency.value = 880; o.connect(a.destination); o.start(); o.stop(a.currentTime + 0.25); } catch(e) {}
 }
 let logCleared = 0;
 function parseLog(lines){
@@ -2271,7 +2318,7 @@ async function refreshAll(user){
   loadSystem(); setInterval(() => { if (curTab === "dash") loadSystem(); }, 3000);
   showAtk("plans"); loadRecordings();
   if (APP.show_setup !== false) openSetup();
-  setInterval(() => { loadStats(); if (curTab === "res" || curTab === "dash") loadLog(); if (curTab === "err") loadErrors(); updateSchedNote(); }, 5000);
+  setInterval(() => { loadStats(); loadLog(); if (curTab === "err") loadErrors(); updateSchedNote(); }, 5000);
 })();
 </script>
 </body>
