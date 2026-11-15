@@ -2360,7 +2360,7 @@ AUTO_WORDS = {
     "train_button":   ["quick train", "train again", "train"],
 }
 # words on popups that are safe to press to get out of the way
-DISMISS_WORDS = ["later", "not now", "close", "okay", "continue", "claim", "collect", "got it", "tap to continue"]
+DISMISS_WORDS = ["reload", "try again", "retry", "later", "not now", "close", "okay", "continue", "claim", "collect", "got it", "tap to continue"]
 
 def ocr_boxes(frame):
     """[(text, x1, y1, x2, y2, conf)] with fractions of the frame. easyocr first, Tesseract TSV fallback."""
@@ -2492,3 +2492,12 @@ class Auto_Learn:
         except Exception:
             logger.warning("Could not analyse the unknown screen")
             return False
+
+def read_fraction(section):
+    """Read a counter like "1/2" with Tesseract (fallback when the template digits don't match). -> (a, b) or None"""
+    import re
+    for img in (section,):
+        text = Tesseract.read(img, digits=False, psm=7) or ""
+        m = re.search(r"(\d+)\s*/\s*(\d+)", text.replace("O", "0").replace("o", "0"))
+        if m: return int(m.group(1)), int(m.group(2))
+    return None

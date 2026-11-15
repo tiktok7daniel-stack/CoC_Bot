@@ -222,6 +222,14 @@ class Upgrader:
             except Exception as e:
                 logger.error(f"Upgrader.home_lab_available: {e}")
             time.sleep(0.5)
+        # fallback: read the "x/y" counter as text
+        try:
+            frac = read_fraction(Frame_Handler.get_frame_section(0.94, 0.75, -0.02, -0.21, high_contrast=True))
+            if frac is not None:
+                logger.info(f"Upgrader.home_lab_available: read counter {frac[0]}/{frac[1]} with OCR")
+                return frac[0] > 0
+        except (KeyboardInterrupt, SystemExit): raise
+        except Exception: pass
         logger.error("Upgrader.home_lab_available: Failed to get home lab availability")
         raise Exception("Failed to get home lab availability")
 
@@ -268,6 +276,14 @@ class Upgrader:
             except Exception as e:
                 logger.error(f"Upgrader.builder_lab_available: {e}")
             time.sleep(0.5)
+        # fallback: read the "x/y" counter as text
+        try:
+            frac = read_fraction(Frame_Handler.get_frame_section(0.94, 0.75, -0.02, -0.21, high_contrast=True))
+            if frac is not None:
+                logger.info(f"Upgrader.builder_lab_available: read counter {frac[0]}/{frac[1]} with OCR")
+                return frac[0] > 0
+        except (KeyboardInterrupt, SystemExit): raise
+        except Exception: pass
         logger.error("Upgrader.builder_lab_available: Failed to get builder lab availability")
         raise Exception("Failed to get builder lab availability")
     

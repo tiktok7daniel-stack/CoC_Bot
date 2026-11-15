@@ -314,6 +314,115 @@ def api_discovered_use(id):
     shutil.copyfile(src, teach.capture_path(id))
     return jsonify({"ok": True})
 
+# ---------------------------------------------------------------- system check
+
+def _bluestacks_conf():
+    for c in (r"C:\ProgramData\BlueStacks_nxt\bluestacks.conf", "/Users/Shared/Library/Application Support/BlueStacks/bluestacks.conf"):
+        if Path(c).exists(): return Path(c)
+    return None
+
+@app.route("/api/syscheck/<id>", methods=["GET"])
+def api_syscheck(id):
+    """Checks everything the bot depends on; each item: {key, status: ok|warn|bad, info}."""
+    import re, shutil, subprocess, importlib.util
+    if not valid_id(id): abort(404)
+    out = []
+    add = lambda key, status, info="": out.append({"key": key, "status": status, "info": str(info)})
+    kw = {"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform == "win32" else {}
+    app_cfg = bot_settings.load_app()
+
+    # Python
+    v = sys.version_info
+    add("python", "ok" if v >= (3, 11) else "bad", f"{v.major}.{v.minor}.{v.micro}")
+
+    # ADB program
+    adb = None
+    if app_cfg.get("emulator") == "bluestacks" and sys.platform == "win32":
+        p = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "BlueStacks_nxt" / "HD-Adb.exe"
+        if p.exists(): adb = str(p)
+    adb = adb or shutil.which("adb")
+    add("adb", "ok" if adb else "bad", adb or "")
+
+    # Other programs running their own ADB (they kill each other's connection)
+    try:
+        import psutil
+        paths = set()
+        for proc in psutil.process_iter(["name", "exe"]):
+            name = (proc.info.get("name") or "").lower()
+            if name in ("adb.exe", "hd-adb.exe", "adb"):
+                paths.add(proc.info.get("exe") or name)
+        others = [x for x in paths if not adb or str(Path(x)).lower() != str(Path(adb)).lower()]
+        add("adb_conflict", "warn" if others else "ok", " | ".join(sorted(others)))
+    except Exception as e:
+        add("adb_conflict", "warn", e)
+
+    # BlueStacks instance, port and resolution
+    port = None
+    conf = _bluestacks_conf() if app_cfg.get("emulator") == "bluestacks" else None
+    if app_cfg.get("emulator") == "bluestacks":
+        if conf is None:
+            add("bs_instance", "bad", "bluestacks.conf")
+        else:
+            text = conf.read_text(errors="ignore")
+            inst = next((m.group(1) for m in re.finditer(r'^bst\.instance\.([^.]+)\.display_name="?(.*?)"?$', text, re.M) if m.group(2) == id), None)
+            if inst is None:
+                add("bs_instance", "bad", id)
+            else:
+                get = lambda k: (re.search(rf'^bst\.instance\.{re.escape(inst)}\.{k}="?(.*?)"?$', text, re.M) or [None, None])[1]
+                port = get("adb_port")
+                add("bs_instance", "ok", f"{id} → {inst}, ADB 127.0.0.1:{port}")
+                w, h = get("fb_width"), get("fb_height")
+                if w and h: add("resolution", "ok" if (w, h) == ("1920", "1080") else "bad", f"{w}×{h}")
+                if get("enable_adb_access") == "0": add("bs_adb_setting", "bad", "")
+
+    # Device state
+    if adb and port:
+        try:
+            r = subprocess.run([adb, "devices"], capture_output=True, text=True, timeout=10, **kw)
+            state = next((l.split()[1] for l in r.stdout.splitlines() if l.startswith(f"127.0.0.1:{port}") and len(l.split()) > 1), None)
+            add("device", "ok" if state == "device" else ("warn" if state is None else "bad"), state or "-")
+        except Exception as e:
+            add("device", "bad", e)
+
+    # Bot running
+    add("bot_running", "ok" if id in instances else "warn", "")
+
+    # OCR
+    add("tesseract", "ok" if _find_tesseract() else "warn", _find_tesseract() or "")
+    add("easyocr", "ok" if importlib.util.find_spec("easyocr") else "bad", "")
+
+    # Learned items
+    try:
+        import teach
+        meta = teach.load_meta()
+        add("learned", "ok" if meta else "warn", f"{len(meta)} ({sum(1 for e in meta.values() if e.get('auto'))} auto)")
+    except Exception as e:
+        add("learned", "warn", e)
+
+    # Internet + GitHub token
+    try:
+        import requests
+        from version import UPDATE_REPO
+        token = app_cfg.get("github_token", "")
+        headers = {"Accept": "application/vnd.github+json"}
+        if token: headers["Authorization"] = f"Bearer {token}"
+        r = requests.get(f"https://api.github.com/repos/{UPDATE_REPO}", headers=headers, timeout=10)
+        add("internet", "ok", "")
+        if not token:
+            add("gh_token", "warn", "")
+        elif r.status_code == 401:
+            add("gh_token", "bad", "401")
+        elif r.status_code != 200:
+            add("gh_token", "bad", r.status_code)
+        else:
+            add("gh_token", "ok", "")
+            add("gh_issues", "ok" if r.json().get("has_issues") else "bad", "")
+            r2 = requests.get(f"https://api.github.com/repos/{UPDATE_REPO}/issues?per_page=1", headers=headers, timeout=10)
+            add("gh_issues_perm", "ok" if r2.status_code == 200 else "bad", r2.status_code)
+    except Exception as e:
+        add("internet", "bad", e)
+    return jsonify({"items": out})
+
 # ---------------------------------------------------------------- GitHub error reports
 
 def _sanitize(text):

@@ -626,6 +626,12 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
 
 <!-- ============================ ERRORS ============================ -->
 <section class="page" id="p-err">
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-h"><div class="ico" style="color:var(--ok)"><i class="fa-solid fa-stethoscope"></i></div><h3 data-t="sc_title"></h3>
+      <div class="tools"><button class="btn sm go" onclick="runSysCheck()"><i class="fa-solid fa-play"></i><span data-t="sc_run"></span></button></div></div>
+    <div class="card-sub" data-t="sc_sub"></div>
+    <div class="card-b" id="scBox"><div class="empty" data-t="sc_hint"></div></div>
+  </div>
   <div class="card">
     <div class="card-h"><div class="ico" style="color:var(--bad)"><i class="fa-solid fa-bug"></i></div><h3 data-t="err_title"></h3>
       <div class="tools">
@@ -780,6 +786,15 @@ ar:{
  tess_found_at:"موجود في:", tess_hint:"اضغط \"تثبيت Tesseract\" — هتفتح نافذة سودا تثبّته لوحدها، وافق لو ويندوز سألك. لحد ما يتثبّت البوت بيستخدم easyocr عادي.", tess_installing:"جاري التثبيت في النافذة اللي اتفتحت… الحالة هتتحدث لوحدها لما يخلص.", groq_key:"مفتاح Groq API",
  unsaved:"تغييرات غير محفوظة. اضغط على حفظ الإعدادات لتطبيقها على البوت.", start_bot:"بدء البوت", save_settings:"حفظ الإعدادات",
  one_err:"خطأ", one_warn:"تحذير",
+ sc_title:"فحص النظام", sc_run:"افحص دلوقتي", sc_sub:"بيفحص كل حاجة البوت محتاجها ويقولك إيه السليم وإيه اللي محتاج تصليح", sc_hint:"دوس \"افحص دلوقتي\"", sc_running:"جاري الفحص… (ثواني)",
+ sc_all_ok:"✅ كل حاجة سليمة", sc_some:"⚠️ فيه {n} حاجة محتاجة انتباه — اقرا الحل تحت كل واحدة",
+ sc_python:"نسخة بايثون", sc_adb:"برنامج الاتصال بالمحاكي (ADB)", sc_adb_conflict:"برامج تانية بتستخدم ADB", sc_bs_instance:"نسخة المحاكي باسم الحساب", sc_resolution:"دقة شاشة المحاكي", sc_bs_adb_setting:"إعداد ADB في المحاكي",
+ sc_device:"حالة الاتصال بالمحاكي", sc_bot_running:"البوت شغال", sc_tesseract:"قارئ الأرقام السريع (Tesseract)", sc_easyocr:"قارئ الكلام (easyocr)", sc_learned:"الحاجات اللي البوت اتعلّمها",
+ sc_internet:"الإنترنت", sc_gh_token:"مفتاح جيت هاب", sc_gh_issues:"خانة البلاغات في المستودع", sc_gh_issues_perm:"صلاحية المفتاح على البلاغات",
+ scf_python:"لازم 3.11 أو أحدث", scf_adb:"اتأكد إن BlueStacks متسطّب", scf_adb_conflict:"فيه برنامج تاني (زي ACBot) شغّال بـ ADB مختلف — ده بيقطع الاتصال. اقفله خالص قبل تشغيل البوت",
+ scf_bs_instance:"اسم نسخة المحاكي لازم يكون نفس اسم الحساب بالظبط (من مدير النسخ)", scf_resolution:"خلّي دقة المحاكي 1920×1080 من إعدادات BlueStacks ← الشاشة", scf_bs_adb_setting:"فعّل ADB من إعدادات BlueStacks ← متقدم",
+ scf_device:"المحاكي مش متصل — شغّل المحاكي أو البوت، ولو مكتوب offline اعمل ريستارت للمحاكي", scf_bot_running:"شغّل البوت عشان يتصل بالمحاكي", scf_tesseract:"ثبّته من الإعدادات ← قراءة النصوص والأرقام", scf_easyocr:"شغّل setup.py تاني",
+ scf_learned:"البوت هيتعلّم لوحده بعد أول هجوم", scf_internet:"اتأكد من النت", scf_gh_token:"حط المفتاح من الإعدادات ← تقارير الأخطاء", scf_gh_issues:"افتح إعدادات المستودع على جيت هاب وعلّم على Issues", scf_gh_issues_perm:"اعمل مفتاح جديد بصلاحية Issues: Read and write على مستودع CoC_Bot",
  st_limit:"وصل للحد", st_break:"في استراحة",
  auto_title:"التعلّم التلقائي 🤖", auto_on:"شغّال", auto_badge:"اتعلّمها لوحده",
  auto_sub:"البوت بيقرا الشاشة: بيتعلّم الأزرار المكتوب عليها (Next، Return Home، Okay، Collect، Train…) وأماكن غنيمة الخصم لوحده. وأي شاشة مش فاهمها بيسجّلها هنا، ويدوس على زرار آمن (Later / Close / Okay…) عشان يكمّل",
@@ -864,6 +879,15 @@ en:{
  tess_found_at:"Found at:", tess_hint:"Click \"Install Tesseract\" — a console window installs it; accept if Windows asks. Until then the bot uses easyocr.", tess_installing:"Installing in the window that opened… the status updates when it's done.", groq_key:"Groq API key",
  unsaved:"Unsaved changes. Click Save settings to apply them to the bot.", start_bot:"Start bot", save_settings:"Save settings",
  one_err:"Error", one_warn:"Warning",
+ sc_title:"System check", sc_run:"Check now", sc_sub:"Checks everything the bot needs and tells you what's fine and what needs fixing", sc_hint:"Click \"Check now\"", sc_running:"Checking… (a few seconds)",
+ sc_all_ok:"✅ Everything is fine", sc_some:"⚠️ {n} item(s) need attention — read the fix under each",
+ sc_python:"Python version", sc_adb:"Emulator connection program (ADB)", sc_adb_conflict:"Other programs using ADB", sc_bs_instance:"Emulator instance named like the account", sc_resolution:"Emulator resolution", sc_bs_adb_setting:"ADB setting in the emulator",
+ sc_device:"Emulator connection", sc_bot_running:"Bot running", sc_tesseract:"Fast number reader (Tesseract)", sc_easyocr:"Text reader (easyocr)", sc_learned:"Items the bot learned",
+ sc_internet:"Internet", sc_gh_token:"GitHub token", sc_gh_issues:"Issues enabled in the repository", sc_gh_issues_perm:"Token permission on issues",
+ scf_python:"3.11 or newer is required", scf_adb:"Make sure BlueStacks is installed", scf_adb_conflict:"Another program (like ACBot) runs a different ADB — it breaks the connection. Close it completely before starting the bot",
+ scf_bs_instance:"The emulator instance name must match the account name exactly", scf_resolution:"Set the emulator to 1920×1080 in BlueStacks settings → Display", scf_bs_adb_setting:"Enable ADB in BlueStacks settings → Advanced",
+ scf_device:"Emulator not connected — start it or the bot; if it says offline restart the emulator", scf_bot_running:"Start the bot so it connects to the emulator", scf_tesseract:"Install it from Settings → OCR", scf_easyocr:"Run setup.py again",
+ scf_learned:"The bot learns by itself after the first attack", scf_internet:"Check the internet", scf_gh_token:"Add the token in Settings → Error reports", scf_gh_issues:"Enable Issues in the GitHub repository settings", scf_gh_issues_perm:"Create a new token with Issues: Read and write on the CoC_Bot repo",
  st_limit:"Limit reached", st_break:"On a break",
  auto_title:"Automatic learning 🤖", auto_on:"On", auto_badge:"self-learned",
  auto_sub:"The bot reads the screen: it learns buttons with words on them (Next, Return Home, Okay, Collect, Train…) and where the enemy loot is by itself. Any screen it doesn't understand is recorded here, and it presses a safe button (Later / Close / Okay…) to carry on",
@@ -1591,6 +1615,16 @@ async function githubReport(){
   if (r.ok && r.url) $("#reportNote").innerHTML = `${t("gh_done")} <span class="num">${esc(r.url)}</span>`;
   else if (r.ok) $("#reportNote").textContent = t("no_errors");
   else $("#reportNote").textContent = {no_token:t("gh_need_token"), bad_token:t("gh_bad_token"), no_permission:t("gh_no_perm"), issues_disabled:t("gh_issues_off")}[r.error] || r.error;
+}
+async function runSysCheck(){
+  $("#scBox").innerHTML = `<div class="empty">${t("sc_running")}</div>`;
+  let r; try { r = await api(`/api/syscheck/${encodeURIComponent(CUR)}`); } catch(e) { $("#scBox").innerHTML = `<div class="empty">${t("save_err")}</div>`; return; }
+  const icon = {ok:'<i class="fa-solid fa-circle-check ok-dot"></i>', warn:'<i class="fa-solid fa-triangle-exclamation" style="color:var(--warn)"></i>', bad:'<i class="fa-solid fa-circle-xmark no-dot"></i>'};
+  const bad = r.items.filter(i => i.status !== "ok").length;
+  $("#scBox").innerHTML = `<div class="note" style="margin:0 0 10px;font-weight:700">${bad ? t("sc_some").replace("{n}", bad) : t("sc_all_ok")}</div>` + r.items.map(i => `
+    <div class="row"><div style="font-size:18px">${icon[i.status]}</div>
+      <div class="lbl"><b>${t("sc_" + i.key)}</b>${i.info ? ` <span class="num" style="color:var(--muted);font-size:12px">(${esc(i.info)})</span>` : ""}
+        ${i.status !== "ok" && t("scf_" + i.key) !== "scf_" + i.key ? `<small style="color:#ffd77a">💡 ${t("scf_" + i.key)}</small>` : ""}</div></div>`).join("");
 }
 function showShot(src){ $("#shotImg").src = src; $("#shotModal").classList.add("show"); }
 async function saveReport(){
