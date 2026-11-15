@@ -666,7 +666,9 @@ def start_coc(timeout=120, detailed=False, force_restart=False):
             logger.info("CoC already open")
             if not detailed: return True
             else: return True, "running"
-        if force_restart: to_system_home()
+        if force_restart:
+            logger.info(f"Restarting CoC ({force_restart if isinstance(force_restart, str) else 'requested'})")
+            to_system_home()
         logger.info("Starting CoC...")
 
         cont_templates = [render_text("Continue", "SupercellMagic", s, color=(255, 255, 255)) for s in range(25, 31)]
@@ -719,7 +721,7 @@ def start_coc(timeout=120, detailed=False, force_restart=False):
             
             i += 1
         if time.time() - start > timeout:
-            stop_coc(sleep=configs.SUSPEND_EMULATOR_ON_IDLE)
+            stop_coc(sleep=configs.SUSPEND_EMULATOR_ON_IDLE, reason="game did not open in 2 minutes")
             raise Exception("Failed to start CoC")
         logger.info("CoC started")
         if not detailed: return True
@@ -730,9 +732,9 @@ def start_coc(timeout=120, detailed=False, force_restart=False):
         if not detailed: return False
         else: return False, "error"
 
-def stop_coc(sleep=False, timeout=60):
+def stop_coc(sleep=False, timeout=60, reason=""):
     import time
-    logger.info("Stopping CoC...")
+    logger.info(f"Stopping CoC... ({reason})" if reason else "Stopping CoC...")
     start = time.time()
     while time.time() - start < timeout:
         ADB_Manager.adbutils_device.shell("am force-stop com.supercell.clashofclans")

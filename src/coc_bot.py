@@ -137,7 +137,7 @@ class CoC_Bot:
                     if getattr(self, "_limit_logged", False) is False:
                         logger.info("Session limit reached, bot is resting")
                         self._limit_logged = True
-                        try: stop_coc()
+                        try: stop_coc(reason="session limit")
                         except Exception: pass
                     update_status("limit")
                     self.idle(1)
@@ -152,7 +152,7 @@ class CoC_Bot:
                     elif time.time() >= self.next_break:
                         length = max(1, br["length_minutes"] * random.uniform(0.7, 1.3))
                         logger.info(f"Taking a break for {length:.0f} min")
-                        try: stop_coc()
+                        try: stop_coc(reason="break")
                         except Exception: pass
                         update_status("break")
                         self.idle(length)
@@ -241,7 +241,7 @@ class CoC_Bot:
                     set_phase("finish")
                     to_home_base()
                     if not self.settings["game"]["keep_open"]:
-                        stop_coc(sleep=configs.SUSPEND_EMULATOR_ON_IDLE)
+                        stop_coc(sleep=configs.SUSPEND_EMULATOR_ON_IDLE, reason="keep game open is off")
                     update_status(time.time())
                     seconds = time.monotonic() - cycle_start
                     stats.record(_utils.INSTANCE_ID, "cycle", seconds=round(seconds))
@@ -259,9 +259,11 @@ class CoC_Bot:
                 logger.exception(f"CoC_Bot.run (error #{consecutive_errors} in a row):")
                 if consecutive_errors == 3:
                     send_notification(f"Bot failed 3 times in a row, last error: {type(e).__name__}: {e}")
-                try: stop_coc()
-                except (KeyboardInterrupt, SystemExit): raise
-                except Exception: logger.exception("CoC_Bot.run: stop_coc failed")
+                # one-off error: leave the game open and just try again; close it only if errors repeat
+                if consecutive_errors >= 2:
+                    try: stop_coc(reason=f"{consecutive_errors} errors in a row")
+                    except (KeyboardInterrupt, SystemExit): raise
+                    except Exception: logger.exception("CoC_Bot.run: stop_coc failed")
                 update_status("error")
                 # retry quickly after a one-off glitch, back off when something is persistently broken
                 wait = 1 if consecutive_errors == 1 else configs.CHECK_INTERVAL * min(consecutive_errors - 1, 6)
