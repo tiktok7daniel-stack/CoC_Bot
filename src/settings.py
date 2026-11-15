@@ -95,6 +95,18 @@ def default_settings():
             "every_minutes": 120,
             "length_minutes": 10,
         },
+        # Loadouts: a saved army (by its in-game name) + how to deploy it
+        "active_plan": "",           # name of the active loadout ("" = classic single point)
+        "plans": [
+            {"name": "تنانين", "army": "", "troops_where": "sides", "heroes_where": "sides", "clan_where": "sides",
+             "spells_where": "center", "spells_delay": 3, "abilities_after": 15, "second_wave_spells": "", "second_wave_after": 20},
+            {"name": "أرضي", "army": "", "troops_where": "sides", "heroes_where": "sides", "clan_where": "bottom",
+             "spells_where": "center", "spells_delay": 5, "abilities_after": 15, "second_wave_spells": "", "second_wave_after": 20},
+            {"name": "جهة واحدة", "army": "", "troops_where": "right", "heroes_where": "right", "clan_where": "right",
+             "spells_where": "center", "spells_delay": 4, "abilities_after": 12, "second_wave_spells": "", "second_wave_after": 18},
+            {"name": "مخصص", "army": "", "troops_where": "sides", "heroes_where": "sides", "clan_where": "sides",
+             "spells_where": "center", "spells_delay": 3, "abilities_after": 15, "second_wave_spells": "", "second_wave_after": 20},
+        ],
         # Routines: taught buttons tapped in order at the start of every cycle (home village)
         "routines": [
             {"name": "army", "enabled": False, "steps": [

@@ -483,12 +483,23 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
 <!-- ============================ ATTACK / FARM ============================ -->
 <section class="page" id="p-atk">
   <div class="subtabs" id="atkNav">
+    <button data-asec="plans"><i class="fa-solid fa-chess-board"></i> <span data-t="as_plans"></span></button>
     <button data-asec="search"><i class="fa-solid fa-magnifying-glass"></i> <span data-t="as_search"></span></button>
     <button data-asec="attack"><i class="fa-solid fa-khanda"></i> <span data-t="as_attack"></span></button>
     <button data-asec="army"><i class="fa-solid fa-people-group"></i> <span data-t="as_army"></span></button>
     <button data-asec="end"><i class="fa-solid fa-flag-checkered"></i> <span data-t="as_end"></span></button>
   </div>
   <div class="grid">
+    <div class="card span2" data-asec="plans">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-chess-board"></i></div><h3 data-t="pl_title"></h3></div>
+      <div class="card-sub" data-t="pl_sub"></div>
+      <div class="card-b">
+        <div class="opt" id="plClassic" onclick="setActivePlan('')" style="min-height:0;margin-bottom:12px"><div class="chk"><i class="fa-solid fa-check"></i></div>
+          <div class="t"><b data-t="pl_classic"></b><small data-t="pl_classic_sub"></small></div></div>
+        <div class="grid" id="plansBox"></div>
+        <div class="note"><i class="fa-solid fa-circle-info"></i> <span data-t="pl_note"></span></div>
+      </div>
+    </div>
     <div class="card span2" data-asec="search">
       <div class="card-h"><div class="ico"><i class="fa-solid fa-box-archive"></i></div><h3 data-t="swf_title"></h3></div>
       <div class="card-sub" data-t="swf_sub"></div>
@@ -842,7 +853,16 @@ ar:{
  tess_found_at:"موجود في:", tess_hint:"اضغط \"تثبيت Tesseract\" — هتفتح نافذة سودا تثبّته لوحدها، وافق لو ويندوز سألك. لحد ما يتثبّت البوت بيستخدم easyocr عادي.", tess_installing:"جاري التثبيت في النافذة اللي اتفتحت… الحالة هتتحدث لوحدها لما يخلص.", groq_key:"مفتاح Groq API",
  unsaved:"تغييرات غير محفوظة. اضغط على حفظ الإعدادات لتطبيقها على البوت.", start_bot:"بدء البوت", save_settings:"حفظ الإعدادات",
  one_err:"خطأ", one_warn:"تحذير",
- brand_sub:"أتمتة كلاش أوف كلانس", nv_home:"الرئيسية", nv_acc:"الحسابات", nv_atk:"الهجوم", nv_bb:"القرية الليلية", nv_capital:"عاصمة القبيلة", nv_stats:"الإحصائيات",
+ brand_sub:"أتمتة كلاش أوف كلانس",
+ as_plans:"التشكيلات", pl_title:"التشكيلات (خطط الهجوم)", pl_sub:"اختار تشكيلة: البوت يختار الجيش المحفوظ بتاعها في اللعبة، وينزّل كل نوع في المكان اللي تحدده",
+ pl_classic:"نقطة واحدة (الطريقة الأصلية)", pl_classic_sub:"كل الجيش في النقطة المضمونة تحت — من غير تشكيلة",
+ pl_use:"استخدمها", pl_active:"شغّالة", pl_army:"اسم الجيش المحفوظ", pl_army_sub:"زي ما هو مكتوب في اللعبة بالظبط (سيبه فاضي = الجيش الحالي)", pl_army_ph:"مثلًا: Dragons",
+ pl_troops:"الوحوش", pl_heroes:"الأبطال", pl_clan:"القلعة وآلات الحصار", pl_spells:"التعاويذ",
+ pl_spells_delay:"التعاويذ بعد", pl_spells_delay_sub:"ثواني بعد نزول الوحوش", pl_abil:"قدرات الأبطال بعد", pl_abil_sub:"ثواني بعد نزول الأبطال (مثلًا 15)",
+ pl_wave:"تعاويذ الموجة التانية", pl_wave_sub:"أرقام كروت التعاويذ اللي تتأجل (مثلًا العلاج)، بالترتيب من الشمال: 1،2،3…", pl_wave_after:"الموجة التانية بعد",
+ w_sides:"الجنبين (يمين وشمال)", w_left:"الشمال بس", w_right:"اليمين بس", w_bottom:"تحت (النقطة المضمونة)", w_center:"في النص", w_none:"ما تستخدمهاش",
+ pl_note:"قبل الإنزال البوت بيجرّب كل مكان بوحش واحد ويتأكد إن الكارت اتغيّر — لو المكان مش مسموح بيرجع للنقطة المضمونة تحت. ولو الجيش المحفوظ ما فتحش، علّم البوت زرار \"قايمة الجيوش المحفوظة\" من مدير القرية.",
+ tk_army_dropdown:"زرار قايمة الجيوش المحفوظة", th_army_dropdown:"في شاشة الجيش قبل الهجوم: ارسم على السهم/الزرار اللي بيفتح الجيوش المحفوظة.", nv_home:"الرئيسية", nv_acc:"الحسابات", nv_atk:"الهجوم", nv_bb:"القرية الليلية", nv_capital:"عاصمة القبيلة", nv_stats:"الإحصائيات",
  nv_war:"مباريات القبيلة", nv_village:"القرية", nv_manager:"مدير القرية", nv_log:"السجل", nv_bot:"البوت", nv_chat:"المحادثة", soon:"قريبًا", soon_msg:"الميزة دي لسه بتتعمل — قريبًا",
  sub_log:"السجل والأخطاء وفحص النظام", sub_teach:"الروتينات وتعليم البوت",
  as_search:"البحث", as_attack:"الهجوم", as_army:"الجيش", as_end:"نهاية الهجوم",
@@ -950,7 +970,16 @@ en:{
  tess_found_at:"Found at:", tess_hint:"Click \"Install Tesseract\" — a console window installs it; accept if Windows asks. Until then the bot uses easyocr.", tess_installing:"Installing in the window that opened… the status updates when it's done.", groq_key:"Groq API key",
  unsaved:"Unsaved changes. Click Save settings to apply them to the bot.", start_bot:"Start bot", save_settings:"Save settings",
  one_err:"Error", one_warn:"Warning",
- brand_sub:"Clash of Clans automation", nv_home:"Home", nv_acc:"Accounts", nv_atk:"Attack", nv_bb:"Builder base", nv_capital:"Clan capital", nv_stats:"Statistics",
+ brand_sub:"Clash of Clans automation",
+ as_plans:"Loadouts", pl_title:"Loadouts (attack plans)", pl_sub:"Pick a loadout: the bot selects its saved army in the game and deploys each type where you choose",
+ pl_classic:"Single point (original)", pl_classic_sub:"The whole army on the proven bottom spot — no loadout",
+ pl_use:"Use", pl_active:"Active", pl_army:"Saved army name", pl_army_sub:"Exactly as written in the game (empty = current army)", pl_army_ph:"e.g. Dragons",
+ pl_troops:"Troops", pl_heroes:"Heroes", pl_clan:"Clan castle & sieges", pl_spells:"Spells",
+ pl_spells_delay:"Spells after", pl_spells_delay_sub:"seconds after the troops", pl_abil:"Hero abilities after", pl_abil_sub:"seconds after the heroes (e.g. 15)",
+ pl_wave:"Second-wave spells", pl_wave_sub:"Spell card numbers to hold back (e.g. heal), counted from the left: 1,2,3…", pl_wave_after:"Second wave after",
+ w_sides:"Both sides", w_left:"Left only", w_right:"Right only", w_bottom:"Bottom (proven spot)", w_center:"Middle", w_none:"Don't use",
+ pl_note:"Before deploying, the bot tests each spot with one troop and checks the card changed — invalid spots fall back to the proven bottom spot. If the saved army list doesn't open, teach the \"saved armies\" button in Village manager.",
+ tk_army_dropdown:"Saved armies button", th_army_dropdown:"On the army screen before attacking: box the arrow/button that opens saved armies.", nv_home:"Home", nv_acc:"Accounts", nv_atk:"Attack", nv_bb:"Builder base", nv_capital:"Clan capital", nv_stats:"Statistics",
  nv_war:"Clan war", nv_village:"Village", nv_manager:"Village manager", nv_log:"Log", nv_bot:"Bot", nv_chat:"Chat", soon:"soon", soon_msg:"This feature is still being built — coming soon",
  sub_log:"Log, errors and system check", sub_teach:"Routines and teaching",
  as_search:"Search", as_attack:"Attack", as_army:"Army", as_end:"Battle end",
@@ -1015,6 +1044,13 @@ const LOG_AR = [
  [/^CoC already open/, "اللعبة مفتوحة بالفعل — هيكمّل عليها ✓"],
  [/^Settings changed, applying now/, "الإعدادات اتغيّرت — جاري التطبيق دلوقتي"],
  [/^Run now requested/, "تم طلب تشغيل دورة الآن"],
+ [/^Attack plan: (.*)/, "التشكيلة: $1"],
+ [/^Deploy spot verified on the left.*/, "✓ مكان الإنزال على الشمال اتأكد"],
+ [/^Deploy spot verified on the right.*/, "✓ مكان الإنزال على اليمين اتأكد"],
+ [/^No valid deploy spot found on the (\w+).*/, "مالقاش مكان مسموح على الجنب ده — هينزّل في النقطة المضمونة تحت"],
+ [/^Saved army '(.*?)' selected/, "✓ اختار الجيش المحفوظ \"$1\""],
+ [/^Saved army '(.*?)' not found.*/, "مالقاش الجيش المحفوظ \"$1\" — هيهاجم بالجيش الحالي"],
+ [/^Second spell wave: (\d+).*/, "الموجة التانية من التعاويذ ($1 كارت)"],
  [/^Storages are full, skipping home attacks/, "المخازن مليانة — مش هيهاجم في الدورة دي"],
  [/^LDPlayer already running\./, "LDPlayer شغال بالفعل"],
  [/^LDPlayer started\./, "LDPlayer اشتغل ✓"],
@@ -1161,6 +1197,38 @@ function showSub(name){
   $$("#p-upg .sub").forEach(s => s.style.display = s.dataset.sub === name ? "" : "none");
 }
 $$("#tabs button").forEach(b => b.onclick = () => b.dataset.soon ? toast(t("soon_msg")) : showTab(b.dataset.tab));
+/* loadouts (attack plans) */
+const WHERE = ["sides", "left", "right", "bottom"];
+function setActivePlan(name){ S.active_plan = name; markDirty(); renderPlans(); }
+function renderPlans(){
+  if (!S || !$("#plansBox")) return;
+  $("#plClassic").classList.toggle("sel", !S.active_plan);
+  const sel = (v, opts, key) => `<select class="in" data-pk="${key}">${opts.map(o => `<option value="${o}" ${o === v ? "selected" : ""}>${t("w_" + o)}</option>`).join("")}</select>`;
+  $("#plansBox").innerHTML = S.plans.map((p, i) => `
+    <div class="lvl" data-i="${i}" style="${S.active_plan && S.active_plan === p.name ? "border-color:var(--accent);box-shadow:0 0 0 2px rgba(79,155,255,.3)" : ""}">
+      <div class="lvl-h"><span class="num-badge">${i + 1}</span><input class="in" data-pk="name" value="${esc(p.name)}" style="width:150px">
+        <div class="tools"><button class="btn sm ${S.active_plan === p.name ? "go" : ""}" data-act="1"><i class="fa-solid fa-check"></i>${t(S.active_plan === p.name ? "pl_active" : "pl_use")}</button></div></div>
+      <div class="row"><div class="lbl"><span data-t="pl_army"></span><small>${t("pl_army_sub")}</small></div><input class="in" data-pk="army" value="${esc(p.army || "")}" placeholder="${t("pl_army_ph")}" style="width:160px"></div>
+      <div class="row"><div class="lbl">${t("pl_troops")}</div>${sel(p.troops_where, WHERE, "troops_where")}</div>
+      <div class="row"><div class="lbl">${t("pl_heroes")}</div>${sel(p.heroes_where, WHERE, "heroes_where")}</div>
+      <div class="row"><div class="lbl">${t("pl_clan")}</div>${sel(p.clan_where, WHERE, "clan_where")}</div>
+      <div class="row"><div class="lbl">${t("pl_spells")}</div>${sel(p.spells_where, ["center", "none"], "spells_where")}</div>
+      <div class="row"><div class="lbl"><span>${t("pl_spells_delay")}</span><small>${t("pl_spells_delay_sub")}</small></div><input class="in" type="number" min="0" data-pk="spells_delay" data-num="1" value="${p.spells_delay}" style="width:80px"><span class="unit">${t("seconds")}</span></div>
+      <div class="row"><div class="lbl"><span>${t("pl_abil")}</span><small>${t("pl_abil_sub")}</small></div><input class="in" type="number" min="0" data-pk="abilities_after" data-num="1" value="${p.abilities_after}" style="width:80px"><span class="unit">${t("seconds")}</span></div>
+      <div class="row"><div class="lbl"><span>${t("pl_wave")}</span><small>${t("pl_wave_sub")}</small></div><input class="in" data-pk="second_wave_spells" value="${esc(p.second_wave_spells || "")}" placeholder="2,3" style="width:80px"></div>
+      <div class="row"><div class="lbl">${t("pl_wave_after")}</div><input class="in" type="number" min="0" data-pk="second_wave_after" data-num="1" value="${p.second_wave_after}" style="width:80px"><span class="unit">${t("seconds")}</span></div>
+    </div>`).join("");
+  $$("#plansBox .lvl").forEach(card => {
+    const p = S.plans[+card.dataset.i];
+    card.querySelectorAll("[data-pk]").forEach(inp => inp.onchange = () => {
+      const k = inp.dataset.pk, old = p.name;
+      p[k] = inp.dataset.num ? (parseFloat(inp.value) || 0) : inp.value;
+      if (k === "name" && S.active_plan === old) S.active_plan = p.name;
+      markDirty(); if (k === "name") renderPlans();
+    });
+    card.querySelector("[data-act]").onclick = () => setActivePlan(p.name);
+  });
+}
 function showAtk(sec){
   $$("#atkNav button").forEach(b => b.classList.toggle("active", b.dataset.asec === sec));
   $$("#p-atk .card[data-asec]").forEach(c => c.classList.toggle("asec-hide", c.dataset.asec !== sec));
@@ -1184,7 +1252,7 @@ function fillInputs(){
     const v = APP[el.dataset.app];
     if (el.type === "checkbox") el.checked = !!v; else el.value = v ?? "";
   });
-  buildDays(); buildQuickTasks(); renderPrio(); updateWallLabel(); updateSchedNote(); renderPresets();
+  buildDays(); buildQuickTasks(); renderPrio(); updateWallLabel(); updateSchedNote(); renderPresets(); renderPlans();
   if (TEACH.catalog.length) renderRoutines();
 }
 document.addEventListener("input", e => onEdit(e.target));
@@ -1873,7 +1941,7 @@ async function refreshAll(user){
   loadStats(); loadLog();
   setInterval(loadState, 3000);
   loadSystem(); setInterval(() => { if (curTab === "dash") loadSystem(); }, 3000);
-  showAtk("search");
+  showAtk("plans");
   setInterval(() => { loadStats(); if (curTab === "res" || curTab === "dash") loadLog(); if (curTab === "err") loadErrors(); updateSchedNote(); }, 5000);
 })();
 </script>

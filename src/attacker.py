@@ -12,6 +12,8 @@ class Attacker:
         self.misc_assets = Asset_Manager.misc_assets
         self.deployed_heroes = []
         self.deployed_troops = []
+        self.held_spells = []
+        self.plan = None             # active loadout (attack plan) dict, None = classic single point
         self.loot_filter = None      # {"enabled", "min_gold", "min_elixir", "min_dark", "mode", "max_skips"}
         self.strategy = "funnel"   # "funnel" | "line" | "two_sides" | "auto" (learns the best)
         self.last_strategy = "funnel"
@@ -132,6 +134,10 @@ class Attacker:
             logger.error("Failed to click find a match button")
             return False
 
+        # Saved army of the active loadout
+        try: self.select_saved_army((self.plan or {}).get("army", ""))
+        except Exception: logger.warning("Saved army selection failed, attacking with the current army")
+
         # Confirm attack
         if not click_with_timeout(
             lambda: Frame_Handler.locate(self.assets["confirm_attack"], thresh=0.9),
@@ -145,6 +151,36 @@ class Attacker:
             logger.error("Failed to search for attack")
             return False
         return self.apply_loot_filter()
+
+    def select_saved_army(self, name):
+        """
+        On the army screen before attacking: pick the saved army called `name`.
+        Reads the screen for the name; if it isn't visible, opens the saved-armies list
+        (taught "army_dropdown" button) and looks again. Never blocks the attack.
+        """
+        import time, teach
+        name = (name or "").strip()
+        if not name: return True
+        time.sleep(0.8)
+        def find_and_tap():
+            frame = Frame_Handler.get_frame(grayscale=False)
+            for text, x1, y1, x2, y2, conf in ocr_boxes(frame):
+                if conf > 0.3 and _word_hit(text, name.lower()):
+                    Input_Handler.click((x1 + x2) / 2, (y1 + y2) / 2)
+                    return True
+            return False
+        if find_and_tap():
+            logger.info(f"Saved army '{name}' selected")
+            time.sleep(0.8)
+            return True
+        if tap_taught("army_dropdown", timeout=2):
+            time.sleep(1.0)
+            if find_and_tap():
+                logger.info(f"Saved army '{name}' selected")
+                time.sleep(0.8)
+                return True
+        logger.warning(f"Saved army '{name}' not found, attacking with the current army")
+        return False
 
     def wait_for_base(self, timeout=60):
         """Wait for an opponent's village (End Battle button visible)."""
@@ -351,50 +387,165 @@ class Attacker:
         section = Frame_Handler.get_frame_section(card_center-0.01, 0.89, card_center+0.01, 0.91, grayscale=False)
         return np.all(section[:, :, 0] == section[:, :, 1]) and np.all(section[:, :, 1] == section[:, :, 2])
 
-    def deploy_troops(self, card_centers, available_slots=None, card_types=None, card_counts=None):
-        """Original, proven deployment: everything on one point, in card order."""
+    # Candidate deploy spots per side (screen fractions after zooming out). The other bot's log on
+    # this game confirmed spots at the far left / far right of the screen at mid height; each one is
+    # still verified in battle before use (one troop is dropped and the card must change).
+    SIDE_CANDIDATES = {
+        "left":  [(0.04, 0.55), (0.06, 0.48), (0.08, 0.62), (0.12, 0.40)],
+        "right": [(0.96, 0.55), (0.94, 0.48), (0.92, 0.62), (0.88, 0.40)],
+    }
+    SPELL_CENTER = (0.5, 0.45)
+
+    def card_crop(self, cx):
+        """The card's count area (changes when a troop is dropped)."""
+        import numpy as np
+        return Frame_Handler.get_frame_section(cx - 0.03, 0.83, cx + 0.03, 0.88, grayscale=True).astype(np.int16)
+
+    def card_changed(self, cx, before, noise):
+        import numpy as np
+        after = self.card_crop(cx)
+        if after.shape != before.shape: return True
+        return float(np.abs(after - before).mean()) > max(6.0, noise * 3)
+
+    def calibrate_sides(self, cx):
+        """
+        Find a valid deploy spot on each side using the troop card at cx: drop one troop,
+        keep the spot if the card's number changed. Falls back to the proven bottom spot.
+        """
         import time, numpy as np
+        a = self.card_crop(cx); time.sleep(0.15); b = self.card_crop(cx)
+        noise = float(np.abs(a - b).mean()) if a.shape == b.shape else 2.0
+        self.side_points = {}
+        Input_Handler.click(cx, 0.9)
+        for side, cands in self.SIDE_CANDIDATES.items():
+            for pt in cands:
+                if self.card_gray(cx): break
+                before = self.card_crop(cx)
+                Input_Handler.click(*pt)
+                time.sleep(0.45)
+                if self.card_changed(cx, before, noise):
+                    self.side_points[side] = pt
+                    logger.info(f"Deploy spot verified on the {side}: {pt}")
+                    break
+            if side not in self.side_points:
+                self.side_points[side] = self.DEPLOY_POINT
+                logger.warning(f"No valid deploy spot found on the {side}, using the bottom spot")
+
+    def points_for(self, where):
+        pts = getattr(self, "side_points", None) or {}
+        if where == "sides": return [pts.get("left", self.DEPLOY_POINT), pts.get("right", self.DEPLOY_POINT)]
+        if where in ("left", "right"): return [pts.get(where, self.DEPLOY_POINT)]
+        return [self.DEPLOY_POINT]
+
+    def deploy_troops(self, card_centers, available_slots=None, card_types=None, card_counts=None):
+        """
+        Deploy the visible cards. Without a plan: the original proven single point.
+        With a plan (loadout): troops / heroes / clan castle on the chosen sides,
+        spells in the middle after a delay, some spells held back for a second wave.
+        """
+        import time, random, numpy as np
         
         if available_slots is None: available_slots = [1] * len(card_centers)
         if card_types is None: card_types = [None] * len(card_centers)
         if card_counts is None: card_counts = [0] * len(card_centers)
+        plan = getattr(self, "plan", None) or {}
         px, py = self.DEPLOY_POINT
         # card positions are only valid for the page of cards currently on screen
         self.deployed_troops = []
         self.deployed_heroes = []
-        
-        # Start holding deploy position w/ additional touch pointer
-        Input_Handler.down(px, py, pointer=1)
-        
-        for i in range(len(card_centers)):
-            if not available_slots[i]: continue
-            # Select slot
-            Input_Handler.click(card_centers[i], 0.9)
-            
-            # Deploy selected slot
-            if card_types[i] in ["hero", "clan"]:
-                Input_Handler.click(px, py)
-                if card_types[i] == "hero": self.deployed_heroes.append(card_centers[i])
-            elif card_types[i] == "troop":
-                Input_Handler.down(px, py, pointer=0)
-                end_time = time.monotonic() + TROOP_DEPLOY_TIME
-                while time.monotonic() < end_time and not self.card_gray(card_centers[i]): time.sleep(0.05)
-                Input_Handler.up(pointer=0)
-                self.deployed_troops.append(card_centers[i])
-            elif card_types[i] == "spell":
-                n = card_counts[i]
-                rxs = np.random.uniform(0.35, 0.65, n)
-                rys = np.random.uniform(0.45, 0.55, n)
-                for coord in zip(rxs, rys):
-                    Input_Handler.click(*coord)
-            else:
-                Input_Handler.click(px, py, n=max(0, card_counts[i]))
-        
-        # Release additional pointer
-        Input_Handler.up(pointer=1)
-        
-        # Unselect last card
+
+        if not plan:
+            # ---- original, proven deployment: everything on one point, in card order
+            Input_Handler.down(px, py, pointer=1)
+            for i in range(len(card_centers)):
+                if not available_slots[i]: continue
+                Input_Handler.click(card_centers[i], 0.9)
+                if card_types[i] in ["hero", "clan"]:
+                    Input_Handler.click(px, py)
+                    if card_types[i] == "hero": self.deployed_heroes.append(card_centers[i])
+                elif card_types[i] == "troop":
+                    Input_Handler.down(px, py, pointer=0)
+                    end_time = time.monotonic() + TROOP_DEPLOY_TIME
+                    while time.monotonic() < end_time and not self.card_gray(card_centers[i]): time.sleep(0.05)
+                    Input_Handler.up(pointer=0)
+                    self.deployed_troops.append(card_centers[i])
+                elif card_types[i] == "spell":
+                    for coord in zip(np.random.uniform(0.35, 0.65, card_counts[i]), np.random.uniform(0.45, 0.55, card_counts[i])):
+                        Input_Handler.click(*coord)
+                else:
+                    Input_Handler.click(px, py, n=max(0, card_counts[i]))
+            Input_Handler.up(pointer=1)
+            Input_Handler.click(0.01, 0.9)
+            return
+
+        # ---- plan (loadout) deployment
+        uses_sides = any(plan.get(k) in ("sides", "left", "right") for k in ("troops_where", "heroes_where", "clan_where"))
+        order = {"troop": 0, "clan": 1, None: 1, "hero": 2, "spell": 3}
+        idx = sorted([i for i in range(len(card_centers)) if available_slots[i]], key=lambda i: order.get(card_types[i], 1))
+        hold_back = set(int(x) for x in str(plan.get("second_wave_spells", "")).replace(" ", "").split(",") if x.isdigit())
+        hero_n = 0
+        for i in idx:
+            t = card_types[i]
+            cx = card_centers[i]
+            if t == "troop" and uses_sides and not getattr(self, "side_points", None):
+                self.calibrate_sides(cx)
+            if t == "troop":
+                pts = self.points_for(plan.get("troops_where", "sides"))
+                Input_Handler.click(cx, 0.9)
+                share = TROOP_DEPLOY_TIME / len(pts)
+                for k, pt in enumerate(pts):
+                    Input_Handler.down(*pt, pointer=0)
+                    end_time = time.monotonic() + share
+                    while time.monotonic() < end_time and not self.card_gray(cx): time.sleep(0.05)
+                    if k == len(pts) - 1: # last spot: finish the card
+                        end2 = time.monotonic() + TROOP_DEPLOY_TIME
+                        while time.monotonic() < end2 and not self.card_gray(cx): time.sleep(0.05)
+                    Input_Handler.up(pointer=0)
+                self.deployed_troops.append(cx)
+                self.troops_done_at = time.monotonic()
+            elif t in ("clan", None):
+                pts = self.points_for(plan.get("clan_where", "sides"))
+                Input_Handler.click(cx, 0.9)
+                Input_Handler.click(*pts[0], n=max(1, card_counts[i]) if t is None else 1)
+            elif t == "hero":
+                pts = self.points_for(plan.get("heroes_where", "sides"))
+                Input_Handler.click(cx, 0.9)
+                Input_Handler.click(*pts[hero_n % len(pts)]) # heroes alternate between the sides
+                hero_n += 1
+                self.deployed_heroes.append(cx)
+                self.heroes_done_at = time.monotonic()
+            elif t == "spell":
+                self.spell_no = getattr(self, "spell_no", 0) + 1
+                if self.spell_no in hold_back:
+                    self.held_spells.append((cx, card_counts[i]))
+                    continue
+                if plan.get("spells_where", "center") == "none": continue
+                delay = float(plan.get("spells_delay", 3))
+                waited = time.monotonic() - getattr(self, "troops_done_at", time.monotonic())
+                if delay > waited: time.sleep(delay - waited)
+                Input_Handler.click(cx, 0.9)
+                self.cast_spell(card_counts[i])
         Input_Handler.click(0.01, 0.9)
+
+    def cast_spell(self, n):
+        import random
+        x0, y0 = self.SPELL_CENTER
+        for _ in range(max(1, n)):
+            Input_Handler.click(x0 + random.uniform(-0.04, 0.04), y0 + random.uniform(-0.04, 0.04))
+
+    def second_wave(self):
+        """Held-back spells (e.g. heal / rage) once the army has taken damage."""
+        import time
+        plan = getattr(self, "plan", None) or {}
+        if not self.held_spells: return
+        after = float(plan.get("second_wave_after", 20))
+        start = getattr(self, "troops_done_at", time.monotonic())
+        if after > time.monotonic() - start: time.sleep(after - (time.monotonic() - start))
+        for cx, n in self.held_spells:
+            Input_Handler.click(cx, 0.9)
+            self.cast_spell(n)
+        Input_Handler.click(0.01, 0.9)
+        logger.info(f"Second spell wave: {len(self.held_spells)} spell card(s)")
 
     def redeploy_leftovers(self):
         """
@@ -402,7 +553,8 @@ class Attacker:
         Returns how many troop cards were used up in the end.
         """
         import time
-        px, py = self.DEPLOY_POINT
+        pts = self.points_for((getattr(self, "plan", None) or {}).get("troops_where", "bottom"))
+        px, py = pts[-1]
         used = 0
         for x in self.deployed_troops:
             if self.card_gray(x):
@@ -420,9 +572,11 @@ class Attacker:
     def activate_hero_abilities(self):
         """Tap the deployed hero cards again after a delay to fire their abilities."""
         import time
-        delay = getattr(self, "hero_retap", 0)
+        plan = getattr(self, "plan", None) or {}
+        delay = float(plan.get("abilities_after", getattr(self, "hero_retap", 0))) if plan else getattr(self, "hero_retap", 0)
         if delay <= 0 or not self.deployed_heroes: return
-        time.sleep(delay)
+        since = time.monotonic() - (getattr(self, "heroes_done_at", None) or time.monotonic())
+        if delay > since: time.sleep(delay - since)
         for x in self.deployed_heroes:
             Input_Handler.click(x, 0.9)
             time.sleep(0.15)
@@ -435,6 +589,11 @@ class Attacker:
         Input_Handler.swipe_up(y1=0.5)
         self.deployed_heroes = []
         self.deployed_troops = []
+        self.side_points = None
+        self.held_spells = []
+        self.spell_no = 0
+        self.troops_done_at = self.heroes_done_at = None
+        if getattr(self, "plan", None): logger.info(f"Attack plan: {self.plan.get('name', '')}")
         
         type_gaps_seen = 0
         total_slots_seen = 0
@@ -486,6 +645,8 @@ class Attacker:
             logger.warning("Could not verify the deployment")
         try: self.activate_hero_abilities()
         except Exception: logger.warning("Hero ability activation failed")
+        try: self.second_wave()
+        except Exception: logger.warning("Second spell wave failed")
         self.finish_battle(restart)
     
     def complete_builder_attack(self, restart=True):
@@ -497,7 +658,9 @@ class Attacker:
         card_centers = np.linspace(0.1, 0.9, 11)
         self.deployed_heroes = []
         self.deployed_troops = []
-        self.deploy_troops(card_centers, card_counts=[4]*len(card_centers))
+        plan, self.plan = self.plan, None # builder base keeps the proven single point
+        try: self.deploy_troops(card_centers, card_counts=[4]*len(card_centers))
+        finally: self.plan = plan
         
         self.finish_battle(restart, max_wait=260) # builder battles can have two stages
     

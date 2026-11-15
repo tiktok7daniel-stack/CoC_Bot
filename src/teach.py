@@ -21,6 +21,7 @@ CATALOG = [
     {"key": "enemy_dark",    "kind": "region", "group": "farm"},
     # --- army
     {"key": "army_button",   "kind": "button", "group": "army",    "multi": False},
+    {"key": "army_dropdown", "kind": "button", "group": "army",    "multi": False},
     {"key": "hero_add",      "kind": "button", "group": "army",    "multi": True},
     {"key": "train_button",  "kind": "button", "group": "army",    "multi": False},
     {"key": "close_button",  "kind": "button", "group": "general", "multi": False},

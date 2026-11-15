@@ -197,6 +197,7 @@ class CoC_Bot:
                     self.attacker.battle_end = s["attack"]["battle_end"]
                     self.attacker.strategy = s["attack"]["strategy"]
                     self.attacker.loot_filter = s["attack"]["loot_filter"]
+                    self.attacker.plan = next((p for p in s.get("plans", []) if p.get("name") and p.get("name") == s.get("active_plan")), None)
                     Auto_Learn.enabled = bool(s["game"].get("auto_learn", True))
                     self.attacker.hero_delay = max(0.0, float(s["attack"]["hero_delay"]))
                     self.attacker.hero_retap = max(0.0, float(s["attack"]["hero_retap"]))
