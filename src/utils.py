@@ -201,7 +201,15 @@ def online(timeout=1):
 def running():
     import requests
     
-    if WEB_APP_URL == "": return True
+    if WEB_APP_URL == "":
+        # desktop GUI: its pause timer lives in the local GUI server
+        gui_port = TEMP_CACHE.get("gui_port")
+        if gui_port is None: return True
+        try:
+            r = requests.get(f"http://127.0.0.1:{gui_port}/instances/{INSTANCE_ID}/running", timeout=(1, 2))
+            return r.json().get("running", True) if r.status_code == 200 else True
+        except Exception:
+            return True # GUI unreachable -> don't block the bot
     try:
         response = requests.get(
             f"{WEB_APP_URL}/instances/{INSTANCE_ID}/running",
@@ -438,7 +446,7 @@ def update_status(status):
     if (gui_port := TEMP_CACHE.get("gui_port")) is not None:
         try:
             requests.post(
-                f"http://localhost:{gui_port}/instances/{INSTANCE_ID}/status",
+                f"http://127.0.0.1:{gui_port}/instances/{INSTANCE_ID}/status",
                 json={"status": status},
                 timeout=(1, 2)
             )
@@ -541,10 +549,15 @@ def to_home_base(ref_cache=False):
 
 # Storage counters in the top-right corner (fractions of a 1920x1080 frame).
 # Each band holds one number; dark elixir only exists in the home village (TH7+).
+# Same bars that in_home_base() / in_builder_base() check by colour, minus the icon column.
 RESOURCE_BANDS = {
-    "gold":   (0.70, 0.035, 0.935, 0.105),
-    "elixir": (0.70, 0.120, 0.935, 0.190),
-    "dark":   (0.70, 0.205, 0.935, 0.275),
+    "gold":   (0.72, 0.020, 0.948, 0.0925),
+    "elixir": (0.72, 0.0925, 0.948, 0.165),
+    "dark":   (0.72, 0.165, 0.948, 0.2375),
+}
+BUILDER_RESOURCE_BANDS = {
+    "gold":   (0.72, 0.020, 0.948, 0.088),
+    "elixir": (0.72, 0.088, 0.948, 0.155),
 }
 RESOURCE_LIMITS = {"gold": 60_000_000, "elixir": 60_000_000, "dark": 600_000}
 
@@ -564,10 +577,8 @@ def read_resources(builder_base=False, save_debug=False):
     try:
         frame = Frame_Handler.get_frame(grayscale=False)
         out = {}
-        for name, (x1, y1, x2, y2) in RESOURCE_BANDS.items():
-            if builder_base and name == "dark":
-                out[name] = None
-                continue
+        out["dark"] = None
+        for name, (x1, y1, x2, y2) in (BUILDER_RESOURCE_BANDS if builder_base else RESOURCE_BANDS).items():
             crop = Frame_Handler.high_contrast(Frame_Handler.crop(frame, x1, y1, x2, y2), thresh=190)
             if save_debug or configs.DEBUG: Frame_Handler.save_frame(crop, f"resource_{name}.png")
             value = _parse_resource(OCR_Handler.get_text(crop))
@@ -579,7 +590,20 @@ def read_resources(builder_base=False, save_debug=False):
         logger.exception("read_resources:")
         return None
 
-def start_coc(timeout=60, detailed=False):
+def game_ready():
+    """True when the game is already open and showing a village (nothing to restart)."""
+    try:
+        if in_home_base():
+            TEMP_CACHE["location"] = "home_base"
+            return True
+        if in_builder_base():
+            TEMP_CACHE["location"] = "builder_base"
+            return True
+    except (KeyboardInterrupt, SystemExit): raise
+    except Exception: pass
+    return False
+
+def start_coc(timeout=60, detailed=False, force_restart=False):
     import time
     
     try:
@@ -587,7 +611,12 @@ def start_coc(timeout=60, detailed=False):
         if not running():
             if not detailed: return False
             else: return False, "paused"
-        to_system_home()
+        # Game already open in a village -> keep it as is (no close / reopen)
+        if not force_restart and game_ready():
+            logger.info("CoC already open")
+            if not detailed: return True
+            else: return True, "running"
+        if force_restart: to_system_home()
         logger.info("Starting CoC...")
 
         cont_templates = [render_text("Continue", "SupercellMagic", s, color=(255, 255, 255)) for s in range(25, 31)]
@@ -599,7 +628,10 @@ def start_coc(timeout=60, detailed=False):
                 if not detailed: return False
                 else: return False, "paused"
 
-            ADB_Manager.adbutils_device.shell(f"am start {'-S' if i==0 else ''} -W -n com.supercell.clashofclans/com.supercell.titan.GameApp")
+            # bring the game to front (starts it if closed); force a clean restart only when
+            # asked to or when it's stuck for a while
+            force = (force_restart and i == 0) or i == 12
+            ADB_Manager.adbutils_device.shell(f"am start {'-S' if force else ''} -W -n com.supercell.clashofclans/com.supercell.titan.GameApp")
             Input_Handler.click_exit(x=0.99, y=0.01, n=4, delay=0.1)
             
             Frame_Handler.get_frame()
@@ -616,7 +648,9 @@ def start_coc(timeout=60, detailed=False):
                 if x is not None and y is not None:
                     Input_Handler.click(x, y)
             
-            update_coc(timeout=5, from_in_game=True)
+            # the update-popup check is slow (uiautomator dump), so only do it now and then
+            if i % 5 == 4: update_coc(timeout=3, from_in_game=True)
+            else: time.sleep(0.3)
             
             i += 1
         if time.time() - start > timeout:
@@ -651,9 +685,7 @@ def update_coc(timeout=10, from_in_game=False):
             conn(text="UPDATE").click(timeout=0)
         except (KeyboardInterrupt, SystemExit): raise
         except:
-            logger.info("No update available")
-            if not from_in_game: to_system_home()
-            return
+            return # no update popup in game
     
     try:
         conn(text="Update").click(timeout=timeout)
@@ -1240,7 +1272,7 @@ class Task_Handler:
                 return cls.cached_exclusions
         elif configs.LOCAL_GUI and TEMP_CACHE.get("gui_port") is not None:
             res = requests.get(
-                f"http://localhost:{TEMP_CACHE['gui_port']}/instances/{INSTANCE_ID}/exclude",
+                f"http://127.0.0.1:{TEMP_CACHE['gui_port']}/instances/{INSTANCE_ID}/exclude",
                 timeout=(10, 20)
             )
             if res.status_code == 200:

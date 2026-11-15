@@ -431,6 +431,15 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
       </div>
     </div>
     <div class="card span2">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-flag-checkered"></i></div><h3 data-t="battle_end_title"></h3></div>
+      <div class="card-sub" data-t="battle_end_sub"></div>
+      <div class="card-b">
+        <div class="row"><div class="lbl"><span data-t="battle_end"></span><small data-t="battle_end_hint"></small></div>
+          <select class="in" data-bind="attack.battle_end"><option value="wait" data-t="be_wait"></option><option value="restart" data-t="be_restart"></option></select></div>
+        <div class="row"><div class="lbl"><span data-t="surrender_after"></span><small data-t="surrender_after_sub"></small></div><input class="in" type="number" min="0" step="5" data-bind="attack.surrender_after" data-type="int"><span class="unit" data-t="seconds"></span></div>
+      </div>
+    </div>
+    <div class="card span2">
       <div class="card-h"><div class="ico"><i class="fa-solid fa-seedling"></i></div><h3 data-t="farm_title"></h3></div>
       <div class="card-sub" data-t="farm_sub"></div>
       <div class="card-b">
@@ -460,6 +469,8 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
       <div class="card-sub" data-t="interval_sub"></div>
       <div class="card-b">
         <div class="row"><div class="lbl" data-t="check_interval"></div><input class="in" type="number" min="1" data-bind="schedule.check_interval" data-type="float"><span class="unit" data-t="minutes"></span></div>
+        <div class="row"><div class="lbl"><span data-t="keep_open"></span><small data-t="keep_open_sub"></small></div><label class="sw"><input type="checkbox" data-bind="game.keep_open"><span></span></label></div>
+        <div class="row"><div class="lbl"><span data-t="apply_instantly"></span><small data-t="apply_instantly_sub"></small></div><label class="sw"><input type="checkbox" data-bind="game.apply_instantly"><span></span></label></div>
         <div class="note"><i class="fa-solid fa-circle-info"></i> <span data-t="interval_note"></span></div>
       </div>
     </div>
@@ -567,7 +578,9 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
   <div class="mid">
     <button class="btn go" id="btnStart" onclick="startBot()"><i class="fa-solid fa-play"></i><span data-t="start_bot"></span></button>
     <button class="btn stop" id="btnStop" onclick="stopBot()"><i class="fa-solid fa-stop"></i><span data-t="stop"></span></button>
+    <button class="btn gold" id="btnWake" onclick="runNow()"><i class="fa-solid fa-bolt"></i><span data-t="run_now"></span></button>
   </div>
+  <span class="unit" id="saveState" style="min-width:120px;text-align:center"></span>
   <button class="btn ghost" onclick="discardChanges()" title=""><i class="fa-solid fa-rotate-left"></i></button>
   <button class="btn primary" id="btnSave" onclick="saveAll()"><i class="fa-solid fa-floppy-disk"></i><span data-t="save_settings"></span></button>
 </footer>
@@ -635,6 +648,10 @@ ar:{
  upd_none:"إنت على آخر إصدار ✓", upd_avail:"فيه تحديث جديد متاح!", upd_done:"تم التحديث ({n} ملف). اقفل البرنامج وافتحه تاني.", upd_err:"فشل التحقق: ",
  notifications:"الإشعارات", notifications_sub:"ابعت إشعارات للتليجرام عند الترقيات والأخطاء", telegram_token:"توكن بوت التليجرام", ocr_title:"قراءة النصوص (OCR)", ocr_sub:"اختياري: مفتاح Groq لقراءة أسرع وأدق", groq_key:"مفتاح Groq API",
  unsaved:"تغييرات غير محفوظة. اضغط على حفظ الإعدادات لتطبيقها على البوت.", start_bot:"بدء البوت", save_settings:"حفظ الإعدادات",
+ run_now:"شغّل دورة الآن", run_now_t:"البوت هيبدأ دورة دلوقتي", saving:"جاري الحفظ…", auto_saved:"اتحفظ تلقائيًا",
+ keep_open:"خلّي اللعبة مفتوحة", keep_open_sub:"البوت مش هيقفل اللعبة بعد كل دورة، ولو لقاها مفتوحة هيكمّل عليها من غير ما يعيد تشغيلها", apply_instantly:"طبّق التغييرات فورًا", apply_instantly_sub:"لما تغيّر أي إعداد والبوت مستني، يبدأ دورة جديدة بعد ثواني",
+ battle_end_title:"إنهاء الهجوم", battle_end_sub:"إزاي البوت يخلّص المعركة بعد ما ينزّل الجيش", battle_end:"طريقة إنهاء المعركة", battle_end_hint:"الانتظار بيخلّي اللعبة مفتوحة. إعادة التشغيل أسرع بس اللعبة بتتقفل وتتفتح",
+ be_wait:"انتظار نهاية المعركة (اللعبة تفضل مفتوحة)", be_restart:"إعادة تشغيل اللعبة (أسرع)", surrender_after:"إنهاء المعركة بعد", surrender_after_sub:"يدوس End Battle بعد الوقت ده عشان يوفّر وقت (0 = يستنى للآخر)",
  saved:"تم حفظ الإعدادات ✓", save_err:"فشل الحفظ", started:"تم تشغيل البوت", stopped_t:"تم إيقاف البوت", paused_t:"تم الإيقاف المؤقت", resumed:"تم الاستئناف", need_running:"شغّل البوت الأول",
  confirm_remove:"حذف الحساب من القائمة؟ (الإعدادات والنتائج هتفضل محفوظة)", confirm_reset:"تصفير نتائج الجلسة؟", copied:"تم النسخ", added:"تمت الإضافة — احفظ الإعدادات", invalid_name:"اسم غير صالح (حروف إنجليزي وأرقام و - _ فقط)",
  ago:"منذ", sec:"ث", mn:"د", hr:"س", now:"الآن", res_updated:"آخر قراءة للموارد", never:"لا يوجد",
@@ -680,6 +697,10 @@ en:{
  upd_none:"You're on the latest version ✓", upd_avail:"A new update is available!", upd_done:"Updated ({n} files). Close and reopen the app.", upd_err:"Check failed: ",
  notifications:"Notifications", notifications_sub:"Send Telegram notifications for upgrades and errors", telegram_token:"Telegram bot token", ocr_title:"Text reading (OCR)", ocr_sub:"Optional: Groq key for faster, more accurate reading", groq_key:"Groq API key",
  unsaved:"Unsaved changes. Click Save settings to apply them to the bot.", start_bot:"Start bot", save_settings:"Save settings",
+ run_now:"Run cycle now", run_now_t:"The bot will start a cycle now", saving:"Saving…", auto_saved:"Saved automatically",
+ keep_open:"Keep the game open", keep_open_sub:"Don't close the game after each cycle; if it's already open in a village, continue without restarting it", apply_instantly:"Apply changes instantly", apply_instantly_sub:"When you change a setting while the bot waits, a new cycle starts within seconds",
+ battle_end_title:"Ending the battle", battle_end_sub:"How the bot finishes a battle after deploying", battle_end:"Battle end method", battle_end_hint:"Waiting keeps the game open. Restarting is faster but closes and reopens the game",
+ be_wait:"Wait for the battle to end (game stays open)", be_restart:"Restart the game (faster)", surrender_after:"End the battle after", surrender_after_sub:"Presses End Battle after this time to save time (0 = wait until the end)",
  saved:"Settings saved ✓", save_err:"Save failed", started:"Bot started", stopped_t:"Bot stopped", paused_t:"Paused", resumed:"Resumed", need_running:"Start the bot first",
  confirm_remove:"Remove this account from the list? (settings and results are kept)", confirm_reset:"Reset session results?", copied:"Copied", added:"Added — save settings", invalid_name:"Invalid name (English letters, digits, - _ only)",
  ago:"ago", sec:"s", mn:"m", hr:"h", now:"now", res_updated:"Last resource reading", never:"never",
@@ -688,6 +709,10 @@ en:{
 /* Log message translations (regex on the original English text) */
 const LOG_AR = [
  [/^Starting CoC\.\.\./, "جاري فتح اللعبة…"],
+ [/^CoC already open/, "اللعبة مفتوحة بالفعل — هيكمّل عليها ✓"],
+ [/^Settings changed, applying now/, "الإعدادات اتغيّرت — جاري التطبيق دلوقتي"],
+ [/^Run now requested/, "تم طلب تشغيل دورة الآن"],
+ [/^Battle end not detected, reopening the game/, "مقدرش يلاقي نهاية المعركة — هيعيد فتح اللعبة"],
  [/^CoC started/, "تم فتح اللعبة ✓"],
  [/^Stopping CoC\.\.\./, "جاري إغلاق اللعبة…"],
  [/^Upgrading home base/, "جاري ترقية القرية الرئيسية"],
@@ -820,16 +845,26 @@ function onEdit(el){
   }
 }
 function isDirty(){ return S && APP && (JSON.stringify(S) !== savedS || JSON.stringify(APP) !== savedAPP); }
-function markDirty(){ $("#unsaved").classList.toggle("show", !!isDirty()); }
+let autoSaveTimer = null;
+function markDirty(){
+  const d = !!isDirty();
+  $("#unsaved").classList.toggle("show", d && !APP_AUTOSAVE);
+  if (d && APP_AUTOSAVE) {
+    $("#saveState").textContent = t("saving");
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(() => saveAll(true), 700); // changes reach the bot within a second
+  }
+}
+const APP_AUTOSAVE = true;
 
 /* quick task toggles on the dashboard */
-const QUICK = ["home_base","heroes","walls","home_lab","pet_house","home_attacks","builder_base","builder_lab","builder_attacks"];
+const QUICK = ["home_base","heroes","walls","home_lab","pet_house","home_attacks","builder_base","builder_lab","builder_attacks","keep_open"];
 function buildQuickTasks(){
   if (!S) return;
   const box = $("#quickTasks"); box.innerHTML = "";
   QUICK.forEach(k => {
-    const path = k === "walls" ? "walls.enabled" : "tasks." + k;
-    const label = k === "walls" ? t("wall_enabled") : t("t_" + k);
+    const path = k === "walls" ? "walls.enabled" : k === "keep_open" ? "game.keep_open" : "tasks." + k;
+    const label = k === "walls" ? t("wall_enabled") : k === "keep_open" ? t("keep_open") : t("t_" + k);
     const row = document.createElement("div"); row.className = "row";
     row.innerHTML = `<div class="lbl">${label}</div><label class="sw"><input type="checkbox" data-bind="${path}" ${getPath(S, path) ? "checked" : ""}><span></span></label>`;
     box.appendChild(row);
@@ -973,6 +1008,7 @@ function renderState(){
   $("#pauseLeft").textContent = (a.end_time && a.end_time > STATE.current_time) ? dur(a.end_time - STATE.current_time) : "—";
   $("#btnStart").disabled = !!a.running;
   $("#btnStop").disabled = !a.running;
+  $("#btnWake").disabled = !a.running || k === "running";
   renderAccounts();
 }
 function renderAccounts(){
@@ -1006,6 +1042,11 @@ async function startBot(){
   accAction(CUR, "start");
 }
 function stopBot(){ accAction(CUR, "stop"); }
+async function runNow(){
+  if (!acc(CUR).running) { toast(t("need_running"), true); return; }
+  if (isDirty()) await saveAll(true);
+  await accAction(CUR, "wake"); toast(t("run_now_t"));
+}
 async function startAll(){ if (isDirty()) await saveAll(true); for (const id of APP.accounts) if (!acc(id).running) await accAction(id, "start"); }
 async function stopAll(){ for (const id of APP.accounts) if (acc(id).running) await accAction(id, "stop"); }
 async function pauseFor(m){
@@ -1058,6 +1099,7 @@ async function saveAll(silent){
     APP = app; savedAPP = JSON.stringify(APP);
     fillInputs(); markDirty(); renderState();
     if (warn) toast(warn, true); else if (!silent) toast(t("saved"));
+    $("#saveState").innerHTML = `<i class="fa-solid fa-check" style="color:var(--ok)"></i> ${t("auto_saved")}`;
   } catch(e) { toast(t("save_err"), true); }
 }
 async function discardChanges(){ await loadApp(); await loadSettings(); applyLang(); }

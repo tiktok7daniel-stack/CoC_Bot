@@ -73,6 +73,12 @@ def default_settings():
             "slot_first": _cfg("ATTACK_SLOT_RANGE", (0, 100))[0],
             "slot_last": _cfg("ATTACK_SLOT_RANGE", (0, 100))[1],
             "exclude_clan_troops": _cfg("EXCLUDE_CLAN_TROOPS", True),
+            "battle_end": "wait",    # "wait" (game stays open) | "restart" (reopen game, faster)
+            "surrender_after": 0,    # seconds after deployment to end the battle early (0 = wait for the end)
+        },
+        "game": {
+            "keep_open": True,       # don't close the game between cycles
+            "apply_instantly": True, # start a cycle right after settings change while idle
         },
         "schedule": {
             "enabled": False,
@@ -215,3 +221,22 @@ TASK_NAMES = list(default_settings()["tasks"].keys())
 def exclusions(s):
     """Task names that are switched OFF (format used by Task_Handler / web app)."""
     return sorted(k for k, v in s["tasks"].items() if not v)
+
+WAKE_DIR = APP_DATA_DIR / "wake"
+
+def request_wake(id):
+    """Ask an idle bot to start its next cycle now."""
+    WAKE_DIR.mkdir(parents=True, exist_ok=True)
+    (WAKE_DIR / _safe_id(id)).write_text("1")
+
+def consume_wake(id):
+    p = WAKE_DIR / _safe_id(id)
+    if p.exists():
+        try: p.unlink()
+        except OSError: pass
+        return True
+    return False
+
+def mtime(id):
+    try: return (SETTINGS_DIR / f"{_safe_id(id)}.json").stat().st_mtime
+    except OSError: return 0

@@ -81,6 +81,10 @@ def api_account_action(id, action):
         if instances.pop(id, None) is not None:
             bot_pipe.send({"action": "stop", "id": id})
         return jsonify({"ok": True})
+    if action == "wake": # "run a cycle now"
+        if id not in instances: return jsonify({"ok": False, "error": "not_running"}), 400
+        bot_settings.request_wake(id)
+        return jsonify({"ok": True})
     if action == "pause":
         inst = instances.get(id)
         if inst is None: return jsonify({"ok": False, "error": "not_running"}), 400

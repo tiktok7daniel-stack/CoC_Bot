@@ -10,6 +10,43 @@ class Attacker:
     def __init__(self):
         self.assets = Asset_Manager.attacker_assets
         self.misc_assets = Asset_Manager.misc_assets
+        self.battle_end = "wait"    # "wait": stay in game until the battle ends | "restart": reopen the game (faster)
+        self.surrender_after = 0    # seconds after deployment to end the battle early (0 = never)
+
+    def finish_battle(self, restart=True, max_wait=200):
+        """
+        End the battle after all troops are deployed.
+        "wait" keeps the game open: wait for the results screen (or surrender after
+        surrender_after seconds) and press Return Home. Falls back to reopening the game.
+        """
+        import time
+
+        if self.battle_end == "restart":
+            if restart: start_coc(force_restart=True)
+            else: stop_coc()
+            return
+
+        start = time.monotonic()
+        surrendered = False
+        while time.monotonic() - start < max_wait:
+            if not running(): break
+            # results screen -> back to the village
+            if self._click_return_home(timeout=0):
+                time.sleep(2)
+                for _ in range(10):
+                    if game_ready(): return
+                    time.sleep(1)
+                break
+            # optional early end: End Battle -> confirm
+            if not surrendered and self.surrender_after > 0 and time.monotonic() - start > self.surrender_after:
+                if self._click_end_battle(timeout=0):
+                    time.sleep(0.7)
+                    self._click_okay(timeout=3)
+                    surrendered = True
+            time.sleep(1)
+        logger.warning("Battle end not detected, reopening the game")
+        if restart: start_coc(force_restart=True)
+        else: stop_coc()
 
     # ============================================================
     # 📱 Screen Interaction
@@ -300,11 +337,7 @@ class Attacker:
             elif last_card_left is None:
                 break
         
-        # Close and reopen CoC to auto complete battle
-        if restart:
-            start_coc()
-        else:
-            stop_coc()
+        self.finish_battle(restart)
     
     def complete_builder_attack(self, restart=True):
         import numpy as np
@@ -315,11 +348,7 @@ class Attacker:
         card_centers = np.linspace(0.1, 0.9, 11)
         self.deploy_troops(card_centers, card_counts=[4]*len(card_centers))
         
-        # Close and reopen CoC to auto complete battle
-        if restart:
-            start_coc()
-        else:
-            stop_coc()
+        self.finish_battle(restart, max_wait=260) # builder battles can have two stages
     
     # ============================================================
     # ⚔️ Attack Management
