@@ -594,6 +594,20 @@ class Attacker:
         self.spell_no = 0
         self.troops_done_at = self.heroes_done_at = None
         if getattr(self, "plan", None): logger.info(f"Attack plan: {self.plan.get('name', '')}")
+        if getattr(self, "plan", None) and self.plan.get("recording"):
+            import recorder
+            data = recorder.load(self.plan["recording"])
+            if data and data.get("events"):
+                logger.info(f"Replaying recording '{data.get('name')}'")
+                time.sleep(0.8)
+                try:
+                    taps = recorder.replay(data, ADB_Manager.minitouch_device.connection, lambda: not running())
+                    logger.info(f"Recording replayed: {taps} taps")
+                except Exception:
+                    logger.exception("Recording replay failed")
+                self.finish_battle(restart)
+                return
+            logger.warning(f"Recording '{self.plan['recording']}' not found, using the loadout")
         
         type_gaps_seen = 0
         total_slots_seen = 0

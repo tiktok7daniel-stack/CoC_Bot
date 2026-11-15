@@ -240,6 +240,31 @@ def api_report(id):
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
+# ---------------------------------------------------------------- battle recordings
+
+@app.route("/api/recordings", methods=["GET"])
+def api_recordings():
+    import recorder
+    return jsonify({"items": recorder.list_recordings()})
+
+@app.route("/api/recordings/delete", methods=["POST"])
+def api_recordings_delete():
+    import recorder
+    recorder.delete((request.json or {}).get("name", ""))
+    return jsonify({"ok": True})
+
+@app.route("/api/record/<id>", methods=["POST"])
+def api_record(id):
+    import recorder
+    if not valid_id(id): abort(404)
+    inst = instances.get(id)
+    if inst is None: return jsonify({"ok": False, "error": "not_running"}), 400
+    name = str((request.json or {}).get("name", "")).strip()
+    if not name: return jsonify({"ok": False, "error": "no_name"}), 400
+    inst.end_time = time.time() + 10 * 60 # the bot rests while you attack
+    recorder.request(id, name)
+    return jsonify({"ok": True})
+
 # ---------------------------------------------------------------- teach the bot
 
 @app.route("/api/teach", methods=["GET"])

@@ -20,9 +20,10 @@ def launch_proc(args):
     parse_args(args.debug, args.id, args.gui, args.gui_port)
     init_instance(args.id)
     enable_logging(args.id)
-    from utils import install_error_reporter, start_capture_service
+    from utils import install_error_reporter, start_capture_service, start_record_service
     install_error_reporter()
     start_capture_service()
+    start_record_service()
     bot = CoC_Bot()
     bot.run()
 

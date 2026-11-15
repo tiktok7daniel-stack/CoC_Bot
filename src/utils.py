@@ -2538,6 +2538,54 @@ def start_capture_service():
                 pass
     threading.Thread(target=loop, daemon=True, name="capture").start()
 
+def start_record_service():
+    """Serve "record a battle" requests from the GUI: wait for the user's own attack and record their touches."""
+    import threading, time, recorder
+    def battle_visible():
+        if find_taught("end_battle"): return True
+        try:
+            from attacker import Attacker
+            a = getattr(battle_visible, "a", None) or Attacker()
+            battle_visible.a = a
+            return a.in_battle()
+        except Exception:
+            return False
+    def record(name):
+        logger.info(f"Battle recording '{name}': start an attack in the game yourself")
+        deadline = time.monotonic() + 300
+        while not battle_visible():
+            if time.monotonic() > deadline:
+                logger.warning("Battle recording cancelled: no battle started within 5 minutes"); return
+            time.sleep(1)
+        Input_Handler.zoom(dir="out")
+        Input_Handler.swipe_up(y1=0.5)
+        time.sleep(0.8)
+        found = recorder.find_touch_device(lambda c: ADB_Manager.adbutils_device.shell(c))
+        if not found:
+            logger.error("Battle recording failed: touch device not found"); return
+        rec = recorder.Recorder(ADB_Manager._adb_exe or "adb", ADB_ADDRESS, *found)
+        rec.start()
+        logger.info("Battle recording: attack now, every tap is being recorded")
+        start, gone = time.monotonic(), 0
+        while time.monotonic() - start < 200:
+            time.sleep(1)
+            gone = 0 if battle_visible() else gone + 1
+            if gone >= 4: break
+        rec.stop()
+        time.sleep(0.3)
+        data = rec.save(name)
+        taps = sum(1 for e in data["events"] if e["type"] == "down")
+        logger.info(f"Battle recording '{name}' saved: {taps} taps, {data['duration']:.0f} seconds")
+    def loop():
+        while True:
+            time.sleep(1)
+            try:
+                req = recorder.take_request(INSTANCE_ID)
+                if req: record(req.get("name") or "battle")
+            except Exception:
+                logger.exception("Battle recording failed")
+    threading.Thread(target=loop, daemon=True, name="recorder").start()
+
 # ======================================================================
 # Automatic learning: read the screen with word positions, learn buttons
 # by their text, learn the enemy loot numbers, and record unknown screens.

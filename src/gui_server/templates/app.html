@@ -491,6 +491,17 @@ footer .mid .btn{min-width:150px;padding:11px 18px;font-size:16px}
   </div>
   <div class="grid">
     <div class="card span2" data-asec="plans">
+      <div class="card-h"><div class="ico"><i class="fa-solid fa-video"></i></div><h3 data-t="rec_title"></h3></div>
+      <div class="card-sub" data-t="rec_sub"></div>
+      <div class="card-b">
+        <div class="row"><div class="lbl"><span data-t="rec_name"></span><small data-t="rec_name_sub"></small></div>
+          <input class="in" id="recName" placeholder="مثلًا: تنانين 1" style="width:170px">
+          <button class="btn go" onclick="startRecording()"><i class="fa-solid fa-circle-dot"></i> <span data-t="rec_start"></span></button></div>
+        <div id="recList"></div>
+        <div class="note"><i class="fa-solid fa-triangle-exclamation"></i> <span data-t="rec_note"></span></div>
+      </div>
+    </div>
+    <div class="card span2" data-asec="plans">
       <div class="card-h"><div class="ico"><i class="fa-solid fa-chess-board"></i></div><h3 data-t="pl_title"></h3></div>
       <div class="card-sub" data-t="pl_sub"></div>
       <div class="card-b">
@@ -854,7 +865,14 @@ ar:{
  unsaved:"تغييرات غير محفوظة. اضغط على حفظ الإعدادات لتطبيقها على البوت.", start_bot:"بدء البوت", save_settings:"حفظ الإعدادات",
  one_err:"خطأ", one_warn:"تحذير",
  brand_sub:"أتمتة كلاش أوف كلانس",
- as_plans:"التشكيلات", pl_title:"التشكيلات (خطط الهجوم)", pl_sub:"اختار تشكيلة: البوت يختار الجيش المحفوظ بتاعها في اللعبة، وينزّل كل نوع في المكان اللي تحدده",
+ as_plans:"التشكيلات",
+ rec_title:"تسجيل معركة (البوت يقلّدك)", rec_sub:"اكتب اسم للتسجيل ودوس تسجيل، وبعدين ادخل هجوم بنفسك في اللعبة. البوت بيسجّل كل ضغطة ووقتها، وبعدين تختار التسجيل ده في أي تشكيلة فيعيد هجومك بالظبط.",
+ rec_name:"اسم التسجيل", rec_name_sub:"مثلًا اسم التشكيلة أو رقم الفريق", rec_start:"ابدأ التسجيل",
+ rec_taps:"ضغطة", rec_delete:"مسح", rec_empty:"مفيش تسجيلات لسه", rec_confirm:"تمسح التسجيل ده؟",
+ rec_need_name:"اكتب اسم للتسجيل الأول", rec_not_running:"شغّل الحساب الأول عشان يقدر يسجّل",
+ rec_started:"البوت وقف مؤقتًا — ادخل هجوم في اللعبة دلوقتي وتابع السجل",
+ rec_note:"لازم الجيش يكون نفسه وبنفس ترتيب الكروت تحت. نزّل الوحوش على أطراف الخريطة البعيدة عشان كل قرية شكلها مختلف. البوت بيبعّد الكاميرا لوحده أول ما المعركة تبدأ — ما تحركش الكاميرا وانت بتهاجم.",
+ pl_rec:"إعادة تسجيل", pl_rec_sub:"لو اخترت تسجيل البوت هيعيد هجومك المتسجّل بدل طريقة الإنزال اللي تحت", pl_rec_none:"من غير تسجيل", pl_title:"التشكيلات (خطط الهجوم)", pl_sub:"اختار تشكيلة: البوت يختار الجيش المحفوظ بتاعها في اللعبة، وينزّل كل نوع في المكان اللي تحدده",
  pl_classic:"نقطة واحدة (الطريقة الأصلية)", pl_classic_sub:"كل الجيش في النقطة المضمونة تحت — من غير تشكيلة",
  pl_use:"استخدمها", pl_active:"شغّالة", pl_army:"اسم الجيش المحفوظ", pl_army_sub:"زي ما هو مكتوب في اللعبة بالظبط (سيبه فاضي = الجيش الحالي)", pl_army_ph:"مثلًا: Dragons",
  pl_troops:"الوحوش", pl_heroes:"الأبطال", pl_clan:"القلعة وآلات الحصار", pl_spells:"التعاويذ",
@@ -971,7 +989,14 @@ en:{
  unsaved:"Unsaved changes. Click Save settings to apply them to the bot.", start_bot:"Start bot", save_settings:"Save settings",
  one_err:"Error", one_warn:"Warning",
  brand_sub:"Clash of Clans automation",
- as_plans:"Loadouts", pl_title:"Loadouts (attack plans)", pl_sub:"Pick a loadout: the bot selects its saved army in the game and deploys each type where you choose",
+ as_plans:"Loadouts",
+ rec_title:"Battle recording", rec_sub:"Name it, press record, then attack by hand. Every tap is recorded and replayed by loadouts that use it.",
+ rec_name:"Recording name", rec_name_sub:"e.g. loadout name", rec_start:"Start recording",
+ rec_taps:"taps", rec_delete:"Delete", rec_empty:"No recordings yet", rec_confirm:"Delete this recording?",
+ rec_need_name:"Enter a name first", rec_not_running:"Start the account first",
+ rec_started:"Bot paused — start an attack in the game now",
+ rec_note:"Use the same army in the same card order. Deploy on the far edges. Don't move the camera while attacking.",
+ pl_rec:"Replay recording", pl_rec_sub:"Replays your recorded attack instead of the deployment below", pl_rec_none:"No recording", pl_title:"Loadouts (attack plans)", pl_sub:"Pick a loadout: the bot selects its saved army in the game and deploys each type where you choose",
  pl_classic:"Single point (original)", pl_classic_sub:"The whole army on the proven bottom spot — no loadout",
  pl_use:"Use", pl_active:"Active", pl_army:"Saved army name", pl_army_sub:"Exactly as written in the game (empty = current army)", pl_army_ph:"e.g. Dragons",
  pl_troops:"Troops", pl_heroes:"Heroes", pl_clan:"Clan castle & sieges", pl_spells:"Spells",
@@ -1045,6 +1070,15 @@ const LOG_AR = [
  [/^Settings changed, applying now/, "الإعدادات اتغيّرت — جاري التطبيق دلوقتي"],
  [/^Run now requested/, "تم طلب تشغيل دورة الآن"],
  [/^Attack plan: (.*)/, "التشكيلة: $1"],
+ [/^Battle recording '(.*?)': start an attack.*/, "🔴 تسجيل \"$1\": ادخل هجوم في اللعبة بنفسك دلوقتي"],
+ [/^Battle recording: attack now.*/, "🔴 هاجم دلوقتي — كل ضغطة بتتسجّل"],
+ [/^Battle recording '(.*?)' saved: (\d+) taps, (\d+) seconds/, "✓ اتحفظ التسجيل \"$1\": $2 ضغطة في $3 ثانية"],
+ [/^Battle recording cancelled.*/, "اتلغى التسجيل: ما بدأتش معركة خلال 5 دقايق"],
+ [/^Battle recording failed.*/, "فشل التسجيل — ابعت السجل"],
+ [/^Replaying recording '(.*?)'/, "▶ بيعيد التسجيل \"$1\""],
+ [/^Recording replayed: (\d+) taps/, "✓ خلّص إعادة التسجيل ($1 ضغطة)"],
+ [/^Recording replay failed.*/, "فشلت إعادة التسجيل"],
+ [/^Recording '(.*?)' not found.*/, "مالقاش التسجيل \"$1\" — هيستخدم التشكيلة العادية"],
  [/^Deploy spot verified on the left.*/, "✓ مكان الإنزال على الشمال اتأكد"],
  [/^Deploy spot verified on the right.*/, "✓ مكان الإنزال على اليمين اتأكد"],
  [/^No valid deploy spot found on the (\w+).*/, "مالقاش مكان مسموح على الجنب ده — هينزّل في النقطة المضمونة تحت"],
@@ -1197,6 +1231,28 @@ function showSub(name){
   $$("#p-upg .sub").forEach(s => s.style.display = s.dataset.sub === name ? "" : "none");
 }
 $$("#tabs button").forEach(b => b.onclick = () => b.dataset.soon ? toast(t("soon_msg")) : showTab(b.dataset.tab));
+/* battle recordings */
+let RECS = [];
+async function loadRecordings(){
+  try { RECS = (await api("/api/recordings")).items || []; } catch(e) { RECS = []; }
+  const box = $("#recList"); if (!box) return;
+  box.innerHTML = RECS.length ? RECS.map(r => `<div class="row"><div class="lbl"><b>${esc(r.name)}</b><small>${r.touches} ${t("rec_taps")} · ${Math.round(r.duration || 0)} ${t("seconds")}</small></div>
+    <button class="btn sm" data-del="${esc(r.name)}"><i class="fa-solid fa-trash"></i> ${t("rec_delete")}</button></div>`).join("")
+    : `<div class="card-sub">${t("rec_empty")}</div>`;
+  box.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
+    if (!confirm(t("rec_confirm"))) return;
+    await api("/api/recordings/delete", {method:"POST", body:{name:b.dataset.del}}); loadRecordings();
+  });
+  renderPlans();
+}
+async function startRecording(){
+  const name = $("#recName").value.trim();
+  if (!name) return toast(t("rec_need_name"), true);
+  const r = await api(`/api/record/${encodeURIComponent(CUR)}`, {method:"POST", body:{name}});
+  if (!r.ok) return toast(t(r.error === "not_running" ? "rec_not_running" : "rec_need_name"), true);
+  toast(t("rec_started"));
+  setTimeout(loadRecordings, 60000); setTimeout(loadRecordings, 240000);
+}
 /* loadouts (attack plans) */
 const WHERE = ["sides", "left", "right", "bottom"];
 function setActivePlan(name){ S.active_plan = name; markDirty(); renderPlans(); }
@@ -1208,6 +1264,7 @@ function renderPlans(){
     <div class="lvl" data-i="${i}" style="${S.active_plan && S.active_plan === p.name ? "border-color:var(--accent);box-shadow:0 0 0 2px rgba(79,155,255,.3)" : ""}">
       <div class="lvl-h"><span class="num-badge">${i + 1}</span><input class="in" data-pk="name" value="${esc(p.name)}" style="width:150px">
         <div class="tools"><button class="btn sm ${S.active_plan === p.name ? "go" : ""}" data-act="1"><i class="fa-solid fa-check"></i>${t(S.active_plan === p.name ? "pl_active" : "pl_use")}</button></div></div>
+      <div class="row"><div class="lbl"><span>${t("pl_rec")}</span><small>${t("pl_rec_sub")}</small></div><select class="in" data-pk="recording"><option value="">${t("pl_rec_none")}</option>${RECS.map(r => `<option value="${esc(r.name)}" ${r.name === p.recording ? "selected" : ""}>${esc(r.name)}</option>`).join("")}</select></div>
       <div class="row"><div class="lbl"><span data-t="pl_army"></span><small>${t("pl_army_sub")}</small></div><input class="in" data-pk="army" value="${esc(p.army || "")}" placeholder="${t("pl_army_ph")}" style="width:160px"></div>
       <div class="row"><div class="lbl">${t("pl_troops")}</div>${sel(p.troops_where, WHERE, "troops_where")}</div>
       <div class="row"><div class="lbl">${t("pl_heroes")}</div>${sel(p.heroes_where, WHERE, "heroes_where")}</div>
@@ -1941,7 +1998,7 @@ async function refreshAll(user){
   loadStats(); loadLog();
   setInterval(loadState, 3000);
   loadSystem(); setInterval(() => { if (curTab === "dash") loadSystem(); }, 3000);
-  showAtk("plans");
+  showAtk("plans"); loadRecordings();
   setInterval(() => { loadStats(); if (curTab === "res" || curTab === "dash") loadLog(); if (curTab === "err") loadErrors(); updateSchedNote(); }, 5000);
 })();
 </script>
