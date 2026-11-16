@@ -1,0 +1,40 @@
+name: Build CoC_Bot.exe launcher
+
+on:
+  push:
+    branches: [ccr-d344ab20-onpy71]
+    paths:
+      - "scripts/launcher/**"
+      - ".github/workflows/build_launcher.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build the launcher exe
+        run: |
+          python -m pip install --upgrade pip pyinstaller
+          pyinstaller --onefile --console --name CoC_Bot --icon src/qt_ui/assets/app_icon.ico scripts/launcher/coc_bot_launcher.py
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CoC_Bot-launcher
+          path: dist/CoC_Bot.exe
+      - name: Publish as release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: launcher-latest
+          name: CoC_Bot.exe (launcher)
+          body: |
+            CoC_Bot.exe - put it in an empty folder (or the bot folder) and double-click.
+            First start downloads the bot and installs everything; every start updates it from GitHub automatically.
+          files: dist/CoC_Bot.exe
+          make_latest: true
