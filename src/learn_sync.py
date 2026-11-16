@@ -36,13 +36,24 @@ def _save(p, data):
     tmp.replace(p)
 
 
+def normalize_repo(text):
+    """'https://github.com/owner/name(.git)' / 'github.com/owner/name/' / 'owner/name' -> 'owner/name'."""
+    import re
+    t = (text or "").strip()
+    t = re.sub(r"^(https?://)?(www\.)?github\.com/", "", t, flags=re.I)
+    t = t.strip().strip("/")
+    if t.endswith(".git"): t = t[:-4]
+    parts = [x for x in t.split("/") if x]
+    return "/".join(parts[:2]) if len(parts) >= 2 else t
+
+
 def _cfg():
     try:
         import settings
         a = settings.load_app()
     except Exception:
         a = {}
-    return {"repo": (a.get("learn_repo") or "").strip().strip("/"), "token": (a.get("github_token") or "").strip(),
+    return {"repo": normalize_repo(a.get("learn_repo") or ""), "token": (a.get("github_token") or "").strip(),
             "auto": a.get("learn_auto", True) is not False}
 
 
