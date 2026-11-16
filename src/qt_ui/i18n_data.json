@@ -968,7 +968,7 @@
 "pw_src_adb": "صور عادية (ADB) — كل نظرة {ms} ملّي ثانية",
 "pw_src_none": "البوت مش شغال دلوقتي",
 "pw_gpu_none": "مش لاقي كارت NVIDIA على الجهاز ده — القراية شغالة على البروسيسور",
-"pw_gpu_on": "✅ {name} شغال — القراية أسرع 10 مرات",
+"pw_gpu_on": "✅ {name} شغال — البوت بيقرا عليه (أسرع 10 مرات)",
 "pw_gpu_off": "{name} موجود بس مش متفعّل",
 "pw_gpu_install": "فعّل كارت الشاشة",
 "pw_brain_txt": "بيعرف {kinds} نوع شاشة من {pics} صورة + {mem} شاشة اتعلّمها لوحده",
@@ -995,7 +995,9 @@
 "pw_links_fail": "ما قدرش يجيب الروابط (النت؟):",
 "pw_files_started": "بيسطّب ملفاتك دلوقتي — تابع هنا",
 "checking": "بيتأكد…",
-"pw_gpu_unpack": "بيسطّب الملفات… {pct}% — سيبه يكمّل لوحده"
+"pw_gpu_unpack": "بيسطّب الملفات… {pct}% — سيبه يكمّل لوحده",
+"pw_gpu_armed": "✅ {name} متفعّل — البوت هيقرا عليه أول ما يشتغل",
+"pw_gpu_bot_cpu": "{name} متسطّب، بس البوت اللي شغال دلوقتي لسه على البروسيسور — وقّف البوت وشغّله تاني"
 },
 "en": {
 "gold": "Gold",
@@ -1966,7 +1968,7 @@
 "pw_src_adb": "Screenshots (ADB) — {ms} ms per look",
 "pw_src_none": "The bot is not running now",
 "pw_gpu_none": "No NVIDIA card found on this PC — reading runs on the processor",
-"pw_gpu_on": "✅ {name} on — reading 10x faster",
+"pw_gpu_on": "✅ {name} working — the bot reads on it (10x faster)",
 "pw_gpu_off": "{name} found but not used",
 "pw_gpu_install": "Enable graphics card",
 "pw_brain_txt": "Knows {kinds} kinds of screen from {pics} taught pictures + {mem} screens it learned itself",
@@ -1993,7 +1995,9 @@
 "pw_links_fail": "Could not get the links (internet?):",
 "pw_files_started": "Installing your files now — follow it here",
 "checking": "Checking…",
-"pw_gpu_unpack": "Installing the files… {pct}% — let it finish by itself"
+"pw_gpu_unpack": "Installing the files… {pct}% — let it finish by itself",
+"pw_gpu_armed": "✅ {name} on — the bot reads on it as soon as it runs",
+"pw_gpu_bot_cpu": "{name} is installed, but the running bot still reads on the processor — stop and start the bot"
 },
 "unit_ar": {
 "healing": "العلاج",
@@ -2777,10 +2781,6 @@
 "اتعرّف على القرية من زرارين Battle و Build ✓"
 ],
 [
-"^Text reader ready \\((\\d+)s\\)",
-"قارئ الكلام جاهز (\\g<1> ثانية) ✓"
-],
-[
 "^Loading the bot's pictures of the game…",
 "بيحمّل صور اللعبة اللي البوت بيتعرّف بيها…"
 ],
@@ -2831,6 +2831,14 @@
 [
 "^Known screen: (.*) \\(recognised by its look\\)",
 "🧠 عرف الشاشة من شكلها: \\1 — اتصرّف على طول من غير قراية"
+],
+[
+"^Text reader ready \\((\\d+)s\\) on the graphics card",
+"🎮 قارئ الكلام جاهز (\\1 ث) — شغال على كارت الشاشة ⚡"
+],
+[
+"^Text reader ready \\((\\d+)s\\) on the processor",
+"قارئ الكلام جاهز (\\1 ث) — على البروسيسور"
 ]
 ]
 }

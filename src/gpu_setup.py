@@ -178,6 +178,7 @@ def status(refresh=False):
         j = _job()
     st["installing"] = bool(j.get("running"))
     st["ready"] = READY.exists()
+    st["active"] = st["ready"] and str(TARGET) in sys.path      # this program started with the card's torch
     st["pending"] = False
     st["result"] = j.get("result", "")
     st["error"] = j.get("error", "")

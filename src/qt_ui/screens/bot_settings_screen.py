@@ -344,8 +344,12 @@ class BotSettingsScreen(Screen):
                 self.gpu_bar.setVisible(True)
                 self.gpu_btn.setVisible(False)
                 self._gpu_timer.start(3000)                      # follow the download
-            elif r.get("ready") and b.get("ocr_gpu"):
-                self.pw_gpu.set("ok", tr("pw_gpu_on").format(name=name))
+            elif r.get("ready") and r.get("active") and b.get("ocr_gpu") is False:
+                # installed and loaded, but the running bot still reads on the processor (started before?)
+                self.pw_gpu.set("warn", tr("pw_gpu_bot_cpu").format(name=name))
+                self.gpu_btn.setVisible(False)
+            elif r.get("ready") and r.get("active"):
+                self.pw_gpu.set("ok", tr("pw_gpu_on").format(name=name) if b.get("ocr_gpu") else tr("pw_gpu_armed").format(name=name))
                 self.gpu_btn.setVisible(False)
             elif r.get("ready"):
                 self.pw_gpu.set("ok", tr("pw_gpu_ready").format(name=name))

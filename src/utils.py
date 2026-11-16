@@ -3203,8 +3203,9 @@ def warm_up_ocr():
         import time
         t = time.time()
         try:
-            easyocr_reader()
-            logger.info(f"Text reader ready ({time.time() - t:.0f}s)")
+            r = easyocr_reader()
+            on = "the graphics card" if str(getattr(r, "device", "cpu")).startswith("cuda") else "the processor"
+            logger.info(f"Text reader ready ({time.time() - t:.0f}s) on {on}")
         except Exception:
             pass
     _ocr_threading.Thread(target=work, daemon=True, name="ocr-warmup").start()
