@@ -86,6 +86,7 @@ def default_settings():
                 "gold_full": 0,      # gold counts as full from this amount (0 = learn the storage size by itself)
                 "elixir_full": 0,
                 "rest_minutes": 30,  # full and nothing to spend on: close the game and rest this long
+                "walls_first": True, # storages full: all the walls the gold / elixir can pay first, then buildings
                 "max_walls": False,  # wall-max mode: farm + walls until every wall is maxed, buildings too but 1 builder kept free
             },
             "skip_when_full": {      # don't attack while the storages are (nearly) full

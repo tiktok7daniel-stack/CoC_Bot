@@ -145,7 +145,8 @@ class CoC_Bot:
     def spend_when_full(self, s):
         """Walls first (all of them that can be paid), then the normal upgrades. True if anything was spent."""
         # today's plan says no walls and no buildings -> don't spend, keep doing what was asked
-        walls_ok = s.get("walls", {}).get("enabled") or s.get("attack", {}).get("farm", {}).get("max_walls")
+        farm = s.get("attack", {}).get("farm", {})
+        walls_ok = s.get("walls", {}).get("enabled") or farm.get("max_walls") or farm.get("walls_first", True) is not False
         if not walls_ok and self.excluded("home_base"):
             if not getattr(self, "_full_plan_logged", False):
                 logger.info("Storages full, but today's plan has no upgrades: going on with the plan")
@@ -155,6 +156,8 @@ class CoC_Bot:
         logger.info("Storages full: upgrading walls and buildings")
         set_phase("spend_full")
         self.upgrader.wall_budget = 10**6
+        # storages full: every wall the gold / elixir can pay first (the user's choice), then buildings with the rest
+        self.upgrader.walls_first = s.get("attack", {}).get("farm", {}).get("walls_first", True) is not False
         # storages full = spend on walls even when "wall upgrades" is off in the quick tasks
         prio = [list(l) for l in configs.HOME_BASE_UPGRADE_PRIORITY]
         if walls_ok and not any("Wall" in l for l in prio):
@@ -164,6 +167,7 @@ class CoC_Bot:
         except (KeyboardInterrupt, SystemExit): raise
         except Exception: logger.exception("Spending when full failed")
         configs.HOME_BASE_UPGRADE_PRIORITY = prio
+        self.upgrader.walls_first = False
         to_home_base()
         after = self.read_and_record_resources() or {}
         spent = any((before.get(k) or 0) - (after.get(k) or 0) > 1000 for k in ("gold", "elixir"))

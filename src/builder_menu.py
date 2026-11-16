@@ -204,6 +204,33 @@ def _like(text, word):
 
 
 # ---------------------------------------------------------------- one upgrade
+def _upgrade_buttons(frame):
+    """Every grey "Upgrade" in the building's bar with its price above it -> [(x, y, cost, resource)]."""
+    import game_digits
+    out = []
+    bar = Frame_Handler.crop(frame, 0.10, 0.62, 0.90, 0.98)
+    for text, bx1, by1, bx2, by2, conf in ocr_boxes(bar):
+        if conf < 0.25 or not _like(text, "upgrade"): continue
+        gx, gy = 0.10 + (bx1 + bx2) / 2 * 0.80, 0.62 + (by1 + by2) / 2 * 0.36
+        around = Frame_Handler.crop(frame, gx - 0.035, gy - 0.10, gx + 0.035, gy - 0.02)
+        r, g, b = (around[..., i].astype(int).mean() for i in range(3))
+        if b > r + 35 and b > 140: continue                          # blue = the magic Hammer: never
+        price = Frame_Handler.crop(frame, gx - 0.055, gy - 0.165, gx + 0.055, gy - 0.095)
+        cost = game_digits.read(price)
+        out.append((gx, gy - 0.05, cost, _resource(price) if cost else None))
+    return out
+
+
+def _pick_button(btns, res=None):
+    """The Upgrade button to press: one whose price can be paid with what is in the storages (the fuller one)."""
+    if not btns: return None
+    if res:
+        ok = [b for b in btns if b[2] and b[3] in ("gold", "elixir", "dark") and (res.get(b[3]) or 0) >= b[2]]
+        if ok: return max(ok, key=lambda b: (res.get(b[3]) or 0) - b[2])[:2]
+        if any(b[2] for b in btns): return None                      # prices read and none can be paid
+    return btns[0][:2]
+
+
 def _upgrade_button(frame):
     """The grey "Upgrade" (hammer) in the building's bar, never the blue one (magic Hammer). -> (x, y) or None."""
     import numpy as np
@@ -237,7 +264,7 @@ def _confirm_button(frame):
     return None
 
 
-def upgrade(row, upgrader=None, tries=12):
+def upgrade(row, upgrader=None, tries=12, res=None):
     """Tap the row (already on screen), Upgrade, Confirm. -> True when the upgrade window was confirmed."""
     import utils
     if not find_and_tap(row): return False
@@ -258,7 +285,9 @@ def upgrade(row, upgrader=None, tries=12):
                     if x is not None: u = (x, y)
                 except Exception:
                     u = None
-            u = u or _upgrade_button(frame)
+            if u is None or row.get("name") == "Wall":
+                # walls can show a gold and an elixir Upgrade: take the one that can be paid
+                u = _pick_button(_upgrade_buttons(frame), res) or u
             if u:
                 Input_Handler.click(*u)
                 pressed_upgrade = True
@@ -284,12 +313,15 @@ def upgrade(row, upgrader=None, tries=12):
 
 
 # ---------------------------------------------------------------- choosing
-def choose(rows, walls=False, heroes=True, keep=None):
+def choose(rows, walls=False, heroes=True, keep=None, res=None):
     """The best row to upgrade now: can pay, not new; walls or buildings; the most expensive one first."""
     keep = keep or {}
     cands = []
     for r in rows:
-        if r["new"] or not r["affordable"] or not r["cost"] or r["name"] in NEVER: continue
+        payable = r["affordable"]
+        if walls and not payable and res:                     # high walls take gold OR elixir: either is enough
+            payable = any((res.get(k) or 0) >= (r["cost"] or 10**12) for k in ("gold", "elixir"))
+        if r["new"] or not payable or not r["cost"] or r["name"] in NEVER: continue
         if (r["name"] == "Wall") != walls: continue
         if r["name"] in HEROES and not heroes: continue
         if r["name"] == "Town Hall" and any(o is not r and o["affordable"] and not o["new"] and o["name"] != "Wall" for o in rows): continue
@@ -300,7 +332,7 @@ def choose(rows, walls=False, heroes=True, keep=None):
     return cands[0] if cands else None
 
 
-def run(upgrader=None, reserve=1, walls_budget=0, heroes=True, max_buildings=6, buildings=True):
+def run(upgrader=None, reserve=1, walls_budget=0, heroes=True, max_buildings=6, buildings=True, walls_first=False, res=None):
     """
     Upgrade buildings while more than `reserve` builders are free (one is kept for walls), then walls with
     the free builder (walls are instant). -> {"buildings": [...], "walls": n}
@@ -311,6 +343,22 @@ def run(upgrader=None, reserve=1, walls_budget=0, heroes=True, max_buildings=6, 
     free, total = free_builders()
     logger.info(f"Builders: {free if free is not None else '?'} free of {total if total is not None else '?'} "
                 f"(keeping {reserve} free for walls)")
+    order = ("walls", "buildings") if walls_first else ("buildings", "walls")
+    for part in order:
+        if part == "buildings": free = _buildings(upgrader, reserve, heroes, max_buildings, buildings, done, free)
+        else: free = _walls(upgrader, walls_budget, done, free, res)
+    return done
+
+
+def _resources_now():
+    try:
+        import utils
+        return utils.read_resources(samples=1)
+    except Exception:
+        return None
+
+
+def _buildings(upgrader, reserve, heroes, max_buildings, buildings, done, free):
     # ---- buildings
     while buildings and free is not None and free > reserve and len(done["buildings"]) < max_buildings:
         if not open_panel():
@@ -339,16 +387,24 @@ def run(upgrader=None, reserve=1, walls_budget=0, heroes=True, max_buildings=6, 
         else:
             logger.warning(f"The upgrade of {pick['name']} did not start (window not recognised)")
             break
+    return free
+
+
+def _walls(upgrader, walls_budget, done, free, res):
     # ---- walls with the builder kept free
+    if walls_budget > 0 and free is not None and free >= 1 and walls_budget >= 10**5:
+        logger.info("Upgrading walls until the gold / elixir runs out")
     while walls_budget > done["walls"] and free is not None and free >= 1:
+        res = _resources_now() or res                  # read in the village (the panel moves the storage bars)
         if not open_panel(): break
         rows, _pages = scan()
-        pick = choose(rows, walls=True)
+        pick = choose(rows, walls=True, res=res)
         if not pick:
             if done["walls"] == 0: logger.info("No wall can be paid now")
+            else: logger.info(f"Walls done: {done['walls']} upgraded, not enough gold / elixir for the next one")
             close_panel()
             break
-        ok = upgrade(pick, upgrader)
+        ok = upgrade(pick, upgrader, res=res)
         time.sleep(0.4)
         Input_Handler.click_exit(n=1)
         if not ok:
@@ -359,4 +415,4 @@ def run(upgrader=None, reserve=1, walls_budget=0, heroes=True, max_buildings=6, 
         if upgrader is not None:
             try: upgrader.on_upgrade("wall", "Wall")
             except Exception: pass
-    return done
+    return free

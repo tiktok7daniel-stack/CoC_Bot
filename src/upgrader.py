@@ -1545,7 +1545,8 @@ class Upgrader:
                 if builder_menu.free_builders()[0] is not None:
                     keep = 1 if _st.load_app().get("keep_wall_builder", True) is not False else 0
                     res = builder_menu.run(self, reserve=max(keep, int(OPEN_HOME_BUILDERS)), heroes=not Task_Handler.excluded("heroes"),
-                                           walls_budget=self.wall_budget if walls_wanted else 0, buildings=not exclude_base)
+                                           walls_budget=self.wall_budget if walls_wanted else 0, buildings=not exclude_base,
+                                           walls_first=getattr(self, "walls_first", False))
                     upgrades_started += res["buildings"]
                     self.last_walls_done = res["walls"]
                     if res["walls"]:
