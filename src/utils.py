@@ -563,21 +563,40 @@ def in_home_base():
         (63, 48, 66), # dark elixir
         (211, 236, 116), # gems
     ]
-    found_all = True
+    # the resource icons (gold, elixir, dark, gems) at the top right; 3 of 4 is enough (an event banner or a
+    # different color profile can hide / shift one of them)
+    hits = 0
     for sec, color in zip(resource_sections, target_colors):
         diff = abs(sec.astype(int) - np.array(color).reshape((1, 1, 3))).sum(2)
-        if min(diff.flatten()) > 10:
-            found_all = False
-            break
-    if found_all: return True
+        if min(diff.flatten()) <= 30: hits += 1
+    if hits >= 3: return True
 
     # Fallback to gold template matching
-    return Frame_Handler.locate(
+    if Frame_Handler.locate(
         Asset_Manager.upgrader_assets["home_gold"],
         grayscale=False,
         prefilter=True,
-        thresh=0.85
-    ) != (None, None)
+        thresh=0.80
+    ) != (None, None):
+        return True
+    # last check: read the big "Attack!" button at the bottom left (cached a few seconds, OCR is slow)
+    return _village_by_words()
+
+
+_VILLAGE_WORDS = {"t": 0.0, "ok": False}
+
+def _village_by_words():
+    import time
+    if time.time() - _VILLAGE_WORDS["t"] < 4: return _VILLAGE_WORDS["ok"]
+    ok = False
+    try:
+        corner = Frame_Handler.get_frame_section(0.0, 0.78, 0.22, 1.0, grayscale=False, use_cached=True)
+        ok = any(_word_hit(b[0], "attack") for b in ocr_boxes(corner) if b[5] > 0.3)
+        if ok and not _VILLAGE_WORDS["ok"]: logger.info("Village recognised by the Attack button")
+    except Exception:
+        ok = False
+    _VILLAGE_WORDS.update(t=time.time(), ok=ok)
+    return ok
 
 def to_home_base(ref_cache=False):
     import cv2, time, numpy as np
@@ -762,8 +781,9 @@ def start_coc(timeout=120, detailed=False, force_restart=False):
             if force and i > 0:
                 restarted_once = True
                 logger.info("Game stuck while starting, restarting it once")
-            ADB_Manager.adbutils_device.shell(f"am start {'-S' if force else ''} -W -n com.supercell.clashofclans/com.supercell.titan.GameApp")
-            Input_Handler.click_exit(x=0.99, y=0.01, n=4, delay=0.1)
+            if force or i % 10 == 0:   # bring it to the front now and then, not every half second
+                ADB_Manager.adbutils_device.shell(f"am start {'-S' if force else ''} -W -n com.supercell.clashofclans/com.supercell.titan.GameApp")
+            if i % 4 == 0: Input_Handler.click_exit(x=0.99, y=0.01, n=2, delay=0.1)
             
             Frame_Handler.get_frame()
             
@@ -779,6 +799,10 @@ def start_coc(timeout=120, detailed=False, force_restart=False):
                 if x is not None and y is not None:
                     Input_Handler.click(x, y)
             
+            if i and i % 40 == 0:    # ~every 20 s: say what is going on instead of staying silent
+                alive = bool(ADB_Manager.adbutils_device.shell("pidof com.supercell.clashofclans").strip())
+                logger.info(f"Still opening the game ({int(elapsed)}s): " + ("the game is open but the village is not recognised yet"
+                                                                          if alive else "waiting for the game to load"))
             # stuck on something unknown (popup, offer, event) after the normal loading time?
             # read it, record it, press a safe button
             if elapsed > 25 and time.time() - last_unknown > 15:
@@ -1568,7 +1592,8 @@ class Task_Handler:
             # settings saved from the desktop GUI (per account), re-read every call
             import settings as bot_settings
             cls.cache_valid = True
-            cls.cached_exclusions = bot_settings.exclusions(bot_settings.load(INSTANCE_ID))
+            import today_plan
+            cls.cached_exclusions = bot_settings.exclusions(today_plan.overlay(bot_settings.load(INSTANCE_ID), INSTANCE_ID))
             return cls.cached_exclusions
         if WEB_APP_URL != "":
             res = requests.get(

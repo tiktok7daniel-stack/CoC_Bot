@@ -22,7 +22,8 @@ class CoC_Bot:
     def load_settings(self):
         """Re-read the account's GUI settings every cycle so changes apply without a restart."""
         try:
-            s = bot_settings.load(_utils.INSTANCE_ID)
+            import today_plan
+            s = today_plan.overlay(bot_settings.load(_utils.INSTANCE_ID), _utils.INSTANCE_ID)   # today's plan on top
             bot_settings.apply(s)
         except Exception:
             logger.exception("CoC_Bot.load_settings: using previous settings")
@@ -482,6 +483,29 @@ class CoC_Bot:
             logger.info(f"Routine {r.get('name')}: {done} taps")
             to_home_base()
 
+    def ask_today_plan(self):
+        """Ask in the app what to do today; wait for the answer (the usual after ASK_TIMEOUT)."""
+        import time, today_plan
+        iid = _utils.INSTANCE_ID
+        set_phase("idle")
+        today_plan.ask(iid)
+        logger.info("Waiting for today's plan (choose in the app)")
+        try: send_notification("🎮 اللعبة جاهزة — افتح Clash Farmer واختار عاوز تعمل إيه النهارده")
+        except Exception: pass
+        start = time.monotonic()
+        while time.monotonic() - start < today_plan.ASK_TIMEOUT:
+            p = today_plan.load(iid)
+            if p:
+                logger.info(f"Today's plan: {today_plan.describe(p)}")
+                return p
+            if not running(): break
+            time.sleep(1)
+        today_plan.cancel_ask(iid)
+        if today_plan.load(iid) is None:
+            p = today_plan.save(iid, "usual", auto=True)
+            logger.info("No answer: doing the usual today")
+            return p
+
     def excluded(self, task):
         """Fresh read of the GUI toggle, so changes made mid-cycle apply to the next step."""
         return Task_Handler.excluded(task)
@@ -632,6 +656,20 @@ class CoC_Bot:
                 else:
                     started, res = start_coc(detailed=True)
                 if started:
+                    # ---- today's plan: asked once a day as soon as the game is open
+                    import today_plan
+                    iid = _utils.INSTANCE_ID
+                    if today_plan.load(iid) is None and bot_settings.load_app().get("ask_plan", True) is not False:
+                        self.ask_today_plan()
+                        continue
+                    if today_plan.mode(iid) == "nothing":
+                        if not getattr(self, "_nothing_logged", False):
+                            logger.info("Today's plan: nothing — the game stays open, the bot waits for you")
+                            self._nothing_logged = True
+                        update_status("idle")
+                        self.idle(2)
+                        continue
+                    self._nothing_logged = False
                     update_status("now")
                     cycle_start = time.monotonic()
                     self.cycle_count += 1

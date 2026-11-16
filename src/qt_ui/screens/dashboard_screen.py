@@ -110,6 +110,25 @@ class DashboardScreen(Screen):
         sa, v = page()
         self.root.addWidget(sa)
 
+        # ---------- today's plan bar
+        self.plan_bar = Box(radius=18, border="rgba(245,183,64,0.35)")
+        pb = QHBoxLayout(self.plan_bar)
+        pb.setContentsMargins(16, 10, 12, 10)
+        pb.setSpacing(12)
+        pic = QLabel()
+        pic.setPixmap(icons.pixmap("calendar", 24, TOKENS["accent"]))
+        pb.addWidget(pic)
+        pcol = QVBoxLayout()
+        pcol.setSpacing(0)
+        pcol.addWidget(label(key="tp_bar_title", role="h3"))
+        self.plan_text = label("—", "sub", wrap=True)
+        pcol.addWidget(self.plan_text)
+        pb.addLayout(pcol, 1)
+        chg = IconButton("edit", "tp_change", "warn", size=14)
+        chg.clicked.connect(lambda: self.ctx.window.today.edit())
+        pb.addWidget(chg)
+        v.addWidget(self.plan_bar)
+
         # ---------- telemetry strip
         strip = QWidget()
         g = QGridLayout(strip)
@@ -265,11 +284,29 @@ class DashboardScreen(Screen):
         self.recordings = []
         from ..widgets.avatar import profiles
         profiles.changed.connect(lambda _a: self.render_accounts())
+        self.store.account_changed.connect(lambda _a: self.refresh_plan())
         on_lang(lambda: (self.render_accounts(), self.render_recordings()))
         self.load_recordings()
 
     # ---------------------------------------------------------------- data
+    def refresh_plan(self):
+        acc = self.store.account
+        if not acc: return
+
+        def got(r):
+            p = (r or {}).get("plan") if isinstance(r, dict) else None
+            if not p: text = tr("tp_bar_none")
+            elif p["mode"] == "usual": text = tr("tp_bar_usual") + (" " + tr("tp_bar_auto") if p.get("auto") else "")
+            elif p["mode"] == "nothing": text = tr("tp_bar_nothing")
+            else:
+                names = {"attack": "tp_attack", "buildings": "tp_buildings", "walls": "tp_walls", "lab": "tp_lab",
+                         "heroes": "tp_heroes", "builder_base": "tp_bb"}
+                text = " · ".join(tr(names[k]) for k, on in p.get("do", {}).items() if on and k in names)
+            self.plan_text.setText(text)
+        self.api.get(f"/api/plan/{acc}", got)
+
     def on_show(self):
+        self.refresh_plan()
         self.load_recordings()
         self.poller.refresh_all()
 

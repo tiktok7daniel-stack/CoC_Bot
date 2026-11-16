@@ -96,6 +96,7 @@ class BotSettingsScreen(Screen):
         self.upd_note = label("", "sub", wrap=True)
         upd.add(self.upd_note)
         upd.add(toggle_row(st, "up_auto", "auto_update", "up_auto_sub", "app"))
+        upd.add(toggle_row(st, "up_ask_plan", "ask_plan", "up_ask_plan_sub", "app"))
         g.addWidget(upd, 0, 1)
 
         tg = GlassCard("notifications", "bell", "notifications_sub")

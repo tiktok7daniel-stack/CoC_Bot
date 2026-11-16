@@ -441,6 +441,29 @@ def api_army_status(id):
     if not valid_id(id): abort(404)
     return jsonify(army_learn.get_status(id) or {})
 
+# ---------------------------------------------------------------- today's plan ("what do you want to do today?")
+
+@app.route("/api/plan_ask", methods=["GET"])
+def api_plan_ask():
+    import today_plan
+    return jsonify({"asking": [dict(id=a, **today_plan.asking(a)) for a in accounts() if today_plan.asking(a)]})
+
+@app.route("/api/plan/<id>", methods=["GET", "POST"])
+def api_plan(id):
+    import today_plan
+    if not valid_id(id): abort(404)
+    if request.method == "GET":
+        return jsonify({"plan": today_plan.load(id), "asking": today_plan.asking(id)})
+    d = request.json or {}
+    mode = d.get("mode") if d.get("mode") in ("usual", "custom", "nothing") else "usual"
+    do = {k: bool(v) for k, v in (d.get("do") or {}).items() if k in today_plan.ITEMS}
+    p = today_plan.save(id, mode, do)
+    inst = instances.get(id)
+    if inst is not None:
+        inst.end_time = 0
+        bot_settings.request_wake(id)
+    return jsonify({"ok": True, "plan": p})
+
 # ---------------------------------------------------------------- capture mode (the user plays, the bot photographs)
 
 @app.route("/api/capture/<id>/start", methods=["POST"])

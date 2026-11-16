@@ -140,6 +140,8 @@ class MainWindow(QMainWindow):
         self._seen_lines = None
         self.setup_tray()
         self.hud = MiniHud(self)
+        from .components.today_dialog import TodayPlanner
+        self.today = TodayPlanner(self)
         from .components.update_center import UpdateCenter
         self.update_center = UpdateCenter(self, self.top.update_pill)
         self.poller.errors.connect(lambda items: self.sidebar.set_badge("log", sum(1 for e in items if e.get("type") == "error")))

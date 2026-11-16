@@ -887,7 +887,42 @@
 "up_auto_sub": "ينزّل أي تحديث جديد لوحده ويسألك بس تعيد التشغيل إمتى",
 "cp_in_battle": "بيسجّل هجمتك",
 "cp_battles": "هجمة",
-"cp_battle_row": "هجمة #{n}: {taps} نزلة جيش و{frames} صورة — اتحفظت كتسجيل «{rec}» (تلاقيه في الهجوم ← التشكيلات)"
+"cp_battle_row": "هجمة #{n}: {taps} نزلة جيش و{frames} صورة — اتحفظت كتسجيل «{rec}» (تلاقيه في الهجوم ← التشكيلات)",
+"tp_title": "{name} — عاوز تعمل إيه النهارده؟",
+"tp_sub": "اللعبة جاهزة. اختار البوت يشتغل على إيه النهارده في الحساب ده (إعداداتك مش هتتغيّر، دي خطة النهارده بس).",
+"tp_usual": "زي كل يوم",
+"tp_farm": "فارم بس",
+"tp_upgrades": "ترقيات بس",
+"tp_nothing": "مش عاوز أعمل حاجة",
+"tp_or_pick": "أو اختار بالظبط",
+"tp_attack": "هجوم وفارم",
+"tp_attack_sub": "يهاجم ويجمع موارد",
+"tp_buildings": "ترقية المباني",
+"tp_buildings_sub": "البنّائين يشتغلوا على المباني",
+"tp_walls": "الأسوار",
+"tp_walls_sub": "يرقّي الأسوار بالموارد الزيادة",
+"tp_lab": "المعمل",
+"tp_lab_sub": "أبحاث الجيش والتعاويذ",
+"tp_heroes": "الأبطال والحيوانات",
+"tp_heroes_sub": "ترقية الأبطال وبيت الحيوانات",
+"tp_bb": "القرية الليلية",
+"tp_bb_sub": "هجوم وترقيات القرية الليلية",
+"tp_go": "يلا ابدأ",
+"tp_countdown": "لو ماخترتش، البوت هيعمل زي كل يوم بعد {s} ثانية",
+"tp_auto_done": "البوت هيكمل زي كل يوم",
+"tp_notify_title": "اللعبة جاهزة",
+"tp_notify": "{name}: اختار عاوز تعمل إيه النهارده",
+"tp_saved_usual": "تمام — البوت هيشتغل زي كل يوم",
+"tp_saved_custom": "تمام — خطة النهارده اتحفظت والبوت بدأ",
+"tp_saved_nothing": "تمام — اللعبة هتفضل مفتوحة والبوت مش هيعمل حاجة",
+"tp_bar_title": "خطة النهارده",
+"tp_change": "غيّر الخطة",
+"tp_bar_none": "لسه — البوت هيسألك أول ما اللعبة تفتح",
+"tp_bar_usual": "زي كل يوم",
+"tp_bar_auto": "(اختارها لوحده)",
+"tp_bar_nothing": "ولا حاجة — اللعبة مفتوحة والبوت مستنيك",
+"up_ask_plan": "اسألني كل يوم عاوز أعمل إيه",
+"up_ask_plan_sub": "أول ما اللعبة تفتح يظهرلك اختيار خطة النهارده"
 },
 "en": {
 "gold": "Gold",
@@ -1777,7 +1812,42 @@
 "up_auto_sub": "Downloads new versions by itself and only asks when to restart",
 "cp_in_battle": "recording your attack",
 "cp_battles": "attacks",
-"cp_battle_row": "Attack #{n}: {taps} deploys, {frames} pictures — saved as recording “{rec}” (Attack → Loadouts)"
+"cp_battle_row": "Attack #{n}: {taps} deploys, {frames} pictures — saved as recording “{rec}” (Attack → Loadouts)",
+"tp_title": "{name} — what do you want to do today?",
+"tp_sub": "The game is ready. Choose what the bot works on today for this account (your settings don't change; this is today's plan only).",
+"tp_usual": "As usual",
+"tp_farm": "Farm only",
+"tp_upgrades": "Upgrades only",
+"tp_nothing": "Nothing today",
+"tp_or_pick": "or pick exactly",
+"tp_attack": "Attack & farm",
+"tp_attack_sub": "Attacks and collects loot",
+"tp_buildings": "Buildings",
+"tp_buildings_sub": "Builders upgrade buildings",
+"tp_walls": "Walls",
+"tp_walls_sub": "Spends spare loot on walls",
+"tp_lab": "Laboratory",
+"tp_lab_sub": "Troop and spell research",
+"tp_heroes": "Heroes & pets",
+"tp_heroes_sub": "Hero and pet house upgrades",
+"tp_bb": "Builder base",
+"tp_bb_sub": "Builder base attacks and upgrades",
+"tp_go": "Let's go",
+"tp_countdown": "Without an answer the bot does the usual in {s} s",
+"tp_auto_done": "The bot goes on as usual",
+"tp_notify_title": "The game is ready",
+"tp_notify": "{name}: choose what to do today",
+"tp_saved_usual": "OK — the bot works as usual",
+"tp_saved_custom": "OK — today's plan saved, the bot started",
+"tp_saved_nothing": "OK — the game stays open and the bot does nothing",
+"tp_bar_title": "Today's plan",
+"tp_change": "Change plan",
+"tp_bar_none": "Not yet — the bot asks as soon as the game is open",
+"tp_bar_usual": "As usual",
+"tp_bar_auto": "(chosen automatically)",
+"tp_bar_nothing": "Nothing — the game is open and the bot waits",
+"up_ask_plan": "Ask me every day what to do",
+"up_ask_plan_sub": "When the game opens, choose today's plan"
 },
 "unit_ar": {
 "healing": "العلاج",
@@ -2495,6 +2565,38 @@
 [
 "^Capture mode: battle #(\\d+) recorded \\((\\d+) deploys, (\\d+) pictures\\)",
 "⚔️ هجمة #\\g<1> اتسجّلت: \\g<2> نزلة جيش و\\g<3> صورة"
+],
+[
+"^Still opening the game \\((\\d+)s\\): the game is open but the village is not recognised yet",
+"لسه بيفتح اللعبة (\\g<1> ثانية): اللعبة مفتوحة بس لسه مش متعرّف على القرية"
+],
+[
+"^Still opening the game \\((\\d+)s\\): waiting for the game to load",
+"لسه بيفتح اللعبة (\\g<1> ثانية): مستني اللعبة تحمّل"
+],
+[
+"^Village recognised by the Attack button",
+"اتعرّف على القرية من زرار Attack ✓"
+],
+[
+"^Waiting for today's plan.*",
+"مستني تختار خطة النهارده من البرنامج"
+],
+[
+"^Today's plan: nothing.*",
+"خطة النهارده: ولا حاجة — اللعبة مفتوحة والبوت مستنيك"
+],
+[
+"^Today's plan: usual",
+"خطة النهارده: زي كل يوم"
+],
+[
+"^Today's plan: (.*)",
+"خطة النهارده: \\g<1>"
+],
+[
+"^No answer: doing the usual today",
+"ماحدش اختار — البوت هيعمل زي كل يوم"
 ]
 ]
 }
