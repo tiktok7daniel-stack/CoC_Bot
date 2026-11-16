@@ -166,27 +166,31 @@ def scan(upgrader, account):
 
 
 # ====================================================================== notifier (bot process)
-def start_notifier(account, notify):
-    """Every 30 s: a saved finish time that passed -> notify once."""
+def check_timers(account, notify, stale=6 * 3600):
+    """A saved finish time that passed -> log + notify once. Finished long ago (bot was off) -> marked silently."""
     from utils import logger
+    data = load(account)
+    changed, now = False, time.time()
+    for t in data.get("timers", []):
+        if t.get("done") or t.get("ends", 0) > now: continue
+        t["done"] = True
+        changed = True
+        if now - t.get("ends", 0) > stale: continue
+        kind = "Lab research" if t.get("kind") == "lab" else "Upgrade"
+        logger.info(f"{kind} finished: {t['name']}")
+        try:
+            notify(("انتهى البحث في المعمل: " if t.get("kind") == "lab" else "اكتمل تطوير ") + t["name"]
+                   + (" — المعمل جاهز لبحث جديد" if t.get("kind") == "lab" else " — عندك بنّاء فاضي دلوقتي"))
+        except Exception: pass
+    if changed: save(account, data)
+    return changed
 
+
+def start_notifier(account, notify):
+    """Every 30 s: check_timers."""
     def loop():
         while True:
             time.sleep(30)
-            try:
-                data = load(account)
-                changed = False
-                for t in data.get("timers", []):
-                    if not t.get("done") and t.get("ends", 0) <= time.time():
-                        t["done"] = True
-                        changed = True
-                        kind = "Lab research" if t.get("kind") == "lab" else "Upgrade"
-                        logger.info(f"{kind} finished: {t['name']}")
-                        try:
-                            notify(("انتهى البحث في المعمل: " if t.get("kind") == "lab" else "اكتمل تطوير ") + t["name"]
-                                   + (" — المعمل جاهز لبحث جديد" if t.get("kind") == "lab" else " — عندك بنّاء فاضي دلوقتي"))
-                        except Exception: pass
-                if changed: save(account, data)
-            except Exception:
-                pass
+            try: check_timers(account, notify)
+            except Exception: pass
     threading.Thread(target=loop, daemon=True, name="village-notifier").start()

@@ -291,7 +291,10 @@ class UpgradeDeckScreen(Screen):
     def fill_items(self):
         while self.items_g.count():
             it = self.items_g.takeAt(0)
-            if it.widget(): it.widget().setParent(None); it.widget().deleteLater()
+            w = it.widget()
+            if w is not None:
+                w.setParent(None)
+                w.deleteLater()
         pinned = {n.lower() for n in (self.store.get("priorities.home_base", []) or [[]])[0]} if self.store.get("priorities.home_base") else set()
         items = [i for i in self.data.get("items", []) if self.cat == "all" or category_of(i.get("name")) == self.cat]
         items.sort(key=lambda i: (not i.get("available"), i.get("name", "").lower() not in pinned, i.get("cost") or 0))

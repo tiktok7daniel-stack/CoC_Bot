@@ -17,7 +17,7 @@ NAV = [
     ("res", "nv_stats", "chart"), ("upg", "nv_village", "home"), ("teach", "nv_manager", "hammer"),
     ("log", "nv_log", "scroll"), ("set", "nv_bot", "bot"),
 ]
-SOON = [("nv_capital", "castle"), ("nv_war", "shield"), ("nv_chat", "chat")]
+SOON = []   # clan capital / clan war / chat removed: not part of the farming bot
 
 
 class NavButton(QAbstractButton):

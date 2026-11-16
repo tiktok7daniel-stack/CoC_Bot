@@ -130,12 +130,31 @@ class TopCommandBar(QFrame):
         sh.addWidget(self.dirty)
         r2.addWidget(save_box)
         v.addLayout(r2)
+        # compact mode: on a narrow window the action buttons show only their icon (+ tooltip)
+        self._compact = None
+        self._text_keys = {self.btn_start: "start_bot", self.btn_stop: "stop", self.btn_pause: "pause_title",
+                           self.btn_wake: "run_now", self.btn_setup: "su_title", self.btn_save: "save_settings"}
+        on_lang(lambda: self._apply_compact(force=True))
         self._started_at = None
         self._clock = QTimer(self)
         self._clock.timeout.connect(self._tick)
         self._clock.start(1000)
         QShortcut(QKeySequence("Ctrl+K"), window, activated=self.search_requested.emit)
         QShortcut(QKeySequence("Ctrl+S"), window, activated=lambda: self.action.emit("save"))
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self._apply_compact()
+
+    def _apply_compact(self, force=False):
+        compact = self.width() < 1100
+        if compact == self._compact and not force: return
+        self._compact = compact
+        for b, key in self._text_keys.items():
+            b.setText("" if compact else tr(key))
+            b.setToolTip(tr(key))
+            if b is self.btn_save: continue
+            b.setMinimumWidth(48 if compact else (170 if b is self.btn_start else 130))
 
     # ---------------------------------------------------------------- window drag on the header
     def mousePressEvent(self, e):
@@ -168,7 +187,10 @@ class TopCommandBar(QFrame):
         self.btn_stop.setEnabled(running)
         self.btn_wake.setEnabled(running and k != "running")
         paused = bool(acc_state.get("end_time")) and acc_state.get("end_time", 0) > (now or 0)
-        self.btn_pause.setText(tr("resume_now") if paused else tr("pause_title"))
+        key = "resume_now" if paused else "pause_title"
+        self._text_keys[self.btn_pause] = key
+        self.btn_pause.setText("" if self._compact else tr(key))
+        self.btn_pause.setToolTip(tr(key))
         self.btn_pause.setEnabled(running)
         self._started_at = acc_state.get("started_at") if running else None
         self._now_offset = (now or 0)
