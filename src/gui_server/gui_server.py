@@ -952,9 +952,8 @@ def api_gpu():
 def api_gpu_install():
     """Install the CUDA build of torch at the next restart (the window restarts the program right after)."""
     import gpu_setup
-    if not gpu_setup.nvidia(): return jsonify({"ok": False, "error": "no_nvidia"})
-    gpu_setup.request_install()
-    return jsonify({"ok": True})
+    ok, err = gpu_setup.start_install()
+    return jsonify({"ok": ok, "error": err})
 
 @app.route("/api/app/resume", methods=["GET"])
 def api_app_resume():

@@ -973,9 +973,15 @@
 "pw_gpu_install": "فعّل كارت الشاشة",
 "pw_brain_txt": "بيعرف {kinds} نوع شاشة من {pics} صورة + {mem} شاشة اتعلّمها لوحده",
 "pw_pending": "هيتسطّب أول ما البرنامج يقفل ويفتح (بياخد كام دقيقة، حوالي 2.5 جيجا)",
-"pw_installing": "البرنامج هيقفل ويسطّب دعم الكارت ويفتح لوحده — استنى كام دقيقة",
+"pw_installing": "بدأ التحميل في الخلفية — البرنامج هيفضل مفتوح وتقدر تتابع النسبة هنا",
 "pw_now": "الشاشة دلوقتي: {t}",
-"pw_offer": "لقيت كارت {name} 🔥 — فعّله من الإعدادات ← السرعة والقوة، وقراية الشاشة هتبقى أسرع 10 مرات"
+"pw_offer": "لقيت كارت {name} 🔥 — فعّله من الإعدادات ← السرعة والقوة، وقراية الشاشة هتبقى أسرع 10 مرات",
+"pw_gpu_dl": "جاري تحميل دعم الكارت… {pct}% ({gb} من ~{of} جيجا)",
+"pw_dl_note": "البرنامج والبوت شغالين عادي وهو بيحمّل — مش لازم تقفل حاجة. لو قفلت البرنامج، التحميل بيكمّل لوحده.",
+"pw_gpu_ready": "✅ دعم {name} اتسطّب — هيشتغل عليه من أول ما تعيد تشغيل البرنامج",
+"pw_restart": "أعد تشغيل البرنامج دلوقتي",
+"pw_gpu_retry": "حاول تاني",
+"pw_gpu_failed": "التحميل ما كملش (النت أو المساحة). البرنامج شغال عادي على البروسيسور — دوس «حاول تاني»."
 },
 "en": {
 "gold": "Gold",
@@ -1951,9 +1957,15 @@
 "pw_gpu_install": "Enable graphics card",
 "pw_brain_txt": "Knows {kinds} kinds of screen from {pics} taught pictures + {mem} screens it learned itself",
 "pw_pending": "Installed when the program restarts (a few minutes, ~2.5 GB)",
-"pw_installing": "The program closes, installs the card support and opens again — wait a few minutes",
+"pw_installing": "Download started in the background — the program stays open, follow the progress here",
 "pw_now": "Screen now: {t}",
-"pw_offer": "Found {name} 🔥 — enable it in Settings → Speed & power and screen reading gets 10x faster"
+"pw_offer": "Found {name} 🔥 — enable it in Settings → Speed & power and screen reading gets 10x faster",
+"pw_gpu_dl": "Downloading card support… {pct}% ({gb} of ~{of} GB)",
+"pw_dl_note": "The program and the bot keep working while it downloads — nothing needs closing. If you close the program, it finishes by itself.",
+"pw_gpu_ready": "✅ {name} support installed — used from the next program restart",
+"pw_restart": "Restart the program now",
+"pw_gpu_retry": "Try again",
+"pw_gpu_failed": "The download didn't finish (internet or disk space). The program keeps working on the processor — press Try again."
 },
 "unit_ar": {
 "healing": "العلاج",

@@ -149,6 +149,18 @@ class BotSettingsScreen(Screen):
         self.gpu_btn.clicked.connect(self.install_gpu)
         self.gpu_btn.setVisible(False)
         pb.addWidget(self.gpu_btn)
+        from PySide6.QtCore import QTimer
+        from PySide6.QtWidgets import QProgressBar
+        self.gpu_bar = QProgressBar()
+        self.gpu_bar.setRange(0, 100)
+        self.gpu_bar.setTextVisible(True)
+        self.gpu_bar.setFixedHeight(16)
+        self.gpu_bar.setMinimumWidth(220)
+        self.gpu_bar.setVisible(False)
+        pb.addWidget(self.gpu_bar)
+        self._gpu_timer = QTimer(self)
+        self._gpu_timer.timeout.connect(self.check_power)
+        self._gpu_mode = "install"
         rb = IconButton("refresh", "verify", size=13)
         rb.clicked.connect(lambda: self.check_power(True))
         pb.addWidget(rb)
@@ -285,29 +297,53 @@ class BotSettingsScreen(Screen):
             else:
                 self.pw_live.set("warn", tr("pw_src_none"))
             card = r.get("card")
+            name = (card or {}).get("name", "")
+            self.gpu_bar.setVisible(False)
+            self._gpu_mode = "install"
             if not card:
                 self.pw_gpu.set("warn", tr("pw_gpu_none"))
                 self.gpu_btn.setVisible(False)
-            elif r.get("cuda"):
-                self.pw_gpu.set("ok", tr("pw_gpu_on").format(name=card.get("name", "")))
+            elif r.get("installing"):
+                pg = r.get("progress") or {}
+                self.pw_gpu.set("warn", tr("pw_gpu_dl").format(pct=pg.get("pct", 0), gb=round(pg.get("mb", 0) / 1024, 1),
+                                                              of=round(pg.get("of_mb", 4500) / 1024, 1)))
+                self.gpu_bar.setVisible(True)
+                self.gpu_bar.setValue(int(pg.get("pct", 0)))
                 self.gpu_btn.setVisible(False)
+                self._gpu_timer.start(3000)                      # follow the download
+            elif r.get("ready") and b.get("ocr_gpu"):
+                self.pw_gpu.set("ok", tr("pw_gpu_on").format(name=name))
+                self.gpu_btn.setVisible(False)
+            elif r.get("ready"):
+                self.pw_gpu.set("ok", tr("pw_gpu_ready").format(name=name))
+                self._gpu_mode = "restart"
+                self.gpu_btn.setText(tr("pw_restart"))
+                self.gpu_btn.setVisible(True)
             else:
-                self.pw_gpu.set("warn", tr("pw_gpu_off").format(name=card.get("name", "")))
-                self.gpu_btn.setVisible(not r.get("pending"))
+                self.pw_gpu.set("warn", tr("pw_gpu_off").format(name=name))
+                self.gpu_btn.setText(tr("pw_gpu_retry") if r.get("result") in ("failed", "no_cuda") else tr("pw_gpu_install"))
+                self.gpu_btn.setVisible(True)
+            if not r.get("installing"): self._gpu_timer.stop()
             m = b.get("model") or {}
             mem = b.get("memory") or {}
             self.pw_brain.set("ok" if m.get("screens") else "warn",
                               tr("pw_brain_txt").format(kinds=m.get("kinds", 0), pics=m.get("screens", 0), mem=mem.get("screens", 0)))
             if m.get("now_title"): self.pw_brain.setToolTip(tr("pw_now").format(t=m["now_title"]))
-            log = (r.get("log") or "").strip().splitlines()
-            self.pw_note.setText(tr("pw_pending") if r.get("pending") else (log[-1] if log else ""))
+            log = [l for l in (r.get("log") or "").strip().splitlines() if l.strip()]
+            res = r.get("result") or ""
+            if r.get("installing"): self.pw_note.setText(tr("pw_dl_note"))
+            elif res in ("failed", "no_cuda") or res.startswith("failed"): self.pw_note.setText(tr("pw_gpu_failed") + ("\n" + log[-1] if log else ""))
+            else: self.pw_note.setText("")
         self.api.get("/api/gpu" + ("?refresh=1" if refresh else ""), got, timeout=150)
 
     def install_gpu(self):
+        if getattr(self, "_gpu_mode", "install") == "restart":
+            self.ctx.window.restart_app()
+            return
         def done(r):
             if isinstance(r, dict) and r.get("ok"):
                 self.ctx.toast(tr("pw_installing"), "ok")
-                self.ctx.window.restart_app()
+                self.check_power()
             else:
                 self.ctx.toast(tr("pw_gpu_none"), "bad")
         self.api.post("/api/gpu/install", {}, done)
