@@ -165,7 +165,10 @@ class LearnPanel(QWidget):
             self.state.setText(tr("ln_not_configured"))
             self.state.setStyleSheet(f"color: {TOKENS['warn']};")
         elif d.get("error"):
-            self.state.setText(tr("ln_error") + " " + d["error"])
+            err = str(d["error"])
+            friendly = tr("ln_err_repo_not_found") if "404" in err else (tr("ln_err_no_write") if "403" in err else
+                       (tr("ln_err_bad_token") if "401" in err else err))
+            self.state.setText(tr("ln_error") + " " + friendly)
             self.state.setStyleSheet(f"color: {TOKENS['bad']};")
         else:
             last = d.get("last_fetch")
