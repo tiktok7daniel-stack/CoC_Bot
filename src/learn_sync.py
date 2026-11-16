@@ -108,8 +108,14 @@ def test():
         if r.status_code == 401: return {"ok": False, "error": "bad_token"}
         if r.status_code != 200: return {"ok": False, "error": f"http_{r.status_code}"}
         d = r.json()
-        can_push = (d.get("permissions") or {}).get("push", False)
-        return {"ok": bool(can_push), "private": bool(d.get("private")), "error": "" if can_push else "no_write"}
+        # real write test: a tiny blob (nothing is committed, no branch changes). Needs Contents: Read and write.
+        w = requests.post(f"https://api.github.com/repos/{c['repo']}/git/blobs", headers=_headers(c["token"]),
+                          json={"content": "clash farmer write test", "encoding": "utf-8"}, timeout=15)
+        if w.status_code in (200, 201):
+            return {"ok": True, "private": bool(d.get("private")), "error": ""}
+        if w.status_code == 409:            # empty repo: reading worked, writing is allowed once a first commit exists
+            return {"ok": True, "private": bool(d.get("private")), "error": ""}
+        return {"ok": False, "private": bool(d.get("private")), "error": "no_write", "detail": f"http_{w.status_code}"}
     except Exception as e:
         return {"ok": False, "error": "offline", "detail": str(e)[:120]}
 
