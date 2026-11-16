@@ -113,9 +113,21 @@ def api_settings(id):
         app_cfg = bot_settings.load_app()
         if app_cfg.get("sync_settings"):
             for other in app_cfg.get("accounts", []):
-                if other != id and valid_id(other): bot_settings.save(other, saved)
+                if other != id and valid_id(other): bot_settings.save(other, _keep_own(other, saved))
         return jsonify(saved)
     return jsonify(bot_settings.load(id))
+
+# what stays different on every account even when settings are shared: the loadout it attacks with
+# (its own saved army / its own recording)
+PER_ACCOUNT = ("active_plan",)
+
+def _keep_own(target, data):
+    import copy
+    out = copy.deepcopy(data)
+    if (bot_settings.SETTINGS_DIR / f"{bot_settings._safe_id(target)}.json").exists():
+        mine = bot_settings.load(target)
+        for k in PER_ACCOUNT: out[k] = mine.get(k, out.get(k))
+    return out
 
 @app.route("/api/settings_copy", methods=["POST"])
 def api_settings_copy():
@@ -129,7 +141,7 @@ def api_settings_copy():
     done = []
     for t in targets:
         if valid_id(t):
-            bot_settings.save(t, data)
+            bot_settings.save(t, _keep_own(t, data))
             bot_settings.request_wake(t) if t in instances else None
             done.append(t)
     return jsonify({"ok": True, "copied": done})
