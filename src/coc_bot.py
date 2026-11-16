@@ -203,6 +203,112 @@ class CoC_Bot:
             try: send_notification(f"تم تطوير {name} بنجاح")
             except Exception: pass
 
+    # ---------------------------------------------------------------- army learning
+    def learn_army(self, name):
+        """Watch the user prepare an army (from the village) and learn every tap with the word under it."""
+        import time, army_learn, recorder
+        iid = _utils.INSTANCE_ID
+        set_phase("army_learning")
+        army_learn.set_status(iid, "opening", name=name)
+        logger.info(f"Army learning '{name}': opening the village")
+        rec = None
+        try:
+            start_coc()
+            to_home_base()
+            found = recorder.find_touch_device(lambda c: ADB_Manager.adbutils_device.shell(c))
+            if not found:
+                army_learn.set_status(iid, "failed", name=name)
+                logger.error("Army learning failed: touch device not found")
+                return
+            _dev, max_x, max_y = found
+            rec = recorder.Recorder(ADB_Manager._adb_exe or "adb", _utils.ADB_ADDRESS, *found)
+            rec.start()
+            army_learn.set_status(iid, "watching", name=name, taps=0)
+            logger.info("Army learning: prepare your army in the game now (open the army, pick / train it), then press Done")
+            import cv2
+            prev = Frame_Handler.get_frame(grayscale=False)
+            downs, shots, seen, start, last_tap = [], [], 0, time.monotonic(), time.monotonic()
+            while time.monotonic() - start < 300:
+                if army_learn.stop_requested(iid): break
+                if time.monotonic() - last_tap > 90 and downs: break       # forgot to press Done
+                frame = Frame_Handler.get_frame(grayscale=False)
+                now = time.monotonic()
+                new = [e for e in rec.events[seen:] if e["type"] == "down"]
+                seen = len(rec.events)
+                for e in new: # the screen the user saw when tapping = the frame captured before this one
+                    small = cv2.resize(prev, (1280, int(1280 * prev.shape[0] / prev.shape[1])))
+                    shots.append((now - 0.2, small))
+                    downs.append((now - 0.2, e["fx"], e["fy"]))
+                    last_tap = now
+                    army_learn.set_status(iid, "watching", name=name, taps=len(downs))
+                prev = frame
+                time.sleep(0.15)
+            rec.stop()
+            if not downs:
+                army_learn.set_status(iid, "failed", name=name)
+                logger.warning("Army learning cancelled: no taps were made")
+                return
+            army_learn.set_status(iid, "reading", name=name, taps=len(downs))
+            logger.info(f"Army learning: reading the {len(downs)} steps")
+            cache = {}
+            def boxes_of(shot):
+                k = id(shot[1])
+                if k not in cache: cache[k] = ocr_boxes(shot[1])
+                return cache[k]
+            steps = army_learn.build_steps(downs, shots, boxes_of, max_x, max_y)
+            data = {"name": name, "created": time.time(), "steps": steps, "touch": [max_x, max_y]}
+            army_learn.save(data, shots[-1][1])     # the army screen right before the last tap
+            words = [s["word"] for s in steps if s["word"]]
+            army_learn.set_status(iid, "saved", name=name, taps=len(steps), words=len(words))
+            logger.info(f"Army learned '{name}': {len(steps)} steps ({len(words)} by word: {', '.join(words[:6])})")
+            try: # the picture also goes to the Claude learning inbox (composition is read there)
+                import learn_sync
+                learn_sync.queue_army(iid, name)
+            except Exception: pass
+            to_home_base()
+        except (KeyboardInterrupt, SystemExit): raise
+        except Exception:
+            army_learn.set_status(iid, "failed", name=name)
+            logger.exception("Army learning failed")
+        finally:
+            if rec is not None: rec.stop()
+
+    def run_army(self, name):
+        """Prepare a learned army: repeat the user's steps, finding each button by its word."""
+        import time, army_learn
+        data = army_learn.load(name)
+        if not data or not data.get("steps"):
+            logger.warning(f"Learned army '{name}' not found")
+            return False
+        set_phase("army_prepare")
+        to_home_base()
+        by_word = 0
+        for i, st in enumerate(data["steps"]):
+            if not running(): return False
+            time.sleep(min(3.0, max(0.7, float(st.get("gap") or 0))))
+            pos = None
+            if st.get("word"):
+                for _ in range(2):
+                    pos = army_learn.find_word(ocr_boxes(Frame_Handler.get_frame(grayscale=False)), st["word"], (st["x"], st["y"]))
+                    if pos: break
+                    time.sleep(0.8)
+            if pos: by_word += 1
+            Input_Handler.click(*(pos or (st["x"], st["y"])))
+        time.sleep(1.0)
+        army_learn.count_use(name)
+        logger.info(f"Army '{name}' prepared ({by_word}/{len(data['steps'])} steps found by word)")
+        to_home_base()
+        return True
+
+    def prepare_army(self):
+        """Before a home attack: the active loadout's learned army, if it has one."""
+        plan = self.attacker.plan or {}
+        name = plan.get("army_macro")
+        if not name: return
+        try: self.run_army(name)
+        except (KeyboardInterrupt, SystemExit): raise
+        except Exception: logger.exception("Preparing the learned army failed")
+
     # ---------------------------------------------------------------- 1-tap commands from the window
     def run_commands(self):
         """Upgrade-now / batch walls / rescan requested from the window; True when something ran."""
@@ -224,6 +330,11 @@ class CoC_Bot:
                 else:
                     logger.warning(f"1-tap upgrade not possible now: {c['name']} (busy builders, resources, or not in the menu)")
                 to_home_base()
+            elif c.get("cmd") == "army" and c.get("name"):
+                logger.info(f"Prepare learned army requested: {c['name']}")
+                try: self.run_army(c["name"])
+                except Exception: logger.exception("Preparing the learned army failed")
+                to_home_base()
             elif c.get("cmd") == "walls":
                 n = max(1, int(c.get("count", 10)))
                 logger.info(f"Batch wall upgrade requested: up to {n}")
@@ -234,6 +345,8 @@ class CoC_Bot:
                 except Exception: logger.exception("Batch wall upgrade failed")
                 finally: configs.HOME_BASE_UPGRADE_PRIORITY = prio
                 to_home_base()
+        if all(c.get("cmd") == "army" for c in cmds):
+            return True
         try: village.scan(self.upgrader, _utils.INSTANCE_ID)  # fresh list + timers after every command
         except Exception: logger.exception("Village scan failed")
         to_home_base()
@@ -285,6 +398,10 @@ class CoC_Bot:
                 if recorder.pending(_utils.INSTANCE_ID): return
                 import village
                 if village.pending(_utils.INSTANCE_ID): return
+                import army_learn
+                if army_learn.pending(_utils.INSTANCE_ID): return
+                import learn_sync
+                learn_sync.tick(_utils.INSTANCE_ID)    # upload unknown screens / fetch what Claude taught
             except Exception: pass
             if anti_idle and time.monotonic() >= next_nudge and running():
                 next_nudge = time.monotonic() + random.uniform(70, 110)
@@ -334,6 +451,13 @@ class CoC_Bot:
                 if village.pending(_utils.INSTANCE_ID):
                     update_status("now")
                     self.run_commands()
+                    continue
+
+                import army_learn
+                areq = army_learn.take_request(_utils.INSTANCE_ID)
+                if areq:
+                    update_status("now")
+                    self.learn_army(areq.get("name") or "army")
                     continue
 
                 import recorder
@@ -448,8 +572,9 @@ class CoC_Bot:
                         attacks = 0
                         import recorder
                         import village
+                        import army_learn
                         while running() and not self.excluded("home_attacks") and attacks < 300 and not recorder.pending(_utils.INSTANCE_ID) \
-                                and not village.pending(_utils.INSTANCE_ID):
+                                and not village.pending(_utils.INSTANCE_ID) and not army_learn.pending(_utils.INSTANCE_ID):
                             self.load_settings()
                             f_now = self.settings["attack"].get("farm", {})
                             if not (f_now.get("enabled", True) or f_now.get("max_walls")): break
@@ -467,6 +592,7 @@ class CoC_Bot:
                             attacks += 1
                             logger.info(f"Attacking home base (#{attacks})")
                             self.attacker.choose_strategy([e for e in stats.read(_utils.INSTANCE_ID) if e["type"] == "attack" and e.get("base") == "home"][-60:])
+                            self.prepare_army()
                             self.attack_with_loot("home", lambda: self.attacker.run_home_base(restart=True))
                     elif running() and not self.excluded("home_attacks") and self.storages_full(self.settings):
                         logger.info("Storages are full, skipping home attacks")
@@ -477,6 +603,7 @@ class CoC_Bot:
                             set_phase("home_attack")
                             logger.info(f"Attacking home base ({i + 1}/{n})")
                             self.attacker.choose_strategy([e for e in stats.read(_utils.INSTANCE_ID) if e["type"] == "attack" and e.get("base") == "home"][-60:])
+                            self.prepare_army()
                             self.attack_with_loot("home", lambda: self.attacker.run_home_base(restart=True))
                             # optionally spend the new loot on walls between farming attacks
                             w = self.settings["walls"]

@@ -352,7 +352,7 @@ def api_village_command(id):
     import village
     if not valid_id(id): abort(404)
     d = request.json or {}
-    if d.get("cmd") not in ("upgrade", "walls", "scan"): return jsonify({"ok": False, "error": "bad_cmd"}), 400
+    if d.get("cmd") not in ("upgrade", "walls", "scan", "army"): return jsonify({"ok": False, "error": "bad_cmd"}), 400
     n = village.push_command(id, d["cmd"], name=str(d.get("name", ""))[:60], count=int(d.get("count", 10) or 10))
     inst = instances.get(id)
     if inst is None: return jsonify({"ok": True, "queued": n, "running": False})
@@ -389,6 +389,77 @@ def api_record(id):
         inst.end_time = 0 # a paused bot would never pick the request up
         bot_settings.request_wake(id)
     return jsonify({"ok": True})
+
+# ---------------------------------------------------------------- learned armies (the bot watched the user)
+
+@app.route("/api/armies", methods=["GET"])
+def api_armies():
+    import army_learn
+    return jsonify({"items": army_learn.list_armies()})
+
+@app.route("/api/armies/picture/<name>", methods=["GET"])
+def api_army_picture(name):
+    from flask import send_file
+    import army_learn
+    p = army_learn.picture_path(name)
+    if not p: abort(404)
+    return send_file(str(p), mimetype="image/jpeg")
+
+@app.route("/api/armies/delete", methods=["POST"])
+def api_army_delete():
+    import army_learn
+    army_learn.delete(str((request.json or {}).get("name", "")))
+    return jsonify({"ok": True})
+
+@app.route("/api/armies/learn/<id>", methods=["POST"])
+def api_army_learn(id):
+    import army_learn
+    if not valid_id(id): abort(404)
+    name = str((request.json or {}).get("name", "")).strip()
+    if not name: return jsonify({"ok": False, "error": "no_name"}), 400
+    army_learn.request(id, name)
+    army_learn.set_status(id, "waiting", name=name)
+    inst = instances.get(id)
+    if inst is None:
+        instances[id] = Instance(id)
+        bot_pipe.send({"action": "start", "id": id})
+    else:
+        inst.end_time = 0
+        bot_settings.request_wake(id)
+    return jsonify({"ok": True})
+
+@app.route("/api/armies/done/<id>", methods=["POST"])
+def api_army_done(id):
+    import army_learn
+    if not valid_id(id): abort(404)
+    army_learn.request_stop(id)
+    return jsonify({"ok": True})
+
+@app.route("/api/armies/status/<id>", methods=["GET"])
+def api_army_status(id):
+    import army_learn
+    if not valid_id(id): abort(404)
+    return jsonify(army_learn.get_status(id) or {})
+
+# ---------------------------------------------------------------- Claude learning inbox (GitHub)
+
+@app.route("/api/learn/<id>", methods=["GET"])
+def api_learn(id):
+    import learn_sync
+    if not valid_id(id): abort(404)
+    return jsonify(learn_sync.overview(id))
+
+@app.route("/api/learn/<id>/sync", methods=["POST"])
+def api_learn_sync(id):
+    import learn_sync
+    if not valid_id(id): abort(404)
+    if not learn_sync.configured(): return jsonify({"ok": False, "error": "not_configured"})
+    return jsonify(learn_sync.sync_now(id))
+
+@app.route("/api/learn_test", methods=["POST"])
+def api_learn_test():
+    import learn_sync
+    return jsonify(learn_sync.test())
 
 @app.route("/api/record_status/<id>", methods=["GET"])
 def api_record_status(id):

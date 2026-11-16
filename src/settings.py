@@ -114,7 +114,7 @@ def default_settings():
         # Loadouts: a saved army (by its in-game name) + how to deploy it
         "active_plan": "",           # name of the active loadout ("" = classic single point)
         "plans": [
-            {"name": "تنانين", "army": "", "recording": "", "troops_where": "sides", "heroes_where": "sides", "clan_where": "sides",
+            {"name": "تنانين", "army": "", "army_macro": "", "recording": "", "troops_where": "sides", "heroes_where": "sides", "clan_where": "sides",
              "spells_where": "center", "spells_delay": 3, "abilities_after": 15, "second_wave_spells": "", "second_wave_after": 20},
             {"name": "أرضي", "army": "", "recording": "", "troops_where": "sides", "heroes_where": "sides", "clan_where": "bottom",
              "spells_where": "center", "spells_delay": 5, "abilities_after": 15, "second_wave_spells": "", "second_wave_after": 20},
@@ -173,6 +173,8 @@ def default_app_settings():
         "show_hud": False,           # floating mini HUD orb (Clash Farmer)
         "desktop_notify": True,      # Windows notifications when upgrades / research finish
         "intro": True,               # 3D animated intro at startup
+        "learn_repo": "",            # "owner/name" of the (private) GitHub repo Claude learns from
+        "learn_auto": True,          # send unknown screens / fetch what Claude taught automatically
         "ui": "qt",                  # "qt" = v4 desktop window, "web" = classic window
         "sync_settings": False,      # one set of settings for every account (saving one saves all)
         "display_w": 1920, "display_h": 1080, "display_dpi": 240, # emulator display the bot checks / sets

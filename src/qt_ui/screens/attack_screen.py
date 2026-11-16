@@ -65,6 +65,14 @@ class PlanCard(Box):
         army.setFixedWidth(180)
         army.textEdited.connect(lambda t: self._set("army", t))
         v.addWidget(form_row("pl_army", "pl_army_sub", army))
+        macro = QComboBox()
+        macro.addItem(tr("al_none"), "")
+        for a in getattr(screen, "armies", []): macro.addItem(a["name"], a["name"])
+        j = macro.findData(p.get("army_macro", ""))
+        macro.setCurrentIndex(max(0, j))
+        macro.activated.connect(lambda _i: self._set("army_macro", macro.currentData()))
+        macro.setMinimumWidth(180)
+        v.addWidget(form_row("al_plan", "al_plan_sub", macro))
         for key, field, items in (("pl_troops", "troops_where", WHERE), ("pl_heroes", "heroes_where", WHERE),
                                   ("pl_clan", "clan_where", WHERE), ("pl_spells", "spells_where", SPELLS_WHERE)):
             c = Combo(items, 220)
@@ -112,6 +120,7 @@ class AttackScreen(Screen):
     def __init__(self, ctx):
         super().__init__(ctx)
         self.recordings = []
+        self.armies = []
         L = self.make_tabs([("plans", "as_plans", "layers"), ("search", "as_search", "search"), ("attack", "as_attack", "swords"),
                             ("army", "as_army", "army"), ("end", "as_end", "flag")])
         st = self.store
@@ -200,6 +209,11 @@ class AttackScreen(Screen):
         L["attack"].addStretch(1)
 
         # ======================= army
+        from ..widgets.army_library import ArmyLibrary
+        lib_card = GlassCard("al_title", "eye", "al_sub", glow=True)
+        self.army_lib = ArmyLibrary(ctx)
+        lib_card.add(self.army_lib)
+        L["army"].addWidget(lib_card)
         timing = GlassCard("army_title", "army", "army_sub")
         timing.add(float_row(st, "deploy_time", "attack.troop_deploy_time", "deploy_time_sub", "seconds", 0, 30, 0.5))
         rng = QHBoxLayout()
@@ -237,8 +251,16 @@ class AttackScreen(Screen):
     # ---------------------------------------------------------------- recordings
     def on_show(self):
         self.load_recordings()
+        self.army_lib.load()
+
+    def _got_armies(self, r):
+        if isinstance(r, dict) and "items" in r:
+            self.armies = r["items"]
+            self.render_plans()
 
     def load_recordings(self):
+        self.api.get("/api/armies", self._got_armies)
+
         def got(r):
             if not isinstance(r, dict) or "items" not in r: return
             self.recordings = r["items"]

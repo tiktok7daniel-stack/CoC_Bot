@@ -147,6 +147,10 @@ class DashboardScreen(Screen):
         self.rec_host = QWidget()
         self.rec_flow = FlowLayout(self.rec_host, 10)
         self.rec_card.add(self.rec_host)
+        self.rec_card.add(label(key="hd_armies", role="sub"))
+        self.army_host = QWidget()
+        self.army_flow = FlowLayout(self.army_host, 8)
+        self.rec_card.add(self.army_host)
         gl.addWidget(self.rec_card, 0, 0)
         self.acc_card = GlassCard("acc_cards", "users")
         go_acc = IconButton("sliders", "nv_acc", size=14)
@@ -273,6 +277,26 @@ class DashboardScreen(Screen):
                 self.recordings = r["items"]
                 self.render_recordings()
         self.api.get("/api/recordings", got)
+        self.api.get("/api/armies", self.render_armies)
+
+    def render_armies(self, r):
+        if not isinstance(r, dict) or "items" not in r: return
+        self.army_flow.clear()
+        if not r["items"]:
+            self.army_flow.addWidget(label(key="hd_armies_none", role="dim"))
+            return
+        for a in r["items"]:
+            b = IconButton("army", None, size=15, text=a["name"])
+            b.setToolTip(tr("hd_army_tip").format(name=a["name"]))
+            b.clicked.connect(lambda _=False, n=a["name"]: self.prepare_army(n))
+            self.army_flow.addWidget(b)
+
+    def prepare_army(self, name):
+        def done(r):
+            ok = isinstance(r, dict) and r.get("ok")
+            self.ctx.toast(tr("al_prepare_ok" if ok and r.get("running") else ("al_prepare_idle" if ok else "dk_failed")).format(name=name),
+                           "ok" if ok else "bad")
+        self.api.post(f"/api/village/{self.store.account}/command", {"cmd": "army", "name": name}, done)
 
     def active_recording(self):
         S = self.store.S

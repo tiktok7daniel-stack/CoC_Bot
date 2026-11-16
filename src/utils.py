@@ -2504,8 +2504,8 @@ def set_phase(name):
 # know, a screen that never came, a loop waiting forever). It is released and the game reopened.
 # ======================================================================
 WATCHDOG_LIMITS = {"commands": 900, "village_scan": 300, "home_attack": 600, "builder_attack": 600, "spend_full": 1500, "home_upgrades": 900,
-                   "builder_upgrades": 900, "walls_farming": 900, "start_game": 300}
-WATCHDOG_SKIP = {"idle", "recording", "break", "", None}
+                   "builder_upgrades": 900, "walls_farming": 900, "start_game": 300, "army_prepare": 300}
+WATCHDOG_SKIP = {"idle", "recording", "army_learning", "break", "", None}
 
 def start_watchdog(default_limit=420):
     import threading, time
@@ -2987,6 +2987,15 @@ class Auto_Learn:
             boxes = ocr_boxes(frame)
             words = [b[0] for b in boxes if b[5] > 0.3]
             action = ""
+            # a screen Claude already explained (knowledge fetched from the learning repo)
+            try:
+                import learn_sync
+                rule = learn_sync.match_screen(words, phase or TEMP_CACHE.get("phase", ""))
+                if rule and learn_sync.run_actions(rule, boxes):
+                    logger.info(f"Known screen (taught by Claude): {rule.get('title') or rule.get('id')}")
+                    return True
+            except (KeyboardInterrupt, SystemExit): raise
+            except Exception: pass
             # never confirm leaving the game: on an exit/quit dialog press Cancel (or nothing)
             text_all = " ".join(words).lower()
             danger = any(w in text_all for w in ("exit", "quit", "leave", "log out", "logout", "disconnect", "sign out", "delete", "buy", "purchase", "gems"))
