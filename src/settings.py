@@ -134,6 +134,7 @@ def default_settings():
         ],
         "game": {
             "keep_open": True,       # don't close the game between cycles
+            "never_close": True,     # the bot never closes the game / emulator: only the user does
             "apply_instantly": True, # start a cycle right after settings change while idle
             "anti_idle": True,       # nudge the map while waiting so the game doesn't disconnect for inactivity
             "auto_learn": True,      # learn buttons / loot numbers by reading the screen, record unknown screens
@@ -274,6 +275,7 @@ def apply(s, wall_budget=None):
         "ATTACK_SLOT_RANGE": (int(a["slot_first"]), int(a["slot_last"])),
         "EXCLUDE_CLAN_TROOPS": bool(a["exclude_clan_troops"]),
         "CHECK_INTERVAL": max(0, float(s["schedule"]["check_interval"])), # 0 = next cycle right away
+        "NEVER_CLOSE_GAME": bool(s["game"].get("never_close", True)),
     }
     for k, v in values.items(): setattr(configs, k, v)
     _push_globals(values)

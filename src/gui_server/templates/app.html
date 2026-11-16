@@ -741,6 +741,7 @@ th{background:var(--panel)}
         <div class="row"><div class="lbl" data-t="break_every"></div><input class="in" type="number" min="10" data-bind="breaks.every_minutes" data-type="int"><span class="unit" data-t="minutes"></span></div>
         <div class="row"><div class="lbl" data-t="break_len"></div><input class="in" type="number" min="1" data-bind="breaks.length_minutes" data-type="int"><span class="unit" data-t="minutes"></span></div>
         <div class="row"><div class="lbl"><span data-t="keep_open"></span><small data-t="keep_open_sub"></small></div><label class="sw"><input type="checkbox" data-bind="game.keep_open"><span></span></label></div>
+        <div class="row"><div class="lbl"><span data-t="never_close"></span><small data-t="never_close_sub"></small></div><label class="sw"><input type="checkbox" data-bind="game.never_close"><span></span></label></div>
         <div class="row"><div class="lbl"><span data-t="anti_idle"></span><small data-t="anti_idle_sub"></small></div><label class="sw"><input type="checkbox" data-bind="game.anti_idle"><span></span></label></div>
         <div class="row"><div class="lbl"><span data-t="apply_instantly"></span><small data-t="apply_instantly_sub"></small></div><label class="sw"><input type="checkbox" data-bind="game.apply_instantly"><span></span></label></div>
         <div class="note"><i class="fa-solid fa-circle-info"></i> <span data-t="interval_note"></span></div>
@@ -1043,6 +1044,7 @@ ar:{
  one_err:"خطأ", one_warn:"تحذير",
  brand_sub:"أتمتة كلاش أوف كلانس",
  as_plans:"التشكيلات",
+ never_close:"البوت ما يقفلش اللعبة أبدًا", never_close_sub:"اللعبة والمحاكي بيفضلوا مفتوحين دايمًا — حتى في الاستراحات ولما المخازن تتملي ولما تقفل البوت",
  farm_max_walls:"تمكيس الأسوار", farm_max_walls_sub:"يفضل يهاجم ويطوّر الأسوار كل ما المخازن تتملي لحد ما كل الأسوار توصل للماكس — وبيطوّر كل المباني الناقصة كمان، بس بيسيب بنّاء واحد فاضي دايمًا للأسوار",
  hr_title:"تسجيلاتي (البوت يقلّدك)", hr_sub:"دوس \"استخدمه وابدأ\" على أي تسجيل: البوت هيهاجم ويعيد نفس ضغطاتك بنفس التوقيت في كل هجمة.",
  hr_new:"تسجيل جديد", hr_use:"استخدمه وابدأ", hr_active:"شغّال", hr_off:"وقّفه", hr_offed:"رجع للطريقة العادية",
@@ -1211,6 +1213,7 @@ en:{
  one_err:"Error", one_warn:"Warning",
  brand_sub:"Clash of Clans automation",
  as_plans:"Loadouts",
+ never_close:"Never close the game", never_close_sub:"The game and emulator always stay open",
  farm_max_walls:"Max all walls", farm_max_walls_sub:"Farm and upgrade walls whenever storages are full until every wall is maxed; buildings too, one builder kept free",
  hr_title:"My recordings", hr_sub:"Press \"Use & start\": the bot replays your taps in every attack.",
  hr_new:"New recording", hr_use:"Use & start", hr_active:"Active", hr_off:"Turn off", hr_offed:"Back to normal deployment",
@@ -1345,6 +1348,8 @@ const LOG_AR = [
  [/^Pre-flight: touch ready/, "✓ الضغط على الشاشة جاهز"],
  [/^Pre-flight check passed.*/, "✅ الفحص خلص: كل حاجة جاهزة — البوت بيبدأ"],
  [/^Pre-flight problem: (.*)/, "❌ مشكلة: $1"],
+ [/^Keeping the game open \((.*)\)/, "اللعبة هتفضل مفتوحة ($1)"],
+ [/^Not restarting the game \(closing is turned off\).*/, "مش هيعيد فتح اللعبة (قفل اللعبة مقفول)"],
  [/^All walls are maxed.*/, "🏆 كل الأسوار وصلت للماكس — وضع تمكيس الأسوار خلص"],
  [/^Watchdog: stuck in '(.*?)' for (\d+)s.*/, "الحارس: البوت كان واقف على خطوة واحدة $2 ثانية — بيعيد اللعبة ويكمّل"],
  [/^Army deployed, leaving the battle right away/, "⚡ نزّل الجيش — خرج من المعركة على طول"],

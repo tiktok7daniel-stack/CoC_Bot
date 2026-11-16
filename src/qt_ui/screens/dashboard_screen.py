@@ -21,7 +21,7 @@ from .base import Screen, grid, page
 QUICK_TASKS = [("tasks.home_base", "t_home_base"), ("tasks.heroes", "t_heroes"), ("walls.enabled", "wall_enabled"),
                ("tasks.home_lab", "t_home_lab"), ("tasks.pet_house", "t_pet_house"), ("tasks.home_attacks", "t_home_attacks"),
                ("tasks.builder_base", "t_builder_base"), ("tasks.builder_lab", "t_builder_lab"),
-               ("tasks.builder_attacks", "t_builder_attacks"), ("game.keep_open", "keep_open")]
+               ("tasks.builder_attacks", "t_builder_attacks"), ("game.keep_open", "keep_open"), ("game.never_close", "never_close")]
 
 
 class Tile(QFrame):

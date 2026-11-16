@@ -733,6 +733,11 @@ def start_coc(timeout=120, detailed=False, force_restart=False):
                         logger.info("CoC reconnected")
                         if not detailed: return True
                         else: return True, "running"
+        if force_restart and never_close():
+            # never kill the game: just bring it to the front and deal with whatever is on screen
+            logger.info(f"Not restarting the game (closing is turned off): {force_restart if isinstance(force_restart, str) else 'requested'}")
+            Auto_Learn.handle_unknown_screen("start_game")
+            force_restart = False
         if force_restart:
             logger.info(f"Restarting CoC ({force_restart if isinstance(force_restart, str) else 'requested'})")
             to_system_home()
@@ -753,7 +758,7 @@ def start_coc(timeout=120, detailed=False, force_restart=False):
             # bring the game to front (starts it if closed). The game can take a long time to load,
             # so never kill it while loading: a clean restart only when asked, or once if it's
             # been stuck for more than 70 seconds.
-            force = (force_restart and i == 0) or (elapsed > 70 and not restarted_once)
+            force = (force_restart and i == 0) or (elapsed > 70 and not restarted_once and not never_close())
             if force and i > 0:
                 restarted_once = True
                 logger.info("Game stuck while starting, restarting it once")
@@ -788,7 +793,7 @@ def start_coc(timeout=120, detailed=False, force_restart=False):
             
             i += 1
         if time.time() - start > timeout:
-            stop_coc(sleep=configs.SUSPEND_EMULATOR_ON_IDLE, reason="game did not open in 2 minutes")
+            stop_coc(sleep=configs.SUSPEND_EMULATOR_ON_IDLE and not never_close(), reason="game did not open in 2 minutes")
             raise Exception("Failed to start CoC")
         logger.info("CoC started")
         if not detailed: return True
@@ -799,8 +804,15 @@ def start_coc(timeout=120, detailed=False, force_restart=False):
         if not detailed: return False
         else: return False, "error"
 
+def never_close():
+    """The user doesn't want the bot to ever close the game (default): only they close it."""
+    return bool(getattr(configs, "NEVER_CLOSE_GAME", True))
+
 def stop_coc(sleep=False, timeout=60, reason=""):
     import time
+    if never_close():
+        logger.info(f"Keeping the game open ({reason})" if reason else "Keeping the game open")
+        return
     logger.info(f"Stopping CoC... ({reason})" if reason else "Stopping CoC...")
     start = time.time()
     while time.time() - start < timeout:
@@ -1023,7 +1035,8 @@ class _Emulator_Manager:
 
     @classmethod
     def init(cls):
-        Exit_Handler.register(cls.stop)
+        # closing the bot closes the emulator (and the game) only when the user allows closing the game
+        Exit_Handler.register(lambda: None if never_close() else cls.stop())
         # an emulator that is already running is used as it is (restarting it closed the game
         # and made the start take minutes); only a stopped one is started
         try: already = cls.check()
@@ -2660,7 +2673,7 @@ def fix_display(w, h, d):
     """LDPlayer: change the copy's resolution + DPI (restart). Others: fix the DPI live if only that is off."""
     import time
     (tw, th), td = _target()
-    if Emulator_Manager is LDPlayer_Manager:
+    if Emulator_Manager is LDPlayer_Manager and not never_close(): # changing it the LDPlayer way restarts the emulator
         idx = str(LDPlayer_Manager.index)
         logger.info(f"Pre-flight: setting LDPlayer to {tw}x{th} {td} DPI (the emulator restarts)")
         try: LDPlayer_Manager.stop()

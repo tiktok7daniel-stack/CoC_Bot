@@ -41,7 +41,7 @@ class Attacker:
         """
         import time
 
-        if self.battle_end == "restart":
+        if self.battle_end == "restart" and not never_close():
             if restart: start_coc(force_restart="battle end mode = restart")
             else: stop_coc(reason="battle end mode = restart")
             return

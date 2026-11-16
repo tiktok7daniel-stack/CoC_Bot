@@ -160,6 +160,7 @@ class BotSettingsScreen(Screen):
         inter.add(toggle_row(st, "breaks", "breaks.enabled", "breaks_sub"))
         inter.add(num_row(st, "break_every", "breaks.every_minutes", None, "minutes", 5, 1440, 5, 90))
         inter.add(num_row(st, "break_len", "breaks.length_minutes", None, "minutes", 1, 600, 1, 90))
+        inter.add(toggle_row(st, "never_close", "game.never_close", "never_close_sub"))
         inter.add(toggle_row(st, "keep_open", "game.keep_open", "keep_open_sub"))
         inter.add(toggle_row(st, "anti_idle", "game.anti_idle", "anti_idle_sub"))
         inter.add(toggle_row(st, "apply_instantly", "game.apply_instantly", "apply_instantly_sub"))
