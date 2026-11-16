@@ -12,7 +12,7 @@ from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QVBoxLayout, QWidget
 
 from .. import icons
-from ..i18n import on_lang, tr
+from ..i18n import on_lang, tr, why_ar
 from ..theme import TOKENS
 from ..widgets.controls import (Chip, Combo, GlassCard, IconButton, NumField, StatusPill, Toggle, bind_combo, bind_line,
                                 bind_num, bind_time, bind_toggle, combo_row, form_row, label, note, num_row, time_edit,
@@ -311,12 +311,18 @@ class BotSettingsScreen(Screen):
     def check_power(self, refresh=False):
         def got(r):
             if not isinstance(r, dict): return
+            self._capture_why = ""
             bots = list((r.get("bots") or {}).values())
             b = max(bots, key=lambda x: x.get("t", 0)) if bots else {}
             src = b.get("source")
             if src:
                 self.pw_live.set("ok" if src in ("live", "window") else "warn",
                                  tr("pw_src_" + src).format(ms=b.get("look_ms", "?")))
+                why = []
+                if src != "live" and b.get("live_why"): why.append(tr("pw_live_why").format(w=why_ar(b["live_why"])))
+                if src == "adb" and b.get("window_why"): why.append(tr("pw_window_why").format(w=why_ar(b["window_why"])))
+                self.pw_live.setToolTip("\n".join(why))
+                self._capture_why = "\n".join(why)
             else:
                 self.pw_live.set("warn", tr("pw_src_none"))
             card = r.get("card")
@@ -371,11 +377,13 @@ class BotSettingsScreen(Screen):
             for b in (self.links_btn, self.files_btn, self.log_btn): b.setVisible(bool(card))
             self.files_btn.setEnabled(not r.get("installing"))
             res = r.get("result") or ""
+            if getattr(self, "_capture_why", "") and not r.get("installing"):
+                self.pw_note.setText(self._capture_why)
             if r.get("installing"): self.pw_note.setText(tr("pw_dl_note"))
             elif res == "interrupted": self.pw_note.setText(tr("pw_gpu_interrupted"))
             elif res in ("failed", "no_cuda") or res.startswith("failed"):
                 self.pw_note.setText(tr("pw_gpu_failed") + "\n" + (r.get("error") or (log[-1] if log else "")))
-            else: self.pw_note.setText("")
+            elif not getattr(self, "_capture_why", ""): self.pw_note.setText("")
         self.api.get("/api/gpu" + ("?refresh=1" if refresh else ""), got, timeout=150)
 
     def install_gpu(self):

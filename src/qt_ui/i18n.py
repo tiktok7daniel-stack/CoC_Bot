@@ -153,6 +153,24 @@ def unit_name(name):
     return name.replace("_", " ")
 
 
+_WHY = [("the video library (av) is not installed", "مكتبة الفيديو (av) مش متسطّبة — حدّث البرنامج"),
+        ("the emulator did not start the stream", "المحاكي ما شغّلش البث"),
+        ("the emulator sent no picture", "المحاكي ما بعتش صورة"),
+        ("the stream shows something else than the game", "البث بيوري حاجة غير اللعبة"),
+        ("the stream server file is missing", "ملف سيرفر البث ناقص"),
+        ("LDPlayer window not found", "مش لاقي نافذة LDPlayer"),
+        ("LDPlayer window is minimized", "نافذة LDPlayer متصغّرة — كبّرها"),
+        ("pw3", "النافذة"), ("pw2", "النافذة كاملة"), ("screen", "الشاشة"),
+        (": nothing", ": مفيش صورة"), (": black", ": صورة سودة"), ("different", "مختلفة عن اللعبة")]
+
+
+def why_ar(text):
+    """A capture problem (English, from the bot) in plain Egyptian Arabic."""
+    if LANG != "ar" or not text: return text
+    for en, ar in _WHY: text = text.replace(en, ar)
+    return text
+
+
 def translate_log(msg):
     """Arabic text for a log message (English original when no rule matches or English is chosen)."""
     if LANG != "ar": return msg
@@ -167,6 +185,10 @@ def translate_log(msg):
                     "heroes & pets": "الأبطال والحيوانات", "builder base": "القرية الليلية"}
             parts = [jobs.get(j.strip(), j.strip()) for j in m.group(2).split(",")]
             return f"▶ الجولة {m.group(1)}: هيعمل " + " ← ".join(parts)
+        if rep == "fn:capture_live":
+            return f"الشاشة اللايف مش متاحة ({why_ar(m.group(1))}) — بيجرّب التصوير من النافذة"
+        if rep == "fn:capture_window":
+            return f"التصوير من نافذة LDPlayer مش متاح ({why_ar(m.group(1))}) — شغال بالطريقة العادية"
         if rep == "fn:troopbar":
             names = [n.strip() for n in m.group(1).split(",")]
             return "شريط الجيش: " + "، ".join("؟" if n == "?" else "بطل" if n == "hero" else unit_name(n) for n in names)

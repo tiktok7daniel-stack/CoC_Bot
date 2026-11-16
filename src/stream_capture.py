@@ -62,6 +62,7 @@ class Stream:
         self._arr, self._arr_of = None, None
 
     def start(self, timeout=6.0):
+        import av  # noqa: F401  (the video decoder: fail here, clearly, when it isn't installed)
         from adbutils import Network
         jar = _jar_path()
         if jar is None: raise FileNotFoundError("scrcpy-server jar missing")
@@ -155,9 +156,13 @@ def _client(device):
     _S["client"] = None
     _S["starts"] += 1
     c = Stream(device).start()
-    for _ in range(40):                       # the first picture comes within ~1 s
-        if c.frame is not None: break
+    for _ in range(80):                       # the first picture comes within ~1 s
+        if c.frame is not None or not c.alive: break
         time.sleep(0.05)
+    if c.frame is None:
+        why = c.error or "the emulator sent no picture"
+        c.close()
+        raise RuntimeError(why)
     _S["client"] = c
     return c
 
@@ -184,11 +189,14 @@ def frame(dims, adb_grab, device):
                 time.sleep(0.15)
             if not ok:
                 _S["off_until"] = now + REST
+                _S["why"] = "the stream shows something else than the game"
                 if _S["logged"] is not False:
                     _log("Live screen not matching the game right now, using screenshots")
                     _S["logged"] = False
                 return None
             _S["ok_until"] = now + RECHECK
+            _S["why"] = ""
+            _S["fails_n"] = 0
             if _S["logged"] is not True:
                 _log(f"Live screen on: the emulator streams its screen ({c.size[0]}x{c.size[1]}), every look is instant")
                 _S["logged"] = True
@@ -198,9 +206,11 @@ def frame(dims, adb_grab, device):
             img = img.copy()
         return img
     except Exception as e:
-        _S["off_until"] = now + REST
+        _S["fails_n"] = _S.get("fails_n", 0) + 1                # each failure in a row waits longer (max 30 min)
+        _S["off_until"] = now + min(1800, REST * 2 ** (_S["fails_n"] - 1))
+        _S["why"] = _why(e)
         if _S["logged"] is not False:
-            _log(f"Live screen not available ({type(e).__name__}), using screenshots")
+            _log(f"Live screen not available: {_why(e)}")
             _S["logged"] = False
         try:
             if _S["client"] is not None: _S["client"].close()
@@ -210,9 +220,18 @@ def frame(dims, adb_grab, device):
         return None
 
 
+def _why(e):
+    """Short reason in plain words (shown in the app)."""
+    t = f"{type(e).__name__}: {e}"
+    if isinstance(e, ImportError) or "No module named 'av'" in t: return "the video library (av) is not installed"
+    if "jar missing" in t: return "the stream server file is missing"
+    if "did not answer" in t: return "the emulator did not start the stream"
+    return t[:160]
+
+
 def stats():
     c = _S["client"]
-    return {"on": bool(c and c.alive), "frames": c.frames if c else 0, "size": c.size if c else None,
+    return {"on": bool(c and c.alive), "why": _S.get("why", ""), "frames": c.frames if c else 0, "size": c.size if c else None,
             "age_ms": int((time.monotonic() - c.frame_t) * 1000) if c and c.frame_t else None}
 
 

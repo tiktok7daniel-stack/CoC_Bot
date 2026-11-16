@@ -2555,6 +2555,12 @@ class Frame_Handler:
             info = {"t": time.time(), "source": max(p["src"], key=p["src"].get), "look_ms": round(p["ms"] / max(1, p["n"]), 1),
                     "looks": p["n"], "ocr_gpu": gpu}
             try:
+                import stream_capture, win_capture
+                info["live_why"] = stream_capture._S.get("why", "")
+                info["window_why"] = win_capture._S.get("why", "")
+            except Exception:
+                pass
+            try:
                 import screen_memory
                 info["memory"] = screen_memory.stats(INSTANCE_ID)
             except Exception:

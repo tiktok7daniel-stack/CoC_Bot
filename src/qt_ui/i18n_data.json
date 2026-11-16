@@ -997,7 +997,9 @@
 "checking": "بيتأكد…",
 "pw_gpu_unpack": "بيسطّب الملفات… {pct}% — سيبه يكمّل لوحده",
 "pw_gpu_armed": "✅ {name} متفعّل — البوت هيقرا عليه أول ما يشتغل",
-"pw_gpu_bot_cpu": "{name} متسطّب، بس البوت اللي شغال دلوقتي لسه على البروسيسور — وقّف البوت وشغّله تاني"
+"pw_gpu_bot_cpu": "{name} متسطّب، بس البوت اللي شغال دلوقتي لسه على البروسيسور — وقّف البوت وشغّله تاني",
+"pw_live_why": "🔴 الشاشة اللايف مش شغالة: {w}",
+"pw_window_why": "⚡ التصوير من النافذة مش شغال: {w}"
 },
 "en": {
 "gold": "Gold",
@@ -1997,7 +1999,9 @@
 "checking": "Checking…",
 "pw_gpu_unpack": "Installing the files… {pct}% — let it finish by itself",
 "pw_gpu_armed": "✅ {name} on — the bot reads on it as soon as it runs",
-"pw_gpu_bot_cpu": "{name} is installed, but the running bot still reads on the processor — stop and start the bot"
+"pw_gpu_bot_cpu": "{name} is installed, but the running bot still reads on the processor — stop and start the bot",
+"pw_live_why": "🔴 Live screen not working: {w}",
+"pw_window_why": "⚡ Window capture not working: {w}"
 },
 "unit_ar": {
 "healing": "العلاج",
@@ -2813,22 +2817,6 @@
 "🏠 الهجمة خلصت وهو رجع القرية — هيهاجم تاني على طول"
 ],
 [
-"^Fast screen capture on",
-"⚡ التصوير السريع شغال: بيقرا شاشة LDPlayer مباشرة (أسرع 20-50 مرة)"
-],
-[
-"^Fast screen capture not available",
-"التصوير السريع مش متاح دلوقتي (نافذة LDPlayer متصغّرة أو مستخبية) — شغال بـ ADB"
-],
-[
-"^Live screen on",
-"🔴 الشاشة اللايف شغالة: البوت شايف اللعبة لحظة بلحظة"
-],
-[
-"^Live screen not",
-"الشاشة اللايف مش متاحة دلوقتي — شغال بالصور العادية"
-],
-[
 "^Known screen: (.*) \\(recognised by its look\\)",
 "🧠 عرف الشاشة من شكلها: \\1 — اتصرّف على طول من غير قراية"
 ],
@@ -2839,6 +2827,26 @@
 [
 "^Text reader ready \\((\\d+)s\\) on the processor",
 "قارئ الكلام جاهز (\\1 ث) — على البروسيسور"
+],
+[
+"^Fast screen capture on.*",
+"⚡ التصوير السريع شغال: بيقرا شاشة LDPlayer مباشرة"
+],
+[
+"^Fast screen capture not available: (.*)",
+"fn:capture_window"
+],
+[
+"^Live screen on.*",
+"🔴 الشاشة اللايف شغالة: البوت شايف اللعبة لحظة بلحظة"
+],
+[
+"^Live screen not available: (.*)",
+"fn:capture_live"
+],
+[
+"^Live screen not matching.*",
+"الشاشة اللايف مش مطابقة للعبة دلوقتي — بيجرّب طريقة تانية"
 ]
 ]
 }

@@ -78,8 +78,10 @@ def _find_hwnd():
     return hwnd
 
 
-def grab(hwnd):
-    """RGB picture of the window's inside, or None."""
+def grab(hwnd, method=None):
+    """RGB picture of the window's inside, or None. method: "pw2" / "pw3" (PrintWindow), "screen" (copy from the screen)."""
+    method = method or _S.get("method") or "pw3"
+    if method == "screen": return _grab_screen(hwnd)
     import ctypes, numpy as np
     from ctypes import wintypes
     u, g = _api()
@@ -95,7 +97,7 @@ def grab(hwnd):
     bmp = g.CreateCompatibleBitmap(hdc, w, h)
     old = g.SelectObject(mdc, bmp)
     try:
-        if not u.PrintWindow(hwnd, mdc, 3):                            # PW_CLIENTONLY | PW_RENDERFULLCONTENT
+        if not u.PrintWindow(hwnd, mdc, 2 if method == "pw2" else 3):  # PW_RENDERFULLCONTENT (| PW_CLIENTONLY)
             g.BitBlt(mdc, 0, 0, w, h, hdc, 0, 0, 0x00CC0020)
         class BMI(ctypes.Structure):
             _fields_ = [("biSize", wintypes.DWORD), ("biWidth", ctypes.c_long), ("biHeight", ctypes.c_long),
@@ -114,6 +116,51 @@ def grab(hwnd):
         u.ReleaseDC(hwnd, hdc)
 
 
+def _grab_screen(hwnd):
+    """Copy the window's area from the screen (works for any drawing, needs the window visible on top)."""
+    import ctypes, numpy as np
+    from ctypes import wintypes
+    u, g = _api()
+    if not hwnd or not u.IsWindow(hwnd) or u.IsIconic(hwnd): return None
+    r = wintypes.RECT()
+    u.GetClientRect(hwnd, ctypes.byref(r))
+    pt = wintypes.POINT(0, 0)
+    ctypes.windll.user32.ClientToScreen(ctypes.c_void_p(hwnd), ctypes.byref(pt))
+    w, h = r.right, r.bottom
+    if w < 200 or h < 100: return None
+    sdc = u.GetDC(None)
+    mdc = g.CreateCompatibleDC(sdc)
+    bmp = g.CreateCompatibleBitmap(sdc, w, h)
+    old = g.SelectObject(mdc, bmp)
+    try:
+        g.BitBlt(mdc, 0, 0, w, h, sdc, pt.x, pt.y, 0x00CC0020)
+        class BMI(ctypes.Structure):
+            _fields_ = [("biSize", wintypes.DWORD), ("biWidth", ctypes.c_long), ("biHeight", ctypes.c_long),
+                        ("biPlanes", wintypes.WORD), ("biBitCount", wintypes.WORD), ("biCompression", wintypes.DWORD),
+                        ("biSizeImage", wintypes.DWORD), ("biXPelsPerMeter", ctypes.c_long), ("biYPelsPerMeter", ctypes.c_long),
+                        ("biClrUsed", wintypes.DWORD), ("biClrImportant", wintypes.DWORD)]
+        bmi = BMI(ctypes.sizeof(BMI), w, -h, 1, 32, 0, 0, 0, 0, 0, 0)
+        buf = (ctypes.c_ubyte * (w * h * 4))()
+        if not g.GetDIBits(mdc, bmp, 0, h, buf, ctypes.byref(bmi), 0): return None
+        return np.frombuffer(buf, dtype=np.uint8).reshape(h, w, 4)[..., 2::-1].copy()
+    finally:
+        g.SelectObject(mdc, old)
+        g.DeleteObject(bmp)
+        g.DeleteDC(mdc)
+        u.ReleaseDC(None, sdc)
+
+
+def _trim(img):
+    """Cut black bars around the game (window wider / taller than the game)."""
+    import numpy as np
+    if img is None: return None
+    g = img.max(axis=2)
+    rows = np.where(g.max(axis=1) > 12)[0]
+    cols = np.where(g.max(axis=0) > 12)[0]
+    if len(rows) < 50 or len(cols) < 50: return img
+    return img[rows[0]:rows[-1] + 1, cols[0]:cols[-1] + 1]
+
+
 # ---------------------------------------------------------------- checked against ADB
 def _small(img):
     import cv2
@@ -121,13 +168,36 @@ def _small(img):
 
 
 def _agrees(adb_frame):
+    """Try every way of copying the window; keep the first that shows what ADB shows. Sets _S["why"] otherwise."""
     import numpy as np
-    for _ in range(3):
-        win = grab(_find_hwnd())
-        if win is None: return False
-        d = float(np.abs(_small(win) - _small(adb_frame)).mean())
-        if d < 18: return True
-        time.sleep(0.15)
+    hwnd = _find_hwnd()
+    if not hwnd:
+        _S["why"] = "LDPlayer window not found"
+        return False
+    try:
+        u, _g = _api()
+        if u.IsIconic(hwnd) or u.IsIconic(u.GetParent(hwnd) or hwnd):
+            _S["why"] = "LDPlayer window is minimized"
+            return False
+    except Exception:
+        pass
+    reasons = []
+    for method in ("pw3", "pw2", "screen"):
+        for _ in range(2):
+            win = _trim(grab(hwnd, method))
+            if win is None:
+                reasons.append(f"{method}: nothing")
+                break
+            if float(win[::8, ::8].std()) < 3:
+                reasons.append(f"{method}: black")
+                break
+            d = float(np.abs(_small(win) - _small(adb_frame)).mean())
+            if d < 18:
+                _S["method"], _S["why"] = method, ""
+                return True
+            reasons.append(f"{method}: different ({d:.0f})")
+            time.sleep(0.15)
+    _S["why"] = "; ".join(reasons[:4])
     return False
 
 
@@ -145,17 +215,19 @@ def frame(dims, adb_grab):
             ref = adb_grab()
             ref = cv2.resize(ref, tuple(dims), interpolation=cv2.INTER_AREA) if (ref.shape[1], ref.shape[0]) != tuple(dims) else ref
             if not _agrees(ref):
-                _S["off_until"] = now + REST
+                _S["fails_n"] = _S.get("fails_n", 0) + 1
+                _S["off_until"] = now + min(1800, REST * 2 ** (_S["fails_n"] - 1))
                 _S["hwnd"] = None
                 if _S["logged"] is not False:
-                    _log("Fast screen capture not available right now (LDPlayer window hidden or different), using ADB")
+                    _log(f"Fast screen capture not available: {_S.get('why') or '?'}")
                     _S["logged"] = False
                 return None
             _S["ok_until"] = now + RECHECK
+            _S["fails_n"] = 0
             if _S["logged"] is not True:
                 _log("Fast screen capture on: reading the LDPlayer window directly (20-50x faster than ADB)")
                 _S["logged"] = True
-        img = grab(_find_hwnd())
+        img = _trim(grab(_find_hwnd()))
         if img is None or float(img[::8, ::8].std()) < 3:
             _S["fails"] += 1
             if _S["fails"] >= 5:
@@ -165,6 +237,7 @@ def frame(dims, adb_grab):
         if (img.shape[1], img.shape[0]) != tuple(dims):
             img = cv2.resize(img, tuple(dims), interpolation=cv2.INTER_LINEAR)
         return img
-    except Exception:
+    except Exception as e:
         _S["off_until"] = now + REST
+        _S["why"] = f"{type(e).__name__}: {e}"[:160]
         return None
