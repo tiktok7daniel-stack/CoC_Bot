@@ -49,6 +49,7 @@ class Attacker:
         import teach
         start = time.monotonic()
         surrendered = False
+        self._next_words = 0
         leave = self.battle_end == "leave"
         surrender_after = (self.leave_after if leave else self.surrender_after)
         if leave:
@@ -86,9 +87,23 @@ class Attacker:
                         time.sleep(0.4)
                         if not self._click_okay(timeout=3): Auto_Learn.learn_button("okay_button", tap=True, min_interval=0)
                         surrendered = True
-            # results screen (current game: "Claim Reward" -> chest -> "Continue") -> back to the village
-            if time.monotonic() - start > 1.5 and not self.in_battle():
-                frame = Frame_Handler.get_frame(grayscale=False)
+            # instant checks by colour (no reading): the results screen's green button, or already back home
+            # (the battle ended by hand / by the game) -> go on at once
+            frame = Frame_Handler.get_frame(grayscale=False)
+            if bottom_green_button(frame):
+                logger.info("Battle over, collecting the reward")
+                if collect_rewards(): return
+                continue
+            if in_home_base(fast=True):
+                logger.info("Battle over, already back in the village")
+                TEMP_CACHE["location"] = "home_base"
+                return
+            if time.monotonic() - start > 1.5 and in_builder_base():
+                TEMP_CACHE["location"] = "builder_base"
+                return
+            # results screen not recognised by colour: read it now and then (reading takes ~1 s)
+            if time.monotonic() - start > 1.5 and time.monotonic() >= getattr(self, "_next_words", 0) and not self.in_battle():
+                self._next_words = time.monotonic() + 3
                 words = " ".join(b[0].lower() for b in ocr_boxes(frame) if b[5] > 0.3)
                 if ("claim" in words and "reward" in words) or "continue" in words or "delivered" in words or "storage" in words \
                         or any(w in words for w in CHEST_WORDS) \
@@ -97,10 +112,12 @@ class Attacker:
                     if collect_rewards(): return
             if self._click_return_home(timeout=0):
                 logger.info("Battle over, returning home")
-                time.sleep(0.4)
-                for _ in range(60): # the village usually shows within 2-4 s
-                    if game_ready(): return
-                    time.sleep(0.2)
+                time.sleep(0.3)
+                for _ in range(80): # the village usually shows within 2-4 s
+                    if game_ready(fast=True): return
+                    if bottom_green_button():
+                        if collect_rewards(): return
+                    time.sleep(0.15)
                 break
             # optional early end: End Battle -> confirm
             if not surrendered and (surrender_after > 0 or leave) and time.monotonic() - start > surrender_after:
@@ -111,13 +128,13 @@ class Attacker:
             # results screen not recognised yet -> once the battle is over (no End Battle button),
             # find "Return Home" by its text and learn it
             if time.monotonic() - start > 15 and not self.in_battle() and Auto_Learn.learn_button("return_home", tap=True, min_interval=12):
-                time.sleep(0.8)
-                for _ in range(40):
-                    if game_ready(): return
-                    time.sleep(0.3)
+                time.sleep(0.3)
+                for _ in range(60):
+                    if game_ready(fast=True): return
+                    time.sleep(0.2)
             time.sleep(0.25)                             # notice the results screen right away
         # (no Android back key here: in the village it opens the "exit game?" dialog)
-        if game_ready(): return
+        if game_ready() or collect_rewards(timeout=15): return
         logger.warning("Battle end not detected, reopening the game")
         if restart: start_coc(force_restart="results screen not recognised")
         else: stop_coc(reason="results screen not recognised")
@@ -177,26 +194,34 @@ class Attacker:
             return x, y
         # React to what the game shows (older: "Find a Match" window; current: the army screen with a green
         # "Attack!" button at the bottom right, then sometimes a confirm) until the search for a base starts.
-        army_done, started = False, False
+        army_done, started, next_read = False, False, time.monotonic() + 1.0
         deadline = time.monotonic() + 20
         while time.monotonic() < deadline and running():
             if find_taught("end_battle") or Frame_Handler.locate(self.assets["end_battle"], thresh=0.9) != (None, None):
                 started = True
                 break
-            x, y = locate_find_a_match()
-            if x is not None:
-                Input_Handler.click(x, y)
-                time.sleep(0.4)
-                continue
-            x, y = Frame_Handler.locate(self.assets["confirm_attack"], thresh=0.9, use_cached=True)
-            if x is not None:
-                Input_Handler.click(x, y)
-                started = True
-                break
-            # the army screen: recognised by its tabs (My Army / Saved Recipes / Cookbook) at the top
-            top = Frame_Handler.get_frame_section(0.0, 0.0, 1.0, 0.15, grayscale=False, use_cached=True)
-            words = " ".join(b[0].lower() for b in ocr_boxes(top) if b[5] > 0.3)
-            if "army" in words and ("recipes" in words or "cookbook" in words or "saved" in words):
+            # the army screen: the green "Attack!" at the bottom right (colour, instant) — checked first
+            frame = Frame_Handler.get_frame(grayscale=False, use_cached=True)
+            is_army = army_screen_open(frame)
+            if not is_army:
+                x, y = locate_find_a_match()
+                if x is not None:
+                    Input_Handler.click(x, y)
+                    time.sleep(0.4)
+                    continue
+                x, y = Frame_Handler.locate(self.assets["confirm_attack"], thresh=0.9, use_cached=True)
+                if x is not None:
+                    Input_Handler.click(x, y)
+                    started = True
+                    break
+                frame = Frame_Handler.get_frame(grayscale=False, use_cached=True)
+            # its tabs are read only as a fallback
+            if not is_army and time.monotonic() >= next_read:
+                next_read = time.monotonic() + 2
+                top = Frame_Handler.crop(frame, 0.0, 0.0, 1.0, 0.15)
+                words = " ".join(b[0].lower() for b in ocr_boxes(top) if b[5] > 0.3)
+                is_army = "army" in words and ("recipes" in words or "cookbook" in words or "saved" in words)
+            if is_army:
                 if not army_done:      # the saved army of the active loadout, on this very screen
                     army_done = True
                     want = ((self.plan or {}).get("army", "") or "").strip()

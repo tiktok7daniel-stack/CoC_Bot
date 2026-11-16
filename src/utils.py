@@ -549,7 +549,8 @@ def extend_pythonanywhere_hosting(username, password):
     )
     assert res.url == webapps_url
 
-def in_home_base():
+def in_home_base(fast=False):
+    """fast=True: colours + picture only (a few ms), no text reading — for loops that look many times a second."""
     import numpy as np
 
     # First check for resource colors
@@ -576,15 +577,42 @@ def in_home_base():
     if hits >= 3 and gems: return True
 
     # Fallback to gold template matching
+    # (only the top-right corner, where the storages are: ~20x faster than the whole screen)
     if Frame_Handler.locate(
         Asset_Manager.upgrader_assets["home_gold"],
+        Frame_Handler.get_frame_section(0.6, 0.0, 1.0, 0.35, grayscale=False, use_cached=True),
         grayscale=False,
         prefilter=True,
         thresh=0.80
     ) != (None, None):
         return True
+    if fast: return False
+    if in_builder_base(): return False          # the builder base has "Battle" / "Build" buttons too
     # last check: read the buttons at the bottom (cached a few seconds, OCR is slow)
     return _village_by_words(colours=hits)
+
+
+# ---------------------------------------------------------------- instant screen checks (colours only, ~1 ms)
+def _green_share(frame, x1, y1, x2, y2):
+    """Share of the area that is the game's bright button green."""
+    h, w = frame.shape[:2]
+    c = frame[int(h * y1):int(h * y2), int(w * x1):int(w * x2)].astype(int)
+    if c.size == 0: return 0.0
+    r, g, b = c[..., 0], c[..., 1], c[..., 2]
+    return float(((g > 165) & (g - r > 25) & (g - b > 70) & (r > 70)).mean())
+
+def bottom_green_button(frame=None):
+    """
+    The big green button in the bottom middle: Claim Reward / Continue / Return Home (results and reward screens).
+    Never there during a battle or in the village (checked on the user's own screenshots).
+    """
+    if frame is None: frame = Frame_Handler.get_frame(grayscale=False)
+    return _green_share(frame, 0.44, 0.83, 0.56, 0.88) >= 0.30 and _green_share(frame, 0.44, 0.74, 0.56, 0.78) < 0.05
+
+def army_screen_open(frame=None):
+    """The army screen before a battle: the green "Attack!" button at the bottom right."""
+    if frame is None: frame = Frame_Handler.get_frame(grayscale=False)
+    return _green_share(frame, 0.83, 0.86, 0.94, 0.92) >= 0.10 and not bottom_green_button(frame)
 
 
 _VILLAGE_WORDS = {"t": 0.0, "ok": False}
@@ -757,13 +785,40 @@ def collect_rewards(timeout=30):
     """
     After a battle the game now shows: results with "Claim Reward" -> a chest you tap until it opens ->
     the item with "Continue" -> the village (older versions: "Return Home"). Go through all of it.
-    True once the village is back.
+    The green button and the village are recognised by their colours (instant); the text is read only
+    when the colours don't tell what the screen is. True once the village is back.
     """
     import time
-    start, taps = time.time(), 0
+    start, taps, greens, last_ocr, logged = time.time(), 0, 0, 0.0, set()
+    def note(what):
+        if what not in logged:
+            logged.add(what)
+            logger.info(f"Battle rewards: pressed {what}")
     while time.time() - start < timeout:
-        if game_ready(): return True
         frame = Frame_Handler.get_frame(grayscale=False)
+        if bottom_green_button(frame):              # Claim Reward / Continue / Return Home: same spot
+            Input_Handler.click(0.5, 0.857)
+            taps += 1
+            greens += 1
+            last_ocr = time.time()                  # next: the chest — tap it straight away, no reading
+            note("the green button")
+            time.sleep(0.3)
+            continue
+        if in_home_base(fast=True):
+            TEMP_CACHE["location"] = "home_base"
+            return True
+        if in_builder_base():
+            TEMP_CACHE["location"] = "builder_base"
+            return True
+        # not the button, not the village: the chest after Claim Reward (tap it till it opens), else read the screen
+        if greens == 1 and time.time() - last_ocr < 2.5:      # after Claim Reward, before Continue
+            for _ in range(3):
+                Input_Handler.click(0.5, 0.55)
+                time.sleep(0.1)
+            note("chest")
+            time.sleep(0.15)
+            continue
+        last_ocr = time.time()
         boxes = [b for b in ocr_boxes(frame) if b[5] > 0.3]
         text = " ".join(b[0].lower() for b in boxes)
         def tap_box(*words):
@@ -778,7 +833,6 @@ def collect_rewards(timeout=30):
         if "claim" in text and "reward" in text:
             what = tap_box("claim reward", "claim")
         elif results:
-            # the results screen: the green button in the bottom middle (Claim Reward, older: Return Home)
             what = tap_box("claim", "return", "home")
             if not what:
                 Input_Handler.click(0.5, 0.857)
@@ -786,14 +840,12 @@ def collect_rewards(timeout=30):
         elif "continue" in text or "delivered" in text or "storage" in text or ("skip" in text and taps):
             what = tap_box("continue")
             if not what:
-                Input_Handler.click(0.5, 0.86)      # the green Continue under the item
+                Input_Handler.click(0.5, 0.86)
                 what = "continue"
         elif "return home" in text or ("return" in text and "home" in text):
             what = tap_box("return home", "return")
-        elif any(w in text for w in CHEST_WORDS) or (taps and len(boxes) <= 4):     # chest room: hardly any text
-            for _ in range(3):                   # the chest in the middle: each tap breaks one lock — tap fast
-                Input_Handler.click(0.5, 0.55)
-                time.sleep(0.12)
+        elif any(w in text for w in CHEST_WORDS) or (taps and len(boxes) <= 4):
+            Input_Handler.click(0.5, 0.55)
             what = "chest"
         if not what:
             try:
@@ -805,16 +857,17 @@ def collect_rewards(timeout=30):
                 pass
         if what:
             taps += 1
-            if taps == 1 or what != "chest": logger.info(f"Battle rewards: pressed {what}")
-            time.sleep(0.25 if what == "chest" else 0.45)
+            note(what)
+            time.sleep(0.3)
         else:
-            time.sleep(0.25)
+            if game_ready(): return True
+            time.sleep(0.2)
     return game_ready()
 
-def game_ready():
+def game_ready(fast=False):
     """True when the game is already open and showing a village (nothing to restart)."""
     try:
-        if in_home_base():
+        if in_home_base(fast=fast):
             TEMP_CACHE["location"] = "home_base"
             return True
         if in_builder_base():
@@ -983,6 +1036,7 @@ def in_builder_base():
     # Fallback to gold template matching
     return Frame_Handler.locate(
         Asset_Manager.upgrader_assets["builder_gold"],
+        Frame_Handler.get_frame_section(0.6, 0.0, 1.0, 0.35, grayscale=False, use_cached=True),
         grayscale=False,
         prefilter=True,
         thresh=0.85
@@ -1841,7 +1895,11 @@ class OCR_Handler:
             except:
                 logger.warning("ocrmac not available, falling back to easyocr")
 
-        result = easyocr_reader().readtext(frame, detail=0)
+        # a plain picture (no text at all) can crash easyocr's model ("min should be less than or equal to max")
+        if frame is None or frame.size == 0 or float(frame.std()) < 2: return []
+        try: result = easyocr_reader().readtext(frame, detail=0)
+        except (KeyboardInterrupt, SystemExit): raise
+        except RuntimeError: return []
         return [text for text in result if text.strip()]
 
     @classmethod
@@ -2659,6 +2717,10 @@ ERRORS_DIR = APP_DATA_DIR / "errors"
 def set_phase(name):
     """What the bot is doing right now (shown next to every error and on the GUI home page)."""
     import json, time
+    # slow steps show up in the log (and in the error reports): where the time goes
+    old, since = TEMP_CACHE.get("phase"), TEMP_CACHE.get("phase_t")
+    if old and since and old not in ("idle", "start_game", "home_attack", "builder_attack") and time.time() - since > 20:
+        logger.info(f"Step '{old}' took {time.time() - since:.0f}s")
     TEMP_CACHE["phase"] = name
     TEMP_CACHE["phase_t"] = time.time()
     try:
@@ -3090,6 +3152,7 @@ def ocr_boxes(frame):
         frame = cv2.resize(frame, (w // 2, h // 2), interpolation=cv2.INTER_AREA)
         h, w = frame.shape[:2]
     out = []
+    if frame.size == 0 or float(frame.std()) < 2: return out      # nothing written on a plain picture
     try:
         for pts, text, conf in easyocr_reader().readtext(frame, detail=1):
             xs, ys = [p[0] for p in pts], [p[1] for p in pts]

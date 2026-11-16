@@ -2715,6 +2715,14 @@
 [
 "^Stuck on a screen the bot doesn't know — picture sent to Claude \\((.*)\\)",
 "🤔 البوت وقف على شاشة مايعرفهاش — اتصوّرت واتبعتت لـ Claude علشان يتعلّمها"
+],
+[
+"^Step '(.*)' took (\\d+)s",
+"⏱️ خطوة \\1 خدت \\2 ثانية"
+],
+[
+"^Battle over, already back in the village",
+"🏠 الهجمة خلصت وهو رجع القرية — هيهاجم تاني على طول"
 ]
 ]
 }
