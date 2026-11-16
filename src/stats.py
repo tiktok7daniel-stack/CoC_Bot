@@ -20,12 +20,134 @@ def _path(id):
     return STATS_DIR / f"{safe}.jsonl"
 
 def record(id, type, **data):
+    e = {"t": time.time(), "type": type, **data}
     try:
         STATS_DIR.mkdir(parents=True, exist_ok=True)
         with open(_path(id), "a", encoding="utf-8") as f:
-            f.write(json.dumps({"t": time.time(), "type": type, **data}, ensure_ascii=False) + "\n")
+            f.write(json.dumps(e, ensure_ascii=False) + "\n")
     except OSError:
         pass
+    try: _ledger_add(id, e)
+    except Exception: pass
+
+
+# ====================================================================== permanent daily ledger
+# The event file is trimmed to stay small; the ledger keeps one compact row per day forever:
+# ~/.CoC_Bot/stats/<id>.daily.json  {"YYYY-MM-DD": {...counters...}}
+DAY_KEYS = ("attacks", "home_attacks", "builder_attacks", "gold", "elixir", "dark", "bb_gold", "bb_elixir",
+            "searches", "skipped", "upgrades", "walls", "buildings", "lab", "cycles", "cycle_seconds", "errors",
+            "warnings", "best_gold", "best_elixir", "best_dark", "zero_loot")
+
+
+def _ledger_path(id):
+    return _path(id).with_suffix(".daily.json")
+
+
+def _ledger_load(id):
+    p = _ledger_path(id)
+    if p.exists():
+        try: return json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError): pass
+    # first use: build it from the events still on disk
+    led = {}
+    for e in read(id): _apply(led, e)
+    _ledger_save(id, led)
+    return led
+
+
+def _ledger_save(id, led):
+    STATS_DIR.mkdir(parents=True, exist_ok=True)
+    p = _ledger_path(id)
+    tmp = p.with_suffix(".tmp2")
+    tmp.write_text(json.dumps(led, ensure_ascii=False), encoding="utf-8")
+    os.replace(tmp, p)
+
+
+def _apply(led, e):
+    t = e.get("t", time.time())
+    day = time.strftime("%Y-%m-%d", time.localtime(t))
+    d = led.setdefault(day, {k: 0 for k in DAY_KEYS})
+    for k in DAY_KEYS: d.setdefault(k, 0)
+    d.setdefault("hours", [0] * 24)
+    d["first"] = min(d.get("first") or t, t)
+    d["last"] = max(d.get("last") or t, t)
+    typ = e.get("type")
+    if typ == "attack":
+        d["attacks"] += 1
+        g, el, dk = (max(0, int(e.get(k) or 0)) for k in ("gold", "elixir", "dark"))
+        if e.get("base") == "builder":
+            d["builder_attacks"] += 1
+            d["bb_gold"] += g
+            d["bb_elixir"] += el
+        else:
+            d["home_attacks"] += 1
+            d["gold"] += g
+            d["elixir"] += el
+            d["dark"] += dk
+            d["best_gold"] = max(d["best_gold"], g)
+            d["best_elixir"] = max(d["best_elixir"], el)
+            d["best_dark"] = max(d["best_dark"], dk)
+            if g + el + dk == 0: d["zero_loot"] += 1
+            d["hours"][time.localtime(t).tm_hour] += g + el
+    elif typ == "search":
+        d["searches"] += 1
+        if not e.get("accepted", True): d["skipped"] += 1
+    elif typ == "upgrade":
+        d["upgrades"] += 1
+        kind = e.get("kind")
+        if kind == "wall": d["walls"] += 1
+        elif kind == "lab": d["lab"] += 1
+        else: d["buildings"] += 1
+        names = d.setdefault("names", [])
+        if kind != "wall" and e.get("name") and len(names) < 40: names.append(str(e.get("name")))
+    elif typ == "cycle":
+        d["cycles"] += 1
+        d["cycle_seconds"] += int(e.get("seconds") or 0)
+    elif typ == "error": d["errors"] += 1
+    elif typ == "warning": d["warnings"] += 1
+
+
+def _ledger_add(id, e):
+    if e.get("type") not in ("attack", "search", "upgrade", "cycle", "error", "warning"): return
+    fresh = not _ledger_path(id).exists()
+    led = _ledger_load(id)          # a fresh ledger is rebuilt from the event file, which already has e
+    if fresh: return
+    _apply(led, e)
+    _ledger_save(id, led)
+
+
+def daily(id, days=0):
+    """Rows oldest -> newest; days=0 means everything. Each row has derived loot/hour and active hours."""
+    led = _ledger_load(id)
+    keys = sorted(led)
+    if days:
+        cut = time.strftime("%Y-%m-%d", time.localtime(time.time() - (days - 1) * 86400))
+        keys = [k for k in keys if k >= cut]
+    out = []
+    for k in keys:
+        d = dict(led[k])
+        active = d.get("cycle_seconds") or max(0, (d.get("last") or 0) - (d.get("first") or 0))
+        d["date"] = k
+        d["active_hours"] = round(active / 3600, 2)
+        d["loot"] = d.get("gold", 0) + d.get("elixir", 0)
+        d["loot_per_hour"] = int(d["loot"] / max(active / 3600, 0.25)) if d["loot"] else 0
+        out.append(d)
+    return out
+
+
+def merge_days(rows_lists):
+    """Combine several accounts' daily rows by date."""
+    by = {}
+    for rows in rows_lists:
+        for r in rows:
+            m = by.setdefault(r["date"], {"date": r["date"], "hours": [0] * 24})
+            for k, v in r.items():
+                if k in ("date", "names", "first", "last"): continue
+                if k == "hours": m["hours"] = [a + b for a, b in zip(m["hours"], v)]
+                elif k.startswith("best_"): m[k] = max(m.get(k, 0), v)
+                elif isinstance(v, (int, float)): m[k] = m.get(k, 0) + v
+            m.setdefault("names", []).extend(r.get("names", []))
+    return [by[k] for k in sorted(by)]
 
 def read(id, since=0):
     p = _path(id)

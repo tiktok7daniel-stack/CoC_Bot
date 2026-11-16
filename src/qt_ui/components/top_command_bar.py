@@ -72,7 +72,7 @@ class TopCommandBar(QFrame):
         self.avatar = QLabel("M")
         self.avatar.setFixedSize(38, 38)
         self.avatar.setAlignment(Qt.AlignCenter)
-        self.avatar.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #C8102E, stop:1 #FF8A00);"
+        self.avatar.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #D9952A, stop:1 #F5B740);"
                                   " border-radius: 10px; font-weight: 800; font-size: 13pt; color: white;")
         ah.addWidget(self.avatar)
         box = QVBoxLayout()
@@ -104,7 +104,7 @@ class TopCommandBar(QFrame):
         self.btn_stop = IconButton("stop", "stop", kind="stop", icon_color="#FCA5A5", size=15)
         self.btn_pause = IconButton("pause", "pause_title", icon_color=TOKENS["warn"], size=15)
         self.btn_wake = IconButton("bolt", "run_now", icon_color=TOKENS["gold"], size=16)
-        self.btn_setup = IconButton("plug", "su_title", icon_color="#FFC7A8", size=16)
+        self.btn_setup = IconButton("plug", "su_title", icon_color="#E9D3A6", size=16)
         for b, a in ((self.btn_start, "start"), (self.btn_stop, "stop"), (self.btn_pause, "pause"),
                      (self.btn_wake, "wake"), (self.btn_setup, "setup")):
             b.setMinimumHeight(40)
@@ -229,7 +229,7 @@ class CommandPalette(QDialog):
             key = (e["text"], e["where"])
             if key in seen: continue
             seen.add(key)
-            it = QListWidgetItem(icons.icon(e.get("icon", "sliders"), "#FFC7A8", 16), f"{e['text']}    —    {e['where']}")
+            it = QListWidgetItem(icons.icon(e.get("icon", "sliders"), "#E9D3A6", 16), f"{e['text']}    —    {e['where']}")
             it.setData(Qt.UserRole, e)
             self.list.addItem(it)
             if self.list.count() >= 60: break

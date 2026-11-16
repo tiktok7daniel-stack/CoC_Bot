@@ -98,7 +98,7 @@ class AccountsScreen(Screen):
             av = QLabel(acc[:1].upper())
             av.setFixedSize(44, 44)
             av.setAlignment(Qt.AlignCenter)
-            av.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #C8102E, stop:1 #FF8A00); border-radius: 11px;"
+            av.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #D9952A, stop:1 #F5B740); border-radius: 11px;"
                              " font-weight: 800; font-size: 14pt; color: white;")
             h.addWidget(av)
             box = QVBoxLayout()

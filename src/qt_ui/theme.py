@@ -9,33 +9,39 @@ from PySide6.QtGui import QColor, QFont, QFontDatabase
 FONT_DIR = Path(__file__).resolve().parent / "fonts"
 
 TOKENS = {
-    "void": "#050508",            # window canvas
-    "void2": "#08080D",           # framed content area
-    "glass": "rgba(20, 16, 22, 0.72)",
-    "glass_solid": "#0F0D12",     # glass color for painters (no alpha blending of children)
-    "glass2": "#16131A",          # inputs, inner rows
-    "glass3": "#201A22",          # hover / raised rows
-    "border": "rgba(255, 184, 0, 0.16)",
-    "border_hover": "rgba(255, 184, 0, 0.50)",
-    "border_solid": "#2C2026",
-    "text": "#F6F1EC",
-    "muted": "#B3A7A3",
-    "dim": "#766A6C",
-    "violet": "#FF1E42",
-    "purple": "#FFB800",
-    "fuchsia": "#FFD700",
-    "nav_from": "#C8102E",
-    "nav_to": "#FF8A00",
-    "ok": "#10B981",
-    "bad": "#EF4444",
-    "warn": "#F59E0B",
-    "gold": "#FBBF24",
-    "elixir": "#EC4899",
-    "dark": "#6366F1",
-    "info": "#38BDF8",
+    # surfaces: near-black with a faint warm tint, each level a little lighter
+    "void": "#07070A",            # window canvas
+    "void2": "#0A0A0E",           # framed content area
+    "glass": "rgba(18, 18, 24, 0.82)",
+    "glass_solid": "#0E0E13",     # cards
+    "glass2": "#14141B",          # inputs, inner rows
+    "glass3": "#1C1C25",          # hover / raised rows
+    "border": "rgba(255, 255, 255, 0.07)",
+    "border_hover": "rgba(245, 183, 64, 0.45)",
+    "border_solid": "#1F1F29",
+    "text": "#F4F2EE",
+    "muted": "#A7A3AD",
+    "dim": "#6E6A76",
+    # one accent: Clash gold. (legacy names kept so every screen picks it up)
+    "violet": "#F5B740",
+    "purple": "#F5B740",
+    "fuchsia": "#FFD36E",
+    "accent": "#F5B740",
+    "accent_hi": "#FFD36E",
+    "accent_lo": "#C98A1E",
+    "on_accent": "#1A1206",       # text on gold
+    "nav_from": "#F5B740",
+    "nav_to": "#D9952A",
+    "ok": "#3DD68C",
+    "bad": "#F0555A",
+    "warn": "#F5A524",
+    "gold": "#F5C542",
+    "elixir": "#E36FD3",
+    "dark": "#8D8CF7",
+    "info": "#5EB1F5",
 }
 
-FONTS = {"ui": "IBM Plex Sans Arabic", "ui2": "Cairo", "mono": "JetBrains Mono"}
+FONTS = {"ui": "IBM Plex Sans Arabic", "ui2": "Cairo", "mono": "JetBrains Mono", "display": "Lilita One"}
 
 
 def color(name, alpha=None):
@@ -64,6 +70,13 @@ def _weight(w):
     return w if isinstance(w, QFont.Weight) else QFont.Weight(int(w))
 
 
+def display_font(size=24):
+    f = QFont(FONTS["display"])
+    f.setFamilies([FONTS["display"], FONTS["ui2"], "Arial Black"])
+    f.setPointSizeF(size)
+    return f
+
+
 def mono_font(size=9.5, weight=QFont.Normal):
     f = QFont(FONTS["mono"])
     f.setFamilies([FONTS["mono"], "Consolas", "DejaVu Sans Mono"])
@@ -79,11 +92,9 @@ def qss():
 * {{ outline: 0; }}
 QWidget {{ color: {t['text']}; font-family: "{FONTS['ui']}", "{FONTS['ui2']}", "Segoe UI"; font-size: 10pt; }}
 QMainWindow, #Root {{ background: transparent; }}
-#Canvas {{ background: {t['void']}; border-radius: 14px; border: 1px solid {t['border_solid']}; }}
-#Content {{ background: {t['void2']}; border: 1px solid {t['border']}; border-radius: 14px; }}
-QToolTip {{ background: {t['glass2']}; color: {t['text']}; border: 1px solid {t['border_hover']}; border-radius: 6px; padding: 6px 8px; }}
+QToolTip {{ background: #17171F; color: {t['text']}; border: 1px solid {t['border_hover']}; border-radius: 8px; padding: 7px 10px; }}
 
-/* ---------- text ---------- */
+/* ---------- type scale: 22 / 13 / 11 / 10 / 9 ---------- */
 QLabel {{ background: transparent; }}
 QLabel[role="h1"] {{ font-size: 22pt; font-weight: 800; }}
 QLabel[role="h2"] {{ font-size: 13pt; font-weight: 700; }}
@@ -93,74 +104,84 @@ QLabel[role="dim"] {{ color: {t['dim']}; font-size: 8.5pt; }}
 QLabel[role="num"] {{ font-family: "{FONTS['mono']}"; font-size: 15pt; font-weight: 700; }}
 QLabel[role="numsm"] {{ font-family: "{FONTS['mono']}"; font-size: 10pt; font-weight: 700; }}
 QLabel[role="kpi"] {{ font-family: "{FONTS['mono']}"; font-size: 19pt; font-weight: 800; }}
+QLabel[role="overline"] {{ color: {t['dim']}; font-size: 8pt; font-weight: 700; letter-spacing: 1px; }}
 QLabel[role="warn"] {{ color: {t['warn']}; }}
 QLabel[role="bad"] {{ color: {t['bad']}; }}
 QLabel[role="ok"] {{ color: {t['ok']}; }}
 
 /* ---------- inputs ---------- */
 QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QTimeEdit, QPlainTextEdit, QTextEdit {{
-  background: {t['glass2']}; border: 1px solid {t['border']}; border-radius: 8px; padding: 6px 10px;
-  selection-background-color: {t['violet']}; min-height: 22px; }}
-QLineEdit:hover, QSpinBox:hover, QDoubleSpinBox:hover, QComboBox:hover, QTimeEdit:hover {{ border-color: {t['border_hover']}; }}
-QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus, QTimeEdit:focus, QPlainTextEdit:focus {{ border-color: {t['purple']}; }}
+  background: {t['glass2']}; border: 1px solid {t['border']}; border-radius: 9px; padding: 6px 10px;
+  selection-background-color: {t['accent']}; selection-color: {t['on_accent']}; min-height: 22px; }}
+QLineEdit:hover, QSpinBox:hover, QDoubleSpinBox:hover, QComboBox:hover, QTimeEdit:hover {{ border-color: rgba(255,255,255,0.16); }}
+QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus, QTimeEdit:focus, QPlainTextEdit:focus {{ border-color: {t['accent']}; background: #17171F; }}
 QSpinBox, QDoubleSpinBox, QTimeEdit {{ font-family: "{FONTS['mono']}"; padding-right: 6px; padding-left: 6px; }}
 QSpinBox::up-button, QSpinBox::down-button, QDoubleSpinBox::up-button, QDoubleSpinBox::down-button,
 QTimeEdit::up-button, QTimeEdit::down-button {{ width: 0; border: 0; }}
 QComboBox::drop-down {{ border: 0; width: 24px; }}
 QComboBox::down-arrow {{ image: none; width: 0; }}
-QComboBox QAbstractItemView {{ background: {t['glass2']}; border: 1px solid {t['border_hover']}; selection-background-color: {t['violet']}; padding: 4px; }}
+QComboBox QAbstractItemView {{ background: #15151C; border: 1px solid {t['border_hover']}; selection-background-color: rgba(245,183,64,0.16); selection-color: {t['accent_hi']}; padding: 4px; }}
 QLineEdit[role="search"] {{ padding-left: 30px; padding-right: 30px; border-radius: 10px; }}
 
-/* ---------- buttons ---------- */
-QPushButton {{ background: {t['glass2']}; border: 1px solid {t['border']}; border-radius: 9px; padding: 7px 14px; font-weight: 600; }}
-QPushButton:hover {{ border-color: {t['border_hover']}; background: {t['glass3']}; }}
-QPushButton:pressed {{ background: {t['border_solid']}; }}
+/* ---------- buttons: neutral by default, gold only for the main action ---------- */
+QPushButton {{ background: {t['glass2']}; border: 1px solid {t['border']}; border-radius: 10px; padding: 8px 15px; font-weight: 600; }}
+QPushButton:hover {{ border-color: rgba(255,255,255,0.18); background: {t['glass3']}; color: #FFFFFF; }}
+QPushButton:pressed {{ background: #101016; }}
 QPushButton:disabled {{ color: {t['dim']}; border-color: {t['border_solid']}; background: {t['glass_solid']}; }}
-QPushButton[kind="primary"] {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 {t['violet']}, stop:0.5 {t['purple']}, stop:1 {t['fuchsia']}); border: 0; color: white; }}
-QPushButton[kind="primary"]:hover {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #FF3355, stop:0.5 #FF6A2A, stop:1 #FFC233); }}
-QPushButton[kind="go"] {{ background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #19C98E, stop:1 #0E9F6E); border: 1px solid #34D399; color: white; }}
-QPushButton[kind="go"]:disabled {{ background: #10392D; border-color: #155E47; color: #6FAF97; }}
-QPushButton[kind="stop"] {{ background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.55); color: #FCA5A5; }}
-QPushButton[kind="stop"]:hover {{ background: rgba(239,68,68,0.22); }}
-QPushButton[kind="warn"] {{ background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.55); color: #FCD34D; }}
+QPushButton[kind="primary"] {{ background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #FFD36E, stop:0.5 #F5B740, stop:1 #D9952A);
+  border: 1px solid #FFE29A; color: {t['on_accent']}; font-weight: 700; }}
+QPushButton[kind="primary"]:hover {{ background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #FFE08A, stop:0.5 #FFC552, stop:1 #E7A332); }}
+QPushButton[kind="primary"]:pressed {{ background: #D9952A; }}
+QPushButton[kind="go"] {{ background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #3DD68C, stop:1 #23A866); border: 1px solid #6BE6A9; color: #04170D; font-weight: 700; }}
+QPushButton[kind="go"]:hover {{ background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #55E39D, stop:1 #2CB873); }}
+QPushButton[kind="go"]:disabled {{ background: #10261B; border-color: #173826; color: #4F8A6B; }}
+QPushButton[kind="stop"] {{ background: rgba(240,85,90,0.10); border: 1px solid rgba(240,85,90,0.45); color: #FF9EA1; }}
+QPushButton[kind="stop"]:hover {{ background: rgba(240,85,90,0.20); color: #FFC2C4; }}
+QPushButton[kind="warn"] {{ background: rgba(245,183,64,0.08); border: 1px solid rgba(245,183,64,0.40); color: #FFD36E; }}
+QPushButton[kind="warn"]:hover {{ background: rgba(245,183,64,0.16); }}
 QPushButton[kind="ghost"] {{ background: transparent; border: 1px solid transparent; }}
-QPushButton[kind="ghost"]:hover {{ background: {t['glass3']}; border-color: {t['border']}; }}
-QPushButton[kind="chip"] {{ border-radius: 14px; padding: 4px 12px; font-weight: 600; }}
-QPushButton[kind="chip"]:checked {{ background: {t['violet']}; border-color: {t['violet']}; color: white; }}
+QPushButton[kind="ghost"]:hover {{ background: rgba(255,255,255,0.05); border-color: {t['border']}; }}
+QPushButton[kind="chip"] {{ border-radius: 15px; padding: 5px 14px; font-weight: 600; color: {t['muted']}; }}
+QPushButton[kind="chip"]:hover {{ color: {t['text']}; }}
+QPushButton[kind="chip"]:checked {{ background: rgba(245,183,64,0.14); border-color: rgba(245,183,64,0.65); color: {t['accent_hi']}; }}
 QPushButton[kind="win"] {{ background: transparent; border: 0; border-radius: 6px; padding: 4px; }}
-QPushButton[kind="win"]:hover {{ background: {t['glass3']}; }}
+QPushButton[kind="win"]:hover {{ background: rgba(255,255,255,0.07); }}
 QPushButton[kind="winclose"] {{ background: transparent; border: 0; border-radius: 6px; padding: 4px; }}
 QPushButton[kind="winclose"]:hover {{ background: {t['bad']}; }}
 
 /* ---------- checkboxes ---------- */
 QCheckBox {{ spacing: 8px; background: transparent; }}
-QCheckBox::indicator {{ width: 18px; height: 18px; border-radius: 5px; border: 1px solid {t['border_hover']}; background: {t['glass2']}; }}
-QCheckBox::indicator:checked {{ background: {t['violet']}; border-color: {t['violet']}; }}
+QCheckBox::indicator {{ width: 18px; height: 18px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.18); background: {t['glass2']}; }}
+QCheckBox::indicator:checked {{ background: {t['accent']}; border-color: {t['accent']}; }}
 
 /* ---------- scroll ---------- */
 QScrollArea {{ background: transparent; border: 0; }}
 QScrollArea > QWidget > QWidget {{ background: transparent; }}
-QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
-QScrollBar::handle:vertical {{ background: {t['border_solid']}; border-radius: 4px; min-height: 30px; }}
-QScrollBar::handle:vertical:hover {{ background: {t['violet']}; }}
-QScrollBar:horizontal {{ background: transparent; height: 10px; margin: 2px; }}
-QScrollBar::handle:horizontal {{ background: {t['border_solid']}; border-radius: 4px; min-width: 30px; }}
+QScrollBar:vertical {{ background: transparent; width: 8px; margin: 2px; }}
+QScrollBar::handle:vertical {{ background: rgba(255,255,255,0.10); border-radius: 3px; min-height: 30px; }}
+QScrollBar::handle:vertical:hover {{ background: rgba(245,183,64,0.55); }}
+QScrollBar:horizontal {{ background: transparent; height: 8px; margin: 2px; }}
+QScrollBar::handle:horizontal {{ background: rgba(255,255,255,0.10); border-radius: 3px; min-width: 30px; }}
 QScrollBar::add-line, QScrollBar::sub-line, QScrollBar::add-page, QScrollBar::sub-page {{ background: none; border: 0; width: 0; height: 0; }}
 
 /* ---------- tables ---------- */
-QTableWidget {{ background: transparent; border: 0; gridline-color: {t['border_solid']}; alternate-background-color: rgba(255,30,66,0.04); }}
-QTableWidget::item {{ padding: 6px; border-bottom: 1px solid {t['border_solid']}; }}
-QTableWidget::item:selected {{ background: rgba(255,30,66,0.22); }}
-QHeaderView::section {{ background: transparent; color: {t['muted']}; border: 0; border-bottom: 1px solid {t['border_hover']}; padding: 8px 6px; font-weight: 700; }}
+QTableWidget {{ background: transparent; border: 0; gridline-color: {t['border_solid']}; alternate-background-color: rgba(255,255,255,0.018); }}
+QTableWidget::item {{ padding: 7px; border-bottom: 1px solid {t['border_solid']}; }}
+QTableWidget::item:selected {{ background: rgba(245,183,64,0.14); color: {t['accent_hi']}; }}
+QHeaderView {{ background: transparent; border: 0; }}
+QTableCornerButton::section {{ background: transparent; border: 0; }}
+QTableWidget QWidget#qt_scrollarea_viewport, QTableView {{ background: transparent; }}
+QHeaderView::section {{ background: transparent; color: {t['dim']}; border: 0; border-bottom: 1px solid rgba(255,255,255,0.10); padding: 9px 6px; font-weight: 700; font-size: 8.5pt; }}
 
 /* ---------- lists ---------- */
 QListWidget {{ background: {t['glass2']}; border: 1px solid {t['border']}; border-radius: 10px; padding: 4px; }}
-QListWidget::item {{ padding: 8px; border-radius: 6px; }}
-QListWidget::item:selected {{ background: rgba(255,30,66,0.28); }}
-QListWidget::item:hover {{ background: {t['glass3']}; }}
+QListWidget::item {{ padding: 8px; border-radius: 7px; }}
+QListWidget::item:selected {{ background: rgba(245,183,64,0.14); color: {t['accent_hi']}; }}
+QListWidget::item:hover {{ background: rgba(255,255,255,0.04); }}
 
 /* ---------- menus ---------- */
-QMenu {{ background: {t['glass2']}; border: 1px solid {t['border_hover']}; border-radius: 8px; padding: 4px; }}
-QMenu::item {{ padding: 7px 18px; border-radius: 5px; }}
-QMenu::item:selected {{ background: {t['violet']}; }}
+QMenu {{ background: #15151C; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 5px; }}
+QMenu::item {{ padding: 8px 20px; border-radius: 6px; }}
+QMenu::item:selected {{ background: rgba(245,183,64,0.14); color: {t['accent_hi']}; }}
+QMenu::separator {{ height: 1px; background: rgba(255,255,255,0.08); margin: 4px 8px; }}
 """

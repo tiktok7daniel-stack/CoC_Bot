@@ -70,7 +70,7 @@ class NeonBarChart(QWidget):
                 bar = QRectF(x, r.bottom() - h, bw, h)
                 c = self.colors[si % len(self.colors)]
                 # glow
-                for k, a in ((10, 18), (6, 30), (3, 46)):
+                for k, a in ((4, 26),):
                     gc = QColor(c)
                     gc.setAlpha(a)
                     p.setPen(Qt.NoPen)
@@ -232,3 +232,139 @@ class MeterBar(QWidget):
             p.setBrush(QBrush(g))
             p.drawRoundedRect(fr, r.height() / 2, r.height() / 2)
         p.end()
+
+
+class AreaChart(QWidget):
+    """Smooth multi-series area chart with axis labels and a hover crosshair + value card.
+    set_data(labels, {series_key: [values]}) ; series drawn on their own scale when scales='own'."""
+
+    def __init__(self, series=(("gold", "gold"), ("elixir", "elixir"), ("dark", "dark")), height=260, scales="own"):
+        super().__init__()
+        self.series = list(series)          # [(key, token color)]
+        self.labels, self.data = [], {}
+        self.names = {}
+        self.scales = scales
+        self.hover = None
+        self.setMinimumHeight(height)
+        self.setMouseTracking(True)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.empty_text = "—"
+        self.fmt = _short
+
+    def set_data(self, labels, data, names=None):
+        self.labels, self.data = list(labels), dict(data)
+        if names: self.names = names
+        self.update()
+
+    def _area(self):
+        return QRectF(self.rect()).adjusted(52, 14, -14, -30)
+
+    def _x(self, r, i, n):
+        rtl = self.layoutDirection() == Qt.RightToLeft
+        f = 0.5 if n == 1 else i / (n - 1)
+        if rtl: f = 1 - f
+        return r.left() + r.width() * f
+
+    def mouseMoveEvent(self, e):
+        n = len(self.labels)
+        if not n: return
+        r = self._area()
+        best = min(range(n), key=lambda i: abs(self._x(r, i, n) - e.position().x()))
+        if best != self.hover:
+            self.hover = best
+            self.update()
+
+    def leaveEvent(self, e):
+        self.hover = None
+        self.update()
+
+    def paintEvent(self, e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        r = self._area()
+        n = len(self.labels)
+        p.setFont(mono_font(7.5))
+        for i in range(5):
+            y = r.top() + r.height() * i / 4
+            p.setPen(QPen(QColor(255, 255, 255, 14), 1))
+            p.drawLine(QPointF(r.left(), y), QPointF(r.right(), y))
+        if not n or not any(any(v for v in vals) for vals in self.data.values()):
+            p.setPen(QColor(TOKENS["dim"]))
+            p.setFont(ui_font(10))
+            p.drawText(r, Qt.AlignCenter, self.empty_text)
+            p.end()
+            return
+        first_key = self.series[0][0]
+        top_all = max([1.0] + [float(v or 0) for k, _c in self.series for v in self.data.get(k, [])])
+        for k, tok in reversed(self.series):
+            vals = self.data.get(k, [])
+            if not vals: continue
+            top = max(1.0, max(float(v or 0) for v in vals)) if self.scales == "own" else top_all
+            pts = [QPointF(self._x(r, i, n), r.bottom() - r.height() * float(v or 0) / top * 0.92) for i, v in enumerate(vals)]
+            path = QPainterPath(pts[0])
+            for a, b in zip(pts, pts[1:]): # smooth curve through the points
+                mx = (a.x() + b.x()) / 2
+                path.cubicTo(QPointF(mx, a.y()), QPointF(mx, b.y()), b)
+            c = QColor(TOKENS[tok])
+            fill = QPainterPath(path)
+            fill.lineTo(QPointF(pts[-1].x(), r.bottom()))
+            fill.lineTo(QPointF(pts[0].x(), r.bottom()))
+            fill.closeSubpath()
+            g = QLinearGradient(0, r.top(), 0, r.bottom())
+            c1 = QColor(c); c1.setAlpha(70 if k == first_key else 34)
+            c2 = QColor(c); c2.setAlpha(0)
+            g.setColorAt(0, c1)
+            g.setColorAt(1, c2)
+            p.fillPath(fill, QBrush(g))
+            p.setPen(QPen(c, 2.2 if k == first_key else 1.6))
+            p.setBrush(Qt.NoBrush)
+            p.drawPath(path)
+            if len(pts) <= 31:
+                p.setPen(Qt.NoPen)
+                p.setBrush(c)
+                for pt in pts: p.drawEllipse(pt, 2.2, 2.2)
+            if k == first_key: # y labels for the main series
+                p.setPen(QColor(TOKENS["dim"]))
+                for i in range(5):
+                    y = r.top() + r.height() * i / 4
+                    val = top / 0.92 * (1 - i / 4)
+                    p.drawText(QRectF(0, y - 8, 46, 16), Qt.AlignRight | Qt.AlignVCenter, self.fmt(val))
+        # x labels (thinned)
+        p.setPen(QColor(TOKENS["dim"]))
+        p.setFont(ui_font(8))
+        step = max(1, int(n / 10 + 0.999))
+        for i, lab in enumerate(self.labels):
+            if i % step and i != n - 1: continue
+            x = self._x(r, i, n)
+            p.drawText(QRectF(x - 40, r.bottom() + 6, 80, 18), Qt.AlignCenter, lab)
+        # hover
+        if self.hover is not None and self.hover < n:
+            i = self.hover
+            x = self._x(r, i, n)
+            p.setPen(QPen(QColor(245, 183, 64, 120), 1, Qt.DashLine))
+            p.drawLine(QPointF(x, r.top()), QPointF(x, r.bottom()))
+            lines = [(self.labels[i], None)] + [(f"{self.names.get(k, k)}:  {fmt_full(self.data.get(k, [0] * n)[i])}", tok)
+                                               for k, tok in self.series if self.data.get(k)]
+            p.setFont(ui_font(9, 600))
+            fm = p.fontMetrics()
+            bw = max(fm.horizontalAdvance(t) for t, _ in lines) + 28
+            bh = 10 + 20 * len(lines)
+            bx = x + 12 if x + 12 + bw < r.right() else x - 12 - bw
+            box = QRectF(bx, r.top() + 4, bw, bh)
+            p.setPen(QPen(QColor(255, 255, 255, 30), 1))
+            p.setBrush(QColor(20, 20, 27, 245))
+            p.drawRoundedRect(box, 9, 9)
+            for j, (t, tok) in enumerate(lines):
+                yy = box.top() + 6 + 20 * j
+                if tok:
+                    p.setPen(Qt.NoPen)
+                    p.setBrush(QColor(TOKENS[tok]))
+                    p.drawEllipse(QPointF(box.left() + 12, yy + 10), 4, 4)
+                p.setPen(QColor(TOKENS["text"] if tok else TOKENS["accent_hi"]))
+                p.drawText(QRectF(box.left() + 22, yy, bw - 26, 20), Qt.AlignVCenter | Qt.AlignLeft, t)
+        p.end()
+
+
+def fmt_full(n):
+    try: return f"{int(n or 0):,}"
+    except (TypeError, ValueError): return "—"

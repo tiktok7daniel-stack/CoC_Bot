@@ -48,26 +48,29 @@ class NavButton(QAbstractButton):
         p.setRenderHint(QPainter.Antialiasing)
         r = QRectF(self.rect()).adjusted(2, 2, -2, -2)
         rtl = self.layoutDirection() == Qt.RightToLeft
-        if self.isChecked():
-            g = QLinearGradient(r.topLeft(), r.topRight())
-            a, b = QColor(TOKENS["nav_from"]), QColor(TOKENS["nav_to"])
-            g.setColorAt(0, b if rtl else a)
-            g.setColorAt(1, a if rtl else b)
-            for k, alpha in ((6, 26), (3, 50)):
-                gc = QColor(TOKENS["purple"])
-                gc.setAlpha(alpha)
-                p.setPen(QPen(gc, k))
-                p.setBrush(Qt.NoBrush)
-                p.drawRoundedRect(r, r.height() / 2, r.height() / 2)
+        on = self.isChecked()
+        hov = self._hover and not self.soon
+        if on:
+            # tinted pill + gold indicator bar on the leading edge
             p.setPen(Qt.NoPen)
-            p.setBrush(QBrush(g))
-            p.drawRoundedRect(r, r.height() / 2, r.height() / 2)
-        elif self._hover and not self.soon:
+            g = QLinearGradient(r.topRight() if rtl else r.topLeft(), r.topLeft() if rtl else r.topRight())
+            g.setColorAt(0, QColor(245, 183, 64, 46))
+            g.setColorAt(1, QColor(245, 183, 64, 8))
+            p.setBrush(g)
+            p.drawRoundedRect(r, 11, 11)
+            p.setPen(QPen(QColor(245, 183, 64, 70), 1))
+            p.setBrush(Qt.NoBrush)
+            p.drawRoundedRect(r, 11, 11)
+            bar = QRectF(r.right() - 3, r.top() + 10, 3, r.height() - 20) if rtl else QRectF(r.left(), r.top() + 10, 3, r.height() - 20)
             p.setPen(Qt.NoPen)
-            p.setBrush(QColor(255, 30, 66, 30))
-            p.drawRoundedRect(r, r.height() / 2, r.height() / 2)
-        fg = "#FFFFFF" if self.isChecked() else (TOKENS["dim"] if self.soon else TOKENS["text"])
-        ic_color = "#FFFFFF" if self.isChecked() else (TOKENS["dim"] if self.soon else "#FFC7A8")
+            p.setBrush(QColor(TOKENS["accent"]))
+            p.drawRoundedRect(bar, 1.5, 1.5)
+        elif hov:
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(255, 255, 255, 12))
+            p.drawRoundedRect(r, 11, 11)
+        fg = TOKENS["accent_hi"] if on else (TOKENS["dim"] if self.soon else ("#FFFFFF" if hov else TOKENS["muted"]))
+        ic_color = TOKENS["accent"] if on else (TOKENS["dim"] if self.soon else ("#FFFFFF" if hov else TOKENS["muted"]))
         isz = 20
         if self.collapsed:
             pm = icons.pixmap(self.icon_name, isz, ic_color)
@@ -77,18 +80,25 @@ class NavButton(QAbstractButton):
             ix = r.right() - 16 - isz if rtl else r.left() + 16
             p.drawPixmap(int(ix), int(r.center().y() - isz / 2), pm)
             p.setPen(QColor(fg))
-            p.setFont(ui_font(10.5, 700 if self.isChecked() else 500))
+            p.setFont(ui_font(10.5, 700 if on else 500))
             reserve = 64 if self.soon else 0   # room for the "soon" badge
             tr_rect = QRectF(r.left() + 16 + reserve, r.top(), r.width() - 32 - isz - 10 - reserve, r.height())
             if not rtl: tr_rect.moveLeft(r.left() + 16 + isz + 10)
-            p.drawText(tr_rect, (Qt.AlignRight if rtl else Qt.AlignLeft) | Qt.AlignVCenter, tr(self.text_key))
+            align = (Qt.AlignRight if rtl else Qt.AlignLeft) | Qt.AlignVCenter
+            if on or hov:
+                halo = QColor(245, 183, 64, 60) if on else QColor(255, 255, 255, 26)
+                p.setPen(halo)
+                for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1.5, -1), (1.5, 1), (1.5, -1), (-1.5, 1)):
+                    p.drawText(tr_rect.translated(dx, dy), align, tr(self.text_key))
+                p.setPen(QColor(fg))
+            p.drawText(tr_rect, align, tr(self.text_key))
             if self.soon:
                 txt = tr("soon")
                 p.setFont(ui_font(7.5, 600))
                 w = p.fontMetrics().horizontalAdvance(txt) + 14
                 br = QRectF(r.left() + 10 if rtl else r.right() - 10 - w, r.center().y() - 9, w, 18)
                 p.setPen(QPen(QColor(TOKENS["border_hover"]), 1))
-                p.setBrush(QColor(255, 30, 66, 30))
+                p.setBrush(QColor(255, 255, 255, 8))
                 p.drawRoundedRect(br, 9, 9)
                 p.setPen(QColor(TOKENS["muted"]))
                 p.drawText(br, Qt.AlignCenter, txt)
@@ -128,17 +138,19 @@ class Sidebar(QFrame):
         brand = QHBoxLayout()
         brand.setSpacing(10)
         self.crest = QLabel()
-        self.crest.setPixmap(icons.pixmap("crest", 46))
+        self.crest.setPixmap(icons.pixmap("crest", 48))
         glow = QGraphicsDropShadowEffect(self.crest)
-        glow.setBlurRadius(30)
-        glow.setOffset(0, 0)
-        glow.setColor(color("fuchsia", 0.55))
+        glow.setBlurRadius(26)
+        glow.setOffset(0, 2)
+        glow.setColor(QColor(245, 183, 64, 70))
         self.crest.setGraphicsEffect(glow)
         brand.addWidget(self.crest)
         names = QVBoxLayout()
         names.setSpacing(0)
-        self.title = QLabel("Clash Farmer")
-        self.title.setStyleSheet("font-size: 15pt; font-weight: 800;")
+        self.title = QLabel()
+        from ..logo import wordmark_pixmap
+        self.title.setPixmap(wordmark_pixmap(118, glow=0.0))
+        self.title.setToolTip("Clash Farmer")
         self.subtitle = QLabel(tr("app_sub"))
         self.subtitle.setProperty("role", "sub")
         on_lang(lambda: self.subtitle.setText(tr("app_sub")))
@@ -207,12 +219,12 @@ class Sidebar(QFrame):
         r = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         path = QPainterPath()
         path.addRoundedRect(r, 18, 18)
-        p.fillPath(path, QColor(19, 17, 29, 215))
-        g = QRadialGradient(r.center().x(), r.top() + 90, 200)
-        g.setColorAt(0, QColor(255, 30, 66, 56))
-        g.setColorAt(1, QColor(255, 30, 66, 0))
+        p.fillPath(path, QColor(12, 12, 16, 235))
+        g = QLinearGradient(r.topLeft(), r.bottomLeft())
+        g.setColorAt(0, QColor(245, 183, 64, 22))
+        g.setColorAt(0.35, QColor(245, 183, 64, 0))
         p.fillPath(path, QBrush(g))
-        p.setPen(QPen(QColor(255, 184, 0, 46), 1))
+        p.setPen(QPen(QColor(255, 255, 255, 16), 1))
         p.drawPath(path)
         p.end()
 
@@ -234,8 +246,8 @@ class FooterCapsule(QFrame):
         self.emu.setProperty("role", "dim")
         self.emu.hide()
         self.ver = QLabel("")
-        self.ver.setStyleSheet(f"background: rgba(255,30,66,0.18); border: 1px solid {TOKENS['border']}; border-radius: 8px;"
-                               f" padding: 1px 7px; font-family: 'JetBrains Mono'; font-size: 8pt; color: #FFC7A8;")
+        self.ver.setStyleSheet(f"background: rgba(245, 183, 64,0.18); border: 1px solid {TOKENS['border']}; border-radius: 8px;"
+                               f" padding: 1px 7px; font-family: 'JetBrains Mono'; font-size: 8pt; color: #E9D3A6;")
         h.addWidget(self.ver)
         self.setStyleSheet(f"FooterCapsule {{ background: {TOKENS['glass2']}; border: 1px solid {TOKENS['border']}; border-radius: 16px; }}")
 

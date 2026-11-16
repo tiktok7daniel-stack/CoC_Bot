@@ -46,7 +46,7 @@ def cell(text, color=None, mono=False):
 
 class ResCard(Box):
     def __init__(self, glyph, key, tint):
-        super().__init__(bg="#120F15", border=f"rgba(255,184,0,0.25)", radius=16, top=TOKENS[tint])
+        super().__init__(bg="#120F15", border=f"rgba(245, 183, 64,0.25)", radius=16, top=TOKENS[tint])
         self.tint = tint
         v = QVBoxLayout(self)
         v.setContentsMargins(16, 14, 16, 14)
@@ -87,8 +87,12 @@ class StatisticsScreen(Screen):
 
     def __init__(self, ctx):
         super().__init__(ctx)
-        sa, v = page()
-        self.root.addWidget(sa)
+        L = self.make_tabs([("history", "sh_tab_history", "calendar"), ("session", "sh_tab_session", "pulse")])
+        from .stats_history import HistoryPanel
+        self.history = HistoryPanel(self)
+        L["history"].addWidget(self.history)
+        L["history"].addStretch(1)
+        v = L["session"]
         head = GlassCard("session_results", "chart", "session_results_sub", glow=True)
         r = IconButton("refresh", "refresh_now", size=14)
         r.clicked.connect(lambda: self.poller.refresh("stats"))
@@ -162,6 +166,7 @@ class StatisticsScreen(Screen):
 
     def on_show(self):
         self.poller.refresh("stats")
+        self.history.load()
 
     def reset(self):
         if QMessageBox.question(self, "Clash Farmer", tr("confirm_reset")) != QMessageBox.Yes: return

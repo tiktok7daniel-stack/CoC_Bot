@@ -44,16 +44,10 @@ class Canvas(QWidget):
         path.addRoundedRect(r, radius, radius)
         p.fillPath(path, QColor(TOKENS["void"]))
         rtl = self.layoutDirection() == Qt.RightToLeft
-        for cx, cy, rad, a in ((r.right() - 140 if rtl else r.left() + 140, r.top() + 40, 420, 56),
-                               (r.center().x(), r.top() + 160, 520, 26)):
-            g = QRadialGradient(cx, cy, rad)
-            g.setColorAt(0, QColor(255, 30, 66, a))
-            g.setColorAt(1, QColor(255, 30, 66, 0))
-            p.fillPath(path, QBrush(g))
-        # gold ambient orb in the opposite bottom corner
-        g = QRadialGradient(r.left() + 180 if rtl else r.right() - 180, r.bottom() - 60, 460)
-        g.setColorAt(0, QColor(255, 184, 0, 34))
-        g.setColorAt(1, QColor(255, 184, 0, 0))
+        # one warm light from the top corner of the sidebar, very soft
+        g = QRadialGradient(r.right() - 120 if rtl else r.left() + 120, r.top(), 620)
+        g.setColorAt(0, QColor(245, 183, 64, 20))
+        g.setColorAt(1, QColor(245, 183, 64, 0))
         p.fillPath(path, QBrush(g))
         p.setPen(QPen(QColor(TOKENS["border_solid"]), 1))
         p.drawPath(path)
@@ -67,8 +61,8 @@ class ContentFrame(QWidget):
         r = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         path = QPainterPath()
         path.addRoundedRect(r, 16, 16)
-        p.fillPath(path, QColor(8, 6, 10, 225))
-        p.setPen(QPen(QColor(255, 184, 0, 46), 1))
+        p.fillPath(path, QColor(10, 10, 14, 230))
+        p.setPen(QPen(QColor(255, 255, 255, 14), 1))
         p.drawPath(path)
         p.end()
 
@@ -273,7 +267,7 @@ class MainWindow(QMainWindow):
     def desktop_notify(self, title, text, icon_name="bell"):
         """Windows toast (tray balloon) + an in-app banner."""
         if self.store.APP.get("desktop_notify", True) and self.tray is not None:
-            self.tray.showMessage(title, text, QIcon(icons.pixmap(icon_name, 64, "#FFB800")), 8000)
+            self.tray.showMessage(title, text, QIcon(icons.pixmap(icon_name, 64, "#F5B740")), 8000)
         self.banner.show_msg(f"{title} — {text}", "ok", icon_name)
 
     NOTIFY_KEYS = (("Upgrade finished:", "nt_upgrade_done", "builder_hammer"), ("Lab research finished:", "nt_lab_done", "flask"),

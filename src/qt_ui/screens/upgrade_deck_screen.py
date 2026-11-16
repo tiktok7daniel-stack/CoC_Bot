@@ -82,7 +82,7 @@ class ProgressBar(QWidget):
             if self.done:
                 g.setColorAt(0, QColor("#10B981")); g.setColorAt(1, QColor("#34D399"))
             else:
-                g.setColorAt(0, QColor("#FF1E42")); g.setColorAt(1, QColor("#FFB800"))
+                g.setColorAt(0, QColor("#F5B740")); g.setColorAt(1, QColor("#F5B740"))
             p.fillPath(fill, g)
         p.end()
 
@@ -114,16 +114,16 @@ class TimerRow(Box):
         done = left <= 0
         kind = self.t.get("kind", "builder")
         self.ic.setPixmap(icons.pixmap("ok" if done else ("flask" if kind == "lab" else "builder_hammer"), 18,
-                                       TOKENS["ok"] if done else "#FFB800"))
+                                       TOKENS["ok"] if done else "#F5B740"))
         self.left.setText(tr("dk_done") if done else fmt_left(left))
-        self.left.setStyleSheet(f"color: {TOKENS['ok'] if done else '#FFD700'}; font-weight: 700;")
+        self.left.setStyleSheet(f"color: {TOKENS['ok'] if done else '#FFD36E'}; font-weight: 700;")
         self.bar.set(1 - left / total if total > 0 else 0.0, done)
         self.set_border("rgba(16,185,129,0.55)" if done else TOKENS["border"])
 
 
 class ItemCard(Box):
     def __init__(self, screen, item, pinned):
-        super().__init__(radius=14, top="#FFB800" if pinned else None)
+        super().__init__(radius=14, top="#F5B740" if pinned else None)
         self.screen, self.item = screen, item
         v = QVBoxLayout(self)
         v.setContentsMargins(14, 12, 14, 12)
@@ -138,7 +138,7 @@ class ItemCard(Box):
         ic = QLabel()
         res = item.get("res") or "gold"
         ic.setPixmap(icons.pixmap(res if res in ("gold", "elixir", "dark") else "gold", 18,
-                                  {"gold": "#FFD700", "elixir": "#E879F9", "dark": "#A78BFA"}.get(res, "#FFD700")))
+                                  {"gold": "#FFD36E", "elixir": "#E879F9", "dark": "#A78BFA"}.get(res, "#FFD36E")))
         c.addWidget(ic)
         c.addWidget(label(fmt_num(item.get("cost")) if item.get("cost") else "—", "num"))
         c.addStretch(1)
@@ -241,7 +241,7 @@ class UpgradeDeckScreen(Screen):
         h = QHBoxLayout(b)
         h.setContentsMargins(12, 8, 12, 8)
         ic = QLabel()
-        ic.setPixmap(icons.pixmap(icon_name, 22, "#FFB800"))
+        ic.setPixmap(icons.pixmap(icon_name, 22, "#F5B740"))
         h.addWidget(ic)
         col = QVBoxLayout()
         col.setSpacing(0)

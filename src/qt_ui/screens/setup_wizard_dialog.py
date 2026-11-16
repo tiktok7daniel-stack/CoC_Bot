@@ -53,7 +53,7 @@ class AccountCard(Box):
         v.setSpacing(10)
         head = QHBoxLayout()
         ic = QLabel()
-        ic.setPixmap(icons.pixmap("users", 18, "#FFC7A8"))
+        ic.setPixmap(icons.pixmap("users", 18, "#E9D3A6"))
         head.addWidget(ic)
         head.addWidget(label(a["id"], "h2"))
         su = wizard.data
@@ -173,7 +173,7 @@ class SetupWizard(QDialog):
         dv.setContentsMargins(14, 10, 14, 10)
         dh = QHBoxLayout()
         di = QLabel()
-        di.setPixmap(icons.pixmap("monitor", 18, "#FFC7A8"))
+        di.setPixmap(icons.pixmap("monitor", 18, "#E9D3A6"))
         dh.addWidget(di)
         dh.addWidget(label(key="su_disp", role="h3"))
         dh.addStretch(1)
@@ -207,7 +207,7 @@ class SetupWizard(QDialog):
         # add account
         add = QHBoxLayout()
         ai = QLabel()
-        ai.setPixmap(icons.pixmap("plus", 16, "#FFC7A8"))
+        ai.setPixmap(icons.pixmap("plus", 16, "#E9D3A6"))
         add.addWidget(ai)
         add.addWidget(label(key="su_add", role="h3"))
         self.new_name = QLineEdit()

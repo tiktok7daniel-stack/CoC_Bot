@@ -45,8 +45,8 @@ class Tile(QFrame):
         v.addWidget(self.value)
         self.spark = Sparkline(tint) if spark else None
         if self.spark: v.addWidget(self.spark)
-        self.setStyleSheet(f"Tile {{ background: {TOKENS['glass2']}; border: 1px solid {TOKENS['border']};"
-                           f" border-top: 3px solid {TOKENS[tint]}; border-radius: 12px; }}")
+        self.setStyleSheet("Tile { background: #101016; border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; }"
+                           " Tile:hover { border-color: rgba(245,183,64,0.35); }")
 
     def set(self, text, spark_value=None):
         arabic = any("\u0600" <= ch <= "\u06FF" for ch in str(text))
@@ -69,8 +69,8 @@ class QuickCard(QPushButton):
         ic = QLabel()
         ic.setFixedSize(40, 40)
         ic.setAlignment(Qt.AlignCenter)
-        ic.setPixmap(icons.pixmap(icon_name, 22, "#FFE3B0"))
-        ic.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 rgba(255,30,66,0.55), stop:1 rgba(255,215,0,0.35)); border-radius: 11px;")
+        ic.setPixmap(icons.pixmap(icon_name, 22, "#F7E3BC"))
+        ic.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 rgba(245, 183, 64,0.55), stop:1 rgba(255,215,0,0.35)); border-radius: 11px;")
         h.addWidget(ic)
         box = QVBoxLayout()
         box.setSpacing(0)
@@ -291,7 +291,7 @@ class DashboardScreen(Screen):
             h.setContentsMargins(10, 8, 10, 8)
             h.setSpacing(10)
             ic = QLabel()
-            ic.setPixmap(icons.pixmap("film", 22, "#FFE3B0"))
+            ic.setPixmap(icons.pixmap("film", 22, "#F7E3BC"))
             h.addWidget(ic)
             box = QVBoxLayout()
             box.setSpacing(0)
@@ -403,7 +403,7 @@ class DashboardScreen(Screen):
             av = QLabel(acc[:1].upper())
             av.setFixedSize(36, 36)
             av.setAlignment(Qt.AlignCenter)
-            av.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #C8102E, stop:1 #FF8A00); border-radius: 9px; font-weight: 800; color: white;")
+            av.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #D9952A, stop:1 #F5B740); border-radius: 9px; font-weight: 800; color: white;")
             h.addWidget(av)
             box = QVBoxLayout()
             box.setSpacing(2)

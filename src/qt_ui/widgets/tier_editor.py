@@ -64,7 +64,7 @@ class Tag(QFrame):
         x.clicked.connect(lambda: self.removed.emit(self))
         h.addWidget(x)
         self.setCursor(Qt.OpenHandCursor)
-        self.setStyleSheet(f"Tag {{ background: rgba(255,30,66,0.14); border: 1px solid {TOKENS['border']}; border-radius: 13px; }}"
+        self.setStyleSheet(f"Tag {{ background: rgba(245, 183, 64,0.14); border: 1px solid {TOKENS['border']}; border-radius: 13px; }}"
                            f" Tag:hover {{ border-color: {TOKENS['border_hover']}; }}")
         self._press = None
 
@@ -115,10 +115,10 @@ class LevelBox(QFrame):
             b.setIcon(icons.icon(ic, TOKENS["muted"], 14))
             if tip == "up":
                 b.setIcon(icons.icon("chevron_down", TOKENS["muted"], 14))
-                b.setStyleSheet("QToolButton { border: 0; padding: 4px; } QToolButton:hover { background: rgba(255,30,66,0.2); border-radius: 6px; }")
+                b.setStyleSheet("QToolButton { border: 0; padding: 4px; } QToolButton:hover { background: rgba(245, 183, 64,0.2); border-radius: 6px; }")
                 b.setArrowType(Qt.UpArrow)
             else:
-                b.setStyleSheet("QToolButton { border: 0; padding: 4px; } QToolButton:hover { background: rgba(255,30,66,0.2); border-radius: 6px; }")
+                b.setStyleSheet("QToolButton { border: 0; padding: 4px; } QToolButton:hover { background: rgba(245, 183, 64,0.2); border-radius: 6px; }")
             if tip == "down": b.setArrowType(Qt.DownArrow)
             b.setToolTip(tr(tip))
             b.setCursor(Qt.PointingHandCursor)
@@ -168,7 +168,7 @@ class LevelBox(QFrame):
         if e.mimeData().hasFormat(MIME):
             e.acceptProposedAction()
             self._hl = True
-            self.setStyleSheet(f"LevelBox {{ background: rgba(255,30,66,0.12); border: 1px dashed {TOKENS['purple']}; border-radius: 12px; }}")
+            self.setStyleSheet(f"LevelBox {{ background: rgba(245, 183, 64,0.12); border: 1px dashed {TOKENS['purple']}; border-radius: 12px; }}")
 
     def dragLeaveEvent(self, e):
         self._unhl()

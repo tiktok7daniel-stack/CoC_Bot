@@ -76,9 +76,9 @@ class GlassCard(QFrame):
         self.v.addStretch(1)   # a card taller than its content keeps everything at the top
         if glow:
             eff = QGraphicsDropShadowEffect(self)
-            eff.setBlurRadius(42)
-            eff.setOffset(0, 0)
-            eff.setColor(color("violet", 0.35))
+            eff.setBlurRadius(36)
+            eff.setOffset(0, 6)
+            eff.setColor(QColor(0, 0, 0, 160))
             self.setGraphicsEffect(eff)
 
     def add(self, w, stretch=0):
@@ -107,24 +107,24 @@ class GlassCard(QFrame):
         r = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         path = QPainterPath()
         path.addRoundedRect(r, 14, 14)
-        # frosted glass: a white sheen fading top-left -> bottom-right over the dark base
-        p.fillPath(path, QColor(12, 10, 16, 205))
-        sheen = QLinearGradient(r.topLeft(), r.bottomRight())
-        sheen.setColorAt(0, QColor(255, 255, 255, 0x22))
-        sheen.setColorAt(1, QColor(255, 255, 255, 0x08))
+        # card: solid dark surface, a faint top light, a hairline border; gold edge + glow when hovered
+        p.fillPath(path, QColor(14, 14, 19, 236))
+        sheen = QLinearGradient(r.topLeft(), r.bottomLeft())
+        sheen.setColorAt(0, QColor(255, 255, 255, 12))
+        sheen.setColorAt(0.25, QColor(255, 255, 255, 0))
         p.fillPath(path, QBrush(sheen))
-        if self._glow or self._hover:
-            g = QRadialGradient(QPointF(r.right() - 30, r.top() + 10), max(r.width(), r.height()) * 0.8)
-            g.setColorAt(0, QColor(255, 30, 66, 60 if self._glow else 34))
-            g.setColorAt(1, QColor(255, 30, 66, 0))
+        if self._glow:
+            g = QRadialGradient(QPointF(r.center().x(), r.top()), max(r.width(), r.height()) * 0.7)
+            g.setColorAt(0, QColor(245, 183, 64, 26))
+            g.setColorAt(1, QColor(245, 183, 64, 0))
             p.fillPath(path, QBrush(g))
-        # crimson -> gold border that fades out toward the bottom
-        bg = QLinearGradient(r.topLeft(), r.bottomRight())
-        a = 1.0 if self._hover else 0.55
-        bg.setColorAt(0, QColor(255, 30, 66, int(200 * a)))
-        bg.setColorAt(0.45, QColor(255, 184, 0, int(150 * a)))
-        bg.setColorAt(1, QColor(255, 184, 0, int(18 * a)))
-        p.setPen(QPen(QBrush(bg), 1.2))
+        if self._hover:
+            bg = QLinearGradient(r.topLeft(), r.bottomLeft())
+            bg.setColorAt(0, QColor(245, 183, 64, 120))
+            bg.setColorAt(1, QColor(245, 183, 64, 20))
+            p.setPen(QPen(QBrush(bg), 1.2))
+        else:
+            p.setPen(QPen(QColor(255, 255, 255, 18), 1))
         p.drawPath(path)
         p.end()
 
@@ -132,12 +132,13 @@ class GlassCard(QFrame):
 class IconBadge(QLabel):
     """Rounded square with a duotone icon inside (card headers)."""
 
-    def __init__(self, name, size=34, tint="#FFC7A8"):
+    def __init__(self, name, size=34, tint="#F5B740"):
         super().__init__()
         self.setFixedSize(size, size)
         self.setAlignment(Qt.AlignCenter)
-        self.setPixmap(icons.pixmap(name, int(size * 0.55), tint))
-        self.setStyleSheet(f"background: rgba(255,30,66,0.16); border: 1px solid {TOKENS['border']}; border-radius: 10px;")
+        self.setPixmap(icons.pixmap(name, int(size * 0.52), tint))
+        self.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 rgba(245,183,64,0.16), stop:1 rgba(245,183,64,0.05));"
+                           " border: 1px solid rgba(245,183,64,0.22); border-radius: 10px;")
 
 
 # ====================================================================== toggle switch
@@ -190,7 +191,7 @@ class Toggle(QAbstractButton):
             p.setBrush(QBrush(g) if self._pos > 0.5 else off)
         else:
             p.setBrush(off)
-        p.setPen(QPen(QColor(255, 184, 0, 90), 1))
+        p.setPen(QPen(QColor(245, 183, 64, 90), 1))
         p.drawRoundedRect(r, r.height() / 2, r.height() / 2)
         d = r.height() - 6
         rtl = self.layoutDirection() == Qt.RightToLeft
@@ -281,7 +282,7 @@ class IconButton(QPushButton):
 
     def set_icon(self, name, col=None):
         kind = self.property("kind")
-        default = "#FFFFFF" if kind in ("primary", "go") else TOKENS["text"]
+        default = TOKENS["on_accent"] if kind == "primary" else ("#04170D" if kind == "go" else TOKENS["text"])
         self.setIcon(icons.icon(name, col or default, self._size))
         self.setIconSize(QSize(self._size, self._size))
 
@@ -504,7 +505,7 @@ class Banner(QFrame):
         self.hide()
 
     def show_msg(self, text, kind="ok", icon_name="check"):
-        c1, c2 = {"ok": ("#0E9F6E", "#047857"), "bad": ("#DC2626", "#991B1B"), "rec": ("#DC2626", "#7E22CE")}.get(kind, ("#C8102E", "#A21CAF"))
+        c1, c2 = {"ok": ("#0E9F6E", "#047857"), "bad": ("#DC2626", "#991B1B"), "rec": ("#DC2626", "#7E22CE")}.get(kind, ("#D9952A", "#A21CAF"))
         self.setStyleSheet(f"Banner {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 {c1}, stop:1 {c2}); border-radius: 14px; }}"
                            " QPushButton { background: rgba(255,255,255,0.18); border: 0; color: white; }")
         self.ic.setPixmap(icons.pixmap(icon_name, 22, "#FFFFFF"))

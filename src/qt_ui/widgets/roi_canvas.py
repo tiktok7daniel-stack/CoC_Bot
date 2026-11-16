@@ -78,7 +78,7 @@ class RoiCanvas(QGraphicsView):
         self.pix.setTransformationMode(Qt.SmoothTransformation)
         self.scene_.addItem(self.pix)
         self.scene_.setSceneRect(QRectF(pm.rect()))
-        pen = QPen(QColor(255, 184, 0, 150), 1, Qt.DashLine)
+        pen = QPen(QColor(245, 183, 64, 150), 1, Qt.DashLine)
         pen.setCosmetic(True)
         self.cross_h = self.scene_.addLine(0, 0, pm.width(), 0, pen)
         self.cross_v = self.scene_.addLine(0, 0, 0, pm.height(), pen)

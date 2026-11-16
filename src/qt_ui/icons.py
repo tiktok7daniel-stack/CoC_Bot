@@ -125,44 +125,8 @@ GLYPHS = {
     "builder_hammer": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M19 15 8 26a2.8 2.8 0 0 1-4-4l11-11" fill="none" stroke="#B7791F" stroke-width="3" stroke-linecap="round"/><path d="M23 5l4 4-5 5-4-4-2 2-2-2 5-5z" fill="#94A3B8" stroke="#334155" stroke-width="1.2" stroke-linejoin="round"/></svg>',
 }
 
-# the Clash Farmer crest: isometric 3D shield, polished gold bevel, neon red crystal core,
-# a war axe and a sword crossed behind it, specular highlights for depth
-CREST = '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-<defs>
- <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFF4B0"/><stop offset=".3" stop-color="#FFD700"/><stop offset=".65" stop-color="#E0A100"/><stop offset="1" stop-color="#8A5A00"/></linearGradient>
- <linearGradient id="goldside" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#B8860B"/><stop offset="1" stop-color="#5C3A00"/></linearGradient>
- <linearGradient id="face" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2A0A12"/><stop offset=".55" stop-color="#14060A"/><stop offset="1" stop-color="#060205"/></linearGradient>
- <linearGradient id="faceR" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3A0010"/><stop offset="1" stop-color="#12030A"/></linearGradient>
- <linearGradient id="steel" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".45" stop-color="#C9D1DB"/><stop offset="1" stop-color="#56606C"/></linearGradient>
- <linearGradient id="wood" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#A86A3A"/><stop offset="1" stop-color="#4A2510"/></linearGradient>
- <radialGradient id="ruby" cx=".38" cy=".3" r=".75"><stop offset="0" stop-color="#FFE0E6"/><stop offset=".22" stop-color="#FF6A85"/><stop offset=".55" stop-color="#FF1E42"/><stop offset="1" stop-color="#7A0016"/></radialGradient>
- <radialGradient id="halo" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#FF1E42" stop-opacity=".85"/><stop offset="1" stop-color="#FF1E42" stop-opacity="0"/></radialGradient>
- <linearGradient id="spec" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".55"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
-</defs>
-<!-- crossed axe and sword behind the shield -->
-<g stroke-linecap="round">
- <path d="M24 108 104 22" stroke="url(#wood)" stroke-width="6"/>
- <path d="M97 14c10 2 17 10 17 20-8-2-14-6-17-12-3 4-8 6-12 6 1-6 6-12 12-14z" fill="url(#steel)" stroke="#2B3138" stroke-width="1.5"/>
- <path d="M104 108 30 28" stroke="url(#steel)" stroke-width="6"/>
- <path d="M30 28 22 14l14 8z" fill="url(#steel)" stroke="#2B3138" stroke-width="1.2"/>
- <path d="M92 100l16 -6M98 114l12 -14" stroke="url(#gold)" stroke-width="5"/>
-</g>
-<!-- shield: extruded side (depth) then the bevel and the face -->
-<path d="M64 14 106 28v30c0 30-22 48-42 60C44 106 22 88 22 58V28z" fill="url(#goldside)" transform="translate(3 4)"/>
-<path d="M64 14 106 28v30c0 30-22 48-42 60C44 106 22 88 22 58V28z" fill="url(#gold)"/>
-<path d="M64 22 98 33v25c0 25-18 40-34 50C48 98 30 83 30 58V33z" fill="url(#face)"/>
-<path d="M64 22 98 33v25c0 25-18 40-34 50z" fill="url(#faceR)" opacity=".55"/>
-<path d="M30 40 64 30l34 10" fill="none" stroke="#FF1E42" stroke-opacity=".35" stroke-width="1"/>
-<path d="M34 64h60M64 30v76" stroke="#FF1E42" stroke-opacity=".18" stroke-width="1"/>
-<!-- red crystal core with glow -->
-<circle cx="64" cy="62" r="26" fill="url(#halo)"/>
-<path d="M64 40 80 56 72 82H56L48 56z" fill="url(#ruby)" stroke="#FFD1DA" stroke-width="1.4" stroke-linejoin="round"/>
-<path d="M64 40v42M48 56h32M56 82l8-26 8 26" fill="none" stroke="#FFE0E6" stroke-opacity=".5" stroke-width=".9"/>
-<path d="M58 46 64 40l6 6-6 8z" fill="#FFFFFF" opacity=".55"/>
-<!-- specular highlights on the gold rim -->
-<path d="M30 30 64 19l18 6" fill="none" stroke="url(#spec)" stroke-width="3" stroke-linecap="round"/>
-<path d="M27 40v18c0 8 2 15 5 21" fill="none" stroke="#FFF7CC" stroke-opacity=".5" stroke-width="2" stroke-linecap="round"/>
-</svg>'''
+# the Clash Farmer crest lives in logo.py (brand assets in one place)
+from .logo import CREST  # noqa: E402
 
 
 def svg_markup(name, color="#EDEAF7"):

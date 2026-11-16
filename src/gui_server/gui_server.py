@@ -190,6 +190,16 @@ def api_stats(id):
     if not valid_id(id): abort(404)
     return jsonify(stats.summary(id))
 
+@app.route("/api/stats_daily/<id>", methods=["GET"])
+def api_stats_daily(id):
+    """Permanent per-day statistics. id = an account or "all"; ?days=N (0 = everything)."""
+    days = int(request.args.get("days", 0) or 0)
+    if id == "all":
+        accs = bot_settings.load_app().get("accounts", []) if hasattr(bot_settings, "load_app") else []
+        return jsonify({"days": stats.merge_days([stats.daily(a, days) for a in accs])})
+    if not valid_id(id): abort(404)
+    return jsonify({"days": stats.daily(id, days)})
+
 @app.route("/api/stats/<id>/reset", methods=["POST"])
 def api_stats_reset(id):
     if not valid_id(id): abort(404)

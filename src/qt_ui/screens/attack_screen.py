@@ -258,7 +258,7 @@ class AttackScreen(Screen):
             h = QHBoxLayout(row)
             h.setContentsMargins(12, 6, 8, 6)
             ic = QLabel()
-            ic.setPixmap(icons.pixmap("film", 18, "#FFC7A8"))
+            ic.setPixmap(icons.pixmap("film", 18, "#E9D3A6"))
             h.addWidget(ic)
             h.addWidget(label(r["name"], "h3"))
             h.addWidget(label(f"{r.get('touches', 0)} {tr('rec_taps')} · {int(r.get('duration') or 0)} {tr('seconds')}", "dim"), 1)
