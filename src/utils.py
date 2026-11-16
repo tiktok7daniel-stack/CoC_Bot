@@ -666,7 +666,8 @@ def _parse_resource(lines):
 import os as _os
 # Tesseract uses every CPU core by itself; several readings at once then fight for the CPU and each one gets
 # 50-100x slower. One core per reading = fast, and the three numbers can be read in parallel.
-_os.environ.setdefault("OMP_THREAD_LIMIT", "1")
+# Only for the tesseract program (set on its own process): the rest of the bot (easyocr / torch) keeps all cores.
+_TESS_ENV = dict(_os.environ, OMP_THREAD_LIMIT="1")
 
 def read_resources(builder_base=False, save_debug=False, samples=3):
     """
@@ -1778,7 +1779,7 @@ class Tesseract:
         args = [exe, "stdin", "stdout", "--psm", str(psm)]
         if digits: args += ["-c", "tessedit_char_whitelist=0123456789"]
         try:
-            out = subprocess.run(args, input=png.tobytes(), capture_output=True, timeout=10, **_no_window())
+            out = subprocess.run(args, input=png.tobytes(), capture_output=True, timeout=10, env=_TESS_ENV, **_no_window())
             return out.stdout.decode("utf-8", errors="ignore").strip()
         except Exception:
             return None
