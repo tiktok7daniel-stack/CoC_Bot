@@ -2693,6 +2693,18 @@
 [
 "^Bot ready \\((\\d+)s\\) — going to the game",
 "البوت جاهز (\\g<1> ثانية) — داخل على اللعبة"
+],
+[
+"^Recording: also deployed (\\d+) new card\\(s\\).*",
+"التسجيل: نزّل كمان \\g<1> كارت جديد ماكانش في التسجيل (بطل أو وحدة جديدة)"
+],
+[
+"^Attack! pressed, looking for a base",
+"داس Attack! — بيدوّر على قرية"
+],
+[
+"^Failed to open the attack.*",
+"ماقدرش يفتح الهجوم (مالقاش زرار Attack! ولا Find a Match)"
 ]
 ]
 }

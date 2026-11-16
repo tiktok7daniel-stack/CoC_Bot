@@ -172,23 +172,41 @@ class Attacker:
             x, y = xys[np.argmin(dists)]
             if x is None or y is None: return None, None
             return x, y
-        if not click_with_timeout(
-            locate_find_a_match,
-            timeout=5
-        ):
-            logger.error("Failed to click find a match button")
-            return False
-
-        # Saved army of the active loadout
-        try: self.select_saved_army((self.plan or {}).get("army", ""))
-        except Exception: logger.warning("Saved army selection failed, attacking with the current army")
-
-        # Confirm attack
-        if not click_with_timeout(
-            lambda: Frame_Handler.locate(self.assets["confirm_attack"], thresh=0.9),
-            timeout=5
-        ):
-            logger.error("Failed to confirm attack")
+        # React to what the game shows (older: "Find a Match" window; current: the army screen with a green
+        # "Attack!" button at the bottom right, then sometimes a confirm) until the search for a base starts.
+        army_done, started = False, False
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline and running():
+            if find_taught("end_battle") or Frame_Handler.locate(self.assets["end_battle"], thresh=0.9) != (None, None):
+                started = True
+                break
+            x, y = locate_find_a_match()
+            if x is not None:
+                Input_Handler.click(x, y)
+                time.sleep(0.6)
+                continue
+            x, y = Frame_Handler.locate(self.assets["confirm_attack"], thresh=0.9, use_cached=True)
+            if x is not None:
+                Input_Handler.click(x, y)
+                started = True
+                break
+            # the army screen: recognised by its tabs (My Army / Saved Recipes / Cookbook) at the top
+            top = Frame_Handler.get_frame_section(0.0, 0.0, 1.0, 0.15, grayscale=False, use_cached=True)
+            words = " ".join(b[0].lower() for b in ocr_boxes(top) if b[5] > 0.3)
+            if "army" in words and ("recipes" in words or "cookbook" in words or "saved" in words):
+                if not army_done:      # the saved army of the active loadout, on this very screen
+                    army_done = True
+                    try: self.select_saved_army((self.plan or {}).get("army", ""))
+                    except Exception: logger.warning("Saved army selection failed, attacking with the current army")
+                    Input_Handler.click(0.20, 0.10)          # back to the "My Army" tab (the Attack! button is there)
+                    time.sleep(0.6)
+                Input_Handler.click(0.883, 0.889)             # green "Attack!" at the bottom right
+                logger.info("Attack! pressed, looking for a base")
+                time.sleep(1.0)
+                continue
+            time.sleep(0.3)
+        if not started and not army_done:
+            logger.error("Failed to open the attack (no Find a Match / Attack! button)")
             return False
 
         # Wait until "end battle" button is found
@@ -668,6 +686,41 @@ class Attacker:
         if self.deployed_troops: Input_Handler.click(0.01, 0.9)
         return used
 
+    def deploy_leftovers(self, data):
+        """
+        After a recording: every card still in colour on the army bar (a hero or troop that was not in the
+        army when the recording was made) is dropped where the recording dropped its army — no need to
+        record again every time the army changes. Spells left over are not thrown blindly.
+        """
+        import time, numpy as np, army_learn
+        mx, my = (data.get("max") or [1, 1])[:2]
+        field = []
+        for e in data.get("events", []):
+            if e.get("type") != "down": continue
+            x, y = army_learn.touch_to_screen(e["fx"], e["fy"], mx, my)
+            if y < 0.80: field.append((x, y))           # taps on the battlefield (not on the army bar)
+        if not field: return 0
+        spot = field[0]                                   # where the first troops went in
+        time.sleep(0.6)
+        frame = Frame_Handler.get_frame_section(0.0, 0.82, 1.0, 1.0, grayscale=False)
+        centers, _b, types, _c, _g = self.detect_troop_positions(frame, return_boundaries=True, return_types=True, return_counts=True)
+        done = 0
+        for x, t in zip(centers, types):
+            if t == "spell" or self.card_gray(x): continue
+            Input_Handler.click(x, 0.9)
+            time.sleep(0.15)
+            for _ in range(12 if t not in ("hero", "clan") else 1):
+                Input_Handler.click(*spot)
+                time.sleep(0.07)
+                if t not in ("hero", "clan") and self.card_gray(x): break
+            if t == "hero": self.deployed_heroes.append(x)
+            done += 1
+        if done: logger.info(f"Recording: also deployed {done} new card(s) that were not in the recording")
+        if self.deployed_heroes:
+            self.heroes_done_at = time.monotonic()
+            self.activate_hero_abilities()
+        return done
+
     def activate_hero_abilities(self):
         """Tap the deployed hero cards again after a delay to fire their abilities."""
         import time
@@ -705,6 +758,8 @@ class Attacker:
                     logger.info(f"Recording replayed: {taps} taps")
                 except Exception:
                     logger.exception("Recording replay failed")
+                try: self.deploy_leftovers(data)     # new heroes / troops the recording didn't know about
+                except Exception: logger.exception("Deploying the remaining cards failed")
                 self.finish_battle(restart)
                 return
             logger.warning(f"Recording '{self.plan['recording']}' not found, using the loadout")
