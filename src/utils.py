@@ -2535,6 +2535,40 @@ class Frame_Handler:
         out[mask_not_in_img1] = 0
         return out
 
+    _power = {"t": 0.0, "n": 0, "ms": 0.0, "src": {}}
+
+    @classmethod
+    def _report(cls, source, seconds):
+        """How the bot sees the screen (for the app's speed & power card): ~/.CoC_Bot/power/<account>.json"""
+        import json, time
+        p = cls._power
+        p["n"] += 1
+        p["ms"] += seconds * 1000
+        p["src"][source] = p["src"].get(source, 0) + 1
+        if time.time() - p["t"] < 10: return
+        try:
+            d = APP_DATA_DIR / "power"
+            d.mkdir(parents=True, exist_ok=True)
+            gpu = None
+            r = getattr(OCR_Handler, "reader", None)
+            if r is not None: gpu = str(getattr(r, "device", "cpu")).startswith("cuda")
+            info = {"t": time.time(), "source": max(p["src"], key=p["src"].get), "look_ms": round(p["ms"] / max(1, p["n"]), 1),
+                    "looks": p["n"], "ocr_gpu": gpu}
+            try:
+                import screen_memory
+                info["memory"] = screen_memory.stats(INSTANCE_ID)
+            except Exception:
+                pass
+            try:
+                import screen_model
+                info["model"] = screen_model.info()
+            except Exception:
+                pass
+            (d / f"{INSTANCE_ID}.json").write_text(json.dumps(info), encoding="utf-8")
+        except Exception:
+            pass
+        p.update(t=time.time(), n=0, ms=0.0, src={})
+
     @classmethod
     def _adb_frame(cls):
         import cv2, numpy as np
@@ -2552,15 +2586,26 @@ class Frame_Handler:
         if use_cached and cls.cached_frame is not None:
             frame = cls.cached_frame.copy()
         else:
-            frame = None
-            if sys.platform == "win32" and current_emulator() == "ldplayer":
-                # straight from the LDPlayer window (~10 ms instead of 300-1500 ms over ADB), checked against ADB
+            # one system, fastest way first, each checked against a real screenshot:
+            # 1) live video stream from the emulator (always the newest picture, works minimized)
+            # 2) the LDPlayer window on the PC (~10 ms)   3) ADB screenshot (300-1500 ms)
+            frame, t_look, source = None, __import__("time").monotonic(), "adb"
+            try:
+                import stream_capture
+                frame = stream_capture.frame(WINDOW_DIMS, cls._adb_frame, ADB_Manager._adbutils_device or ADB_Manager.adbutils_device)
+            except (KeyboardInterrupt, SystemExit): raise
+            except Exception: frame = None
+            if frame is not None: source = "live"
+            if frame is None and sys.platform == "win32" and current_emulator() == "ldplayer":
                 try:
                     import win_capture
                     frame = win_capture.frame(WINDOW_DIMS, cls._adb_frame)
+                    if frame is not None: source = "window"
                 except (KeyboardInterrupt, SystemExit): raise
                 except Exception: frame = None
             if frame is None: frame = cls._adb_frame()
+            cls.frame_t = __import__("time").monotonic()
+            cls._report(source, cls.frame_t - t_look)
             cls.cached_frame = frame.copy()
         # if configs.DEBUG: cls.save_frame(frame, "frame.png")
         if high_contrast: frame = cls.high_contrast(frame, thresh)
@@ -3278,6 +3323,20 @@ class Auto_Learn:
             import screen_memory
             frame = Frame_Handler.get_frame(grayscale=False)
             if screen_memory.press(INSTANCE_ID, frame, logger): return True
+        except (KeyboardInterrupt, SystemExit): raise
+        except Exception: pass
+        # the brain knows this screen by its look: do what Claude taught for it, without reading a word
+        try:
+            import screen_model, learn_sync
+            label, dist = screen_model.classify(frame, INSTANCE_ID)
+            if label:
+                rule = next((r for r in learn_sync._load(learn_sync.KNOW, {}).get("screens", []) if r.get("id") == label), None)
+                if rule and rule.get("no_action"): return False
+                if rule and rule.get("actions") and learn_sync.run_actions(rule, []):
+                    if time.time() - cls.tried.get("brain_log:" + label, 0) > 60:
+                        cls.tried["brain_log:" + label] = time.time()
+                        logger.info(f"Known screen: {rule.get('title_ar') or label} (recognised by its look)")
+                    return True
         except (KeyboardInterrupt, SystemExit): raise
         except Exception: pass
         if time.time() - cls.tried.get("unknown", 0) < 6: return False

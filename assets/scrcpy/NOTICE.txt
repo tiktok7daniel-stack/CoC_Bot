@@ -1,0 +1,3 @@
+scrcpy-server-v1.24.jar — from scrcpy by Genymobile (https://github.com/Genymobile/scrcpy)
+Licensed under the Apache License, Version 2.0. Copyright (C) 2018 Genymobile, Copyright (C) 2018-2022 Romain Vimont.
+Used unmodified by src/stream_capture.py for the live screen.

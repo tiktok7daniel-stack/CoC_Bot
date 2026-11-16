@@ -933,6 +933,29 @@ def api_app_restart():
                      cwd=str(root), creationflags=flags, close_fds=True, start_new_session=sys.platform != "win32")
     return jsonify({"ok": True, "resume": running})
 
+@app.route("/api/gpu", methods=["GET"])
+def api_gpu():
+    """NVIDIA card / CUDA state for the text reader (refresh=1 checks again: ~5 s)."""
+    import gpu_setup, json
+    st = gpu_setup.status(refresh=request.args.get("refresh") == "1")
+    st["bots"] = {}
+    d = Path.home() / ".CoC_Bot" / "power"
+    for p in (d.glob("*.json") if d.exists() else []):
+        try:
+            b = json.loads(p.read_text(encoding="utf-8"))
+            if time.time() - b.get("t", 0) < 120: st["bots"][p.stem] = b
+        except (OSError, ValueError):
+            pass
+    return jsonify(st)
+
+@app.route("/api/gpu/install", methods=["POST"])
+def api_gpu_install():
+    """Install the CUDA build of torch at the next restart (the window restarts the program right after)."""
+    import gpu_setup
+    if not gpu_setup.nvidia(): return jsonify({"ok": False, "error": "no_nvidia"})
+    gpu_setup.request_install()
+    return jsonify({"ok": True})
+
 @app.route("/api/app/resume", methods=["GET"])
 def api_app_resume():
     """Bots that were running before a restart (once, within 10 minutes)."""

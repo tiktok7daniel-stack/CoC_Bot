@@ -117,6 +117,8 @@ class Attacker:
                 if collect_rewards(): return
                 continue
             if in_home_base(fast=True):
+                try: __import__("screen_model").teach_self(__import__("utils").INSTANCE_ID, frame, "village_home")
+                except Exception: pass
                 self.ended_at = time.monotonic()
                 logger.info("Battle over, already back in the village")
                 TEMP_CACHE["location"] = "home_base"
@@ -246,6 +248,8 @@ class Attacker:
                 words = " ".join(b[0].lower() for b in ocr_boxes(top) if b[5] > 0.3)
                 is_army = "army" in words and ("recipes" in words or "cookbook" in words or "saved" in words)
             if is_army:
+                try: __import__("screen_model").teach_self(__import__("utils").INSTANCE_ID, frame, "army_screen")
+                except Exception: pass
                 if not army_done:      # the saved army of the active loadout, on this very screen
                     army_done = True
                     want = ((self.plan or {}).get("army", "") or "").strip()

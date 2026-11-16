@@ -28,6 +28,13 @@ def main():
             if r.returncode == 0: open(marker, "w", encoding="utf-8").write(stamp)
     except Exception:
         pass
+    # NVIDIA card asked for: the CUDA build of torch, now while nothing uses torch (a few minutes, once)
+    try:
+        sys.path.insert(0, os.path.join(root, "src"))
+        import gpu_setup
+        gpu_setup.install(py)
+    except Exception:
+        pass
     flags = 0
     if sys.platform == "win32": flags = 0x08000000 | 0x00000008     # CREATE_NO_WINDOW | DETACHED_PROCESS
     subprocess.Popen([py, os.path.join(root, "src", "main.py"), "--gui"], cwd=root, creationflags=flags,

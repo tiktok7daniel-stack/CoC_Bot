@@ -196,6 +196,16 @@ class MainWindow(QMainWindow):
     def on_loaded(self):
         lang = self.store.APP.get("language", "ar")
         if lang != i18n.LANG: self.apply_language(lang)
+        QTimer.singleShot(8000, self._offer_gpu)
+
+    def _offer_gpu(self):
+        """An NVIDIA card that isn't used yet: say it once (Settings -> Speed & power has the button)."""
+        if self.store.APP.get("gpu_offered"): return
+        def got(r):
+            if isinstance(r, dict) and r.get("card") and not r.get("cuda") and not r.get("pending"):
+                self.store.APP["gpu_offered"] = True
+                self.banner.show_msg(tr("pw_offer").format(name=r["card"].get("name", "NVIDIA")), "ok", "bolt")
+        self.api.get("/api/gpu", got, timeout=150)
 
     def apply_language(self, lang):
         i18n.set_lang(lang)

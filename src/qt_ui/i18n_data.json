@@ -955,7 +955,27 @@
 "fast_capture": "تصوير سريع للشاشة ⚡",
 "fast_capture_sub": "بيقرا شاشة LDPlayer مباشرة بدل ADB — أسرع 20-50 مرة. خلّي نافذة LDPlayer مفتوحة (مش متصغّرة)",
 "lf_every_sub": "بيهاجم أي قرية يلاقيها",
-"lf_every": "البوت بيهاجم أول قرية تظهر له على طول — مفيش تخطّي ولا قراية غنايم، علشان مايضيعش ولا ثانية. ولما المخازن تتملا بيكمّل هجوم برضه."
+"lf_every": "البوت بيهاجم أول قرية تظهر له على طول — مفيش تخطّي ولا قراية غنايم، علشان مايضيعش ولا ثانية. ولما المخازن تتملا بيكمّل هجوم برضه.",
+"live_stream": "شاشة لايف 🔴",
+"live_stream_sub": "المحاكي بيبعت الشاشة فيديو مباشر — البوت شايف اللعبة لحظة بلحظة، وشغال حتى لو LDPlayer متصغّر",
+"pw_title": "السرعة والقوة ⚡",
+"pw_sub": "كل حاجة بتخلي البوت سريع — شغالين مع بعض كنظام واحد",
+"pw_live": "شوفان الشاشة",
+"pw_gpu": "كارت الشاشة",
+"pw_brain": "عقل البوت",
+"pw_src_live": "🔴 لايف — كل نظرة {ms} ملّي ثانية",
+"pw_src_window": "⚡ من نافذة LDPlayer — كل نظرة {ms} ملّي ثانية",
+"pw_src_adb": "صور عادية (ADB) — كل نظرة {ms} ملّي ثانية",
+"pw_src_none": "البوت مش شغال دلوقتي",
+"pw_gpu_none": "مفيش كارت NVIDIA — القراية على البروسيسور",
+"pw_gpu_on": "✅ {name} شغال — القراية أسرع 10 مرات",
+"pw_gpu_off": "{name} موجود بس مش متفعّل",
+"pw_gpu_install": "فعّل كارت الشاشة",
+"pw_brain_txt": "بيعرف {kinds} نوع شاشة من {pics} صورة + {mem} شاشة اتعلّمها لوحده",
+"pw_pending": "هيتسطّب أول ما البرنامج يقفل ويفتح (بياخد كام دقيقة، حوالي 2.5 جيجا)",
+"pw_installing": "البرنامج هيقفل ويسطّب دعم الكارت ويفتح لوحده — استنى كام دقيقة",
+"pw_now": "الشاشة دلوقتي: {t}",
+"pw_offer": "لقيت كارت {name} 🔥 — فعّله من الإعدادات ← السرعة والقوة، وقراية الشاشة هتبقى أسرع 10 مرات"
 },
 "en": {
 "gold": "Gold",
@@ -1913,7 +1933,27 @@
 "fast_capture": "Fast screen capture ⚡",
 "fast_capture_sub": "Reads the LDPlayer window directly instead of ADB — 20-50x faster. Keep the LDPlayer window open (not minimized)",
 "lf_every_sub": "Attacks every base it finds",
-"lf_every": "The bot attacks the first base it finds right away — no skipping and no loot reading, so no second is lost. Full storages don't stop it either."
+"lf_every": "The bot attacks the first base it finds right away — no skipping and no loot reading, so no second is lost. Full storages don't stop it either.",
+"live_stream": "Live screen 🔴",
+"live_stream_sub": "The emulator streams its screen as live video — the bot sees the game instantly, even with LDPlayer minimized",
+"pw_title": "Speed & power ⚡",
+"pw_sub": "Everything that makes the bot fast — working together as one system",
+"pw_live": "Seeing the screen",
+"pw_gpu": "Graphics card",
+"pw_brain": "Bot brain",
+"pw_src_live": "🔴 Live — {ms} ms per look",
+"pw_src_window": "⚡ From the LDPlayer window — {ms} ms per look",
+"pw_src_adb": "Screenshots (ADB) — {ms} ms per look",
+"pw_src_none": "The bot is not running now",
+"pw_gpu_none": "No NVIDIA card — reading on the processor",
+"pw_gpu_on": "✅ {name} on — reading 10x faster",
+"pw_gpu_off": "{name} found but not used",
+"pw_gpu_install": "Enable graphics card",
+"pw_brain_txt": "Knows {kinds} kinds of screen from {pics} taught pictures + {mem} screens it learned itself",
+"pw_pending": "Installed when the program restarts (a few minutes, ~2.5 GB)",
+"pw_installing": "The program closes, installs the card support and opens again — wait a few minutes",
+"pw_now": "Screen now: {t}",
+"pw_offer": "Found {name} 🔥 — enable it in Settings → Speed & power and screen reading gets 10x faster"
 },
 "unit_ar": {
 "healing": "العلاج",
@@ -2739,6 +2779,18 @@
 [
 "^Fast screen capture not available",
 "التصوير السريع مش متاح دلوقتي (نافذة LDPlayer متصغّرة أو مستخبية) — شغال بـ ADB"
+],
+[
+"^Live screen on",
+"🔴 الشاشة اللايف شغالة: البوت شايف اللعبة لحظة بلحظة"
+],
+[
+"^Live screen not",
+"الشاشة اللايف مش متاحة دلوقتي — شغال بالصور العادية"
+],
+[
+"^Known screen: (.*) \\(recognised by its look\\)",
+"🧠 عرف الشاشة من شكلها: \\1 — اتصرّف على طول من غير قراية"
 ]
 ]
 }

@@ -137,6 +137,27 @@ class BotSettingsScreen(Screen):
         ocr.add(form_row("groq_key", None, secret_field(st, "groq_api_key", "gsk_…")))
         g.addWidget(ocr, 1, 1)
 
+        # ======================= speed & power: everything that makes the bot fast, working together
+        pw = GlassCard("pw_title", "bolt", "pw_sub")
+        self.pw_live = StatusPill("warn", "—")
+        self.pw_gpu = StatusPill("warn", "—")
+        self.pw_brain = StatusPill("warn", "—")
+        for key, pill in (("pw_live", self.pw_live), ("pw_gpu", self.pw_gpu), ("pw_brain", self.pw_brain)):
+            pw.add(form_row(key, None, pill))
+        pb = QHBoxLayout()
+        self.gpu_btn = IconButton("bolt", "pw_gpu_install", kind="primary", size=14)
+        self.gpu_btn.clicked.connect(self.install_gpu)
+        self.gpu_btn.setVisible(False)
+        pb.addWidget(self.gpu_btn)
+        rb = IconButton("refresh", "verify", size=13)
+        rb.clicked.connect(lambda: self.check_power(True))
+        pb.addWidget(rb)
+        pb.addStretch(1)
+        pw.add(pb)
+        self.pw_note = label("", "sub", wrap=True)
+        pw.add(self.pw_note)
+        g.addWidget(pw, 3, 0, 1, 2)
+
         gh = GlassCard("gh_title", "github", "gh_sub")
         gh.add(form_row("gh_token", "gh_token_sub", secret_field(st, "github_token", "github_pat_…")))
         gh.add(toggle_row(st, "gh_auto", "auto_report", "gh_auto_sub", "app"))
@@ -164,6 +185,7 @@ class BotSettingsScreen(Screen):
         g.addWidget(sch, 0, 0)
         inter = GlassCard("interval_title", "hourglass", "interval_sub")
         inter.add(num_row(st, "check_interval", "schedule.check_interval", None, "minutes", 0, 1440, 1, 90))
+        inter.add(toggle_row(st, "live_stream", "live_stream", "live_stream_sub", scope="app"))
         inter.add(toggle_row(st, "fast_capture", "fast_capture", "fast_capture_sub", scope="app"))
         inter.add(toggle_row(st, "never_close", "game.never_close", "never_close_sub"))
         inter.add(toggle_row(st, "keep_open", "game.keep_open", "keep_open_sub"))
@@ -182,6 +204,7 @@ class BotSettingsScreen(Screen):
     def on_show(self):
         self.check_tess()
         self.check_update()
+        self.check_power()
 
     def on_sub(self, key):
         if key == "general": self.check_tess()
@@ -248,6 +271,46 @@ class BotSettingsScreen(Screen):
                 self.tess.set("warn", tr("tess_missing"))
                 self.inst_btn.setVisible(r.get("platform") == "win32")
         self.api.get("/api/tesseract", got, timeout=30)
+
+    # ---------------------------------------------------------------- speed & power
+    def check_power(self, refresh=False):
+        def got(r):
+            if not isinstance(r, dict): return
+            bots = list((r.get("bots") or {}).values())
+            b = max(bots, key=lambda x: x.get("t", 0)) if bots else {}
+            src = b.get("source")
+            if src:
+                self.pw_live.set("ok" if src in ("live", "window") else "warn",
+                                 tr("pw_src_" + src).format(ms=b.get("look_ms", "?")))
+            else:
+                self.pw_live.set("warn", tr("pw_src_none"))
+            card = r.get("card")
+            if not card:
+                self.pw_gpu.set("warn", tr("pw_gpu_none"))
+                self.gpu_btn.setVisible(False)
+            elif r.get("cuda"):
+                self.pw_gpu.set("ok", tr("pw_gpu_on").format(name=card.get("name", "")))
+                self.gpu_btn.setVisible(False)
+            else:
+                self.pw_gpu.set("warn", tr("pw_gpu_off").format(name=card.get("name", "")))
+                self.gpu_btn.setVisible(not r.get("pending"))
+            m = b.get("model") or {}
+            mem = b.get("memory") or {}
+            self.pw_brain.set("ok" if m.get("screens") else "warn",
+                              tr("pw_brain_txt").format(kinds=m.get("kinds", 0), pics=m.get("screens", 0), mem=mem.get("screens", 0)))
+            if m.get("now_title"): self.pw_brain.setToolTip(tr("pw_now").format(t=m["now_title"]))
+            log = (r.get("log") or "").strip().splitlines()
+            self.pw_note.setText(tr("pw_pending") if r.get("pending") else (log[-1] if log else ""))
+        self.api.get("/api/gpu" + ("?refresh=1" if refresh else ""), got, timeout=150)
+
+    def install_gpu(self):
+        def done(r):
+            if isinstance(r, dict) and r.get("ok"):
+                self.ctx.toast(tr("pw_installing"), "ok")
+                self.ctx.window.restart_app()
+            else:
+                self.ctx.toast(tr("pw_gpu_none"), "bad")
+        self.api.post("/api/gpu/install", {}, done)
 
     def install_tess(self):
         def done(r):

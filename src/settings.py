@@ -171,6 +171,7 @@ def default_app_settings():
         "emulator_links": {},        # account -> emulator copy (LDPlayer index / BlueStacks instance) chosen on the setup screen
         "show_setup": True,          # show the setup screen when the app opens
         "show_hud": False,           # floating mini HUD orb (Clash Farmer)
+        "live_stream": True,         # live video of the emulator screen (scrcpy): every look at the screen is instant
         "fast_capture": True,        # read the LDPlayer window directly (much faster than ADB screenshots)
         "desktop_notify": True,      # Windows notifications when upgrades / research finish
         "intro": True,               # 3D animated intro at startup

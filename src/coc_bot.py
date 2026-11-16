@@ -600,6 +600,16 @@ class CoC_Bot:
         stats.record(_utils.INSTANCE_ID, "session_start")
         self.session_start = time.time()
         consecutive_errors = 0
+        # the brain: always knows what the screen is (newest live picture, or the last picture the bot took)
+        try:
+            import screen_model, stream_capture
+            def newest():
+                c = stream_capture._S.get("client")
+                img = c.latest() if c is not None and c.alive else None
+                return img if img is not None else Frame_Handler.cached_frame
+            screen_model.watch(_utils.INSTANCE_ID, newest, logger)
+        except Exception:
+            logger.debug("Screen watcher not started", exc_info=True)
         while True:
             try:
                 s = self.load_settings()

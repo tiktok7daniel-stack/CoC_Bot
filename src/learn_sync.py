@@ -227,6 +227,11 @@ def fetch_knowledge():
     if isinstance(k, dict): _save(KNOW, k)
     s = _get_json("knowledge/status.json")
     if isinstance(s, dict): _save(STATUS, s)
+    m = _get_json("knowledge/model.json")                 # the screen model Claude trained on the labelled pictures
+    if isinstance(m, dict) and m.get("items"):
+        _save(BASE / "model.json", m)
+        try: __import__("screen_model").load(force=True)
+        except Exception: pass
     st = _load(STATE, {})
     st["last_fetch"] = time.time()
     _save(STATE, st)
@@ -356,7 +361,9 @@ def run_actions(rule, boxes):
             Input_Handler.click_exit(n=1)
             did = True
         elif kind == "wait":
-            _t.sleep(min(10.0, float(a.get("s", 1))))
+            w = float(a.get("s", 1))
+            # short waits are only for the screen to change: the bot sees it instantly now (long ones = loading)
+            _t.sleep(min(10.0, w) if w >= 5 else min(w, 0.4))
     return did
 
 
