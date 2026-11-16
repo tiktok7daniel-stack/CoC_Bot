@@ -14,7 +14,7 @@ from ..theme import TOKENS, color, ui_font
 
 NAV = [
     ("dash", "nv_home", "trophy"), ("deck", "nv_deck", "bolt"), ("acc", "nv_acc", "id"), ("atk", "nv_atk", "swords"), ("bb", "nv_bb", "moon"),
-    ("res", "nv_stats", "chart"), ("upg", "nv_village", "home"), ("teach", "nv_manager", "hammer"),
+    ("res", "nv_stats", "chart"), ("upg", "nv_village", "home"), ("teach", "nv_manager", "hammer"), ("learn", "nv_learn", "school"),
     ("log", "nv_log", "scroll"), ("set", "nv_bot", "bot"),
 ]
 SOON = []   # clan capital / clan war / chat removed: not part of the farming bot

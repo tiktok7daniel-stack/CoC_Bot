@@ -162,6 +162,11 @@ def translate_log(msg):
         if rep == "fn:storage":
             kind, value = m.group(1), m.group(2)
             return f"عرف حجم مخزن {'الدهب' if kind == 'gold' else 'الإكسير'}: {int(value):,}"
+        if rep == "fn:round":
+            jobs = {"attack & farm": "هجوم وفارم", "buildings": "ترقية المباني", "walls": "الأسوار", "lab": "المعمل",
+                    "heroes & pets": "الأبطال والحيوانات", "builder base": "القرية الليلية"}
+            parts = [jobs.get(j.strip(), j.strip()) for j in m.group(2).split(",")]
+            return f"▶ الجولة {m.group(1)}: هيعمل " + " ← ".join(parts)
         if rep == "fn:troopbar":
             names = [n.strip() for n in m.group(1).split(",")]
             return "شريط الجيش: " + "، ".join("؟" if n == "?" else "بطل" if n == "hero" else unit_name(n) for n in names)

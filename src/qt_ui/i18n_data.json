@@ -922,7 +922,13 @@
 "tp_bar_auto": "(اختارها لوحده)",
 "tp_bar_nothing": "ولا حاجة — اللعبة مفتوحة والبوت مستنيك",
 "up_ask_plan": "اسألني كل يوم عاوز أعمل إيه",
-"up_ask_plan_sub": "أول ما اللعبة تفتح يظهرلك اختيار خطة النهارده"
+"up_ask_plan_sub": "أول ما اللعبة تفتح يظهرلك اختيار خطة النهارده",
+"sub_learn": "وضع التعلّم",
+"nv_learn": "التعلّم",
+"lm_work": "وضع الشغل",
+"lm_work_sub": "البوت بيعمل خطة النهارده بس، خطوة خطوة، ومش بيتعلّم ولا بيدوس على حاجة مالهاش لازمة.",
+"lm_learn": "وضع التعلّم",
+"lm_learn_sub": "بيشتغل لما إنت تدوس «ابدأ التصوير» بس: البوت مش بيلعب، بيتفرج عليك ويتعلّم، وبعدها تبعت لـ Claude."
 },
 "en": {
 "gold": "Gold",
@@ -1847,7 +1853,13 @@
 "tp_bar_auto": "(chosen automatically)",
 "tp_bar_nothing": "Nothing — the game is open and the bot waits",
 "up_ask_plan": "Ask me every day what to do",
-"up_ask_plan_sub": "When the game opens, choose today's plan"
+"up_ask_plan_sub": "When the game opens, choose today's plan",
+"sub_learn": "Learn mode",
+"nv_learn": "Learning",
+"lm_work": "Work mode",
+"lm_work_sub": "The bot does today's plan only, step by step — no learning, no taps that serve no purpose.",
+"lm_learn": "Learn mode",
+"lm_learn_sub": "Runs only when you press Start capturing: the bot doesn't play, it watches you and learns, then you send it to Claude."
 },
 "unit_ar": {
 "healing": "العلاج",
@@ -1902,6 +1914,10 @@
 "ruin_witch": "ساحرة الأطلال"
 },
 "log": [
+[
+"^Round (\\d+): nothing to do",
+"▶ الجولة \\g<1>: مفيش شغل في خطة النهارده"
+],
 [
 "^Not restarting the game \\(closing is turned off\\).*",
 "مش هيعيد فتح اللعبة (قفل اللعبة مقفول) — بيتعامل مع اللي على الشاشة"
@@ -2597,6 +2613,10 @@
 [
 "^No answer: doing the usual today",
 "ماحدش اختار — البوت هيعمل زي كل يوم"
+],
+[
+"^Round (\\d+): (.*)",
+"fn:round"
 ]
 ]
 }

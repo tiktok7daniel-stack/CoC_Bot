@@ -483,6 +483,19 @@ class CoC_Bot:
             logger.info(f"Routine {r.get('name')}: {done} taps")
             to_home_base()
 
+    def announce_round(self, s):
+        """One clear line per round: exactly which jobs it will do now (today's plan + settings)."""
+        t = s.get("tasks", {})
+        farm = s.get("attack", {}).get("farm", {})
+        jobs = []
+        if t.get("home_attacks") and (farm.get("enabled", True) or farm.get("max_walls")): jobs.append("attack & farm")
+        if t.get("home_base"): jobs.append("buildings")
+        if s.get("walls", {}).get("enabled") or farm.get("max_walls"): jobs.append("walls")
+        if t.get("home_lab"): jobs.append("lab")
+        if t.get("heroes") or t.get("pet_house"): jobs.append("heroes & pets")
+        if t.get("builder_attacks") or t.get("builder_base") or t.get("builder_lab"): jobs.append("builder base")
+        logger.info(f"Round {self.cycle_count + 1}: " + (", ".join(jobs) if jobs else "nothing to do"))
+
     def ask_today_plan(self):
         """Ask in the app what to do today; wait for the answer (the usual after ASK_TIMEOUT)."""
         import time, today_plan
@@ -672,6 +685,7 @@ class CoC_Bot:
                     self._nothing_logged = False
                     update_status("now")
                     cycle_start = time.monotonic()
+                    self.announce_round(s)
                     self.cycle_count += 1
 
                     # Battle / wall / budget settings for this cycle
@@ -715,12 +729,15 @@ class CoC_Bot:
                         logger.info("Upgrading home base")
                         self.load_settings()
                         self.upgrader.run_home_base(self.excluded("home_base"), self.excluded("home_lab"), self.excluded("pet_house"))
-                        try:
-                            import village
-                            set_phase("village_scan")
-                            to_home_base()
-                            village.scan(self.upgrader, _utils.INSTANCE_ID)
-                        except Exception: logger.exception("Village scan failed")
+                        # read the builder menu for the Upgrade Deck only now and then (every 3 hours), not every round:
+                        # the button "Scan village now" in the app does it on request
+                        import village, time as _t
+                        if _t.time() - float((village.load(_utils.INSTANCE_ID) or {}).get("t", 0) or 0) > 3 * 3600:
+                            try:
+                                set_phase("village_scan")
+                                to_home_base()
+                                village.scan(self.upgrader, _utils.INSTANCE_ID)
+                            except Exception: logger.exception("Village scan failed")
 
                     farm = self.settings["attack"].get("farm", {})
                     if running() and not self.excluded("home_attacks") and (farm.get("enabled", True) or farm.get("max_walls")):

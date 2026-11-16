@@ -56,7 +56,7 @@ class BotSettingsScreen(Screen):
         st = self.store
         self._relay = _Relay()
         self._relay.done.connect(lambda fn, r: fn(r))
-        L = self.make_tabs([("general", "sn_general", "sliders"), ("learn", "ln_tab", "school"), ("sch", "tab_sch", "clock")])
+        L = self.make_tabs([("general", "sn_general", "sliders"), ("sch", "tab_sch", "clock")])
 
         # ======================= general
         w, g = grid(2)
@@ -146,11 +146,6 @@ class BotSettingsScreen(Screen):
         L["general"].addWidget(w)
         L["general"].addStretch(1)
 
-        # ======================= learning with Claude
-        from .learn_panel import LearnPanel
-        self.learn = LearnPanel(ctx, secret_field)
-        L["learn"].addWidget(self.learn)
-        L["learn"].addStretch(1)
 
         # ======================= schedule
         w, g = grid(2)
@@ -194,7 +189,6 @@ class BotSettingsScreen(Screen):
 
     def on_sub(self, key):
         if key == "general": self.check_tess()
-        if key == "learn": self.learn.load()
 
     # ---------------------------------------------------------------- days
     def render_days(self):

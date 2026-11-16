@@ -26,6 +26,7 @@ from .screens.statistics_screen import StatisticsScreen
 from .screens.village_manager_screen import VillageManagerScreen
 from .screens.village_screen import VillageScreen
 from .screens.upgrade_deck_screen import UpgradeDeckScreen
+from .screens.learn_screen import LearnScreen
 from .components.mini_hud import MiniHud
 from .store import Store
 from .theme import TOKENS
@@ -125,7 +126,7 @@ class MainWindow(QMainWindow):
         self.banner = Banner(canvas)
         self.screens = {}
         for cls in (DashboardScreen, UpgradeDeckScreen, AccountsScreen, AttackScreen, BuilderBaseScreen, StatisticsScreen, VillageScreen,
-                    VillageManagerScreen, LogsScreen, BotSettingsScreen):
+                    VillageManagerScreen, LearnScreen, LogsScreen, BotSettingsScreen):
             s = cls(self.ctx)
             self.screens[s.key] = s
             self.stack.addWidget(s)

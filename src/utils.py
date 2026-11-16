@@ -2930,7 +2930,8 @@ AUTO_WORDS = {
     "train_button":   ["quick train", "train again", "train"],
 }
 # words on popups that are safe to press to get out of the way
-DISMISS_WORDS = ["reload", "try again", "retry", "later", "not now", "close", "okay", "continue", "claim", "collect", "got it", "tap to continue"]
+# only buttons that close / dismiss a window — never ones that take, buy or start something
+DISMISS_WORDS = ["reload", "try again", "retry", "later", "not now", "close", "okay", "continue", "got it", "tap to continue"]
 
 def ocr_boxes(frame):
     """[(text, x1, y1, x2, y2, conf)] with fractions of the frame. easyocr first, Tesseract TSV fallback."""
