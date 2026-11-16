@@ -403,7 +403,9 @@ def run_actions(rule, boxes):
 def _api(method, path, body=None, timeout=60):
     import requests
     c = _cfg()
-    r = requests.request(method, f"https://api.github.com/repos/{c['repo']}/{path}", headers=_headers(c["token"]), json=body, timeout=timeout)
+    # no "/" at the end: GitHub answers ".../repos/owner/name/" with 404 Not Found
+    url = f"https://api.github.com/repos/{c['repo']}" + (f"/{path}" if path else "")
+    r = requests.request(method, url, headers=_headers(c["token"]), json=body, timeout=timeout)
     if r.status_code >= 300: raise RuntimeError(f"GitHub {r.status_code}: {r.text[:160]}")
     return r.json()
 
