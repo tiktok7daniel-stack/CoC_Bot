@@ -566,10 +566,14 @@ def in_home_base():
     # the resource icons (gold, elixir, dark, gems) at the top right; 3 of 4 is enough (an event banner or a
     # different color profile can hide / shift one of them)
     hits = 0
-    for sec, color in zip(resource_sections, target_colors):
+    gems = False
+    for i, (sec, color) in enumerate(zip(resource_sections, target_colors)):
         diff = abs(sec.astype(int) - np.array(color).reshape((1, 1, 3))).sum(2)
-        if min(diff.flatten()) <= 30: hits += 1
-    if hits >= 3: return True
+        if min(diff.flatten()) <= 30:
+            hits += 1
+            if i == 3: gems = True
+    # the gems bar is only shown in the village (a battle shows gold / elixir / dark too, but no gems)
+    if hits >= 3 and gems: return True
 
     # Fallback to gold template matching
     if Frame_Handler.locate(
@@ -579,20 +583,29 @@ def in_home_base():
         thresh=0.80
     ) != (None, None):
         return True
-    # last check: read the big "Attack!" button at the bottom left (cached a few seconds, OCR is slow)
-    return _village_by_words()
+    # last check: read the buttons at the bottom (cached a few seconds, OCR is slow)
+    return _village_by_words(colours=hits)
 
 
 _VILLAGE_WORDS = {"t": 0.0, "ok": False}
 
-def _village_by_words():
+def _village_by_words(colours=0):
     import time
     if time.time() - _VILLAGE_WORDS["t"] < 4: return _VILLAGE_WORDS["ok"]
     ok = False
     try:
-        corner = Frame_Handler.get_frame_section(0.0, 0.78, 0.22, 1.0, grayscale=False, use_cached=True)
-        ok = any(_word_hit(b[0], "attack") for b in ocr_boxes(corner) if b[5] > 0.3)
-        if ok and not _VILLAGE_WORDS["ok"]: logger.info("Village recognised by the Attack button")
+        # the game's buttons at the bottom corners: "Battle" (older versions "Attack!") on the left, "Build" on the right
+        left = Frame_Handler.get_frame_section(0.0, 0.78, 0.18, 1.0, grayscale=False, use_cached=True)
+        right = Frame_Handler.get_frame_section(0.84, 0.78, 1.0, 1.0, grayscale=False, use_cached=True)
+        lw = [b[0] for b in ocr_boxes(left) if b[5] > 0.3]
+        rw = [b[0] for b in ocr_boxes(right) if b[5] > 0.3]
+        battle = any(_word_hit(w, "battle") or _word_hit(w, "attack") for w in lw)
+        build = any(_word_hit(w, "build") for w in rw)
+        # Battle + Build, or Battle + at least one resource colour at the top right (OCR misses small words sometimes)
+        ok = battle and (build or colours >= 1)
+        # a running battle has "Surrender" at the bottom left instead
+        if ok and any(_word_hit(w, "surrender") for w in lw): ok = False
+        if ok and not _VILLAGE_WORDS["ok"]: logger.info("Village recognised by the Battle / Build buttons")
     except Exception:
         ok = False
     _VILLAGE_WORDS.update(t=time.time(), ok=ok)
@@ -3072,6 +3085,8 @@ class Auto_Learn:
             try:
                 import learn_sync
                 rule = learn_sync.match_screen(words, phase or TEMP_CACHE.get("phase", ""))
+                if rule and rule.get("no_action"):      # a known screen that needs nothing (e.g. the village itself)
+                    return False
                 if rule and learn_sync.run_actions(rule, boxes):
                     logger.info(f"Known screen (taught by Claude): {rule.get('title') or rule.get('id')}")
                     return True

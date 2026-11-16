@@ -2591,10 +2591,6 @@
 "لسه بيفتح اللعبة (\\g<1> ثانية): مستني اللعبة تحمّل"
 ],
 [
-"^Village recognised by the Attack button",
-"اتعرّف على القرية من زرار Attack ✓"
-],
-[
 "^Waiting for today's plan.*",
 "مستني تختار خطة النهارده من البرنامج"
 ],
@@ -2629,6 +2625,10 @@
 [
 "^Home base upgrades stopped: the builder menu could not be read 3 times in a row",
 "وقف الترقيات: مش قادر يقرا قايمة البنّائين 3 مرات ورا بعض"
+],
+[
+"^Village recognised by the Battle / Build buttons",
+"اتعرّف على القرية من زرارين Battle و Build ✓"
 ]
 ]
 }
