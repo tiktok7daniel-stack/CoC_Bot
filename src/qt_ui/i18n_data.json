@@ -1003,7 +1003,9 @@
 "keep_wall_builder": "سيب بنّاء فاضي للأسوار 🧱",
 "keep_wall_builder_sub": "البوت مايشغّلش كل البنّائين في المباني — واحد دايمًا فاضي للأسوار",
 "daily_rewards": "الهدايا المجانية 🎁",
-"daily_rewards_sub": "يستلم هدية Free! اليومية وجوايز الباس المجانية — عمره ما يدوس على حاجة بفلوس"
+"daily_rewards_sub": "يستلم هدية Free! اليومية وجوايز الباس المجانية — عمره ما يدوس على حاجة بفلوس",
+"battle_speed": "سرّع آخر دقيقة في الهجمة ⏩",
+"battle_speed_sub": "لما يظهر زرار 1x الأخضر في آخر دقيقة، البوت يدوس عليه لحد ما يبقى 4x"
 },
 "en": {
 "gold": "Gold",
@@ -2009,7 +2011,9 @@
 "keep_wall_builder": "Keep a builder free for walls 🧱",
 "keep_wall_builder_sub": "Never all builders on buildings — one always stays free for walls",
 "daily_rewards": "Free gifts 🎁",
-"daily_rewards_sub": "Takes the daily Free! gift and the free season pass rewards — never anything paid"
+"daily_rewards_sub": "Takes the daily Free! gift and the free season pass rewards — never anything paid",
+"battle_speed": "Speed up the last minute ⏩",
+"battle_speed_sub": "When the green 1x button shows in the last minute, the bot taps it until it says 4x"
 },
 "unit_ar": {
 "healing": "العلاج",
@@ -2919,6 +2923,10 @@
 [
 "^Daily free gift claimed",
 "🎁 استلم الهدية المجانية اليومية"
+],
+[
+"^Battle speed 4x",
+"⏩ سرّع الهجمة 4x"
 ]
 ]
 }
