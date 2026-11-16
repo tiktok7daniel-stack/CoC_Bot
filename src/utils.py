@@ -2577,13 +2577,22 @@ class Input_Handler:
         start = [left_in, right_in] if dir=="in" else [left_out, right_out]
         end = [left_out, right_out] if dir=="in" else [left_in, right_in]
         
+        import time
         builder.down(0, *start[0], pressure=100)
         builder.down(1, *start[1], pressure=100)
         cls._publish(builder)
-        builder.move(0, *end[0], pressure=100)
-        builder.move(1, *end[1], pressure=100)
-        builder.commit()
-        cls._publish(builder)
+        time.sleep(0.03)
+        # a real pinch: the two fingers slide in steps (one jump is sometimes ignored by the game)
+        steps = 10
+        for i in range(1, steps + 1):
+            f = i / steps
+            p0 = (int(start[0][0] + (end[0][0] - start[0][0]) * f), int(start[0][1] + (end[0][1] - start[0][1]) * f))
+            p1 = (int(start[1][0] + (end[1][0] - start[1][0]) * f), int(start[1][1] + (end[1][1] - start[1][1]) * f))
+            builder.move(0, *p0, pressure=100)
+            builder.move(1, *p1, pressure=100)
+            cls._publish(builder)
+            time.sleep(0.02)
+        time.sleep(0.05)
         builder.up(0)
         builder.up(1)
         cls._publish(builder)

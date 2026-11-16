@@ -199,9 +199,7 @@ class CoC_Bot:
                 recorder.set_status(iid, "failed")
                 logger.warning("Battle recording cancelled: could not start a battle")
                 return
-            Input_Handler.zoom(dir="out")
-            Input_Handler.swipe_up(y1=0.5)
-            time.sleep(0.8)
+            self.attacker.prepare_field()          # base fully there, then zoom out (as in every attack)
             found = recorder.find_touch_device(lambda c: ADB_Manager.adbutils_device.shell(c))
             if not found:
                 recorder.set_status(iid, "failed")

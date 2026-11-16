@@ -949,11 +949,29 @@ class Attacker:
             time.sleep(0.15)
         logger.debug(f"Activated {len(self.deployed_heroes)} hero abilities")
     
+    def prepare_field(self):
+        """
+        Before dropping anything: wait until the base has fully appeared (the clouds are gone: two pictures in a row
+        look the same), then zoom out (twice: the second one is harmless when it is already out) and move the view.
+        Zooming while the clouds are still there is ignored by the game.
+        """
+        import time, numpy as np
+        prev, end = None, time.monotonic() + 3.0
+        while time.monotonic() < end:
+            cur = Frame_Handler.get_frame_section(0.0, 0.1, 1.0, 0.8, grayscale=True)[::8, ::8].astype(int)
+            if prev is not None and cur.shape == prev.shape and float(np.abs(cur - prev).mean()) < 4: break
+            prev = cur
+            time.sleep(0.2)
+        for _ in range(2):
+            Input_Handler.zoom(dir="out")
+            time.sleep(0.25)
+        Input_Handler.swipe_up(y1=0.5)
+        time.sleep(0.2)
+
     def complete_normal_attack(self, restart=True, exclude_clan_troops=False):
         import time, numpy as np
 
-        Input_Handler.zoom(dir="out")
-        Input_Handler.swipe_up(y1=0.5)
+        self.prepare_field()
         self.deployed_heroes = []
         self.deployed_troops = []
         self.side_points = None
@@ -1048,8 +1066,7 @@ class Attacker:
     def complete_builder_attack(self, restart=True):
         import numpy as np
         
-        Input_Handler.zoom(dir="out")
-        Input_Handler.swipe_up(y1=0.5)
+        self.prepare_field()
         
         card_centers = np.linspace(0.1, 0.9, 11)
         self.deployed_heroes = []
