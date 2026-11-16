@@ -2663,6 +2663,18 @@
 [
 "^Village recognised by the Battle / Build buttons",
 "اتعرّف على القرية من زرارين Battle و Build ✓"
+],
+[
+"^Text reader ready \\((\\d+)s\\)",
+"قارئ الكلام جاهز (\\g<1> ثانية) ✓"
+],
+[
+"^Loading the bot's pictures of the game…",
+"بيحمّل صور اللعبة اللي البوت بيتعرّف بيها…"
+],
+[
+"^Bot ready \\((\\d+)s\\) — going to the game",
+"البوت جاهز (\\g<1> ثانية) — داخل على اللعبة"
 ]
 ]
 }

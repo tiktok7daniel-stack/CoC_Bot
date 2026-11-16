@@ -1760,10 +1760,7 @@ class OCR_Handler:
             except:
                 logger.warning("ocrmac not available, falling back to easyocr")
 
-        if not hasattr(cls, 'reader'):
-            import easyocr
-            cls.reader = easyocr.Reader(['en'], gpu=True)
-        result = cls.reader.readtext(frame, detail=0)
+        result = easyocr_reader().readtext(frame, detail=0)
         return [text for text in result if text.strip()]
 
     @classmethod
@@ -2965,6 +2962,39 @@ AUTO_WORDS = {
 # only buttons that close / dismiss a window — never ones that take, buy or start something
 DISMISS_WORDS = ["reload", "try again", "retry", "later", "not now", "close", "okay", "continue", "got it", "tap to continue"]
 
+import threading as _ocr_threading
+_OCR_LOCK = _ocr_threading.Lock()
+
+
+def easyocr_reader():
+    """The one easyocr reader of this process (loading it takes 20-40 s the first time, so it is started
+    in the background when the bot starts: warm_up_ocr). GPU only when there really is one."""
+    with _OCR_LOCK:
+        r = getattr(OCR_Handler, "reader", None)
+        if r is not None: return r
+        import easyocr
+        try:
+            import torch
+            gpu = bool(torch.cuda.is_available())
+        except Exception:
+            gpu = False
+        OCR_Handler.reader = easyocr.Reader(['en'], gpu=gpu, verbose=False)
+        return OCR_Handler.reader
+
+
+def warm_up_ocr():
+    """Load the text reader in the background now, so the first look at the game screen is instant."""
+    def work():
+        import time
+        t = time.time()
+        try:
+            easyocr_reader()
+            logger.info(f"Text reader ready ({time.time() - t:.0f}s)")
+        except Exception:
+            pass
+    _ocr_threading.Thread(target=work, daemon=True, name="ocr-warmup").start()
+
+
 def ocr_boxes(frame):
     """[(text, x1, y1, x2, y2, conf)] with fractions of the frame. easyocr first, Tesseract TSV fallback."""
     import numpy as np, cv2
@@ -2974,10 +3004,7 @@ def ocr_boxes(frame):
         h, w = frame.shape[:2]
     out = []
     try:
-        if not hasattr(OCR_Handler, "reader"):
-            import easyocr
-            OCR_Handler.reader = easyocr.Reader(['en'], gpu=True)
-        for pts, text, conf in OCR_Handler.reader.readtext(frame, detail=1):
+        for pts, text, conf in easyocr_reader().readtext(frame, detail=1):
             xs, ys = [p[0] for p in pts], [p[1] for p in pts]
             if text.strip(): out.append((text.strip(), min(xs) / w, min(ys) / h, max(xs) / w, max(ys) / h, float(conf)))
         return out

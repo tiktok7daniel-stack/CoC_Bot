@@ -23,6 +23,9 @@ def launch_proc(args):
     import time
     from utils import install_error_reporter, start_capture_service, start_record_service, update_status, preflight
     logger.info("Bot starting: preparing the emulator")
+    from utils import warm_up_ocr
+    warm_up_ocr()          # the text reader loads in the background while the emulator / checks run
+    t_start = time.time()
     for attempt in range(1, 1000):
         try:
             init_instance(args.id)
@@ -50,7 +53,9 @@ def launch_proc(args):
     village.start_notifier(args.id, lambda text: send_notification(text) if _st.load(args.id).get("notify", {}).get("upgrade_done", True) else None)
     start_capture_service()
     preflight()
+    logger.info("Loading the bot's pictures of the game…")
     bot = CoC_Bot()
+    logger.info(f"Bot ready ({time.time() - t_start:.0f}s) — going to the game")
     bot.run()
 
 def cmd_launch(args):
