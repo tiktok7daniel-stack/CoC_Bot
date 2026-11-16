@@ -127,9 +127,16 @@ def upload_pending(id, limit=MAX_PER_ROUND):
     st = _load(STATE, {})
     done = st.setdefault("uploaded", {})
     n = 0
+    try:
+        import settings
+        auto_screens = settings.load_app().get("upload_unknown", False)
+    except Exception:
+        auto_screens = False
+    if not auto_screens: limit_screens = 0
+    else: limit_screens = limit
     folder = teach.DISCOVERED_DIR / teach._safe(id)
-    for d in reversed(teach.discoveries(id, 40)):            # oldest first
-        if n >= limit: break
+    for d in reversed(teach.discoveries(id, 40)):            # oldest first (only when "send unknown screens" is on)
+        if n >= limit_screens: break
         key = f"{id}/{d['shot']}"
         if key in done or not (folder / d["shot"]).exists(): continue
         stem = f"inbox/{time.strftime('%Y%m%d', time.localtime(d.get('t', time.time())))}/{teach._safe(id)}_{d['shot'][:-4]}"
@@ -362,12 +369,13 @@ def send_capture(id, session):
         if not p.exists(): continue
         stem = sh["file"][:-4]
         files[f"{root}/{sh['file']}"] = p.read_bytes()
-        meta = {"file": sh["file"], "t": sh.get("t"), "tap": sh.get("tap"), "words": sh.get("words", []), "account": id,
+        meta = {"file": sh["file"], "t": sh.get("t"), "tap": sh.get("tap"), "words": sh.get("words", []), "note": sh.get("note", ""), "account": id,
                 "session": session, "bot_version": version.VERSION, "kind": "capture"}
         files[f"{root}/{stem}.json"] = json.dumps(meta, ensure_ascii=False, indent=1).encode("utf-8")
         tap = f"({sh['tap'][0]:.2f}, {sh['tap'][1]:.2f})" if sh.get("tap") else "—"
         words = " · ".join(str(w).replace("|", "/") for w in (sh.get("words") or [])[:10]) or "—"
-        lines.append(f"| {stem} | <img src=\"{sh['file']}\" width=\"260\"> | {tap} | {words} |")
+        note = (sh.get("note") or "").replace("|", "/")
+        lines.append(f"| {stem} | <img src=\"{sh['file']}\" width=\"260\"> | {tap} | {('📝 ' + note + '<br>') if note else ''}{words} |")
     for b in s.get("battles", []):           # your attacks: their pictures + taps
         bdir = folder / b["folder"]
         if not bdir.exists(): continue

@@ -209,3 +209,64 @@ def end_battle(battle, rec, max_x, max_y, session):
         (recorder.REC_DIR / f"{recorder._safe(name)}.json").write_text(json.dumps(data), encoding="utf-8")
         info["recording"] = name
     return info
+
+
+# ====================================================================== manual pictures (the user presses the button)
+import threading as _threading
+_LOCK = _threading.Lock()
+
+
+def manual_session(id):
+    """The open manual session (not sent yet), or a new one."""
+    for x in sessions(id):
+        d = load_session(id, x["session"])
+        if d and d.get("manual") and not d.get("sent"): return x["session"], d
+    s, _folder = new_session(id)
+    d = {"session": s, "account": id, "started": time.time(), "state": "ready", "manual": True, "shots": []}
+    save_session(id, s, d)
+    return s, d
+
+
+def add_manual_shot(id, png_bytes, note=""):
+    """Save one screenshot the user took (converted to the same 1280 px JPEG + words as capture mode)."""
+    import cv2, numpy as np
+    session, d = manual_session(id)
+    img = cv2.imdecode(np.frombuffer(png_bytes, np.uint8), cv2.IMREAD_COLOR)
+    if img is None: raise ValueError("bad picture")
+    small = cv2.resize(img, (1280, int(1280 * img.shape[0] / img.shape[1])))
+    n = max([int(x["file"][:3]) for x in d["shots"]] + [0]) + 1
+    name = f"{n:03d}.jpg"
+    cv2.imwrite(str(session_dir(id, session) / name), small, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    shot = {"file": name, "t": time.time(), "tap": None, "words": [], "note": note.strip()[:300]}
+    d["shots"].append(shot)
+    save_session(id, session, d)
+
+    def read_words():   # in the background: the button answers at once
+        try:
+            import utils
+            words = [b[0] for b in utils.ocr_boxes(cv2.cvtColor(small, cv2.COLOR_BGR2RGB)) if b[5] > 0.3][:60]
+        except Exception:
+            return
+        with _LOCK:
+            cur = load_session(id, session)
+            if not cur: return
+            for x in cur.get("shots", []):
+                if x["file"] == name: x["words"] = words
+            save_session(id, session, cur)
+    import threading
+    threading.Thread(target=read_words, daemon=True).start()
+    return session, shot
+
+
+def set_note(id, session, file, note):
+    with _LOCK:
+        return _set_note(id, session, file, note)
+
+
+def _set_note(id, session, file, note):
+    d = load_session(id, session)
+    if not d: return False
+    for x in d.get("shots", []):
+        if x["file"] == file: x["note"] = note.strip()[:300]
+    save_session(id, session, d)
+    return True

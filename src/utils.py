@@ -974,7 +974,8 @@ class Exit_Handler:
         if sys.platform != "win32":
             signals.append(signal.SIGHUP)
         for sig in signals:
-            signal.signal(sig, cls.handle_sig)
+            try: signal.signal(sig, cls.handle_sig)
+            except ValueError: pass   # loaded from a worker thread (e.g. the window's server): no signal handlers there
 
 Exit_Handler.setup_signal_handlers()
 

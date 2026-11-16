@@ -177,7 +177,8 @@ def default_app_settings():
         "ask_plan": True,            # ask "what do you want to do today?" once a day when the game is open        # download new versions by itself, then only ask to restart
         "profiles": {},              # account -> {"name": display name} (pictures: ~/.CoC_Bot/avatars)
         "learn_repo": "",            # "owner/name" of the (private) GitHub repo Claude learns from
-        "learn_auto": True,          # send unknown screens / fetch what Claude taught automatically
+        "learn_auto": True,
+        "upload_unknown": False,     # send the screens the bot didn't understand by itself (off: only your own pictures)          # send unknown screens / fetch what Claude taught automatically
         "ui": "qt",                  # "qt" = v4 desktop window, "web" = classic window
         "sync_settings": False,      # one set of settings for every account (saving one saves all)
         "display_w": 1920, "display_h": 1080, "display_dpi": 240, # emulator display the bot checks / sets

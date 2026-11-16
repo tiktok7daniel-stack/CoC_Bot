@@ -488,6 +488,28 @@ def api_capture_stop(id):
     cs.request_stop(id)
     return jsonify({"ok": True})
 
+@app.route("/api/capture/<id>/snap", methods=["POST"])
+def api_capture_snap(id):
+    """The user's own picture: one screenshot of the emulator now, saved in the manual session."""
+    import capture_session as cs
+    from gui_server import emu_setup
+    if not valid_id(id): abort(404)
+    try:
+        png = emu_setup.screenshot(bot_settings.load_app(), id)
+    except Exception as e:
+        return jsonify({"ok": False, "error": "adb", "detail": str(e)[:160]})
+    if not png: return jsonify({"ok": False, "error": "no_emulator"})
+    session, shot = cs.add_manual_shot(id, png, str((request.json or {}).get("note", "")))
+    cs.set_status(id, "ready", session=session, shots=len(cs.load_session(id, session)["shots"]), manual=True)
+    return jsonify({"ok": True, "session": session, "shot": shot})
+
+@app.route("/api/capture/<id>/note", methods=["POST"])
+def api_capture_note(id):
+    import capture_session as cs
+    if not valid_id(id): abort(404)
+    d = request.json or {}
+    return jsonify({"ok": cs.set_note(id, str(d.get("session", "")), str(d.get("file", "")), str(d.get("note", "")))})
+
 @app.route("/api/capture/<id>/status", methods=["GET"])
 def api_capture_status(id):
     import capture_session as cs

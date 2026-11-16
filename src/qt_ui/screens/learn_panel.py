@@ -112,6 +112,7 @@ class LearnPanel(QWidget):
         setup.add(form_row("ln_repo", "ln_repo_sub", repo))
         setup.add(form_row("gh_token", "ln_token_sub", secret_field(st, "github_token", "github_pat_…")))
         setup.add(toggle_row(st, "ln_auto", "learn_auto", "ln_auto_sub", "app"))
+        setup.add(toggle_row(st, "ln_upload_unknown", "upload_unknown", "ln_upload_unknown_sub", "app"))
         btns = QHBoxLayout()
         t = IconButton("plug", "ln_test", size=14)
         t.clicked.connect(self.test)
