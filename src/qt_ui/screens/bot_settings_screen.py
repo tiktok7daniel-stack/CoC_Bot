@@ -164,6 +164,7 @@ class BotSettingsScreen(Screen):
         g.addWidget(sch, 0, 0)
         inter = GlassCard("interval_title", "hourglass", "interval_sub")
         inter.add(num_row(st, "check_interval", "schedule.check_interval", None, "minutes", 0, 1440, 1, 90))
+        inter.add(toggle_row(st, "fast_capture", "fast_capture", "fast_capture_sub", scope="app"))
         inter.add(toggle_row(st, "never_close", "game.never_close", "never_close_sub"))
         inter.add(toggle_row(st, "keep_open", "game.keep_open", "keep_open_sub"))
         inter.add(toggle_row(st, "anti_idle", "game.anti_idle", "anti_idle_sub"))

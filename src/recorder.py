@@ -7,8 +7,14 @@ time since the recording started (positions as fractions of the touch device ran
 Replay: the same fingers are sent back through minitouch at the same times.
 Recordings live in ~/.CoC_Bot/recordings/<name>.json (local, per user).
 """
-import json, re, time, subprocess, threading
+import bisect, collections, json, re, time, subprocess, threading
 from pathlib import Path
+
+# every touch the bot itself sends (time.monotonic()): touches seen on the screen that are not in here are yours
+BOT_TOUCHES = collections.deque(maxlen=50000)
+
+def bot_touched():
+    BOT_TOUCHES.append(time.monotonic())
 
 REC_DIR = Path.home() / ".CoC_Bot" / "recordings"
 REQ_DIR = Path.home() / ".CoC_Bot" / "record_requests"
@@ -110,7 +116,7 @@ class Recorder:
 
     def _emit(self, type, slot, s):
         t = round(self.ts - self.ts0, 3) if self.ts is not None else round(time.monotonic() - self.t0, 3)
-        e = {"t": t, "type": type, "id": slot}
+        e = {"t": t, "type": type, "id": slot, "k": self.ts, "m": time.monotonic()}
         if type != "up": e.update(fx=round(s["x"] / self.max_x, 5), fy=round(s["y"] / self.max_y, 5))
         if type == "move" and self.events and self.events[-1]["type"] == "move" and self.events[-1]["id"] == slot \
                 and t - self.events[-1]["t"] < 0.04:
@@ -149,8 +155,9 @@ class Recorder:
 
     def save(self, name):
         REC_DIR.mkdir(parents=True, exist_ok=True)
-        data = {"name": name, "created": time.time(), "duration": self.events[-1]["t"] if self.events else 0,
-                "max": [self.max_x, self.max_y], "events": self.events}
+        events = [{k: v for k, v in e.items() if k not in ("k", "m")} for e in self.events]
+        data = {"name": name, "created": time.time(), "duration": events[-1]["t"] if events else 0,
+                "max": [self.max_x, self.max_y], "events": events}
         (REC_DIR / f"{_safe(name)}.json").write_text(json.dumps(data), encoding="utf-8")
         return data
 
@@ -177,6 +184,7 @@ def replay(data, connection, should_stop=lambda: False):
         else:
             b.up(cid)
         b.commit()
+        bot_touched()
         connection.send(b._content)
     # release every finger in case the recording ended mid-touch
     b = CommandBuilder()
@@ -185,3 +193,54 @@ def replay(data, connection, should_stop=lambda: False):
     try: connection.send(b._content)
     except Exception: pass
     return taps
+
+
+# ---------------------------------------------------------------- your own taps on top of a replay
+def user_strokes(events, since=None, until=None, tol=0.3):
+    """
+    The fingers (down .. up) seen on the screen that the bot did not send itself: yours.
+    events: Recorder events (with "k" kernel time and "m" arrival time). since / until: time.monotonic() limits.
+    """
+    if not events: return []
+    ks = [e for e in events if e.get("k") is not None]
+    off = min(e["m"] - e["k"] for e in ks) if ks else 0.0       # kernel clock -> monotonic (the fastest arrival)
+    est = lambda e: e["k"] + off if e.get("k") is not None else e["m"]
+    bot = sorted(BOT_TOUCHES)
+    strokes, cur = [], {}
+    for e in events:
+        sid = e["id"]
+        if e["type"] == "down": cur[sid] = [e]
+        elif sid in cur:
+            cur[sid].append(e)
+            if e["type"] == "up": strokes.append(cur.pop(sid))
+    strokes += list(cur.values())
+    out = []
+    for st in strokes:
+        t = est(st[0])
+        if since is not None and t < since: continue
+        if until is not None and t > until: continue
+        i = bisect.bisect_left(bot, t - tol)
+        if i < len(bot) and bot[i] <= t + tol: continue          # the bot's own touch
+        out.append([dict(e, est=est(e)) for e in st])
+    return out
+
+
+def merge_user_part(name, strokes, t0):
+    """Add your taps (seen while the recording was replayed) to the recording, at the time you made them."""
+    data = load(name)
+    if not data or not strokes: return 0
+    new = []
+    for st in strokes:
+        for e in st:
+            n = {"t": round(max(0.0, e["est"] - t0), 3), "type": e["type"], "id": int(e["id"]) % 5 + 5}
+            if e["type"] != "up": n.update(fx=e["fx"], fy=e["fy"])
+            new.append(n)
+    downs = sum(1 for n in new if n["type"] == "down")
+    if not downs: return 0
+    ev = sorted(data.get("events", []) + new, key=lambda e: e["t"])
+    data["events"] = ev
+    data["duration"] = ev[-1]["t"]
+    data.setdefault("merged", []).append({"t": time.time(), "taps": downs})
+    REC_DIR.mkdir(parents=True, exist_ok=True)
+    (REC_DIR / f"{_safe(data.get('name', name))}.json").write_text(json.dumps(data), encoding="utf-8")
+    return downs

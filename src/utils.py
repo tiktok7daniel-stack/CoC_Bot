@@ -2363,6 +2363,11 @@ class Input_Handler:
         """Send touch commands; if the minitouch socket died, restart minitouch once and resend."""
         content = builder._content
         try:
+            import recorder
+            recorder.bot_touched()               # the bot's own touch (not the user's) — for recordings
+        except Exception:
+            pass
+        try:
             builder.publish(ADB_Manager.minitouch_device.connection)
         except (OSError, ConnectionError, BrokenPipeError) as e:
             builder.reset()
@@ -2413,6 +2418,8 @@ class Input_Handler:
 
     @classmethod
     def multi_click(cls, x1, y1, x2, y2, duration=0):
+        try: __import__("recorder").bot_touched()
+        except Exception: pass
         ADB_Manager.minitouch_device.tap([cls._to_raw(x1, y1), cls._to_raw(x2, y2)], duration=duration)
 
     @classmethod
@@ -2529,17 +2536,31 @@ class Frame_Handler:
         return out
 
     @classmethod
+    def _adb_frame(cls):
+        import cv2, numpy as np
+        try: frame = ADB_Manager.adbutils_device_no_retry.framebuffer() # faster than screenshot but potentially unstable
+        except (KeyboardInterrupt, SystemExit): raise
+        except: frame = ADB_Manager.adbutils_device.screenshot()
+        frame = np.array(frame)[..., :3]
+        if (frame.shape[1], frame.shape[0]) != tuple(WINDOW_DIMS):
+            frame = cv2.resize(frame, WINDOW_DIMS, interpolation=cv2.INTER_NEAREST)
+        return frame
+
+    @classmethod
     def get_frame(cls, grayscale=True, high_contrast=False, thresh=200, use_cached=False):
         import cv2, numpy as np
         if use_cached and cls.cached_frame is not None:
             frame = cls.cached_frame.copy()
         else:
-            try: frame = ADB_Manager.adbutils_device_no_retry.framebuffer() # faster than screenshot but potentially unstable
-            except (KeyboardInterrupt, SystemExit): raise
-            except: frame = ADB_Manager.adbutils_device.screenshot()
-            frame = np.array(frame)[..., :3]
-            if (frame.shape[1], frame.shape[0]) != tuple(WINDOW_DIMS):
-                frame = cv2.resize(frame, WINDOW_DIMS, interpolation=cv2.INTER_NEAREST)
+            frame = None
+            if sys.platform == "win32" and current_emulator() == "ldplayer":
+                # straight from the LDPlayer window (~10 ms instead of 300-1500 ms over ADB), checked against ADB
+                try:
+                    import win_capture
+                    frame = win_capture.frame(WINDOW_DIMS, cls._adb_frame)
+                except (KeyboardInterrupt, SystemExit): raise
+                except Exception: frame = None
+            if frame is None: frame = cls._adb_frame()
             cls.cached_frame = frame.copy()
         # if configs.DEBUG: cls.save_frame(frame, "frame.png")
         if high_contrast: frame = cls.high_contrast(frame, thresh)
@@ -3252,7 +3273,14 @@ class Auto_Learn:
         """
         import time, teach
         if not cls.enabled: return False
-        if time.time() - cls.tried.get("unknown", 0) < 15: return False
+        # a screen it already got out of before: press the same place at once (no reading, no waiting)
+        try:
+            import screen_memory
+            frame = Frame_Handler.get_frame(grayscale=False)
+            if screen_memory.press(INSTANCE_ID, frame, logger): return True
+        except (KeyboardInterrupt, SystemExit): raise
+        except Exception: pass
+        if time.time() - cls.tried.get("unknown", 0) < 6: return False
         cls.tried["unknown"] = time.time()
         try:
             frame = Frame_Handler.get_frame(grayscale=False)
@@ -3286,8 +3314,16 @@ class Auto_Learn:
             for word in DISMISS_WORDS:
                 hit = next((b for b in boxes if b[5] > 0.4 and _word_hit(b[0], word)), None)
                 if hit:
-                    Input_Handler.click((hit[1] + hit[3]) / 2, (hit[2] + hit[4]) / 2)
+                    x, y = (hit[1] + hit[3]) / 2, (hit[2] + hit[4]) / 2
+                    Input_Handler.click(x, y)
                     action = f"tap:{hit[0]}"
+                    # learn it: did the press get the bot out of this screen? next time it presses at once
+                    try:
+                        import screen_memory
+                        h = screen_memory.fingerprint(frame)
+                        screen_memory.learn(INSTANCE_ID, h, x, y, hit[0], screen_memory.changed(h), phase or TEMP_CACHE.get("phase", ""))
+                    except (KeyboardInterrupt, SystemExit): raise
+                    except Exception: pass
                     break
             teach.record_discovery(INSTANCE_ID, frame, words, phase or TEMP_CACHE.get("phase", ""), action)
             try: __import__("learn_sync").note_unknown(INSTANCE_ID, frame, words, phase or TEMP_CACHE.get("phase", ""))

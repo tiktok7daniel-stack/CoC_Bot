@@ -60,11 +60,32 @@ class Attacker:
                 if not self._click_okay(timeout=3): Auto_Learn.learn_button("okay_button", tap=True, min_interval=0)
                 surrendered = True
         smart = self.smart_end and not leave and teach.taught("enemy_gold") and teach.taught("enemy_elixir")
+        # without the taught numbers: watch the "Available Loot" numbers top-left by their pixels (no reading)
+        smart_px = self.smart_end and not leave and not smart
+        loot_img = None
         last_loot, last_change, next_read, dropped = None, time.monotonic(), 0, False
         while time.monotonic() - start < max_wait:
             if not running(): break
             if not surrendered and getattr(self, "_later", None) and self.in_battle():
                 self.run_due()                           # hero abilities / second spell wave when their time comes
+            if smart_px and not surrendered and time.monotonic() >= next_read:
+                next_read = time.monotonic() + 1.0
+                try:
+                    import numpy as np
+                    cur = Frame_Handler.get_frame_section(0.04, 0.12, 0.17, 0.27, grayscale=True).astype(int)
+                    if loot_img is not None and cur.shape == loot_img.shape and float(np.abs(cur - loot_img).mean()) > 3:
+                        dropped, last_change = True, time.monotonic()
+                    if loot_img is None: last_change = time.monotonic()
+                    loot_img = cur
+                    stalled = time.monotonic() - last_change > (self.smart_end_after if dropped else max(30, self.smart_end_after))
+                    if stalled and self.in_battle():
+                        logger.info(f"Loot stopped for {self.smart_end_after}s, ending the battle early")
+                        if self._click_end_battle(timeout=0) or Auto_Learn.learn_button("end_battle", tap=True):
+                            time.sleep(0.4)
+                            if not self._click_okay(timeout=3): Auto_Learn.learn_button("okay_button", tap=True, min_interval=0)
+                            surrendered = True
+                except Exception:
+                    smart_px = False
             # smart end: the remaining enemy loot (top-left) stopped going down -> nothing more to take
             if smart and not surrendered and time.monotonic() >= next_read:
                 next_read = time.monotonic() + 1.5
@@ -91,10 +112,12 @@ class Attacker:
             # (the battle ended by hand / by the game) -> go on at once
             frame = Frame_Handler.get_frame(grayscale=False)
             if bottom_green_button(frame):
+                self.ended_at = time.monotonic()
                 logger.info("Battle over, collecting the reward")
                 if collect_rewards(): return
                 continue
             if in_home_base(fast=True):
+                self.ended_at = time.monotonic()
                 logger.info("Battle over, already back in the village")
                 TEMP_CACHE["location"] = "home_base"
                 return
@@ -111,6 +134,7 @@ class Attacker:
                     logger.info("Battle over, collecting the reward")
                     if collect_rewards(): return
             if self._click_return_home(timeout=0):
+                self.ended_at = time.monotonic()
                 logger.info("Battle over, returning home")
                 time.sleep(0.3)
                 for _ in range(80): # the village usually shows within 2-4 s
@@ -318,6 +342,8 @@ class Attacker:
         Returns True when a good base is on screen.
         """
         import time, teach
+        # attack every base it finds: no skipping, no reading of the loot (no time lost)
+        if not getattr(self, "skip_bases", False): return True
         # learn the search screen by itself (once), even when the filter is off
         if not (teach.taught("enemy_gold") and teach.taught("next_button")):
             frame = Frame_Handler.get_frame(grayscale=False)
@@ -755,6 +781,42 @@ class Attacker:
             self.activate_hero_abilities()
         return done
 
+    def _watch_touches(self):
+        """Start reading the screen's touch events (to tell your taps from the bot's own)."""
+        try:
+            import recorder, utils as _u
+            found = _u.TEMP_CACHE.get("touch_dev")
+            if not found:
+                found = recorder.find_touch_device(lambda c: ADB_Manager.adbutils_device.shell(c))
+                _u.TEMP_CACHE["touch_dev"] = found
+            if not found: return None
+            rec = recorder.Recorder(ADB_Manager._adb_exe or "adb", _u.ADB_ADDRESS, *found)
+            rec.start()
+            return rec
+        except Exception:
+            return None
+
+    def _merge_touches(self, watch, data, start):
+        """Your taps made while the recording was playing (not the bot's) -> saved into the same recording."""
+        import time
+        if watch is None: return
+        try:
+            import recorder, army_learn
+            time.sleep(0.3)
+            watch.stop()
+            until = getattr(self, "ended_at", None) or time.monotonic()
+            strokes = recorder.user_strokes(watch.events, since=start, until=until)
+            mx, my = (data.get("max") or [1, 1])[:2]
+            keep = []
+            for st in strokes:            # a tap on Surrender / End Battle ends the battle: not part of the attack
+                x, y = army_learn.touch_to_screen(st[0]["fx"], st[0]["fy"], mx, my)
+                if x < 0.16 and 0.69 < y < 0.81: break
+                keep.append(st)
+            n = recorder.merge_user_part(data.get("name") or self.plan.get("recording"), keep, start)
+            if n: logger.info(f"Recording '{data.get('name')}': you added {n} new tap(s) — saved into the recording")
+        except Exception:
+            logger.warning("Could not add your taps to the recording", exc_info=True)
+
     def later(self, at, fn):
         """Run fn at time `at` (monotonic) from the battle-end loop, so nothing waits for it."""
         self._later = getattr(self, "_later", None) or []
@@ -784,7 +846,7 @@ class Attacker:
         for x in self.deployed_heroes:
             Input_Handler.click(x, 0.9)
             time.sleep(0.15)
-        logger.info(f"Activated {len(self.deployed_heroes)} hero abilities")
+        logger.debug(f"Activated {len(self.deployed_heroes)} hero abilities")
     
     def complete_normal_attack(self, restart=True, exclude_clan_troops=False):
         import time, numpy as np
@@ -799,21 +861,25 @@ class Attacker:
         self.card_names = {}
         self.troops_done_at = self.heroes_done_at = None
         self._later = []
-        if getattr(self, "plan", None): logger.info(f"Attack plan: {self.plan.get('name', '')}")
+        if getattr(self, "plan", None): logger.debug(f"Attack plan: {self.plan.get('name', '')}")
         if getattr(self, "plan", None) and self.plan.get("recording"):
             import recorder
             data = recorder.load(self.plan["recording"])
             if data and data.get("events"):
                 logger.info(f"Replaying recording '{data.get('name')}'")
+                watch = self._watch_touches()            # your own taps during the battle are added to the recording
                 time.sleep(0.3)
+                replay_start = time.monotonic()
+                self.ended_at = None
                 try:
                     taps = recorder.replay(data, ADB_Manager.minitouch_device.connection, lambda: not running())
-                    logger.info(f"Recording replayed: {taps} taps")
+                    logger.debug(f"Recording replayed: {taps} taps")
                 except Exception:
                     logger.exception("Recording replay failed")
                 try: self.deploy_leftovers(data)     # new heroes / troops the recording didn't know about
                 except Exception: logger.exception("Deploying the remaining cards failed")
                 self.finish_battle(restart)
+                self._merge_touches(watch, data, replay_start)
                 return
             logger.warning(f"Recording '{self.plan['recording']}' not found, using the loadout")
         

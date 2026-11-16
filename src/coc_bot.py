@@ -34,6 +34,7 @@ class CoC_Bot:
 
     def storages_full(self, s):
         """User-set "storages full" levels reached -> skip attacking (nothing more to store)."""
+        return False                       # never skip attacking: the bot keeps going (the user's choice)
         f = s["attack"].get("skip_when_full", {})
         res = getattr(self, "last_res", None)
         if not f.get("enabled") or not res: return False

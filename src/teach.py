@@ -111,6 +111,12 @@ DISCOVERED_DIR = APP_DATA_DIR / "discovered"
 def record_discovery(id, frame_rgb, words, phase, action):
     """Remember a screen the bot didn't understand (screenshot + the words it read + what it did)."""
     import cv2
+    # the same screen again (looks the same) -> not stored a second time
+    try:
+        import screen_memory
+        if screen_memory.seen_before(id, "discovery", frame_rgb): return False
+    except Exception:
+        pass
     d = DISCOVERED_DIR / _safe(id)
     d.mkdir(parents=True, exist_ok=True)
     name = time.strftime("%Y%m%d_%H%M%S") + ".jpg"

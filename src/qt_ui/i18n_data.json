@@ -951,7 +951,11 @@
 "tp_saved_smart": "تمام — الأوتوميشن الذكي شغال",
 "nt_stuck": "البوت وقف على شاشة مايعرفهاش 🤔",
 "ln_send_stuck": "لو وقف على شاشة مايعرفهاش يبعتها على طول",
-"ln_send_stuck_sub": "لو فضل على نفس الشاشة الغريبة 20 ثانية، يصوّرها ويبعتها لـ Claude مرة واحدة ويقولك"
+"ln_send_stuck_sub": "لو فضل على نفس الشاشة الغريبة 20 ثانية، يصوّرها ويبعتها لـ Claude مرة واحدة ويقولك",
+"fast_capture": "تصوير سريع للشاشة ⚡",
+"fast_capture_sub": "بيقرا شاشة LDPlayer مباشرة بدل ADB — أسرع 20-50 مرة. خلّي نافذة LDPlayer مفتوحة (مش متصغّرة)",
+"lf_every_sub": "بيهاجم أي قرية يلاقيها",
+"lf_every": "البوت بيهاجم أول قرية تظهر له على طول — مفيش تخطّي ولا قراية غنايم، علشان مايضيعش ولا ثانية. ولما المخازن تتملا بيكمّل هجوم برضه."
 },
 "en": {
 "gold": "Gold",
@@ -1905,7 +1909,11 @@
 "tp_saved_smart": "OK — smart automation is on",
 "nt_stuck": "The bot is stuck on an unknown screen 🤔",
 "ln_send_stuck": "Stuck on an unknown screen: send it right away",
-"ln_send_stuck_sub": "Same unknown screen for 20 s -> picture sent to Claude once, and you are told"
+"ln_send_stuck_sub": "Same unknown screen for 20 s -> picture sent to Claude once, and you are told",
+"fast_capture": "Fast screen capture ⚡",
+"fast_capture_sub": "Reads the LDPlayer window directly instead of ADB — 20-50x faster. Keep the LDPlayer window open (not minimized)",
+"lf_every_sub": "Attacks every base it finds",
+"lf_every": "The bot attacks the first base it finds right away — no skipping and no loot reading, so no second is lost. Full storages don't stop it either."
 },
 "unit_ar": {
 "healing": "العلاج",
@@ -2723,6 +2731,14 @@
 [
 "^Battle over, already back in the village",
 "🏠 الهجمة خلصت وهو رجع القرية — هيهاجم تاني على طول"
+],
+[
+"^Fast screen capture on",
+"⚡ التصوير السريع شغال: بيقرا شاشة LDPlayer مباشرة (أسرع 20-50 مرة)"
+],
+[
+"^Fast screen capture not available",
+"التصوير السريع مش متاح دلوقتي (نافذة LDPlayer متصغّرة أو مستخبية) — شغال بـ ADB"
 ]
 ]
 }

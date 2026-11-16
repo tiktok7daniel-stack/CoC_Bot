@@ -139,6 +139,14 @@ def upload_pending(id, limit=MAX_PER_ROUND):
         if n >= limit_screens: break
         key = f"{id}/{d['shot']}"
         if key in done or not (folder / d["shot"]).exists(): continue
+        try:                                                   # a screen like one already sent: skip it
+            import cv2, screen_memory
+            pic = cv2.cvtColor(cv2.imread(str(folder / d["shot"])), cv2.COLOR_BGR2RGB)
+            if screen_memory.seen_before(id, "uploaded", pic):
+                done[key] = {"t": time.time(), "skipped": "same as one already sent"}
+                continue
+        except Exception:
+            pass
         stem = f"inbox/{time.strftime('%Y%m%d', time.localtime(d.get('t', time.time())))}/{teach._safe(id)}_{d['shot'][:-4]}"
         meta = dict(d, account=id, bot_version=version.VERSION, kind="screen")
         _put(stem + ".jpg", (folder / d["shot"]).read_bytes(), f"inbox: unknown screen {d['shot']}")

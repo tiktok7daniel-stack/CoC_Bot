@@ -174,21 +174,11 @@ class AttackScreen(Screen):
 
         # ======================= search
         w, g = grid(2)
-        swf = GlassCard("swf_title", "box", "swf_sub")
-        swf.add(toggle_row(st, "swf_enabled", "attack.skip_when_full.enabled"))
-        swf.add(num_row(st, "swf_gold", "attack.skip_when_full.gold", step=100000, width=150, icon_name=None))
-        swf.add(num_row(st, "swf_elixir", "attack.skip_when_full.elixir", step=100000, width=150))
-        g.addWidget(swf, 0, 0)
-        lf = GlassCard("lf_title", "filter", "lf_sub")
-        lf.add(toggle_row(st, "lf_enabled", "attack.loot_filter.enabled"))
-        lf.add(num_row(st, "lf_min_gold", "attack.loot_filter.min_gold", step=50000, width=150))
-        lf.add(num_row(st, "lf_min_elixir", "attack.loot_filter.min_elixir", step=50000, width=150))
-        lf.add(num_row(st, "lf_min_dark", "attack.loot_filter.min_dark", step=1000, width=150))
-        lf.add(combo_row(st, "lf_mode", "attack.loot_filter.mode", [("all", "lf_all"), ("any", "lf_any")]))
-        lf.add(num_row(st, "lf_skips", "attack.loot_filter.max_skips", lo=0, hi=500, width=100))
+        lf = GlassCard("lf_title", "filter", "lf_every_sub")
+        lf.add(label(key="lf_every", role="sub", wrap=True))
         self.lf_state = label("", "sub", wrap=True)
         lf.add(self.lf_state)
-        g.addWidget(lf, 0, 1)
+        g.addWidget(lf, 0, 0)
         L["search"].addWidget(w)
         L["search"].addStretch(1)
 
@@ -345,9 +335,8 @@ class AttackScreen(Screen):
 
     def _update_lf(self):
         """Loot filter needs the Next button and the enemy loot numbers learned (done automatically)."""
-        if not getattr(self, "_taught", None):
-            self.lf_state.setText("")
-            return
+        self.lf_state.setText("")             # no loot filter any more: every base is attacked
+        return
         ok = all(k in self._taught for k in ("next_button", "enemy_gold"))
         self.lf_state.setText(tr("lf_ready") if ok else tr("lf_need"))
         self.lf_state.setProperty("role", "ok" if ok else "warn")
