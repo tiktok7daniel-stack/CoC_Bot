@@ -174,6 +174,7 @@ def status(refresh=False):
     st["pending"] = False
     st["result"] = j.get("result", "")
     st["error"] = j.get("error", "")
+    st["files"] = j.get("files", [])
     if st["installing"]:
         done, total = j.get("done", 0), j.get("total", 0)
         st["progress"] = {"stage": j.get("stage", "start"), "mb": done // 1048576, "of_mb": total // 1048576,
@@ -260,28 +261,68 @@ def _download(files):
     return out
 
 
-def worker():
+def _platform_tag():
+    if sys.platform == "win32": return "win_amd64"
+    if sys.platform == "darwin": return "macosx"
+    return "linux_x86_64"
+
+
+def _ver(v):
+    out = []
+    for p in re.split(r"[.+]", v.split("+")[0]):
+        out.append(int(p) if p.isdigit() else 0)
+    return tuple(out)
+
+
+def find_files(url):
+    """The torch + torchvision wheels on the PyTorch index that fit this python / Windows -> [(url, name)]."""
+    import requests
+    from urllib.parse import unquote, urljoin
+    cp = f"cp{sys.version_info.major}{sys.version_info.minor}"
+    plat = _platform_tag()
+    picked = []
+    want = None
+    for pkg in ("torch", "torchvision"):
+        page = f"{url}/{pkg}/"
+        html = requests.get(page, timeout=60).text
+        cands = []
+        for href in re.findall(r'href="([^"]+?\.whl)[^"]*"', html):
+            name = unquote(href.split("/")[-1])
+            m = re.match(rf"{pkg}-([^-]+)-{cp}-{cp}t?-(.+)\.whl$", name)
+            if not m or plat not in m.group(2) or m.group(0).count("-") < 4: continue
+            if f"-{cp}t-" in name: continue                                      # free-threaded build: no
+            v = m.group(1)
+            if pkg == "torchvision" and want and _ver(v)[:2] != want: continue   # must match the torch picked
+            cands.append((_ver(v), v, urljoin(page, href.split("#")[0]), name))
+        if not cands:
+            raise RuntimeError(f"no {pkg} for python {sys.version_info.major}.{sys.version_info.minor} ({plat}) on {url}")
+        best = max(cands)
+        picked.append((best[2], best[3]))
+        if pkg == "torch":                     # torchvision 0.(torch minor + 15) goes with torch 2.x
+            tv = best[0]
+            want = (0, tv[1] + 15) if tv[0] == 2 else None
+    return picked
+
+
+def worker(files_given=None):
     _set_job(running=True, pid=os.getpid(), stage="find")
     try:
         card = nvidia()
         if not card: raise RuntimeError("no NVIDIA card found")
-        url = _index_url(card["driver"])
-        _log(f"index {url}, python {sys.version.split()[0]}")
-        # 1. which files fit this PC
-        rep = HOME / "gpu_report.json"
-        r = _pip(["install", "--dry-run", "--ignore-installed", "--no-deps", "--quiet", "--report", str(rep),
-                  "torch", "torchvision", "--index-url", url], timeout=300)
-        files = []
-        if r.returncode == 0 and rep.exists():
-            for it in json.loads(rep.read_text(encoding="utf-8")).get("install", []):
-                u = it.get("download_info", {}).get("url", "")
-                if u: files.append((u, u.split("/")[-1].split("#")[0].replace("%2B", "+")))
-        if not files:
-            err = (r.stderr or r.stdout or "").strip().splitlines()
-            raise RuntimeError("no fitting version found: " + (err[-1] if err else f"pip exit {r.returncode}"))
-        _log("files: " + ", ".join(n for _, n in files))
-        # 2. download
-        paths = _download(files)
+        if files_given:
+            # files the user downloaded himself (from the links in the app)
+            paths = [Path(p) for p in files_given if str(p).endswith(".whl") and os.path.exists(p)]
+            if not any("torch-" in p.name for p in paths): raise RuntimeError("the torch file (torch-…whl) is missing")
+            _log("your files: " + ", ".join(p.name for p in paths))
+        else:
+            url = _index_url(card["driver"])
+            _log(f"index {url}, python {sys.version.split()[0]}")
+            # 1. which files fit this PC (read from the index page: seconds)
+            files = find_files(url)
+            _set_job(files=[{"url": u, "name": n} for u, n in files])
+            _log("files: " + ", ".join(n for _, n in files))
+            # 2. download
+            paths = _download(files)
         # 3. install into its own folder
         _set_job(stage="install")
         shutil.rmtree(TMP, ignore_errors=True)
@@ -312,5 +353,28 @@ def remove():
     status(refresh=True)
 
 
+def start_install_files(paths, py=None):
+    """Install wheels the user downloaded himself. -> (ok, error)"""
+    if installing(): return False, "busy"
+    paths = [str(p) for p in paths if str(p).lower().endswith(".whl")]
+    if not paths: return False, "no .whl files chosen"
+    HOME.mkdir(parents=True, exist_ok=True)
+    LOG.write_text(f"{time.strftime('%Y-%m-%d %H:%M:%S')} installing your files\n", encoding="utf-8")
+    try:
+        kw = {"creationflags": NW | DETACHED} if sys.platform == "win32" else {"start_new_session": True}
+        p = subprocess.Popen([_python(py), os.path.abspath(__file__), "--install", "--files"] + paths, cwd=str(HOME),
+                             close_fds=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **kw)
+    except Exception as e:
+        return False, f"{type(e).__name__}: {e}"
+    _set_job(running=True, pid=p.pid, start=time.time(), stage="install", done=0, total=0, result="", error="")
+    return True, ""
+
+
+def links():
+    """Direct download links for this PC (for downloading by hand). -> [(url, name)]"""
+    card = nvidia()
+    return find_files(_index_url(card["driver"] if card else "999"))
+
+
 if __name__ == "__main__" and "--install" in sys.argv:
-    worker()
+    worker(sys.argv[sys.argv.index("--files") + 1:] if "--files" in sys.argv else None)

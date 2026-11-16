@@ -948,6 +948,22 @@ def api_gpu():
             pass
     return jsonify(st)
 
+@app.route("/api/gpu/links", methods=["GET"])
+def api_gpu_links():
+    """Direct download links of the right files for this PC (to download by hand in the browser)."""
+    import gpu_setup
+    try:
+        return jsonify({"ok": True, "files": [{"url": u, "name": n} for u, n in gpu_setup.links()]})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"{type(e).__name__}: {e}"[:300]})
+
+@app.route("/api/gpu/install_files", methods=["POST"])
+def api_gpu_install_files():
+    """Install torch / torchvision files the user downloaded himself."""
+    import gpu_setup
+    ok, err = gpu_setup.start_install_files((request.json or {}).get("paths", []))
+    return jsonify({"ok": ok, "error": err})
+
 @app.route("/api/gpu/install", methods=["POST"])
 def api_gpu_install():
     """Install the CUDA build of torch at the next restart (the window restarts the program right after)."""

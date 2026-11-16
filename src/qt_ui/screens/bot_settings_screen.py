@@ -158,6 +158,26 @@ class BotSettingsScreen(Screen):
         self.gpu_bar.setMinimumWidth(220)
         self.gpu_bar.setVisible(False)
         pb.addWidget(self.gpu_bar)
+        self.gpu_more = QHBoxLayout()
+        self.links_btn = IconButton("link", "pw_links", size=13)
+        self.links_btn.clicked.connect(self.show_links)
+        self.files_btn = IconButton("folder", "pw_have_files", size=13)
+        self.files_btn.clicked.connect(self.install_files)
+        self.log_btn = IconButton("list", "pw_details", size=13)
+        self.log_btn.clicked.connect(lambda: self.gpu_log.setVisible(not self.gpu_log.isVisible()))
+        for b in (self.links_btn, self.files_btn, self.log_btn): self.gpu_more.addWidget(b)
+        self.gpu_more.addStretch(1)
+        self.gpu_links = QLabel("")
+        self.gpu_links.setOpenExternalLinks(True)
+        self.gpu_links.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        self.gpu_links.setWordWrap(True)
+        self.gpu_links.setVisible(False)
+        self.gpu_log = QLabel("")
+        self.gpu_log.setWordWrap(True)
+        self.gpu_log.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.gpu_log.setLayoutDirection(Qt.LeftToRight)
+        self.gpu_log.setStyleSheet("font-family: Consolas, monospace; font-size: 8.5pt; color: %s;" % TOKENS["muted"])
+        self.gpu_log.setVisible(False)
         self._gpu_timer = QTimer(self)
         self._gpu_timer.timeout.connect(self.check_power)
         self._gpu_mode = "install"
@@ -168,6 +188,9 @@ class BotSettingsScreen(Screen):
         pw.add(pb)
         self.pw_note = label("", "sub", wrap=True)
         pw.add(self.pw_note)
+        pw.add(self.gpu_more)
+        pw.add(self.gpu_links)
+        pw.add(self.gpu_log)
         g.addWidget(pw, 3, 0, 1, 2)
 
         gh = GlassCard("gh_title", "github", "gh_sub")
@@ -336,6 +359,9 @@ class BotSettingsScreen(Screen):
                               tr("pw_brain_txt").format(kinds=m.get("kinds", 0), pics=m.get("screens", 0), mem=mem.get("screens", 0)))
             if m.get("now_title"): self.pw_brain.setToolTip(tr("pw_now").format(t=m["now_title"]))
             log = [l for l in (r.get("log") or "").strip().splitlines() if l.strip()]
+            self.gpu_log.setText("\n".join(log[-14:]) or "—")
+            for b in (self.links_btn, self.files_btn, self.log_btn): b.setVisible(bool(card))
+            self.files_btn.setEnabled(not r.get("installing"))
             res = r.get("result") or ""
             if r.get("installing"): self.pw_note.setText(tr("pw_dl_note"))
             elif res == "interrupted": self.pw_note.setText(tr("pw_gpu_interrupted"))
@@ -358,6 +384,33 @@ class BotSettingsScreen(Screen):
                 self.pw_note.setText(msg)
                 self.ctx.toast(msg, "bad")
         self.api.post("/api/gpu/install", {}, done)
+
+    def show_links(self):
+        """The exact files for this PC, to download in the browser (then: I have the files)."""
+        self.gpu_links.setVisible(True)
+        self.gpu_links.setText(tr("checking"))
+        def got(r):
+            if isinstance(r, dict) and r.get("ok"):
+                rows = "".join(f'<div style="margin:4px 0">⬇️ <a href="{f["url"]}" style="color:{TOKENS["accent"]}">{f["name"]}</a></div>'
+                               for f in r.get("files", []))
+                self.gpu_links.setText(f'<div>{tr("pw_links_help")}</div>{rows}')
+            else:
+                self.gpu_links.setText(tr("pw_links_fail") + " " + str((r or {}).get("error", "") if isinstance(r, dict) else r))
+        self.api.get("/api/gpu/links", got, timeout=90)
+
+    def install_files(self):
+        from PySide6.QtWidgets import QFileDialog
+        paths, _ = QFileDialog.getOpenFileNames(self, tr("pw_have_files"), "", "Python wheel (*.whl)")
+        if not paths: return
+        def done(r):
+            if isinstance(r, dict) and r.get("ok"):
+                self.ctx.toast(tr("pw_files_started"), "ok")
+                QTimer.singleShot(800, self.check_power)
+            else:
+                msg = tr("pw_start_fail") + " " + str((r or {}).get("error", "") if isinstance(r, dict) else r)
+                self.pw_note.setText(msg)
+                self.ctx.toast(msg, "bad")
+        self.api.post("/api/gpu/install_files", {"paths": paths}, done)
 
     def install_tess(self):
         def done(r):
