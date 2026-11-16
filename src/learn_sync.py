@@ -119,7 +119,8 @@ def upload_pending(id, limit=MAX_PER_ROUND):
         meta = dict(d, account=id, bot_version=version.VERSION, kind="screen")
         _put(stem + ".jpg", (folder / d["shot"]).read_bytes(), f"inbox: unknown screen {d['shot']}")
         _put(stem + ".json", json.dumps(meta, ensure_ascii=False, indent=1).encode("utf-8"), f"inbox: words of {d['shot']}")
-        done[key] = time.time()
+        done[key] = {"t": time.time(), "path": stem, "words": d.get("words", [])[:10], "phase": d.get("phase", ""),
+                     "action": d.get("action", ""), "account": id}
         n += 1
     # learned armies
     if QUEUE.exists():
@@ -135,12 +136,40 @@ def upload_pending(id, limit=MAX_PER_ROUND):
             stem = f"armies/{army_learn._safe(q['name'])}"
             _put(stem + ".jpg", pic.read_bytes(), f"army: {q['name']}")
             _put(stem + ".json", json.dumps(dict(data, account=q.get("id")), ensure_ascii=False, indent=1).encode("utf-8"), f"army steps: {q['name']}")
-            done[f"army/{q['name']}"] = time.time()
+            done[f"army/{q['name']}"] = {"t": time.time(), "path": stem, "army": q["name"]}
             n += 1
         QUEUE.write_text("\n".join(rest) + ("\n" if rest else ""), encoding="utf-8")
     st["last_upload"] = time.time()
     _save(STATE, st)
+    if n: write_index()
     return n
+
+
+def write_index():
+    """README.md of the learning repo: every picture the bot didn't know, its words and its state (⏳ / ✓)."""
+    st = _load(STATE, {})
+    status = _load(STATUS, {}).get("items", {})
+    rows = [v for v in st.get("uploaded", {}).values() if isinstance(v, dict) and v.get("path")]
+    rows.sort(key=lambda v: v.get("t", 0), reverse=True)
+    screens = [v for v in rows if not v.get("army")]
+    armies = [v for v in rows if v.get("army")]
+    learned = sum(1 for v in screens if (status.get(v["path"].split("/")[-1]) or {}).get("done"))
+    out = ["# Clash Farmer — شاشات البوت ماكانش يعرفها", "",
+           f"**{len(screens)}** شاشة اتبعتت — **{learned}** اتعلّمت ✓ — **{len(screens) - learned}** مستنية Claude ⏳", "",
+           "> Claude: اتبع `docs/LEARNING.md` في ريبو البوت. اكتب القواعد في `knowledge/screens.json` والحالة في `knowledge/status.json`.", "",
+           "| الصورة | الحالة | اللي البوت قراه | كان بيعمل إيه |", "|---|---|---|---|"]
+    for v in screens:
+        name = v["path"].split("/")[-1]
+        s_ = status.get(name) or {}
+        state = ("✓ " + (s_.get("note_ar") or s_.get("note") or "اتعلّمت")) if s_.get("done") else "⏳ مستنية Claude"
+        words = " · ".join(str(w).replace("|", "/") for w in v.get("words", [])[:8]) or "—"
+        when = time.strftime("%Y-%m-%d %H:%M", time.localtime(v.get("t", 0)))
+        out.append(f"| <img src=\"{v['path']}.jpg\" width=\"240\"><br>{when} | {state} | {words} | {v.get('phase') or '—'} {v.get('action') or ''} |")
+    if armies:
+        out += ["", "## الجيوش اللي البوت اتعلّمها منك", "", "| الجيش | الصورة |", "|---|---|"]
+        for v in armies: out.append(f"| {v['army']} | <img src=\"{v['path']}.jpg\" width=\"240\"> |")
+    _put("README.md", "\n".join(out).encode("utf-8"), f"index: {len(screens)} screens, {learned} learned")
+
 
 
 def fetch_knowledge():
@@ -159,7 +188,9 @@ def sync_now(id):
     st = _load(STATE, {})
     try:
         up = upload_pending(id, limit=20)
+        before = json.dumps(_load(STATUS, {}), sort_keys=True)
         rules = fetch_knowledge()
+        if not up and json.dumps(_load(STATUS, {}), sort_keys=True) != before: write_index()
         st = _load(STATE, {})
         st["error"] = ""
         _save(STATE, st)
