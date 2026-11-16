@@ -283,8 +283,34 @@ def overview(id):
 
 
 # ====================================================================== using the knowledge (bot process)
-def match_screen(words, phase=""):
-    """The taught rule for a screen showing these OCR words, or None."""
+FINGERPRINT_MAX = 26     # dhash distance (of 128 bits) that still counts as "the same screen"
+
+
+def match_picture(frame):
+    """The taught rule whose example pictures look like this frame (works without reading any word)."""
+    try:
+        import capture_session as cs
+        h = cs.dhash(frame)
+    except Exception:
+        return None, None
+    best, best_d = None, 999
+    for r in _load(KNOW, {}).get("screens", []):
+        for fp in r.get("fingerprints", []):
+            try: d = cs.distance(h, (int(fp[0]), int(fp[1])))
+            except (ValueError, TypeError, IndexError): continue
+            if d < best_d: best, best_d = r, d
+    return (best, best_d) if best is not None and best_d <= FINGERPRINT_MAX else (None, best_d)
+
+
+def match_screen(words, phase="", frame=None):
+    """The taught rule for this screen: by its words, else by how it looks (fingerprint of the taught pictures)."""
+    r = _match_words(words, phase)
+    if r is None and frame is not None:
+        r, _d = match_picture(frame)
+    return r
+
+
+def _match_words(words, phase=""):
     text = " ".join(w.lower() for w in words)
     best, best_score = None, 0
     for r in _load(KNOW, {}).get("screens", []):

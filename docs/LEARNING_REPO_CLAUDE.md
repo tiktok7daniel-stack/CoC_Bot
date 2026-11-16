@@ -33,3 +33,15 @@ Study the technique: army used, deploy order, where (edges / funnel / corner), t
 Write it to `knowledge/strategies.json`: `{"<session>/battle_NN": {"army": {...}, "plan_ar": "<Egyptian Arabic summary of the technique>",
 "deploy": [{"what": "...", "where": "left edge", "t": 0.0}], "result": {...}, "rating": 1-5}}` and tell the user what you learned.
 The battle is also saved in the bot as a replayable recording ("learned <date> #N").
+
+### Pictures the user took (manual sessions)
+`captures/<session>/` from the "Take picture" button: each `NNN.json` has a `note` written by the user (Arabic) saying
+what the screen is or what goes wrong there — follow it. The user is walking through the whole village on purpose:
+build `knowledge/map.json` = every screen / menu / button with where it is (x/y fractions) and how to reach it
+(`{"screen_id": {"title_ar", "how_to_open": [taps...], "buttons": {"name": [x, y]}, "source": "captures/..."}}`),
+then propose new bot features based on it.
+
+### Fingerprints (recognising screens by how they look)
+Every rule in `knowledge/screens.json` carries `fingerprints`: the dhash (capture_session.dhash, two ints as strings)
+of every picture marked with that rule. The bot uses them when it can't read the words on a screen (distance <= 26).
+After marking new pictures, recompute the fingerprints for all rules (pictures from status.json -> their rule).

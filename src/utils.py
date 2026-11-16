@@ -783,13 +783,24 @@ def collect_rewards(timeout=30):
             if not what:
                 Input_Handler.click(0.5, 0.857)
                 what = "results button"
-        elif "continue" in text:
+        elif "continue" in text or "delivered" in text or "storage" in text or ("skip" in text and taps):
             what = tap_box("continue")
+            if not what:
+                Input_Handler.click(0.5, 0.86)      # the green Continue under the item
+                what = "continue"
         elif "return home" in text or ("return" in text and "home" in text):
             what = tap_box("return home", "return")
         elif any(w in text for w in CHEST_WORDS) or (taps and len(boxes) <= 4):     # chest room: hardly any text
             Input_Handler.click(0.5, 0.55)       # the chest in the middle: each tap breaks one lock
             what = "chest"
+        if not what:
+            try:
+                import learn_sync
+                rule = learn_sync.match_screen([b[0] for b in boxes], "home_attack", frame)
+                if rule and not rule.get("no_action") and learn_sync.run_actions(rule, boxes):
+                    what = rule.get("id", "taught screen")
+            except Exception:
+                pass
         if what:
             taps += 1
             if taps == 1 or what != "chest": logger.info(f"Battle rewards: pressed {what}")
@@ -3180,7 +3191,7 @@ class Auto_Learn:
             # a screen Claude already explained (knowledge fetched from the learning repo)
             try:
                 import learn_sync
-                rule = learn_sync.match_screen(words, phase or TEMP_CACHE.get("phase", ""))
+                rule = learn_sync.match_screen(words, phase or TEMP_CACHE.get("phase", ""), frame)
                 if rule and rule.get("no_action"):      # a known screen that needs nothing (e.g. the village itself)
                     return False
                 if rule and learn_sync.run_actions(rule, boxes):

@@ -88,7 +88,8 @@ class Attacker:
             if time.monotonic() - start > 6 and not self.in_battle():
                 frame = Frame_Handler.get_frame(grayscale=False)
                 words = " ".join(b[0].lower() for b in ocr_boxes(frame) if b[5] > 0.3)
-                if ("claim" in words and "reward" in words) or "continue" in words or any(w in words for w in CHEST_WORDS) \
+                if ("claim" in words and "reward" in words) or "continue" in words or "delivered" in words or "storage" in words \
+                        or any(w in words for w in CHEST_WORDS) \
                         or (("victory" in words or "defeat" in words) and ("bonus" in words or "damage" in words)):
                     logger.info("Battle over, collecting the reward")
                     if collect_rewards(): return
