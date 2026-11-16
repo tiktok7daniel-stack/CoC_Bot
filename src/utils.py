@@ -1495,17 +1495,19 @@ class LDPlayer_Manager(_Emulator_Manager):
     @classmethod
     def start(cls, timeout=120):
         import time
-        cls.wake()
+        if cls.pid is not None: cls.wake()
         if cls.check():
             logger.info("LDPlayer already running.")
             return
+        logger.info(f"Starting LDPlayer (copy #{cls.index})…")
         cls._run("launch", "--index", str(cls.index))
         start_time = time.time()
         while time.time() - start_time < timeout:
             if cls.check():
                 logger.info("LDPlayer started.")
+                time.sleep(8)          # Android finishes booting after the window is up
                 return
-            time.sleep(1)
+            time.sleep(2)
         raise Exception("LDPlayer failed to start.")
 
     @classmethod
@@ -1523,8 +1525,16 @@ class LDPlayer_Manager(_Emulator_Manager):
             time.sleep(1)
         raise Exception("LDPlayer failed to stop.")
 
+def _chosen_emulator():
+    """The emulator picked in the app (fresh from the settings file; LDPlayer when nothing is set)."""
+    try:
+        import settings as _s
+        return _s.load_app().get("emulator") or getattr(configs, "EMULATOR_TYPE", "ldplayer")
+    except Exception:
+        return getattr(configs, "EMULATOR_TYPE", "ldplayer")
+
 Emulator_Manager = {"bluestacks": BlueStacks_Manager, "mumu": MuMu_Manager, "ldplayer": LDPlayer_Manager}.get(
-    getattr(configs, "EMULATOR_TYPE", "bluestacks"), BlueStacks_Manager)
+    _chosen_emulator(), LDPlayer_Manager)
 
 class Task_Handler:
     
@@ -1878,6 +1888,39 @@ def ensure_minitouch(device):
         raise RuntimeError("minitouch was installed but does not run on this device")
     logger.info("minitouch installed.")
 
+def current_emulator():
+    """The emulator chosen in the app settings (read fresh: a child process may not have it in configs yet)."""
+    try:
+        import settings
+        return settings.load_app().get("emulator") or getattr(configs, "EMULATOR_TYPE", "ldplayer")
+    except Exception:
+        return getattr(configs, "EMULATOR_TYPE", "ldplayer")
+
+
+def emulator_adb():
+    """The emulator's OWN adb. Two different adb programs on one PC keep killing each other's server
+    (device offline / not found every few minutes), so LDPlayer always uses LDPlayer's adb, never BlueStacks'."""
+    import os, sys
+    from pathlib import Path
+    if sys.platform != "win32": return None
+    emu = current_emulator()
+    if emu == "ldplayer":
+        try:
+            p = LDPlayer_Manager.adb_exe
+            if p: return p
+        except Exception:
+            pass
+        for base in ([os.environ.get("ProgramFiles", r"C:\Program Files")] + [f"{d}:\\" for d in "CDEF"]):
+            for sub in ("LDPlayer\\LDPlayer9", "LDPlayer\\LDPlayer4.0", "LDPlayer9", "ChangZhi\\LDPlayer"):
+                p = Path(base) / sub / "adb.exe"
+                if p.exists(): return str(p)
+        return None
+    if emu == "bluestacks":
+        p = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "BlueStacks_nxt" / "HD-Adb.exe"
+        return str(p) if p.exists() else None
+    return None
+
+
 class ADB_Manager:
     import uiautomator2 as u2
     from adbutils import AdbDevice
@@ -1910,13 +1953,7 @@ class ADB_Manager:
         
         if addr is None: addr = ADB_ADDRESS
         if ADB_ABS_DIR != "": os.environ["PATH"] = ADB_ABS_DIR + os.pathsep + os.environ["PATH"]
-        adb_executable = shutil.which("adb")
-        if sys.platform == "win32" and getattr(configs, "EMULATOR_TYPE", "bluestacks") == "bluestacks":
-            bluestacks_adb = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "BlueStacks_nxt" / "HD-Adb.exe"
-            if bluestacks_adb.exists(): adb_executable = str(bluestacks_adb)
-        if sys.platform == "win32" and getattr(configs, "EMULATOR_TYPE", "bluestacks") == "ldplayer":
-            ld_adb = LDPlayer_Manager.adb_exe
-            if ld_adb: adb_executable = ld_adb
+        adb_executable = emulator_adb() or shutil.which("adb")
         if adb_executable is None:
             raise FileNotFoundError("ADB executable not found. Set ADB_ABS_DIR to its directory.")
         os.environ["ADBUTILS_ADB_PATH"] = adb_executable
@@ -1925,12 +1962,12 @@ class ADB_Manager:
         import pyminitouch.connection
         pyminitouch.connection._ADB = adb_executable
         # if cls.is_connected(): return
-        subprocess.run([adb_executable, "start-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run([adb_executable, "start-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **_no_window())
         cls._adb_exe = adb_executable
         def reset_adb():
             # Never kill the shared adb server (it drops every connection, including
             # minitouch and other accounts): just reconnect this device.
-            subprocess.run([adb_executable, "disconnect", addr], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run([adb_executable, "disconnect", addr], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **_no_window())
         res = adbutils.adb.connect(addr)
         if "connected" not in res:
             reset_adb()
@@ -1983,7 +2020,7 @@ class ADB_Manager:
         addr = ADB_ADDRESS
         try:
             if cls.device_state(addr) == "offline" and cls._adb_exe:
-                subprocess.run([cls._adb_exe, "reconnect", "offline"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+                subprocess.run([cls._adb_exe, "reconnect", "offline"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10, **_no_window())
             adbutils.adb.connect(addr, timeout=5)
         except Exception:
             pass
@@ -2494,7 +2531,7 @@ def set_phase(name):
         d.mkdir(parents=True, exist_ok=True)
         (d / f"{INSTANCE_ID}.json").write_text(json.dumps({
             "phase": name, "t": time.time(), "adb": ADB_ADDRESS,
-            "emulator": getattr(configs, "EMULATOR_TYPE", "bluestacks"), "pid": __import__("os").getpid(),
+            "emulator": current_emulator(), "pid": __import__("os").getpid(),
         }))
     except Exception:
         pass

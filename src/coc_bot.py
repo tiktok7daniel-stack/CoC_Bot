@@ -415,8 +415,19 @@ class CoC_Bot:
         cmds = village.take_commands(_utils.INSTANCE_ID)
         if not cmds: return False
         set_phase("commands")
-        start_coc()
-        to_home_base()
+        try:
+            start_coc()
+            to_home_base()
+        except (KeyboardInterrupt, SystemExit): raise
+        except Exception:
+            logger.warning("Commands postponed: the game / village is not reachable right now")
+        if not in_home_base():
+            # don't hammer the game with commands it can't do now: keep them for the next round (max 3 tries)
+            for c in cmds:
+                tries = int(c.get("tries", 0)) + 1
+                if tries <= 3: village.push_command(_utils.INSTANCE_ID, c["cmd"], **{k: v for k, v in c.items() if k not in ("cmd", "t")}, tries=tries)
+            logger.warning("Commands postponed: not in the village (will try again)")
+            return False
         for c in cmds:
             if c.get("cmd") == "upgrade" and c.get("name"):
                 logger.info(f"1-tap upgrade requested: {c['name']}")

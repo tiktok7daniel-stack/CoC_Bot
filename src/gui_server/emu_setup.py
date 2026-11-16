@@ -89,6 +89,13 @@ def adb_exe(app, console=None):
     if emu == "ldplayer" and console:
         p = Path(console).parent / "adb.exe"
         if p.exists(): return str(p)
+    if emu == "ldplayer": # never another adb for LDPlayer: two adb servers knock each other offline
+        try:
+            import utils
+            p = utils.emulator_adb()
+            if p: return p
+        except Exception:
+            pass
     if emu == "bluestacks" and sys.platform == "win32":
         p = bs_dir() / "HD-Adb.exe"
         if p.exists(): return str(p)

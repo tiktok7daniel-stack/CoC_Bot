@@ -149,7 +149,7 @@ ATTACK_BUILDER_BASE = True # can be overridden on desktop or web app
 ########################
 DEBUG = False
 DISABLE_DEVICE_SLEEP = True
-EMULATOR_TYPE = "bluestacks" # "bluestacks" or "mumu"
+EMULATOR_TYPE = "ldplayer" # "ldplayer", "bluestacks" or "mumu"
 AUTO_START_EMULATOR = True
 SUSPEND_EMULATOR_ON_IDLE = False # optionally suspend emulator process when idle to cut down on resource usage
 WINDOW_DIMS = (1920, 1080) # width, height

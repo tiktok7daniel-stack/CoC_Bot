@@ -1510,6 +1510,7 @@ class Upgrader:
             wall_misses = 0
             counter = 0
             if walls_wanted: logger.info("Upgrading walls")
+            errors_in_row = 0
             while counter < max(MAX_UPGRADES_PER_CHECK, min(self.wall_budget, 200) if walls_wanted else 0):
                 counter += 1
                 try:
@@ -1559,7 +1560,13 @@ class Upgrader:
                         break
                 except (KeyboardInterrupt, SystemExit): raise
                 except:
+                    errors_in_row += 1
+                    if errors_in_row >= 3:
+                        logger.warning("Home base upgrades stopped: the builder menu could not be read 3 times in a row")
+                        break
                     logger.warning("Encountered an error while attempting to upgrade home base. Retrying...")
+                    continue
+                errors_in_row = 0
             configs.HOME_BASE_UPGRADE_PRIORITY = base_priority
             self.skip_walls = False
             self.last_walls_done = walls_done

@@ -156,7 +156,7 @@ def default_settings():
 def default_app_settings():
     return {
         "language": "ar",
-        "emulator": _cfg("EMULATOR_TYPE", "bluestacks"),
+        "emulator": _cfg("EMULATOR_TYPE", "ldplayer"),
         "start_with_windows": False,
         "telegram_bot_token": _cfg("TELEGRAM_BOT_TOKEN", ""),
         "groq_api_key": _cfg("GROQ_API_KEY", ""),
