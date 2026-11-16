@@ -329,7 +329,11 @@ class BotSettingsScreen(Screen):
             elif r.get("installing"):
                 pg = r.get("progress") or {}
                 stage = pg.get("stage", "start")
-                if stage == "download":
+                if stage == "install" and pg.get("of_mb"):
+                    self.pw_gpu.set("warn", tr("pw_gpu_unpack").format(pct=pg.get("pct", 0)))
+                    self.gpu_bar.setRange(0, 100)
+                    self.gpu_bar.setValue(int(pg.get("pct", 0)))
+                elif stage == "download":
                     self.pw_gpu.set("warn", tr("pw_gpu_dl").format(pct=pg.get("pct", 0), gb=round(pg.get("mb", 0) / 1024, 2),
                                                                   of=round(pg.get("of_mb", 0) / 1024, 2), speed=pg.get("speed", 0)))
                     self.gpu_bar.setRange(0, 100)

@@ -985,7 +985,7 @@
 "pw_stage_start": "بيبدأ…",
 "pw_stage_find": "بيدوّر على النسخة المناسبة لكارتك…",
 "pw_stage_install": "بيسطّب الملفات…",
-"pw_stage_check": "بيتأكد إن الكارت شغال…",
+"pw_stage_check": "بيجرّب الكارت لأول مرة… (ممكن ياخد دقيقة)",
 "pw_gpu_interrupted": "التحميل وقف في النص (البرنامج أو الجهاز اتقفل). دوس «حاول تاني» — هيكمّل من مكان ما وقف.",
 "pw_start_fail": "ما قدرش يبدأ:",
 "pw_links": "روابط التحميل",
@@ -994,7 +994,8 @@
 "pw_links_help": "لو التحميل من البرنامج بطيء أو واقف: حمّل الملفين دول من المتصفح (هما المناسبين لجهازك بالظبط)، وبعدين دوس «عندي الملفات» واختارهم مع بعض.",
 "pw_links_fail": "ما قدرش يجيب الروابط (النت؟):",
 "pw_files_started": "بيسطّب ملفاتك دلوقتي — تابع هنا",
-"checking": "بيتأكد…"
+"checking": "بيتأكد…",
+"pw_gpu_unpack": "بيسطّب الملفات… {pct}% — سيبه يكمّل لوحده"
 },
 "en": {
 "gold": "Gold",
@@ -1982,7 +1983,7 @@
 "pw_stage_start": "Starting…",
 "pw_stage_find": "Finding the right version for your card…",
 "pw_stage_install": "Installing the files…",
-"pw_stage_check": "Checking the card works…",
+"pw_stage_check": "Trying the card for the first time… (can take a minute)",
 "pw_gpu_interrupted": "The download stopped half way (program or PC closed). Press Try again — it continues where it stopped.",
 "pw_start_fail": "Could not start:",
 "pw_links": "Download links",
@@ -1991,7 +1992,8 @@
 "pw_links_help": "If downloading from the program is slow or stuck: download these two files in your browser (exactly the right ones for your PC), then press “I have the files” and choose both.",
 "pw_links_fail": "Could not get the links (internet?):",
 "pw_files_started": "Installing your files now — follow it here",
-"checking": "Checking…"
+"checking": "Checking…",
+"pw_gpu_unpack": "Installing the files… {pct}% — let it finish by itself"
 },
 "unit_ar": {
 "healing": "العلاج",

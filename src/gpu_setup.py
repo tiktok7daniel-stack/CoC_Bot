@@ -28,7 +28,7 @@ TMP = HOME / "cuda_torch.part"
 DL = HOME / "cuda_dl"
 OLD_FLAG = HOME / "gpu_install.flag"
 NW = 0x08000000 if sys.platform == "win32" else 0            # CREATE_NO_WINDOW
-DETACHED = 0x00000008 if sys.platform == "win32" else 0      # DETACHED_PROCESS
+GROUP = 0x00000200 if sys.platform == "win32" else 0         # CREATE_NEW_PROCESS_GROUP (survives the program closing)
 
 
 def activate():
@@ -103,6 +103,13 @@ def nvidia():
 # ---------------------------------------------------------------- state
 def _python(py=None):
     return (py or sys.executable).replace("pythonw.exe", "python.exe")
+
+
+def _pythonw(py=None):
+    """The windowless python (no black window); python.exe where there is none."""
+    exe = py or sys.executable
+    w = exe.replace("python.exe", "pythonw.exe") if exe.lower().endswith("python.exe") else exe
+    return w if os.path.exists(w) else exe
 
 
 def torch_info(path=None, py=None):
@@ -201,8 +208,8 @@ def start_install(py=None):
     HOME.mkdir(parents=True, exist_ok=True)
     LOG.write_text(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {card['name']} (driver {card['driver']})\n", encoding="utf-8")
     try:
-        kw = {"creationflags": NW | DETACHED} if sys.platform == "win32" else {"start_new_session": True}
-        p = subprocess.Popen([_python(py), os.path.abspath(__file__), "--install"], cwd=str(HOME), close_fds=True,
+        kw = {"creationflags": NW | GROUP} if sys.platform == "win32" else {"start_new_session": True}
+        p = subprocess.Popen([_pythonw(py), os.path.abspath(__file__), "--install"], cwd=str(HOME), close_fds=True,
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **kw)
     except Exception as e:
         _log(f"could not start: {type(e).__name__}: {e}")
@@ -304,6 +311,30 @@ def find_files(url):
     return picked
 
 
+def _unpack(paths):
+    """A wheel is a zip: unpack it into its own folder (what pip --target does), with real progress."""
+    import zipfile
+    shutil.rmtree(TMP, ignore_errors=True)
+    TMP.mkdir(parents=True, exist_ok=True)
+    zips = [zipfile.ZipFile(p) for p in paths]
+    total = sum(i.file_size for z in zips for i in z.infolist())
+    done, last = 0, 0.0
+    _set_job(stage="install", done=0, total=total)
+    _log(f"unpacking {total // 1048576} MB")
+    for z in zips:
+        for info in z.infolist():
+            name = info.filename
+            if name.split("/", 1)[0].endswith(".data"): continue          # scripts / headers: not needed
+            z.extract(info, TMP)
+            done += info.file_size
+            if time.time() - last > 0.5:
+                _set_job(stage="install", done=done, total=total)
+                last = time.time()
+        z.close()
+    _set_job(stage="install", done=total, total=total)
+    _log("unpacked")
+
+
 def worker(files_given=None):
     _set_job(running=True, pid=os.getpid(), stage="find")
     try:
@@ -324,10 +355,7 @@ def worker(files_given=None):
             # 2. download
             paths = _download(files)
         # 3. install into its own folder
-        _set_job(stage="install")
-        shutil.rmtree(TMP, ignore_errors=True)
-        r = _pip(["install", "--no-deps", "--no-index", "--target", str(TMP)] + [str(p) for p in paths])
-        if r.returncode != 0: raise RuntimeError("install failed: " + ((r.stderr or "").strip().splitlines() or ["?"])[-1])
+        _unpack(paths)
         # 4. check
         _set_job(stage="check")
         v, cuda, cv = torch_info(TMP)
@@ -361,8 +389,8 @@ def start_install_files(paths, py=None):
     HOME.mkdir(parents=True, exist_ok=True)
     LOG.write_text(f"{time.strftime('%Y-%m-%d %H:%M:%S')} installing your files\n", encoding="utf-8")
     try:
-        kw = {"creationflags": NW | DETACHED} if sys.platform == "win32" else {"start_new_session": True}
-        p = subprocess.Popen([_python(py), os.path.abspath(__file__), "--install", "--files"] + paths, cwd=str(HOME),
+        kw = {"creationflags": NW | GROUP} if sys.platform == "win32" else {"start_new_session": True}
+        p = subprocess.Popen([_pythonw(py), os.path.abspath(__file__), "--install", "--files"] + paths, cwd=str(HOME),
                              close_fds=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **kw)
     except Exception as e:
         return False, f"{type(e).__name__}: {e}"
