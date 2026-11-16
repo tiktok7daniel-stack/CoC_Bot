@@ -937,7 +937,15 @@
 "cp_snap_fail": "التصوير فشل:",
 "cp_st_manual": "عندك {n} صورة — دوس على أي صورة تكتب لها ملاحظة، وامسح اللي مش عاوزه، وبعدين «ابعت لـ Claude»",
 "ln_upload_unknown": "ابعت الشاشات اللي البوت ماعرفهاش لوحده",
-"ln_upload_unknown_sub": "مقفول: بيتبعت بس الصور اللي إنت بتصوّرها"
+"ln_upload_unknown_sub": "مقفول: بيتبعت بس الصور اللي إنت بتصوّرها",
+"so_tip": "دوس تصوّر الشاشة وتتبعت لـ Claude على طول (أو F8 من الكيبورد) — اسحبه تحطه في أي مكان، كليك يمين للاختيارات",
+"so_last": "صوّرت {n} صورة",
+"so_note": "اكتب ملاحظة للصورة الجاية",
+"so_open": "افتح الصور",
+"so_hide": "اخفي الزرار العايم",
+"so_toggle": "إظهار/إخفاء زرار التصوير العايم",
+"so_show": "زرار عايم",
+"so_show_tip": "زرار تصوير صغير فوق كل الشاشات — تحطه جنب اللعبة وتدوس عليه (أو F8)"
 },
 "en": {
 "gold": "Gold",
@@ -1877,7 +1885,15 @@
 "cp_snap_fail": "Picture failed:",
 "cp_st_manual": "{n} pictures — click one to write a note, delete what you don't want, then Send to Claude",
 "ln_upload_unknown": "Send screens the bot didn't understand by itself",
-"ln_upload_unknown_sub": "Off: only the pictures you take are sent"
+"ln_upload_unknown_sub": "Off: only the pictures you take are sent",
+"so_tip": "Click: picture of the screen, sent to Claude right away (or F8) — drag it anywhere, right click for options",
+"so_last": "{n} pictures taken",
+"so_note": "Note for the next picture",
+"so_open": "Open the pictures",
+"so_hide": "Hide the floating button",
+"so_toggle": "Show/hide the floating camera",
+"so_show": "Floating button",
+"so_show_tip": "A small camera on top of every window — put it next to the game and click it (or F8)"
 },
 "unit_ar": {
 "healing": "العلاج",

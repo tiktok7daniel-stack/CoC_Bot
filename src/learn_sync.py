@@ -398,3 +398,37 @@ def send_capture(id, session):
     cs.save_session(id, session, s)
     cs.set_status(id, "sent", session=session, shots=len(s["shots"]), path=root)
     return {"ok": True, "path": root, "shots": len(s["shots"])}
+
+
+def upload_shot(id, session, file, wait_words=10):
+    """Send one picture right away (floating button): captures/<session>_<account>/NNN.jpg + .json."""
+    import capture_session as cs, version
+    if not configured(): return False
+    deadline = time.time() + wait_words
+    shot = None
+    while time.time() < deadline:      # the words are read in the background: give them a moment
+        d = cs.load_session(id, session) or {}
+        shot = next((x for x in d.get("shots", []) if x["file"] == file), None)
+        if shot is None: return False
+        if shot.get("words"): break
+        time.sleep(1)
+    p = cs.session_dir(id, session) / file
+    if not p.exists(): return False
+    root = f"captures/{session}_{cs._safe(id)}"
+    stem = file[:-4]
+    meta = {"file": file, "t": shot.get("t"), "tap": shot.get("tap"), "words": shot.get("words", []), "note": shot.get("note", ""),
+            "account": id, "session": session, "bot_version": version.VERSION, "kind": "capture"}
+    try:
+        _put(f"{root}/{file}", p.read_bytes(), f"picture {session}/{stem}")
+        _put(f"{root}/{stem}.json", json.dumps(meta, ensure_ascii=False, indent=1).encode("utf-8"), f"words {session}/{stem}")
+    except Exception as e:
+        st = _load(STATE, {})
+        st["error"] = str(e)[:200]
+        _save(STATE, st)
+        return False
+    with cs._LOCK:
+        d = cs.load_session(id, session) or {}
+        for x in d.get("shots", []):
+            if x["file"] == file: x["sent"] = True
+        cs.save_session(id, session, d)
+    return True

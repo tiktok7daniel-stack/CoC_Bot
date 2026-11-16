@@ -141,6 +141,8 @@ class MainWindow(QMainWindow):
         self._seen_lines = None
         self.setup_tray()
         self.hud = MiniHud(self)
+        from .components.snap_orb import SnapOrb
+        self.snap_orb = SnapOrb(self)
         from .components.today_dialog import TodayPlanner
         self.today = TodayPlanner(self)
         from .components.update_center import UpdateCenter
@@ -165,6 +167,7 @@ class MainWindow(QMainWindow):
             self.apply_language(self.store.APP.get("language", "ar"))
             self.poller.refresh_all()
             self.api.get("/api/app/resume", self._resume)
+            if self.store.APP.get("show_snap_orb", False): self.snap_orb.show_orb()
             if self.store.APP.get("show_hud", False):
                 self.hud.place()
                 self.hud.show()
@@ -285,6 +288,7 @@ class MainWindow(QMainWindow):
         m = QMenu()
         m.addAction(tr("hud_open_main"), lambda: (self.showNormal(), self.raise_(), self.activateWindow()))
         m.addAction(tr("hud_toggle"), self.toggle_hud)
+        m.addAction(tr("so_toggle"), lambda: self.snap_orb.toggle())
         m.addSeparator()
         m.addAction(tr("start"), lambda: self.run_action("start"))
         m.addAction(tr("stop"), lambda: self.run_action("stop"))
@@ -380,6 +384,8 @@ class MainWindow(QMainWindow):
     def closeEvent(self, e):
         if self.store.dirty: self.store.save_blocking()
         try:
+            self.snap_orb.unregister_hotkey()
+            self.snap_orb.close()
             self.hud.close()
             if self.tray is not None: self.tray.hide()
         except RuntimeError: pass

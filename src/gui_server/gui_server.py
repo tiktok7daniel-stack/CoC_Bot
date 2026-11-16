@@ -499,9 +499,17 @@ def api_capture_snap(id):
     except Exception as e:
         return jsonify({"ok": False, "error": "adb", "detail": str(e)[:160]})
     if not png: return jsonify({"ok": False, "error": "no_emulator"})
-    session, shot = cs.add_manual_shot(id, png, str((request.json or {}).get("note", "")))
-    cs.set_status(id, "ready", session=session, shots=len(cs.load_session(id, session)["shots"]), manual=True)
-    return jsonify({"ok": True, "session": session, "shot": shot})
+    body = request.json or {}
+    session, shot = cs.add_manual_shot(id, png, str(body.get("note", "")))
+    n = len(cs.load_session(id, session)["shots"])
+    cs.set_status(id, "ready", session=session, shots=n, manual=True)
+    sending = False
+    if body.get("send"):     # floating button: straight to GitHub
+        import threading, learn_sync
+        if learn_sync.configured():
+            threading.Thread(target=learn_sync.upload_shot, args=(id, session, shot["file"]), daemon=True).start()
+            sending = True
+    return jsonify({"ok": True, "session": session, "shot": shot, "count": n, "sending": sending})
 
 @app.route("/api/capture/<id>/note", methods=["POST"])
 def api_capture_note(id):
