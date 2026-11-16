@@ -95,7 +95,7 @@ def default_settings():
             "leave_after": 0,        # "leave": seconds to wait after the army is down before ending
             "surrender_after": 0,    # seconds after deployment to end the battle early (0 = wait for the end)
             "smart_end": True,       # end the battle when the enemy loot stops going down
-            "smart_end_after": 15,   # ... for this many seconds
+            "smart_end_after": 8,    # ... for this many seconds
         },
         "notify": {                  # phone (Telegram) + desktop notifications
             "upgrade_done": True,    # a running upgrade / lab research finished
@@ -107,7 +107,7 @@ def default_settings():
             "max_hours": 0,          # stop after running this many hours (0 = no limit)
         },
         "breaks": {
-            "enabled": True,         # humanized breaks: close the game for a while now and then
+            "enabled": False,        # not used: the bot never stops by itself (humanized breaks: close the game for a while now and then
             "every_minutes": 120,
             "length_minutes": 10,
         },
@@ -178,7 +178,8 @@ def default_app_settings():
         "profiles": {},              # account -> {"name": display name} (pictures: ~/.CoC_Bot/avatars)
         "learn_repo": "",            # "owner/name" of the (private) GitHub repo Claude learns from
         "learn_auto": True,
-        "upload_unknown": False,     # send the screens the bot didn't understand by itself (off: only your own pictures)          # send unknown screens / fetch what Claude taught automatically
+        "upload_unknown": False,
+        "send_stuck": True,          # stuck on the same unknown screen -> picture straight to Claude     # send the screens the bot didn't understand by itself (off: only your own pictures)          # send unknown screens / fetch what Claude taught automatically
         "ui": "qt",                  # "qt" = v4 desktop window, "web" = classic window
         "sync_settings": False,      # one set of settings for every account (saving one saves all)
         "display_w": 1920, "display_h": 1080, "display_dpi": 240, # emulator display the bot checks / sets

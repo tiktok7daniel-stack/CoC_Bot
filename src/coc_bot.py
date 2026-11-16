@@ -411,11 +411,17 @@ class CoC_Bot:
         return True
 
     def prepare_army(self):
-        """Before a home attack: the active loadout's learned army, if it has one."""
+        """
+        Before a home attack: the active loadout's learned army, if it has one. The game keeps (and refills) the
+        last army by itself after every battle, so this runs once — again only when the army changed or after
+        the game was reopened.
+        """
         plan = self.attacker.plan or {}
         name = plan.get("army_macro")
         if not name: return
-        try: self.run_army(name)
+        if getattr(self, "_army_prepared", None) == (name, _utils.TEMP_CACHE.get("game_session")): return
+        try:
+            if self.run_army(name): self._army_prepared = (name, _utils.TEMP_CACHE.get("game_session"))
         except (KeyboardInterrupt, SystemExit): raise
         except Exception: logger.exception("Preparing the learned army failed")
 
@@ -642,36 +648,7 @@ class CoC_Bot:
                     self.idle(1)
                     continue
 
-                # End conditions
-                lim = s["limits"]
-                if (lim["max_attacks"] and self.session_attacks >= lim["max_attacks"]) or \
-                   (lim["max_hours"] and time.time() - self.session_start >= lim["max_hours"] * 3600):
-                    if getattr(self, "_limit_logged", False) is False:
-                        logger.info("Session limit reached, bot is resting")
-                        self._limit_logged = True
-                        try: stop_coc(reason="session limit")
-                        except Exception: pass
-                    update_status("limit")
-                    self.idle(1)
-                    continue
-                self._limit_logged = False
-
-                # Humanized breaks
-                br = s["breaks"]
-                if br["enabled"]:
-                    if self.next_break is None:
-                        self.next_break = time.time() + br["every_minutes"] * 60 * random.uniform(0.8, 1.2)
-                    elif time.time() >= self.next_break:
-                        length = max(1, br["length_minutes"] * random.uniform(0.7, 1.3))
-                        logger.info(f"Taking a break for {length:.0f} min")
-                        try: stop_coc(reason="break")
-                        except Exception: pass
-                        update_status("break")
-                        self.idle(length)
-                        self.next_break = None
-                        continue
-                else:
-                    self.next_break = None
+                # no attack limit, no hour limit, no breaks: the bot keeps going until you stop it
 
                 set_phase("start_game")
                 if TEMP_CACHE.pop("restart_game", False):
@@ -702,7 +679,8 @@ class CoC_Bot:
                     self.attacker.battle_end = s["attack"]["battle_end"]
                     self.attacker.smart_end = s["attack"].get("smart_end", True)
                     self.attacker.leave_after = max(0, float(s["attack"].get("leave_after", 0)))
-                    self.attacker.smart_end_after = max(5, int(s["attack"].get("smart_end_after", 15)))
+                    sea = int(s["attack"].get("smart_end_after", 8))
+                    self.attacker.smart_end_after = 8 if sea == 15 else max(5, sea)   # 15 = the old slow default
                     self.attacker.strategy = s["attack"]["strategy"]
                     self.attacker.loot_filter = s["attack"]["loot_filter"]
                     self.attacker.plan = next((p for p in s.get("plans", []) if p.get("name") and p.get("name") == s.get("active_plan")), None)
@@ -756,7 +734,7 @@ class CoC_Bot:
                         import recorder
                         import village
                         import army_learn
-                        while running() and not self.excluded("home_attacks") and attacks < 300 and not recorder.pending(_utils.INSTANCE_ID) \
+                        while running() and not self.excluded("home_attacks") and not recorder.pending(_utils.INSTANCE_ID) \
                                 and not village.pending(_utils.INSTANCE_ID) and not army_learn.pending(_utils.INSTANCE_ID) \
                                 and not __import__("capture_session").pending(_utils.INSTANCE_ID):
                             self.load_settings()
@@ -768,12 +746,12 @@ class CoC_Bot:
                                 # spent something: go round again (more walls to buy, or attack once not full);
                                 # rest only when nothing at all could be bought
                                 if self.spend_when_full(self.settings): continue
-                                rest = max(1, float(self.settings["attack"]["farm"].get("rest_minutes", 30)))
-                                logger.info(f"Storages full and nothing to spend on: closing the game for {rest:.0f} minutes")
-                                stop_coc(reason="storages full")
-                                update_status("break")
-                                self.idle(rest)
-                                break
+                                # nothing to buy: keep attacking anyway (the bot never stops by itself)
+                                if not getattr(self, "_full_logged", False):
+                                    logger.info("Storages full and nothing to spend on: attacking on")
+                                    self._full_logged = True
+                            else:
+                                self._full_logged = False
                             set_phase("home_attack")
                             attacks += 1
                             logger.info(f"Attacking home base (#{attacks})")
@@ -832,7 +810,8 @@ class CoC_Bot:
                     update_status("error")
 
                 set_phase("idle")
-                self.idle(configs.CHECK_INTERVAL)
+                # attacks on: straight into the next round; otherwise look again in a few minutes
+                self.idle(0.05 if not self.excluded("home_attacks") or not self.excluded("builder_attacks") else configs.CHECK_INTERVAL)
 
             except (KeyboardInterrupt, SystemExit): raise
             except Exception as e:

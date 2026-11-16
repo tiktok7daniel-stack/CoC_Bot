@@ -458,3 +458,77 @@ def upload_shot(id, session, file, wait_words=10):
             if x["file"] == file: x["sent"] = True
         cs.save_session(id, session, d)
     return True
+
+
+# ====================================================================== stuck on an unknown screen -> straight to Claude
+STUCK_SECONDS = 20       # the same unknown screen for this long (or seen 3 times) = stuck
+_stuck = {"hash": None, "since": 0.0, "seen": 0}
+
+
+def note_unknown(id, frame, words, phase):
+    """Called for every screen the bot doesn't know. When it keeps seeing the same one, send it right away
+    (once per screen: screens already sent or already taught are not sent again)."""
+    import capture_session as cs
+    try: h = cs.dhash(frame)
+    except Exception: return False
+    now = time.time()
+    if _stuck["hash"] is not None and cs.distance(h, _stuck["hash"]) <= 10:
+        _stuck["seen"] += 1
+    else:
+        _stuck.update(hash=h, since=now, seen=1)
+        return False
+    if now - _stuck["since"] < STUCK_SECONDS and _stuck["seen"] < 3: return False
+    _stuck.update(hash=None, since=0.0, seen=0)
+    return report_stuck(id, frame, words, phase, h)
+
+
+def report_stuck(id, frame, words, phase, h=None):
+    """Save + send one screen the bot got stuck on (in the background), and tell the user."""
+    import capture_session as cs, threading
+    try:
+        import settings
+        if settings.load_app().get("send_stuck", True) is False: return False
+    except Exception:
+        pass
+    h = h or cs.dhash(frame)
+    st = _load(STATE, {})
+    sent = st.setdefault("stuck_sent", [])
+    if any(cs.distance(h, (int(a), int(b))) <= 12 for a, b in sent): return False   # this screen was sent already
+    rule, _d = match_picture(frame)
+    if rule is not None: return False                                               # taught meanwhile
+    sent.append([str(h[0]), str(h[1])])
+    st["stuck_sent"] = sent[-300:]
+    _save(STATE, st)
+    import cv2
+    name = time.strftime("%Y%m%d_%H%M%S")
+    folder = BASE / "stuck"
+    folder.mkdir(parents=True, exist_ok=True)
+    small = cv2.resize(frame, (1280, int(1280 * frame.shape[0] / frame.shape[1])))
+    cv2.imwrite(str(folder / f"{name}.jpg"), cv2.cvtColor(small, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 85])
+    meta = {"t": time.time(), "account": id, "phase": phase, "words": list(words)[:60], "kind": "stuck",
+            "note": "the bot got stuck on this screen (auto)"}
+    (folder / f"{name}.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
+
+    def send():
+        if not configured(): return
+        try:
+            import version
+            stem = f"inbox/stuck/{_safe_id(id)}_{name}"
+            _put(stem + ".jpg", (folder / f"{name}.jpg").read_bytes(), f"stuck: {name}")
+            _put(stem + ".json", json.dumps(dict(meta, bot_version=version.VERSION), ensure_ascii=False, indent=1).encode("utf-8"), f"stuck words: {name}")
+        except Exception as e:
+            st2 = _load(STATE, {})
+            st2["error"] = str(e)[:200]
+            _save(STATE, st2)
+    threading.Thread(target=send, daemon=True).start()
+    try:
+        from utils import logger, send_notification
+        logger.info(f"Stuck on a screen the bot doesn't know — picture sent to Claude ({phase})")
+        send_notification("🤔 البوت وقف على شاشة مايعرفهاش — صوّرها وبعتها لـ Claude علشان يتعلّمها")
+    except Exception:
+        pass
+    return True
+
+
+def _safe_id(x):
+    return "".join(c for c in str(x) if c.isalnum() or c in "-_") or "main"

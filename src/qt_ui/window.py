@@ -312,7 +312,7 @@ class MainWindow(QMainWindow):
 
     NOTIFY_KEYS = (("Upgrade finished:", "nt_upgrade_done", "builder_hammer"), ("Lab research finished:", "nt_lab_done", "flask"),
                    ("1-tap upgrade done:", "nt_tap_done", "bolt"), ("Auto upgrade started:", "nt_auto_up", "hammer"),
-                   ("Batch wall upgrade", "nt_walls", "brick"))
+                   ("Batch wall upgrade", "nt_walls", "brick"), ("Stuck on a screen the bot doesn't know", "nt_stuck", "camera"))
 
     def notify_events(self, lines):
         """New log lines -> desktop notifications (first poll only remembers what is already there)."""

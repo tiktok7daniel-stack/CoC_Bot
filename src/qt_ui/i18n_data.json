@@ -948,7 +948,10 @@
 "so_show_tip": "زرار تصوير صغير فوق كل الشاشات — تحطه جنب اللعبة وتدوس عليه (أو F8)",
 "tp_smart": "✨ أوتوميشن ذكي (البوت يعمل كل حاجة)",
 "tp_smart_sub": "يهاجم ويفارم على طول، ولما المخازن تتملي يرقّي الأسوار ويرجع يهاجم، ويشغّل كل البنّائين على المباني ويسيب واحد للأسوار، والمعمل والأبطال شغالين",
-"tp_saved_smart": "تمام — الأوتوميشن الذكي شغال"
+"tp_saved_smart": "تمام — الأوتوميشن الذكي شغال",
+"nt_stuck": "البوت وقف على شاشة مايعرفهاش 🤔",
+"ln_send_stuck": "لو وقف على شاشة مايعرفهاش يبعتها على طول",
+"ln_send_stuck_sub": "لو فضل على نفس الشاشة الغريبة 20 ثانية، يصوّرها ويبعتها لـ Claude مرة واحدة ويقولك"
 },
 "en": {
 "gold": "Gold",
@@ -1899,7 +1902,10 @@
 "so_show_tip": "A small camera on top of every window — put it next to the game and click it (or F8)",
 "tp_smart": "✨ Smart automation (the bot does everything)",
 "tp_smart_sub": "Attacks non-stop; full storages -> walls, then attacks again; all builders but one on buildings (one kept for walls); lab and heroes keep working",
-"tp_saved_smart": "OK — smart automation is on"
+"tp_saved_smart": "OK — smart automation is on",
+"nt_stuck": "The bot is stuck on an unknown screen 🤔",
+"ln_send_stuck": "Stuck on an unknown screen: send it right away",
+"ln_send_stuck_sub": "Same unknown screen for 20 s -> picture sent to Claude once, and you are told"
 },
 "unit_ar": {
 "healing": "العلاج",
@@ -2705,6 +2711,10 @@
 [
 "^Failed to open the attack.*",
 "ماقدرش يفتح الهجوم (مالقاش زرار Attack! ولا Find a Match)"
+],
+[
+"^Stuck on a screen the bot doesn't know — picture sent to Claude \\((.*)\\)",
+"🤔 البوت وقف على شاشة مايعرفهاش — اتصوّرت واتبعتت لـ Claude علشان يتعلّمها"
 ]
 ]
 }

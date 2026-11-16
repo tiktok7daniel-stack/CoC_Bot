@@ -62,9 +62,11 @@ class Attacker:
         last_loot, last_change, next_read, dropped = None, time.monotonic(), 0, False
         while time.monotonic() - start < max_wait:
             if not running(): break
+            if not surrendered and getattr(self, "_later", None) and self.in_battle():
+                self.run_due()                           # hero abilities / second spell wave when their time comes
             # smart end: the remaining enemy loot (top-left) stopped going down -> nothing more to take
             if smart and not surrendered and time.monotonic() >= next_read:
-                next_read = time.monotonic() + 2.5
+                next_read = time.monotonic() + 1.5
                 try:
                     frame = Frame_Handler.get_frame(grayscale=False)
                     vals = [read_taught_number(k, frame) for k in ("enemy_gold", "enemy_elixir")]
@@ -77,15 +79,15 @@ class Attacker:
                     last_loot = [v if o is None else min(v, o) for v, o in zip(vals, last_loot or [None, None])]
                 # only after the loot went down at least once (troops still walking in is not "stopped"),
                 # or when nothing at all was taken for 45 seconds
-                stalled = time.monotonic() - last_change > (self.smart_end_after if dropped else max(45, self.smart_end_after))
+                stalled = time.monotonic() - last_change > (self.smart_end_after if dropped else max(30, self.smart_end_after))
                 if last_loot is not None and stalled and self.in_battle():
                     logger.info(f"Loot stopped for {self.smart_end_after}s, ending the battle early")
                     if self._click_end_battle(timeout=0) or Auto_Learn.learn_button("end_battle", tap=True):
-                        time.sleep(0.7)
+                        time.sleep(0.4)
                         if not self._click_okay(timeout=3): Auto_Learn.learn_button("okay_button", tap=True, min_interval=0)
                         surrendered = True
             # results screen (current game: "Claim Reward" -> chest -> "Continue") -> back to the village
-            if time.monotonic() - start > 6 and not self.in_battle():
+            if time.monotonic() - start > 1.5 and not self.in_battle():
                 frame = Frame_Handler.get_frame(grayscale=False)
                 words = " ".join(b[0].lower() for b in ocr_boxes(frame) if b[5] > 0.3)
                 if ("claim" in words and "reward" in words) or "continue" in words or "delivered" in words or "storage" in words \
@@ -95,10 +97,10 @@ class Attacker:
                     if collect_rewards(): return
             if self._click_return_home(timeout=0):
                 logger.info("Battle over, returning home")
-                time.sleep(0.8)
-                for _ in range(40): # the village usually shows within 2-4 s
+                time.sleep(0.4)
+                for _ in range(60): # the village usually shows within 2-4 s
                     if game_ready(): return
-                    time.sleep(0.3)
+                    time.sleep(0.2)
                 break
             # optional early end: End Battle -> confirm
             if not surrendered and (surrender_after > 0 or leave) and time.monotonic() - start > surrender_after:
@@ -113,7 +115,7 @@ class Attacker:
                 for _ in range(40):
                     if game_ready(): return
                     time.sleep(0.3)
-            time.sleep(0.4 if surrendered else 0.6) # notice the results screen quickly
+            time.sleep(0.25)                             # notice the results screen right away
         # (no Android back key here: in the village it opens the "exit game?" dialog)
         if game_ready(): return
         logger.warning("Battle end not detected, reopening the game")
@@ -184,7 +186,7 @@ class Attacker:
             x, y = locate_find_a_match()
             if x is not None:
                 Input_Handler.click(x, y)
-                time.sleep(0.6)
+                time.sleep(0.4)
                 continue
             x, y = Frame_Handler.locate(self.assets["confirm_attack"], thresh=0.9, use_cached=True)
             if x is not None:
@@ -197,15 +199,19 @@ class Attacker:
             if "army" in words and ("recipes" in words or "cookbook" in words or "saved" in words):
                 if not army_done:      # the saved army of the active loadout, on this very screen
                     army_done = True
-                    try: self.select_saved_army((self.plan or {}).get("army", ""))
-                    except Exception: logger.warning("Saved army selection failed, attacking with the current army")
-                    Input_Handler.click(0.20, 0.10)          # back to the "My Army" tab (the Attack! button is there)
-                    time.sleep(0.6)
+                    want = ((self.plan or {}).get("army", "") or "").strip()
+                    # the game keeps the last army after a battle: choose it only the first time (or when it changed)
+                    if want and getattr(self, "_army_selected", None) != want:
+                        try:
+                            if self.select_saved_army(want): self._army_selected = want
+                        except Exception: logger.warning("Saved army selection failed, attacking with the current army")
+                        Input_Handler.click(0.20, 0.10)      # back to the "My Army" tab (the Attack! button is there)
+                        time.sleep(0.4)
                 Input_Handler.click(0.883, 0.889)             # green "Attack!" at the bottom right
                 logger.info("Attack! pressed, looking for a base")
-                time.sleep(1.0)
+                time.sleep(0.5)
                 continue
-            time.sleep(0.3)
+            time.sleep(0.15)
         if not started and not army_done:
             logger.error("Failed to open the attack (no Find a Match / Attack! button)")
             return False
@@ -265,7 +271,7 @@ class Attacker:
             if find_taught("end_battle"): return True
             x, y = Frame_Handler.locate(self.assets["end_battle"], thresh=0.9)
             if x is not None and y is not None: return True
-            time.sleep(0.3)
+            time.sleep(0.15)
         return False
 
     def record_search(self, loot=None, accepted=True):
@@ -657,8 +663,10 @@ class Attacker:
         plan = getattr(self, "plan", None) or {}
         if not self.held_spells: return
         after = float(plan.get("second_wave_after", 20))
-        start = getattr(self, "troops_done_at", time.monotonic())
-        if after > time.monotonic() - start: time.sleep(after - (time.monotonic() - start))
+        start = getattr(self, "troops_done_at", None) or time.monotonic()
+        if after > time.monotonic() - start:
+            self.later(start + after, self.second_wave)
+            return
         for cx, n in self.held_spells:
             Input_Handler.click(cx, 0.9)
             self.cast_spell(n)
@@ -702,7 +710,7 @@ class Attacker:
             if y < 0.80: field.append((x, y))           # taps on the battlefield (not on the army bar)
         if not field: return 0
         spot = field[0]                                   # where the first troops went in
-        time.sleep(0.6)
+        time.sleep(0.2)
         frame = Frame_Handler.get_frame_section(0.0, 0.82, 1.0, 1.0, grayscale=False)
         centers, _b, types, _c, _g = self.detect_troop_positions(frame, return_boundaries=True, return_types=True, return_counts=True)
         done = 0
@@ -722,13 +730,31 @@ class Attacker:
             self.activate_hero_abilities()
         return done
 
-    def activate_hero_abilities(self):
-        """Tap the deployed hero cards again after a delay to fire their abilities."""
+    def later(self, at, fn):
+        """Run fn at time `at` (monotonic) from the battle-end loop, so nothing waits for it."""
+        self._later = getattr(self, "_later", None) or []
+        self._later.append((at, fn))
+
+    def run_due(self):
+        import time
+        todo, keep = [], []
+        for at, fn in getattr(self, "_later", None) or []:
+            (todo if time.monotonic() >= at else keep).append((at, fn))
+        self._later = keep
+        for _at, fn in todo:
+            try: fn()
+            except Exception: logger.warning("A timed battle step failed", exc_info=True)
+
+    def activate_hero_abilities(self, wait=False):
+        """Tap the deployed hero cards again after a delay to fire their abilities (scheduled, not waited for)."""
         import time
         plan = getattr(self, "plan", None) or {}
         delay = float(plan.get("abilities_after", getattr(self, "hero_retap", 0))) if plan else getattr(self, "hero_retap", 0)
         if delay <= 0 or not self.deployed_heroes: return
         since = time.monotonic() - (getattr(self, "heroes_done_at", None) or time.monotonic())
+        if delay > since and not wait:
+            self.later(time.monotonic() + delay - since, lambda: self.activate_hero_abilities(wait=True))
+            return
         if delay > since: time.sleep(delay - since)
         for x in self.deployed_heroes:
             Input_Handler.click(x, 0.9)
@@ -747,13 +773,14 @@ class Attacker:
         self.spell_no = 0
         self.card_names = {}
         self.troops_done_at = self.heroes_done_at = None
+        self._later = []
         if getattr(self, "plan", None): logger.info(f"Attack plan: {self.plan.get('name', '')}")
         if getattr(self, "plan", None) and self.plan.get("recording"):
             import recorder
             data = recorder.load(self.plan["recording"])
             if data and data.get("events"):
                 logger.info(f"Replaying recording '{data.get('name')}'")
-                time.sleep(0.8)
+                time.sleep(0.3)
                 try:
                     taps = recorder.replay(data, ADB_Manager.minitouch_device.connection, lambda: not running())
                     logger.info(f"Recording replayed: {taps} taps")
@@ -818,7 +845,7 @@ class Attacker:
         except Exception:
             logger.warning("Could not verify the deployment")
         if self.battle_end != "leave": # fast in / fast out skips the timed extras
-            try: self.activate_hero_abilities()
+            try: self.activate_hero_abilities()      # scheduled: fired from the battle-end loop
             except Exception: logger.warning("Hero ability activation failed")
             try: self.second_wave()
             except Exception: logger.warning("Second spell wave failed")
@@ -853,7 +880,7 @@ class Attacker:
             found = False
             while time.time() - start_time < timeout:
                 if in_home_base(): found = True; break
-                time.sleep(0.3)
+                time.sleep(0.2)
             if not found:
                 # a popup / another screen is in the way: clear it and try to get home once more
                 Auto_Learn.handle_unknown_screen("home_attack")

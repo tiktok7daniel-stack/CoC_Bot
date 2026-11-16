@@ -791,7 +791,9 @@ def collect_rewards(timeout=30):
         elif "return home" in text or ("return" in text and "home" in text):
             what = tap_box("return home", "return")
         elif any(w in text for w in CHEST_WORDS) or (taps and len(boxes) <= 4):     # chest room: hardly any text
-            Input_Handler.click(0.5, 0.55)       # the chest in the middle: each tap breaks one lock
+            for _ in range(3):                   # the chest in the middle: each tap breaks one lock — tap fast
+                Input_Handler.click(0.5, 0.55)
+                time.sleep(0.12)
             what = "chest"
         if not what:
             try:
@@ -804,9 +806,9 @@ def collect_rewards(timeout=30):
         if what:
             taps += 1
             if taps == 1 or what != "chest": logger.info(f"Battle rewards: pressed {what}")
-            time.sleep(0.7 if what == "chest" else 1.0)
+            time.sleep(0.25 if what == "chest" else 0.45)
         else:
-            time.sleep(0.6)
+            time.sleep(0.25)
     return game_ready()
 
 def game_ready():
@@ -2691,6 +2693,12 @@ def start_watchdog(default_limit=420):
                 quiet = time.time() - max(TEMP_CACHE.get("phase_t", 0), TEMP_CACHE.get("last_log", 0))
                 if quiet > WATCHDOG_LIMITS.get(phase, default_limit):
                     logger.warning(f"Watchdog: stuck in '{phase}' for {int(quiet)}s, restarting the step")
+                    try:
+                        import learn_sync
+                        fr = Frame_Handler.get_frame(grayscale=False)
+                        learn_sync.report_stuck(INSTANCE_ID, fr, [b[0] for b in ocr_boxes(fr) if b[5] > 0.3], f"watchdog:{phase}")
+                    except Exception:
+                        pass
                     TEMP_CACHE["stuck"] = True
                     TEMP_CACHE["restart_game"] = True
                     TEMP_CACHE["phase_t"] = time.time()
@@ -3208,6 +3216,8 @@ class Auto_Learn:
                     Input_Handler.click((cancel[1] + cancel[3]) / 2, (cancel[2] + cancel[4]) / 2)
                     action = f"tap:{cancel[0]}"
                 teach.record_discovery(INSTANCE_ID, frame, words, phase or TEMP_CACHE.get("phase", ""), action)
+                try: __import__("learn_sync").note_unknown(INSTANCE_ID, frame, words, phase or TEMP_CACHE.get("phase", ""))
+                except Exception: pass
                 logger.info(f"Unknown screen recorded ({len(words)} words){', pressed ' + repr(action[4:]) if action else ''}")
                 return bool(action)
             for word in DISMISS_WORDS:
@@ -3217,6 +3227,8 @@ class Auto_Learn:
                     action = f"tap:{hit[0]}"
                     break
             teach.record_discovery(INSTANCE_ID, frame, words, phase or TEMP_CACHE.get("phase", ""), action)
+            try: __import__("learn_sync").note_unknown(INSTANCE_ID, frame, words, phase or TEMP_CACHE.get("phase", ""))
+            except Exception: pass
             logger.info(f"Unknown screen recorded ({len(words)} words){', pressed ' + repr(action[4:]) if action else ''}")
             return bool(action)
         except (KeyboardInterrupt, SystemExit): raise
