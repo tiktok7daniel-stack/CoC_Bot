@@ -34,6 +34,8 @@ def launch_proc(args):
             update_status("error")
             time.sleep(min(60, 10 * attempt))
     install_error_reporter()
+    from utils import start_watchdog
+    start_watchdog()
     start_capture_service()
     preflight()
     bot = CoC_Bot()

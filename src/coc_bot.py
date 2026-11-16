@@ -317,7 +317,10 @@ class CoC_Bot:
                     self.next_break = None
 
                 set_phase("start_game")
-                started, res = start_coc(detailed=True)
+                if TEMP_CACHE.pop("restart_game", False):
+                    started, res = start_coc(detailed=True, force_restart="watchdog: a step was stuck")
+                else:
+                    started, res = start_coc(detailed=True)
                 if started:
                     update_status("now")
                     cycle_start = time.monotonic()

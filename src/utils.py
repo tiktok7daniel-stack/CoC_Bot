@@ -209,6 +209,8 @@ def online(timeout=1):
 
 def running():
     import requests
+    # the watchdog found the bot stuck: answer "not running" once so every loop lets go of the step
+    if TEMP_CACHE.pop("stuck", False): return False
     
     if WEB_APP_URL == "":
         # desktop GUI: its pause timer lives in the local GUI server
@@ -649,6 +651,32 @@ def read_resources(builder_base=False, save_debug=False, samples=3):
         out[k] = best if vals.count(best) > 1 else sorted(vals)[len(vals) // 2] # majority, else median
     return out
 
+def _read_number_robust(raw):
+    """
+    The storage numbers are white digits with a dark outline; one threshold sometimes loses a digit
+    (2,264,765 read as 22,647). Read the number with a few thresholds / sizes and keep the value the
+    readings agree on; with no agreement keep the longest reading (missing digits is the usual error).
+    """
+    import re, cv2
+    from collections import Counter
+    candidates = []
+    for thresh in (190, 160, 215):
+        crop = Frame_Handler.high_contrast(raw, thresh=thresh)
+        for scale in (1, 2):
+            img = crop if scale == 1 else cv2.resize(crop, None, fx=2, fy=2, interpolation=cv2.INTER_NEAREST)
+            text = Tesseract.read(img, digits=True)
+            digits = re.sub(r"[^0-9]", "", text or "")
+            if digits: candidates.append(int(digits))
+        counts = Counter(candidates)
+        best, n = counts.most_common(1)[0] if counts else (None, 0)
+        if n >= 3: return best # three readings agree: done early
+    if candidates:
+        counts = Counter(candidates)
+        best, n = counts.most_common(1)[0]
+        if n >= 2: return best
+        return max(candidates, key=lambda v: (len(str(v)), v))
+    return OCR_Handler.get_number(Frame_Handler.high_contrast(raw, thresh=190)) # slow OCR as the last resort
+
 def _read_resources_once(builder_base=False, save_debug=False):
     """
     Read gold / elixir / dark elixir from the village screen with OCR.
@@ -659,9 +687,9 @@ def _read_resources_once(builder_base=False, save_debug=False):
         out = {}
         out["dark"] = None
         for name, (x1, y1, x2, y2) in (BUILDER_RESOURCE_BANDS if builder_base else RESOURCE_BANDS).items():
-            crop = Frame_Handler.high_contrast(Frame_Handler.crop(frame, x1, y1, x2, y2), thresh=190)
-            if save_debug or configs.DEBUG: Frame_Handler.save_frame(crop, f"resource_{name}.png")
-            value = OCR_Handler.get_number(crop)
+            raw = Frame_Handler.crop(frame, x1, y1, x2, y2)
+            if save_debug or configs.DEBUG: Frame_Handler.save_frame(raw, f"resource_{name}.png")
+            value = _read_number_robust(raw)
             out[name] = value if value is not None and 0 <= value <= RESOURCE_LIMITS[name] else None
         if all(v is None for v in out.values()): return None
         return out
@@ -1902,7 +1930,14 @@ class ADB_Manager:
                 if cls._minitouch_device is not None: cls._minitouch_device.stop()
             except Exception: pass
             cls.kill_device_minitouch(d1)
-            d2 = MNTDevice(addr)
+            import time as _t
+            _t.sleep(0.4) # let the old minitouch release its socket ("Address already in use")
+            try:
+                d2 = MNTDevice(addr)
+            except Exception:
+                cls.kill_device_minitouch(d1)
+                _t.sleep(1.0)
+                d2 = MNTDevice(addr)
             d3 = u2.connect(addr)
             devices = [d1, d2, d3]
             Exit_Handler.register(d2.stop)
@@ -2440,6 +2475,7 @@ def set_phase(name):
     """What the bot is doing right now (shown next to every error and on the GUI home page)."""
     import json, time
     TEMP_CACHE["phase"] = name
+    TEMP_CACHE["phase_t"] = time.time()
     try:
         d = APP_DATA_DIR / "phase"
         d.mkdir(parents=True, exist_ok=True)
@@ -2449,6 +2485,35 @@ def set_phase(name):
         }))
     except Exception:
         pass
+
+# ======================================================================
+# Watchdog: a step that writes nothing to the log for too long is stuck (a popup the bot doesn't
+# know, a screen that never came, a loop waiting forever). It is released and the game reopened.
+# ======================================================================
+WATCHDOG_LIMITS = {"home_attack": 600, "builder_attack": 600, "spend_full": 1500, "home_upgrades": 900,
+                   "builder_upgrades": 900, "walls_farming": 900, "start_game": 300}
+WATCHDOG_SKIP = {"idle", "recording", "break", "", None}
+
+def start_watchdog(default_limit=420):
+    import threading, time
+    TEMP_CACHE["last_log"] = time.time()
+    logger.add(lambda _m: TEMP_CACHE.__setitem__("last_log", time.time()), level="INFO")
+
+    def loop():
+        while True:
+            time.sleep(20)
+            try:
+                phase = TEMP_CACHE.get("phase")
+                if phase in WATCHDOG_SKIP: continue
+                quiet = time.time() - max(TEMP_CACHE.get("phase_t", 0), TEMP_CACHE.get("last_log", 0))
+                if quiet > WATCHDOG_LIMITS.get(phase, default_limit):
+                    logger.warning(f"Watchdog: stuck in '{phase}' for {int(quiet)}s, restarting the step")
+                    TEMP_CACHE["stuck"] = True
+                    TEMP_CACHE["restart_game"] = True
+                    TEMP_CACHE["phase_t"] = time.time()
+            except Exception:
+                pass
+    threading.Thread(target=loop, daemon=True, name="watchdog").start()
 
 def install_error_reporter():
     import threading, time, traceback
@@ -2680,7 +2745,12 @@ def preflight():
     while True:
         problems = []
         try:
-            ADB_Manager.connect(timeout=120)
+            # already connected (the emulator start just did it): don't rebuild minitouch a second time,
+            # two minitouch servers fight over the same socket
+            alive = False
+            try: alive = ADB_Manager._adbutils_device is not None and "ok" in ADB_Manager._adbutils_device.shell("echo ok")
+            except Exception: alive = False
+            if not alive: ADB_Manager.connect(timeout=120)
             for _ in range(120):
                 if ADB_Manager.boot_completed(): break
                 time.sleep(1)

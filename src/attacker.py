@@ -781,8 +781,13 @@ class Attacker:
                 if in_home_base(): found = True; break
                 time.sleep(0.3)
             if not found:
-                logger.error("Not in home base. Aborting home attack.")
+                # a popup / another screen is in the way: clear it and try to get home once more
                 Auto_Learn.handle_unknown_screen("home_attack")
+                try: to_home_base()
+                except Exception: pass
+                found = in_home_base()
+            if not found:
+                logger.error("Not in home base. Aborting home attack.")
                 return
             
             # Complete an attack
