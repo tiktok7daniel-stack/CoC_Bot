@@ -856,7 +856,7 @@
 "cp_discard": "امسح الكل",
 "cp_send": "ابعت {n} صورة لـ Claude",
 "cp_resend": "ابعتهم تاني",
-"cp_how": "دوس «ابدأ التصوير» ← العب عادي ودوس على كل حاجة عاوز البوت يفهمها (الجيش، المحل، النوافذ…) ← دوس «خلصت» ← راجع الصور وامسح المكرر ← «ابعت لـ Claude» ← قولّي في الشات «بعتّ التصوير». الدايرة الدهبي على كل صورة = المكان اللي دوست عليه قبلها.",
+"cp_how": "دوس «ابدأ التصوير» ← العب عادي ودوس على كل حاجة عاوز البوت يفهمها (الجيش، المحل، النوافذ…). ولو هاجمت، الهجمة كلها بتتسجّل لوحدها: إزاي نزّلت الجيش وفين وإمتى ← دوس «خلصت» ← راجع الصور وامسح المكرر ← «ابعت لـ Claude» ← قولّي في الشات «بعتّ التصوير». الدايرة الدهبي = المكان اللي دوست عليه.",
 "cp_banner": "البوت بيصوّر دلوقتي 📸 العب عادي وكل شاشة جديدة هتتصوّر — دوس «خلصت» لما تخلص",
 "cp_st_waiting": "في الانتظار… البوت هيبدأ بعد خطوته الحالية",
 "cp_st_starting": "بيفتح اللعبة…",
@@ -868,7 +868,26 @@
 "cp_st_send_failed": "الإرسال فشل:",
 "cp_st_failed": "التصوير مانجحش — جرّب تاني",
 "cp_confirm_new": "فيه صور لسه ما اتبعتتش — تبدأ تصوير جديد برضه؟ (الصور القديمة هتفضل محفوظة)",
-"cp_confirm_discard": "تمسح كل صور التصوير ده؟"
+"cp_confirm_discard": "تمسح كل صور التصوير ده؟",
+"up_pill": "تحديث جديد v{v}",
+"up_ready_pill": "جاهز — أعد التشغيل (v{v})",
+"up_title": "فيه تحديث جديد",
+"up_title_ready": "التحديث اتنزّل",
+"up_note": "هينزّل الملفات اللي اتغيّرت بس — إعداداتك وجيوشك وصورك هتفضل زي ما هي.",
+"up_working_note": "بينزّل التحديث",
+"up_ready_note": "خلاص اتنزّل. دوس «أعد التشغيل» والبرنامج يقفل ويفتح لوحده بالنسخة الجديدة، والبوتات اللي كانت شغالة هترجع تشتغل.",
+"up_now": "حدّث الآن",
+"up_later": "بعدين",
+"up_restart": "أعد التشغيل الآن",
+"up_restarting": "بيعيد التشغيل… البرنامج هيقفل ويفتح تاني خلال ثواني",
+"up_banner": "فيه تحديث جديد v{v} — دوس «تحديث جديد» فوق",
+"up_resumed": "اتحدّث البرنامج — رجّعت {n} بوت يشتغل",
+"up_restart_fail": "ماقدرناش نعيد التشغيل — اقفل البرنامج وافتحه",
+"up_auto": "حدّث تلقائيًا",
+"up_auto_sub": "ينزّل أي تحديث جديد لوحده ويسألك بس تعيد التشغيل إمتى",
+"cp_in_battle": "بيسجّل هجمتك",
+"cp_battles": "هجمة",
+"cp_battle_row": "هجمة #{n}: {taps} نزلة جيش و{frames} صورة — اتحفظت كتسجيل «{rec}» (تلاقيه في الهجوم ← التشكيلات)"
 },
 "en": {
 "gold": "Gold",
@@ -1727,7 +1746,7 @@
 "cp_discard": "Delete all",
 "cp_send": "Send {n} pictures to Claude",
 "cp_resend": "Send again",
-"cp_how": "Start capturing → play and tap everything you want the bot to understand (army, shop, windows…) → Done → review and delete repeats → Send to Claude → tell me in the chat “I sent the capture”. The gold ring on each picture marks where you tapped before it.",
+"cp_how": "Start capturing → play and tap everything you want the bot to understand (army, shop, windows…). If you attack, the whole attack is recorded by itself: how, where and when you deployed → Done → review and delete repeats → Send to Claude → tell me in the chat “I sent the capture”. The gold ring = where you tapped.",
 "cp_banner": "The bot is capturing 📸 play normally, every new screen is photographed — press Done when finished",
 "cp_st_waiting": "Waiting… the bot starts after its current step",
 "cp_st_starting": "Opening the game…",
@@ -1739,7 +1758,26 @@
 "cp_st_send_failed": "Sending failed:",
 "cp_st_failed": "Capture failed — try again",
 "cp_confirm_new": "Some pictures were not sent yet — start a new capture anyway? (the old ones stay saved)",
-"cp_confirm_discard": "Delete all pictures of this capture?"
+"cp_confirm_discard": "Delete all pictures of this capture?",
+"up_pill": "New update v{v}",
+"up_ready_pill": "Ready — restart (v{v})",
+"up_title": "A new update is available",
+"up_title_ready": "Update downloaded",
+"up_note": "Only the changed files are downloaded — your settings, armies and pictures stay.",
+"up_working_note": "Downloading the update",
+"up_ready_note": "Done. Press Restart and the program closes and opens again on the new version; bots that were running start again.",
+"up_now": "Update now",
+"up_later": "Later",
+"up_restart": "Restart now",
+"up_restarting": "Restarting… the program closes and opens again in a few seconds",
+"up_banner": "New update v{v} available — press “New update” at the top",
+"up_resumed": "Updated — {n} bots started again",
+"up_restart_fail": "Couldn't restart — close and reopen the program",
+"up_auto": "Update automatically",
+"up_auto_sub": "Downloads new versions by itself and only asks when to restart",
+"cp_in_battle": "recording your attack",
+"cp_battles": "attacks",
+"cp_battle_row": "Attack #{n}: {taps} deploys, {frames} pictures — saved as recording “{rec}” (Attack → Loadouts)"
 },
 "unit_ar": {
 "healing": "العلاج",
@@ -2449,6 +2487,14 @@
 [
 "^Capture mode failed",
 "وضع التصوير فشل"
+],
+[
+"^Capture mode: battle #(\\d+) started.*",
+"⚔️ هجمة #\\g<1> بدأت — البوت بيسجّل إزاي بتنزّل الجيش"
+],
+[
+"^Capture mode: battle #(\\d+) recorded \\((\\d+) deploys, (\\d+) pictures\\)",
+"⚔️ هجمة #\\g<1> اتسجّلت: \\g<2> نزلة جيش و\\g<3> صورة"
 ]
 ]
 }

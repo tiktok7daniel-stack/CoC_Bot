@@ -140,6 +140,8 @@ class MainWindow(QMainWindow):
         self._seen_lines = None
         self.setup_tray()
         self.hud = MiniHud(self)
+        from .components.update_center import UpdateCenter
+        self.update_center = UpdateCenter(self, self.top.update_pill)
         self.poller.errors.connect(lambda items: self.sidebar.set_badge("log", sum(1 for e in items if e.get("type") == "error")))
         self.store.accounts_changed.connect(lambda accs: self.top.set_accounts(accs, self.store.account))
         self.store.account_changed.connect(lambda a: (self.top.set_accounts(self.store.APP.get("accounts", []), a), self.poller.refresh_all()))
@@ -159,12 +161,31 @@ class MainWindow(QMainWindow):
                 return
             self.apply_language(self.store.APP.get("language", "ar"))
             self.poller.refresh_all()
+            self.api.get("/api/app/resume", self._resume)
             if self.store.APP.get("show_hud", False):
                 self.hud.place()
                 self.hud.show()
             if self.store.APP.get("show_setup", True) is not False:
                 QTimer.singleShot(400, self.setup.open_wizard)
         self.store.load_all(loaded)
+
+    def _resume(self, r):
+        """After a restart: start again the bots that were running before it."""
+        for acc in (r or {}).get("accounts", []) if isinstance(r, dict) else []:
+            self.account_action(acc, "start")
+        if isinstance(r, dict) and r.get("accounts"):
+            self.banner.show_msg(tr("up_resumed").format(n=len(r["accounts"])), "ok", "refresh")
+
+    def restart_app(self):
+        """Close and reopen the whole program (used after an update)."""
+        if self.store.dirty: self.store.save_blocking()
+
+        def done(r):
+            if isinstance(r, dict) and r.get("ok"):
+                QTimer.singleShot(300, self.close)
+            else:
+                self.toast.show_msg(tr("up_restart_fail"), "bad")
+        self.api.post("/api/app/restart", {}, done)
 
     def on_loaded(self):
         lang = self.store.APP.get("language", "ar")

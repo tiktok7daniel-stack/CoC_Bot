@@ -25,3 +25,11 @@ When the user says in the chat that they sent a capture:
 - for army screens, write the composition to `knowledge/armies.json` (`{"<name or session/NNN>": {"troops": {...}, "spells": {...}, "heroes": [...]}}`)
 - mark each picture in `knowledge/status.json` with key `captures/<session folder>/<NNN>` and an Egyptian-Arabic `note_ar`
 - reply to the user in Arabic with what was learned from each picture
+
+### Battles inside a capture (`battle_NN/`)
+When the user attacked while capturing, the folder `battle_NN/` holds pictures every 2 s and at every deploy, and
+`battle.json` with `tap_list` (time in seconds from the first deploy, x/y screen fractions) and `frame_list`.
+Study the technique: army used, deploy order, where (edges / funnel / corner), timing of heroes and spells, the result.
+Write it to `knowledge/strategies.json`: `{"<session>/battle_NN": {"army": {...}, "plan_ar": "<Egyptian Arabic summary of the technique>",
+"deploy": [{"what": "...", "where": "left edge", "t": 0.0}], "result": {...}, "rating": 1-5}}` and tell the user what you learned.
+The battle is also saved in the bot as a replayable recording ("learned <date> #N").

@@ -864,6 +864,35 @@ def api_tesseract_install():
 
 # ---------------------------------------------------------------- updates
 
+@app.route("/api/app/restart", methods=["POST"])
+def api_app_restart():
+    """Restart the whole program (after an update): remember which bots run, start a helper that reopens the
+    program once this one has closed. The window closes itself right after this returns."""
+    import json, subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent.parent
+    running = [i for i in list(instances) if i in accounts()]
+    resume = Path.home() / ".CoC_Bot" / "resume.json"
+    resume.parent.mkdir(parents=True, exist_ok=True)
+    resume.write_text(json.dumps({"t": time.time(), "accounts": running}), encoding="utf-8")
+    flags = 0x08000000 | 0x00000008 if sys.platform == "win32" else 0
+    subprocess.Popen([sys.executable, str(root / "src" / "restart_helper.py"), str(os.getppid()), str(root), sys.executable],
+                     cwd=str(root), creationflags=flags, close_fds=True, start_new_session=sys.platform != "win32")
+    return jsonify({"ok": True, "resume": running})
+
+@app.route("/api/app/resume", methods=["GET"])
+def api_app_resume():
+    """Bots that were running before a restart (once, within 10 minutes)."""
+    import json
+    from pathlib import Path
+    p = Path.home() / ".CoC_Bot" / "resume.json"
+    try:
+        d = json.loads(p.read_text(encoding="utf-8"))
+        p.unlink()
+    except (OSError, ValueError):
+        return jsonify({"accounts": []})
+    return jsonify({"accounts": d.get("accounts", []) if time.time() - d.get("t", 0) < 600 else []})
+
 @app.route("/api/update/check", methods=["GET"])
 def api_update_check():
     try:

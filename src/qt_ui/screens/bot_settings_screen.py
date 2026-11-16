@@ -95,6 +95,7 @@ class BotSettingsScreen(Screen):
         upd.add(ub)
         self.upd_note = label("", "sub", wrap=True)
         upd.add(self.upd_note)
+        upd.add(toggle_row(st, "up_auto", "auto_update", "up_auto_sub", "app"))
         g.addWidget(upd, 0, 1)
 
         tg = GlassCard("notifications", "bell", "notifications_sub")
@@ -237,8 +238,10 @@ class BotSettingsScreen(Screen):
         def done(r):
             self.upd_btn.setEnabled(True)
             if isinstance(r, dict) and r.get("ok"):
-                self.upd_note.setText(tr("upd_done"))
-                self.ctx.banner(tr("upd_done"), "ok", "download")
+                self.upd_note.setText(tr("up_ready_note"))
+                uc = self.ctx.window.update_center
+                uc._ready(str(r.get("version") or ""))
+                uc.dialog.open_for(self.v_cur.text(), str(r.get("version") or self.v_new.text()), ready=True)
             else:
                 self.upd_note.setText(tr("upd_err") + f"  {(r or {}).get('error', '')}")
         self.api.post("/api/update/apply", {}, done, timeout=600)

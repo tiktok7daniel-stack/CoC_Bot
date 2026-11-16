@@ -155,3 +155,57 @@ NEW = 22           # at least this far from every saved picture = a new screen
 
 def is_new(h, saved):
     return all(distance(h, s) >= NEW for s in saved)
+
+
+# ====================================================================== your attacks (inside a capture session)
+BATTLE_FRAME_EVERY = 2.0
+BATTLE_MAX_FRAMES = 80
+
+
+def start_battle(folder, n, rec):
+    d = folder / f"battle_{n:02d}"
+    d.mkdir(parents=True, exist_ok=True)
+    return {"n": n, "dir": d, "t0": time.time(), "ev0": len(rec.events) if rec is not None else 0, "frames": [],
+            "last_frame": 0.0, "seen": len(rec.events) if rec is not None else 0}
+
+
+def battle_frame(battle, frame, rec):
+    """A picture every 2 s, and one right when a new deploy tap happens (what the battlefield looked like)."""
+    import cv2
+    now = time.time()
+    new_tap = False
+    if rec is not None:
+        downs = [e for e in rec.events[battle["seen"]:] if e["type"] == "down"]
+        battle["seen"] = len(rec.events)
+        new_tap = bool(downs)
+    if (now - battle["last_frame"] >= BATTLE_FRAME_EVERY or new_tap) and len(battle["frames"]) < BATTLE_MAX_FRAMES:
+        name = f"{len(battle['frames']) + 1:03d}.jpg"
+        small = cv2.resize(frame, (1280, int(1280 * frame.shape[0] / frame.shape[1])))
+        cv2.imwrite(str(battle["dir"] / name), cv2.cvtColor(small, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 75])
+        battle["frames"].append({"file": name, "t": round(now - battle["t0"], 2), "tap": new_tap})
+        battle["last_frame"] = now
+
+
+def end_battle(battle, rec, max_x, max_y, session):
+    """Save the battle: taps (as screen positions + times), its pictures, and a replayable recording."""
+    import army_learn, recorder
+    events = list(rec.events[battle["ev0"]:]) if rec is not None else []
+    t0 = events[0]["t"] if events else 0
+    events = [dict(e, t=round(e["t"] - t0, 3)) for e in events]
+    taps = []
+    for e in events:
+        if e["type"] == "down":
+            x, y = army_learn.touch_to_screen(e["fx"], e["fy"], max_x, max_y)
+            taps.append({"t": e["t"], "x": round(x, 4), "y": round(y, 4)})
+    info = {"n": battle["n"], "folder": battle["dir"].name, "duration": round(time.time() - battle["t0"], 1),
+            "taps": len(taps), "frames": len(battle["frames"]), "recording": ""}
+    (battle["dir"] / "battle.json").write_text(json.dumps(dict(info, tap_list=taps, frame_list=battle["frames"]),
+                                                          ensure_ascii=False, indent=1), encoding="utf-8")
+    if taps:   # keep it as a battle recording the bot can replay (Attack -> loadouts)
+        name = f"learned {session[4:8]}-{session[9:13]} #{battle['n']}"
+        recorder.REC_DIR.mkdir(parents=True, exist_ok=True)
+        data = {"name": name, "created": time.time(), "duration": events[-1]["t"] if events else 0,
+                "max": [max_x, max_y], "events": events, "learned": True}
+        (recorder.REC_DIR / f"{recorder._safe(name)}.json").write_text(json.dumps(data), encoding="utf-8")
+        info["recording"] = name
+    return info

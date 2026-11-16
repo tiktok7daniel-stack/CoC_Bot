@@ -510,10 +510,13 @@ class Banner(QFrame):
         self.hide()
 
     def show_msg(self, text, kind="ok", icon_name="check"):
-        c1, c2 = {"ok": ("#0E9F6E", "#047857"), "bad": ("#DC2626", "#991B1B"), "rec": ("#DC2626", "#7E22CE")}.get(kind, ("#D9952A", "#A21CAF"))
-        self.setStyleSheet(f"Banner {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 {c1}, stop:1 {c2}); border-radius: 14px; }}"
-                           " QPushButton { background: rgba(255,255,255,0.18); border: 0; color: white; }")
-        self.ic.setPixmap(icons.pixmap(icon_name, 22, "#FFFFFF"))
+        c1, c2, edge = {"ok": ("#16A36A", "#0B6E47", "#3DD68C"), "bad": ("#C6383D", "#7E1D22", "#F0555A"),
+                        "rec": ("#B4232A", "#5E1016", "#F0555A")}.get(kind, ("#2A2214", "#15120C", "#F5B740"))
+        self.setStyleSheet(f"Banner {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 {c1}, stop:1 {c2});"
+                           f" border: 1px solid {edge}; border-radius: 18px; }}"
+                           " QPushButton { background: rgba(255,255,255,0.14); border: 0; color: white; border-radius: 10px; padding: 6px 14px; }")
+        self.text.setStyleSheet("font-size: 12.5pt; font-weight: 800; color: " + ("#FFE7A8" if kind not in ("ok", "bad", "rec") else "white") + ";")
+        self.ic.setPixmap(icons.pixmap(icon_name, 22, "#FFFFFF" if kind in ("ok", "bad", "rec") else "#F5B740"))
         done = kind == "ok"
         self.seal.setVisible(done)
         self.ic.setVisible(not done)

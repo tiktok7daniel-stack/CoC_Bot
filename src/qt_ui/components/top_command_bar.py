@@ -115,6 +115,9 @@ class TopCommandBar(QFrame):
             r2.addWidget(b)
         self.btn_start.setMinimumWidth(170)
         r2.addStretch(1)
+        from .update_center import UpdatePill
+        self.update_pill = UpdatePill()
+        r2.addWidget(self.update_pill)
         self.state = StatusPill("stopped")
         r2.addWidget(self.state)
         self.discard = IconButton("undo", kind="ghost", size=15, tip_key="discard")
@@ -149,7 +152,8 @@ class TopCommandBar(QFrame):
         self._apply_compact()
 
     def _apply_compact(self, force=False):
-        compact = self.width() < 1100
+        extra = self.update_pill.sizeHint().width() + 12 if self.update_pill.isVisible() else 0
+        compact = self.width() < 1100 + extra
         if compact == self._compact and not force: return
         self._compact = compact
         for b, key in self._text_keys.items():

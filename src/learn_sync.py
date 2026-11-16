@@ -362,6 +362,12 @@ def send_capture(id, session):
         tap = f"({sh['tap'][0]:.2f}, {sh['tap'][1]:.2f})" if sh.get("tap") else "—"
         words = " · ".join(str(w).replace("|", "/") for w in (sh.get("words") or [])[:10]) or "—"
         lines.append(f"| {stem} | <img src=\"{sh['file']}\" width=\"260\"> | {tap} | {words} |")
+    for b in s.get("battles", []):           # your attacks: their pictures + taps
+        bdir = folder / b["folder"]
+        if not bdir.exists(): continue
+        for f in sorted(bdir.iterdir()):
+            if f.suffix in (".jpg", ".json"): files[f"{root}/{b['folder']}/{f.name}"] = f.read_bytes()
+        lines.append(f"| ⚔️ {b['folder']} | [{b['frames']} صورة]({b['folder']}/) | {b['taps']} نزلة جيش | {b['duration']:.0f} ثانية |")
     files[f"{root}/README.md"] = "\n".join(lines).encode("utf-8")
     files[f"{root}/session.json"] = json.dumps(dict(s, account=id), ensure_ascii=False, indent=1).encode("utf-8")
 

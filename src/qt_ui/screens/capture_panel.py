@@ -145,7 +145,9 @@ class CapturePanel(GlassCard):
         self._blink = not self._blink
         if t == "capturing":
             dot = f'<span style="color:{TOKENS["bad"]};font-size:15pt">{"●" if self._blink else "○"}</span>'
-            self.rec.setText(f'{dot}&nbsp;<b>REC</b>&nbsp;&nbsp;<span style="color:{TOKENS["accent_hi"]};font-size:13pt;font-weight:800">{st.get("shots", 0)}</span> {tr("cp_shots")}')
+            fight = f'&nbsp;&nbsp;⚔️ <b style="color:{TOKENS["bad"]}">{tr("cp_in_battle")}</b>' if st.get("in_battle") else ""
+            bat = f'&nbsp;&nbsp;⚔️ <b>{st.get("battles", 0)}</b> {tr("cp_battles")}' if st.get("battles") else ""
+            self.rec.setText(f'{dot}&nbsp;<b>REC</b>&nbsp;&nbsp;<span style="color:{TOKENS["accent_hi"]};font-size:13pt;font-weight:800">{st.get("shots", 0)}</span> {tr("cp_shots")}{bat}{fight}')
         else:
             self.rec.setText("")
         n = st.get("shots", 0)
@@ -186,6 +188,17 @@ class CapturePanel(GlassCard):
         cols = 4
         for i, sh in enumerate(shots):
             self.grid.addWidget(Thumb(self, self.session, sh), i // cols, i % cols)
+        row = (len(shots) + cols - 1) // cols
+        for j, b in enumerate((self.data or {}).get("battles", [])):
+            box = Box(radius=14, border="rgba(240,85,90,0.45)")
+            h = QHBoxLayout(box)
+            h.setContentsMargins(14, 10, 14, 10)
+            ic = QLabel()
+            ic.setPixmap(icons.pixmap("swords", 22, TOKENS["bad"]))
+            h.addWidget(ic)
+            h.addWidget(label(tr("cp_battle_row").format(n=b["n"], taps=b.get("taps", 0), frames=b.get("frames", 0),
+                                                        rec=b.get("recording") or "—"), wrap=True), 1)
+            self.grid.addWidget(box, row + j, 0, 1, cols)
 
     # ---------------------------------------------------------------- actions
     def start(self):

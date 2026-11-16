@@ -297,9 +297,35 @@ class CoC_Bot:
             logger.info("Capture mode: play now — every new screen is photographed. Press Done when finished")
             saved, prev_h, last_tap, start = [], None, None, time.monotonic()
             seen = 0
+            data["battles"] = []
+            battle, gone, next_check = None, 0, 0.0
+            attacker = getattr(self, "attacker", None)
             while time.monotonic() - start < cs.MAX_MINUTES * 60 and len(saved) < cs.MAX_SHOTS:
                 if cs.stop_requested(iid): break
+                # ---- your attacks: the whole battle is recorded (taps + pictures), and kept as a replayable recording
+                if attacker is not None and time.monotonic() >= next_check:
+                    next_check = time.monotonic() + 1.0
+                    try: fighting = attacker.in_battle()
+                    except Exception: fighting = False
+                    if fighting and battle is None:
+                        battle = cs.start_battle(folder, len(data["battles"]) + 1, rec)
+                        logger.info(f"Capture mode: battle #{battle['n']} started, watching your attack")
+                        cs.set_status(iid, "capturing", session=session, shots=len(saved), battles=len(data["battles"]), in_battle=True)
+                        gone = 0
+                    elif battle is not None:
+                        gone = 0 if fighting else gone + 1
+                        if gone >= 3:
+                            info = cs.end_battle(battle, rec, max_x, max_y, session)
+                            data["battles"].append(info)
+                            cs.save_session(iid, session, data)
+                            logger.info(f"Capture mode: battle #{info['n']} recorded ({info['taps']} deploys, {info['frames']} pictures)")
+                            cs.set_status(iid, "capturing", session=session, shots=len(saved), battles=len(data["battles"]))
+                            battle = None
                 frame = Frame_Handler.get_frame(grayscale=False)
+                if battle is not None:
+                    cs.battle_frame(battle, frame, rec)
+                    time.sleep(0.25)
+                    continue
                 if rec is not None:
                     downs = [e for e in rec.events[seen:] if e["type"] == "down"]
                     seen = len(rec.events)
@@ -320,6 +346,8 @@ class CoC_Bot:
                     cs.set_status(iid, "capturing", session=session, shots=len(saved))
                     last_tap = None
                 time.sleep(0.35)
+            if battle is not None:      # stopped in the middle of a battle
+                data["battles"].append(cs.end_battle(battle, rec, max_x, max_y, session))
             if rec is not None: rec.stop()
             # read the words of every picture (Claude gets them with the picture)
             cs.set_status(iid, "reading", session=session, shots=len(saved))
