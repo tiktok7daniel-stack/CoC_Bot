@@ -945,7 +945,10 @@
 "so_hide": "اخفي الزرار العايم",
 "so_toggle": "إظهار/إخفاء زرار التصوير العايم",
 "so_show": "زرار عايم",
-"so_show_tip": "زرار تصوير صغير فوق كل الشاشات — تحطه جنب اللعبة وتدوس عليه (أو F8)"
+"so_show_tip": "زرار تصوير صغير فوق كل الشاشات — تحطه جنب اللعبة وتدوس عليه (أو F8)",
+"tp_smart": "✨ أوتوميشن ذكي (البوت يعمل كل حاجة)",
+"tp_smart_sub": "يهاجم ويفارم على طول، ولما المخازن تتملي يرقّي الأسوار ويرجع يهاجم، ويشغّل كل البنّائين على المباني ويسيب واحد للأسوار، والمعمل والأبطال شغالين",
+"tp_saved_smart": "تمام — الأوتوميشن الذكي شغال"
 },
 "en": {
 "gold": "Gold",
@@ -1893,7 +1896,10 @@
 "so_hide": "Hide the floating button",
 "so_toggle": "Show/hide the floating camera",
 "so_show": "Floating button",
-"so_show_tip": "A small camera on top of every window — put it next to the game and click it (or F8)"
+"so_show_tip": "A small camera on top of every window — put it next to the game and click it (or F8)",
+"tp_smart": "✨ Smart automation (the bot does everything)",
+"tp_smart_sub": "Attacks non-stop; full storages -> walls, then attacks again; all builders but one on buildings (one kept for walls); lab and heroes keep working",
+"tp_saved_smart": "OK — smart automation is on"
 },
 "unit_ar": {
 "healing": "العلاج",
@@ -1948,6 +1954,18 @@
 "ruin_witch": "ساحرة الأطلال"
 },
 "log": [
+[
+"^Today's plan: smart automation",
+"خطة النهارده: ✨ أوتوميشن ذكي"
+],
+[
+"^Battle rewards: pressed (.*)",
+"مكافأة الهجمة: داس على \\g<1>"
+],
+[
+"^Battle over, collecting the reward",
+"الهجمة خلصت — بيستلم المكافأة"
+],
 [
 "^Round (\\d+): nothing to do",
 "▶ الجولة \\g<1>: مفيش شغل في خطة النهارده"

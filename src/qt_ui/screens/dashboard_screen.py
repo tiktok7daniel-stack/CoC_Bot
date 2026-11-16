@@ -298,6 +298,7 @@ class DashboardScreen(Screen):
             if not p: text = tr("tp_bar_none")
             elif p["mode"] == "usual": text = tr("tp_bar_usual") + (" " + tr("tp_bar_auto") if p.get("auto") else "")
             elif p["mode"] == "nothing": text = tr("tp_bar_nothing")
+            elif p["mode"] == "smart": text = tr("tp_smart") + " — " + tr("tp_smart_sub")
             else:
                 names = {"attack": "tp_attack", "buildings": "tp_buildings", "walls": "tp_walls", "lab": "tp_lab",
                          "heroes": "tp_heroes", "builder_base": "tp_bb"}

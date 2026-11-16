@@ -750,6 +750,53 @@ def _read_resources_once(builder_base=False, save_debug=False):
         logger.exception("read_resources:")
         return None, False
 
+CHEST_WORDS = ("common", "rare", "epic", "legendary", "mythic")
+
+def collect_rewards(timeout=30):
+    """
+    After a battle the game now shows: results with "Claim Reward" -> a chest you tap until it opens ->
+    the item with "Continue" -> the village (older versions: "Return Home"). Go through all of it.
+    True once the village is back.
+    """
+    import time
+    start, taps = time.time(), 0
+    while time.time() - start < timeout:
+        if game_ready(): return True
+        frame = Frame_Handler.get_frame(grayscale=False)
+        boxes = [b for b in ocr_boxes(frame) if b[5] > 0.3]
+        text = " ".join(b[0].lower() for b in boxes)
+        def tap_box(*words):
+            for w in words:
+                hit = next((b for b in boxes if _word_hit(b[0], w)), None)
+                if hit:
+                    Input_Handler.click((hit[1] + hit[3]) / 2, (hit[2] + hit[4]) / 2)
+                    return hit[0]
+            return None
+        what = None
+        results = ("victory" in text or "defeat" in text) and ("bonus" in text or "damage" in text or "you got" in text)
+        if "claim" in text and "reward" in text:
+            what = tap_box("claim reward", "claim")
+        elif results:
+            # the results screen: the green button in the bottom middle (Claim Reward, older: Return Home)
+            what = tap_box("claim", "return", "home")
+            if not what:
+                Input_Handler.click(0.5, 0.857)
+                what = "results button"
+        elif "continue" in text:
+            what = tap_box("continue")
+        elif "return home" in text or ("return" in text and "home" in text):
+            what = tap_box("return home", "return")
+        elif any(w in text for w in CHEST_WORDS) or (taps and len(boxes) <= 4):     # chest room: hardly any text
+            Input_Handler.click(0.5, 0.55)       # the chest in the middle: each tap breaks one lock
+            what = "chest"
+        if what:
+            taps += 1
+            if taps == 1 or what != "chest": logger.info(f"Battle rewards: pressed {what}")
+            time.sleep(0.7 if what == "chest" else 1.0)
+        else:
+            time.sleep(0.6)
+    return game_ready()
+
 def game_ready():
     """True when the game is already open and showing a village (nothing to restart)."""
     try:

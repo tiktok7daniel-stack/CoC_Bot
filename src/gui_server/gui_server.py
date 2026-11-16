@@ -455,7 +455,7 @@ def api_plan(id):
     if request.method == "GET":
         return jsonify({"plan": today_plan.load(id), "asking": today_plan.asking(id)})
     d = request.json or {}
-    mode = d.get("mode") if d.get("mode") in ("usual", "custom", "nothing") else "usual"
+    mode = d.get("mode") if d.get("mode") in ("usual", "custom", "nothing", "smart") else "usual"
     do = {k: bool(v) for k, v in (d.get("do") or {}).items() if k in today_plan.ITEMS}
     p = today_plan.save(id, mode, do)
     inst = instances.get(id)

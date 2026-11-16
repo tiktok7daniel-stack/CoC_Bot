@@ -80,6 +80,21 @@ def overlay(s, id):
     if not p or p.get("mode") == "usual": return s
     s = copy.deepcopy(s)
     tasks = s.setdefault("tasks", {})
+    if p["mode"] == "smart":
+        # smart automation: attack non-stop; full storages -> walls, then attack again; all builders but one on
+        # buildings (the last one stays free for walls); lab, heroes and pets keep working
+        for t in ("home_attacks", "home_base", "home_lab", "heroes", "pet_house", "builder_apprentice", "lab_assistant"):
+            tasks[t] = True
+        tasks["home_base_priority"] = tasks.get("home_base_priority", True)
+        w = s.setdefault("walls", {})
+        w["enabled"] = True
+        w["during_farming"] = True
+        farm = s.setdefault("attack", {}).setdefault("farm", {})
+        farm["enabled"] = True
+        u = s.setdefault("upgrades", {})
+        u["open_home_builders"] = max(1, int(u.get("open_home_builders", 0) or 0))
+        u["every_cycles"] = 1
+        return s
     if p["mode"] == "nothing":
         for k in list(tasks): tasks[k] = False
         s.setdefault("walls", {})["enabled"] = False
@@ -102,5 +117,6 @@ def overlay(s, id):
 def describe(p):
     """Short English summary for the log."""
     if not p: return "none"
+    if p["mode"] == "smart": return "smart automation"
     if p["mode"] != "custom": return p["mode"]
     return ", ".join(k for k, v in p.get("do", {}).items() if v) or "nothing"

@@ -84,7 +84,14 @@ class Attacker:
                         time.sleep(0.7)
                         if not self._click_okay(timeout=3): Auto_Learn.learn_button("okay_button", tap=True, min_interval=0)
                         surrendered = True
-            # results screen -> back to the village
+            # results screen (current game: "Claim Reward" -> chest -> "Continue") -> back to the village
+            if time.monotonic() - start > 6 and not self.in_battle():
+                frame = Frame_Handler.get_frame(grayscale=False)
+                words = " ".join(b[0].lower() for b in ocr_boxes(frame) if b[5] > 0.3)
+                if ("claim" in words and "reward" in words) or "continue" in words or any(w in words for w in CHEST_WORDS) \
+                        or (("victory" in words or "defeat" in words) and ("bonus" in words or "damage" in words)):
+                    logger.info("Battle over, collecting the reward")
+                    if collect_rewards(): return
             if self._click_return_home(timeout=0):
                 logger.info("Battle over, returning home")
                 time.sleep(0.8)
@@ -201,12 +208,23 @@ class Attacker:
         if not name: return True
         time.sleep(0.8)
         def find_and_tap():
-            frame = Frame_Handler.get_frame(grayscale=False)
-            for text, x1, y1, x2, y2, conf in ocr_boxes(frame):
-                if conf > 0.3 and _word_hit(text, name.lower()):
-                    Input_Handler.click((x1 + x2) / 2, (y1 + y2) / 2)
-                    return True
-            return False
+            boxes = [b for b in ocr_boxes(Frame_Handler.get_frame(grayscale=False)) if b[5] > 0.3]
+            # current game: Army -> "Saved Recipes" tab, every recipe row has a green "Use" button on its right
+            tab = next((b for b in boxes if _word_hit(b[0], "saved recipes") or _word_hit(b[0], "recipes")), None)
+            if tab and not any(_word_hit(b[0], "use") for b in boxes):
+                Input_Handler.click((tab[1] + tab[3]) / 2, (tab[2] + tab[4]) / 2)
+                time.sleep(0.8)
+                boxes = [b for b in ocr_boxes(Frame_Handler.get_frame(grayscale=False)) if b[5] > 0.3]
+            hit = next((b for b in boxes if _word_hit(b[0], name.lower())), None)
+            if not hit: return False
+            cy = (hit[2] + hit[4]) / 2
+            uses = [b for b in boxes if b[0].strip().lower() == "use" and b[1] > hit[3] and -0.02 < (b[2] + b[4]) / 2 - cy < 0.14]
+            if uses:
+                u = min(uses, key=lambda b: (b[2] + b[4]) / 2 - cy)
+                Input_Handler.click((u[1] + u[3]) / 2, (u[2] + u[4]) / 2)
+            else:
+                Input_Handler.click((hit[1] + hit[3]) / 2, (hit[2] + hit[4]) / 2)
+            return True
         if find_and_tap():
             logger.info(f"Saved army '{name}' selected")
             time.sleep(0.8)

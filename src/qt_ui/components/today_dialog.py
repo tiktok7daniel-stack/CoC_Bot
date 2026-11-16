@@ -107,6 +107,12 @@ class TodayDialog(QDialog):
         # quick choices
         q = QHBoxLayout()
         q.setSpacing(8)
+        smart = IconButton("sparkle", "tp_smart", "primary", size=16)
+        smart.setMinimumHeight(52)
+        smart.setToolTip(tr("tp_smart_sub"))
+        smart.clicked.connect(lambda: self.send("smart", {}))
+        v.insertWidget(1, smart)
+        v.insertWidget(2, label(key="tp_smart_sub", role="sub", wrap=True))
         for key, tk, ic in (("usual", "tp_usual", "refresh"), ("farm", "tp_farm", "swords"), ("upgrades", "tp_upgrades", "hammer"),
                             ("nothing", "tp_nothing", "pause")):
             b = IconButton(ic, tk, "chip", size=14)
