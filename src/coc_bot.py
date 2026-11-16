@@ -136,6 +136,15 @@ class CoC_Bot:
         after = self.read_and_record_resources() or {}
         spent = any((before.get(k) or 0) - (after.get(k) or 0) > 1000 for k in ("gold", "elixir"))
         logger.info("Spent the loot, back to attacking" if spent else "Nothing could be bought")
+        # wall-max mode: storages full and not one wall could be bought twice in a row -> every wall is maxed
+        if s["attack"].get("farm", {}).get("max_walls"):
+            if getattr(self.upgrader, "last_walls_done", 0) > 0: self.no_wall_streak = 0
+            else: self.no_wall_streak = getattr(self, "no_wall_streak", 0) + 1
+            if self.no_wall_streak >= 2 and not getattr(self, "walls_maxed_told", False):
+                self.walls_maxed_told = True
+                logger.info("All walls are maxed: wall-max mode is done")
+                try: send_notification("كل الأسوار وصلت للماكس — وضع تمكيس الأسوار خلص")
+                except Exception: pass
         return spent
 
     # ---------------------------------------------------------------- record a battle
@@ -374,13 +383,14 @@ class CoC_Bot:
                         self.upgrader.run_home_base(self.excluded("home_base"), self.excluded("home_lab"), self.excluded("pet_house"))
 
                     farm = self.settings["attack"].get("farm", {})
-                    if running() and not self.excluded("home_attacks") and farm.get("enabled", True):
+                    if running() and not self.excluded("home_attacks") and (farm.get("enabled", True) or farm.get("max_walls")):
                         # attack non-stop; when the storages are full spend them, then attack again
                         attacks = 0
                         import recorder
                         while running() and not self.excluded("home_attacks") and attacks < 300 and not recorder.pending(_utils.INSTANCE_ID):
                             self.load_settings()
-                            if not self.settings["attack"].get("farm", {}).get("enabled", True): break
+                            f_now = self.settings["attack"].get("farm", {})
+                            if not (f_now.get("enabled", True) or f_now.get("max_walls")): break
                             if self.full_resources(self.settings):
                                 # spent something: go round again (more walls to buy, or attack once not full);
                                 # rest only when nothing at all could be bought

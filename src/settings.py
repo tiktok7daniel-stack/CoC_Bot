@@ -86,6 +86,7 @@ def default_settings():
                 "gold_full": 0,      # gold counts as full from this amount (0 = learn the storage size by itself)
                 "elixir_full": 0,
                 "rest_minutes": 30,  # full and nothing to spend on: close the game and rest this long
+                "max_walls": False,  # wall-max mode: farm + walls until every wall is maxed, buildings too but 1 builder kept free
             },
             "skip_when_full": {      # don't attack while the storages are (nearly) full
                 "enabled": False, "gold": 0, "elixir": 0,
@@ -247,7 +248,7 @@ def apply(s, wall_budget=None):
     """Map account settings onto the configs constants the bot code reads."""
     t, p, u, a = s["tasks"], s["priorities"], s["upgrades"], s["attack"]
     home_priority = [list(lvl) for lvl in p["home_base"] if lvl]
-    if s["walls"]["enabled"] and (wall_budget is None or wall_budget > 0):
+    if (s["walls"]["enabled"] or s["attack"].get("farm", {}).get("max_walls")) and (wall_budget is None or wall_budget > 0):
         home_priority.append(["Wall"]) # walls go last so real buildings come first
     values = {
         "UPGRADE_HOME_BASE": t["home_base"], "UPGRADE_HEROES": t["heroes"],
@@ -264,7 +265,8 @@ def apply(s, wall_budget=None):
         "BUILDER_BASE_UPGRADE_PRIORITY": [list(l) for l in p["builder_base"] if l],
         "BUILDER_LAB_UPGRADE_PRIORITY": [list(l) for l in p["builder_lab"] if l],
         "MAX_UPGRADES_PER_CHECK": max(1, int(u["max_per_cycle"])),
-        "OPEN_HOME_BUILDERS": max(0, int(u["open_home_builders"])),
+        # wall-max mode keeps one builder free for the walls
+        "OPEN_HOME_BUILDERS": max(1 if a.get("farm", {}).get("max_walls") else 0, int(u["open_home_builders"])),
         "OPEN_BUILDER_BUILDERS": max(0, int(u["open_builder_builders"])),
         "START_FROM_MENU_TOP": bool(u["start_from_menu_top"]),
         "TROOP_DEPLOY_TIME": float(a["troop_deploy_time"]),

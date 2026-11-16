@@ -193,6 +193,7 @@ class AttackScreen(Screen):
         g.addWidget(atk, 0, 0)
         farm = GlassCard("farm_title", "brick", "farm_sub")
         farm.add(toggle_row(st, "farm_on", "attack.farm.enabled", "farm_on_sub"))
+        farm.add(toggle_row(st, "farm_max_walls", "attack.farm.max_walls", "farm_max_walls_sub"))
         farm.add(toggle_row(st, "wall_farming", "walls.during_farming", "wall_farming_sub"))
         g.addWidget(farm, 0, 1)
         L["attack"].addWidget(w)

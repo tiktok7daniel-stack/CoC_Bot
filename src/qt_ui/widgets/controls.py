@@ -62,14 +62,14 @@ class GlassCard(QFrame):
             box.setSpacing(0)
             self.title = label(key=title_key, role="h3") if title_key else label("", "h3")
             box.addWidget(self.title)
-            if sub_key:
-                self.sub = label(key=sub_key, role="sub", wrap=True)
-                box.addWidget(self.sub)
             self.header.addLayout(box, 1)
             self.tools = QHBoxLayout()
             self.tools.setSpacing(6)
             self.header.addLayout(self.tools)
             self.v.addLayout(self.header)
+            if sub_key: # own full-width line: a wrapped label inside the header row could overlap the title
+                self.sub = label(key=sub_key, role="sub", wrap=True)
+                self.v.addWidget(self.sub)
         self.body = QVBoxLayout()
         self.body.setSpacing(4)
         self.v.addLayout(self.body)

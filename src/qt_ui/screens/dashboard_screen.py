@@ -210,6 +210,7 @@ class DashboardScreen(Screen):
         w3, g3 = grid(3)
         farm = GlassCard("farm_title", "layers", "farm_sub")
         farm.add(toggle_row(self.store, "farm_on", "attack.farm.enabled", "farm_on_sub"))
+        farm.add(toggle_row(self.store, "farm_max_walls", "attack.farm.max_walls", "farm_max_walls_sub"))
         farm.add(form_row("farm_gold", "farm_auto_sub", bind_num(self.store, NumField(0, 10**9, 100000, 150), "attack.farm.gold_full"), icon_name=None))
         farm.add(form_row("farm_elixir", "farm_auto_sub", bind_num(self.store, NumField(0, 10**9, 100000, 150), "attack.farm.elixir_full")))
         farm.add(num_row(self.store, "farm_rest", "attack.farm.rest_minutes", "farm_rest_sub", "minutes", 1, 1440, 5, 90))

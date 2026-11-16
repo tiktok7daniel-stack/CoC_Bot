@@ -1504,6 +1504,7 @@ class Upgrader:
         upgrades_started = []
         base_priority = [list(lvl) for lvl in configs.HOME_BASE_UPGRADE_PRIORITY]
         walls_wanted = any("Wall" in lvl for lvl in base_priority) and self.wall_budget > 0
+        self.last_walls_done = 0
         if not exclude_base or walls_wanted:
             walls_done = 0
             wall_misses = 0
@@ -1561,6 +1562,7 @@ class Upgrader:
                     logger.warning("Encountered an error while attempting to upgrade home base. Retrying...")
             configs.HOME_BASE_UPGRADE_PRIORITY = base_priority
             self.skip_walls = False
+            self.last_walls_done = walls_done
             if walls_wanted and walls_done > 0:
                 logger.info(f"Walls finished: {walls_done} upgraded")
                 try: send_notification(f"🧱 البوت خلّص الأسوار: طوّر {walls_done} سور")

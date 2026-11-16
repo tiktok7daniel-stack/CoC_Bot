@@ -122,6 +122,8 @@ class MainWindow(QMainWindow):
 
         self.poller.state.connect(self.on_state)
         self.poller.system.connect(self.on_system)
+        self.poller.log.connect(self.notify_from_log)
+        self._notified = None
         self.poller.errors.connect(lambda items: self.sidebar.set_badge("log", sum(1 for e in items if e.get("type") == "error")))
         self.store.accounts_changed.connect(lambda accs: self.top.set_accounts(accs, self.store.account))
         self.store.account_changed.connect(lambda a: (self.top.set_accounts(self.store.APP.get("accounts", []), a), self.poller.refresh_all()))
@@ -230,6 +232,23 @@ class MainWindow(QMainWindow):
 
     def on_system(self, sysd):
         self.on_state(self.poller.last.get("state") or {})
+
+    def notify_from_log(self, lines):
+        """Big notice for the moments the user waits for (walls done, every wall maxed); new lines only."""
+        import re
+        hits = [l for l in lines if "Walls finished:" in l or "All walls are maxed" in l]
+        last = hits[-1] if hits else ""
+        if self._notified is None:
+            self._notified = last
+            return
+        if last and last != self._notified:
+            self._notified = last
+            if "All walls are maxed" in last:
+                self.banner.show_msg(tr("walls_maxed_banner"), "ok", "trophy")
+            else:
+                m = re.search(r"Walls finished: (\d+)", last)
+                self.banner.show_msg(i18n.translate_log(f"Walls finished: {m.group(1) if m else '?'} upgraded"), "ok", "brick")
+            QApplication.beep()
 
     def on_online(self, online):
         if not online: self.toast.show_msg(tr("conn_lost"), "bad")

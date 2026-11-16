@@ -83,7 +83,8 @@ class _Job(QRunnable):
 
     def run(self):
         result = self.api.request(self.method, self.path, self.body, self.timeout, self.raw)
-        self.api._emitter.done.emit(self.done, result)
+        try: self.api._emitter.done.emit(self.done, result)
+        except RuntimeError: pass # the window closed while this request was running
 
 
 class Poller(QObject):
