@@ -104,11 +104,28 @@ def free_gift():
             learn_sync.report_stuck(utils.INSTANCE_ID, Frame_Handler.get_frame(grayscale=False), [], "free_gift")
         except Exception:
             pass
-    Input_Handler.click_exit(n=2)
-    time.sleep(0.5)
+    close_window()
     try: utils.to_home_base()
     except Exception: pass
     return got > 0
+
+
+def close_window():
+    """The red X at the top right of a window (the shop, offers…): found by its colour, then pressed."""
+    import numpy as np, cv2
+    for _ in range(3):
+        frame = Frame_Handler.get_frame(grayscale=False)
+        x1, y1, x2, y2 = 0.86, 0.0, 1.0, 0.16
+        a = Frame_Handler.crop(frame, x1, y1, x2, y2)
+        r, g, b = (a[..., i].astype(int) for i in range(3))
+        m = ((r > 190) & (g < 80) & (b < 80)).astype(np.uint8)
+        n, _l, st, cen = cv2.connectedComponentsWithStats(m, 8)
+        if n <= 1 or st[1:, 4].max() < a.shape[0] * a.shape[1] * 0.02: break
+        i = 1 + int(np.argmax(st[1:, 4]))
+        h, w = a.shape[:2]
+        Input_Handler.click(x1 + cen[i][0] / w * (x2 - x1), y1 + cen[i][1] / h * (y2 - y1))
+        time.sleep(0.6)
+    Input_Handler.click_exit(n=1)
 
 
 def run(force=False):

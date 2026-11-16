@@ -209,13 +209,18 @@ def _upgrade_buttons(frame):
     import game_digits
     out = []
     bar = Frame_Handler.crop(frame, 0.10, 0.62, 0.90, 0.98)
-    for text, bx1, by1, bx2, by2, conf in ocr_boxes(bar):
+    boxes = ocr_boxes(bar)
+    for text, bx1, by1, bx2, by2, conf in boxes:
         if conf < 0.25 or not _like(text, "upgrade"): continue
+        if "more" in text.lower() or "row" in text.lower(): continue
         gx, gy = 0.10 + (bx1 + bx2) / 2 * 0.80, 0.62 + (by1 + by2) / 2 * 0.36
+        # "Upgrade More" (pick several walls) has "More" on the line under it: never that one
+        under = [o for o in boxes if -0.01 < (o[2] - by2) * 0.36 < 0.05 and abs((o[1] + o[3]) / 2 - (bx1 + bx2) / 2) * 0.80 < 0.04]
+        if any(re.sub(r"[^a-z]", "", o[0].lower()).startswith(("mo", "mn")) for o in under): continue
         around = Frame_Handler.crop(frame, gx - 0.035, gy - 0.10, gx + 0.035, gy - 0.02)
         r, g, b = (around[..., i].astype(int).mean() for i in range(3))
         if b > r + 35 and b > 140: continue                          # blue = the magic Hammer: never
-        price = Frame_Handler.crop(frame, gx - 0.055, gy - 0.165, gx + 0.055, gy - 0.095)
+        price = Frame_Handler.crop(frame, gx - 0.055, gy - 0.13, gx + 0.055, gy - 0.065)    # the price sits on the button, above the word
         cost = game_digits.read(price)
         out.append((gx, gy - 0.05, cost, _resource(price) if cost else None))
     return out
@@ -224,6 +229,7 @@ def _upgrade_buttons(frame):
 def _pick_button(btns, res=None):
     """The Upgrade button to press: one whose price can be paid with what is in the storages (the fuller one)."""
     if not btns: return None
+    if any(b[2] for b in btns): btns = [b for b in btns if b[2]]     # real Upgrade buttons show their price
     if res:
         ok = [b for b in btns if b[2] and b[3] in ("gold", "elixir", "dark") and (res.get(b[3]) or 0) >= b[2]]
         if ok: return max(ok, key=lambda b: (res.get(b[3]) or 0) - b[2])[:2]
