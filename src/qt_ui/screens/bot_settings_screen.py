@@ -8,7 +8,7 @@ Screens 17-18 - Bot settings, two sub-tabs:
 """
 import json, threading, urllib.request
 
-from PySide6.QtCore import QObject, Qt, Signal
+from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QVBoxLayout, QWidget
 
 from .. import icons
@@ -305,10 +305,16 @@ class BotSettingsScreen(Screen):
                 self.gpu_btn.setVisible(False)
             elif r.get("installing"):
                 pg = r.get("progress") or {}
-                self.pw_gpu.set("warn", tr("pw_gpu_dl").format(pct=pg.get("pct", 0), gb=round(pg.get("mb", 0) / 1024, 1),
-                                                              of=round(pg.get("of_mb", 4500) / 1024, 1)))
+                stage = pg.get("stage", "start")
+                if stage == "download":
+                    self.pw_gpu.set("warn", tr("pw_gpu_dl").format(pct=pg.get("pct", 0), gb=round(pg.get("mb", 0) / 1024, 2),
+                                                                  of=round(pg.get("of_mb", 0) / 1024, 2), speed=pg.get("speed", 0)))
+                    self.gpu_bar.setRange(0, 100)
+                    self.gpu_bar.setValue(int(pg.get("pct", 0)))
+                else:
+                    self.pw_gpu.set("warn", tr("pw_stage_" + stage) if tr("pw_stage_" + stage) != "pw_stage_" + stage else tr("pw_stage_start"))
+                    self.gpu_bar.setRange(0, 0)                  # moving bar: working, no percentage yet
                 self.gpu_bar.setVisible(True)
-                self.gpu_bar.setValue(int(pg.get("pct", 0)))
                 self.gpu_btn.setVisible(False)
                 self._gpu_timer.start(3000)                      # follow the download
             elif r.get("ready") and b.get("ocr_gpu"):
@@ -321,7 +327,7 @@ class BotSettingsScreen(Screen):
                 self.gpu_btn.setVisible(True)
             else:
                 self.pw_gpu.set("warn", tr("pw_gpu_off").format(name=name))
-                self.gpu_btn.setText(tr("pw_gpu_retry") if r.get("result") in ("failed", "no_cuda") else tr("pw_gpu_install"))
+                self.gpu_btn.setText(tr("pw_gpu_retry") if r.get("result") in ("failed", "no_cuda", "interrupted") else tr("pw_gpu_install"))
                 self.gpu_btn.setVisible(True)
             if not r.get("installing"): self._gpu_timer.stop()
             m = b.get("model") or {}
@@ -332,7 +338,9 @@ class BotSettingsScreen(Screen):
             log = [l for l in (r.get("log") or "").strip().splitlines() if l.strip()]
             res = r.get("result") or ""
             if r.get("installing"): self.pw_note.setText(tr("pw_dl_note"))
-            elif res in ("failed", "no_cuda") or res.startswith("failed"): self.pw_note.setText(tr("pw_gpu_failed") + ("\n" + log[-1] if log else ""))
+            elif res == "interrupted": self.pw_note.setText(tr("pw_gpu_interrupted"))
+            elif res in ("failed", "no_cuda") or res.startswith("failed"):
+                self.pw_note.setText(tr("pw_gpu_failed") + "\n" + (r.get("error") or (log[-1] if log else "")))
             else: self.pw_note.setText("")
         self.api.get("/api/gpu" + ("?refresh=1" if refresh else ""), got, timeout=150)
 
@@ -343,9 +351,12 @@ class BotSettingsScreen(Screen):
         def done(r):
             if isinstance(r, dict) and r.get("ok"):
                 self.ctx.toast(tr("pw_installing"), "ok")
-                self.check_power()
+                QTimer.singleShot(800, self.check_power)
             else:
-                self.ctx.toast(tr("pw_gpu_none"), "bad")
+                err = (r or {}).get("error", "") if isinstance(r, dict) else ""
+                msg = tr("pw_gpu_none") if err == "no_nvidia" else tr("pw_start_fail") + " " + str(err or r)
+                self.pw_note.setText(msg)
+                self.ctx.toast(msg, "bad")
         self.api.post("/api/gpu/install", {}, done)
 
     def install_tess(self):
