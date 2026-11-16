@@ -620,6 +620,37 @@ def bottom_green_button(frame=None):
     if frame is None: frame = Frame_Handler.get_frame(grayscale=False)
     return _green_share(frame, 0.44, 0.83, 0.56, 0.88) >= 0.30 and _green_share(frame, 0.44, 0.74, 0.56, 0.78) < 0.05
 
+def red_battle_button(frame=None):
+    """The red End Battle / Surrender button at the left during a battle -> its middle (x, y), or None."""
+    import numpy as np, cv2
+    if frame is None: frame = Frame_Handler.get_frame(grayscale=False)
+    x1, y1, x2, y2 = 0.0, 0.66, 0.16, 0.81
+    area = Frame_Handler.crop(frame, x1, y1, x2, y2)
+    r, g, b = (area[..., i].astype(int) for i in range(3))
+    m = ((r > 185) & (g < 95) & (b < 95)).astype(np.uint8)
+    if m.mean() < 0.08: return None
+    n, _l, st, cen = cv2.connectedComponentsWithStats(m, 8)
+    if n <= 1: return None
+    i = 1 + int(np.argmax(st[1:, 4]))
+    if st[i, 2] < st[i, 3] * 1.8: return None                       # a wide button, not a red blob
+    h, w = area.shape[:2]
+    return x1 + cen[i][0] / w * (x2 - x1), y1 + cen[i][1] / h * (y2 - y1)
+
+def green_center_button(frame=None, area=(0.25, 0.40, 0.75, 0.85)):
+    """The biggest green button in the middle (Okay of a confirm window) -> (x, y) or None."""
+    import numpy as np, cv2
+    if frame is None: frame = Frame_Handler.get_frame(grayscale=False)
+    x1, y1, x2, y2 = area
+    crop = Frame_Handler.crop(frame, *area)
+    r, g, b = (crop[..., i].astype(int) for i in range(3))
+    m = ((g > 165) & (g - r > 25) & (g - b > 70) & (r > 70)).astype(np.uint8)
+    n, _l, st, cen = cv2.connectedComponentsWithStats(m, 8)
+    if n <= 1: return None
+    i = 1 + int(np.argmax(st[1:, 4]))
+    if st[i, 4] < crop.shape[0] * crop.shape[1] * 0.01 or st[i, 2] < st[i, 3] * 1.3: return None
+    h, w = crop.shape[:2]
+    return x1 + cen[i][0] / w * (x2 - x1), y1 + cen[i][1] / h * (y2 - y1)
+
 def army_screen_open(frame=None):
     """The army screen before a battle: the green "Attack!" button at the bottom right."""
     if frame is None: frame = Frame_Handler.get_frame(grayscale=False)

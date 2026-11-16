@@ -27,6 +27,7 @@ class Attacker:
 
     def in_battle(self):
         """End Battle / Surrender button visible = the battle is still running."""
+        if red_battle_button() is not None: return True                  # by its colour: works on every version
         if find_taught("end_battle"): return True
         x, y = Frame_Handler.locate(self.assets["end_battle"], thresh=0.9)
         if x is not None: return True
@@ -63,7 +64,8 @@ class Attacker:
                 surrendered = True
         smart = self.smart_end and not leave and teach.taught("enemy_gold") and teach.taught("enemy_elixir")
         # without the taught numbers: watch the "Available Loot" numbers top-left by their pixels (no reading)
-        smart_px = self.smart_end and not leave and not smart
+        # always: the Available Loot (top left) and the Overall Damage % (bottom right) watched by their pixels
+        smart_px = self.smart_end and not leave
         loot_img = None
         last_loot, last_change, next_read, dropped = None, time.monotonic(), 0, False
         while time.monotonic() - start < max_wait:
@@ -79,14 +81,19 @@ class Attacker:
                 next_read = time.monotonic() + 1.0
                 try:
                     import numpy as np
-                    cur = Frame_Handler.get_frame_section(0.04, 0.12, 0.17, 0.27, grayscale=True).astype(int)
+                    fr = Frame_Handler.get_frame(grayscale=True)
+                    cur = np.concatenate([Frame_Handler.crop(fr, 0.04, 0.12, 0.17, 0.27).astype(int).ravel(),
+                                          Frame_Handler.crop(fr, 0.85, 0.70, 0.99, 0.78).astype(int).ravel()])
                     if loot_img is not None and cur.shape == loot_img.shape and float(np.abs(cur - loot_img).mean()) > 3:
                         dropped, last_change = True, time.monotonic()
                     if loot_img is None: last_change = time.monotonic()
                     loot_img = cur
-                    stalled = time.monotonic() - last_change > (self.smart_end_after if dropped else max(30, self.smart_end_after))
+                    # nothing more is being taken or destroyed: leave. Before anything was destroyed (troops still
+                    # walking in) the bot waits longer
+                    wait = self.smart_end_after if dropped else max(20, self.smart_end_after)
+                    stalled = time.monotonic() - last_change > wait and time.monotonic() - start > 10
                     if stalled and self.in_battle():
-                        logger.info(f"Loot stopped for {self.smart_end_after}s, ending the battle early")
+                        logger.info(f"Nothing taken or destroyed for {wait:.0f}s, ending the battle")
                         if self._click_end_battle(timeout=0) or Auto_Learn.learn_button("end_battle", tap=True):
                             time.sleep(0.4)
                             if not self._click_okay(timeout=3): Auto_Learn.learn_button("okay_button", tap=True, min_interval=0)
@@ -183,11 +190,20 @@ class Attacker:
     # ============================================================
     
     def _click_okay(self, timeout=5):
-        if tap_taught("okay_button", timeout=timeout): return True # taught from the user's screen wins
-        return click_with_timeout(
-            lambda: Frame_Handler.locate(self.assets["okay"], thresh=0.9),
-            timeout=timeout,
-        )
+        import time
+        end = time.monotonic() + max(0.5, timeout)
+        while time.monotonic() < end:
+            if tap_taught("okay_button", timeout=0): return True # taught from the user's screen wins
+            x, y = Frame_Handler.locate(self.assets["okay"], thresh=0.9)
+            if x is not None:
+                Input_Handler.click(x, y)
+                return True
+            g = green_center_button()                             # the confirm window's green Okay, by colour
+            if g is not None:
+                Input_Handler.click(*g)
+                return True
+            time.sleep(0.15)
+        return False
     
     def _click_surrender(self, timeout=5):
         return click_with_timeout(
@@ -196,6 +212,10 @@ class Attacker:
         )
     
     def _click_end_battle(self, timeout=5):
+        r = red_battle_button()                                   # the red button at the left, by colour
+        if r is not None:
+            Input_Handler.click(*r)
+            return True
         if tap_taught("end_battle", timeout=timeout): return True # taught from the user's screen wins
         return click_with_timeout(
             lambda: Frame_Handler.locate(self.assets["end_battle"], thresh=0.9),
@@ -550,8 +570,10 @@ class Attacker:
     def card_gray(self, card_center):
         """A used-up card turns gray."""
         import numpy as np
-        section = Frame_Handler.get_frame_section(card_center-0.01, 0.89, card_center+0.01, 0.91, grayscale=False)
-        return np.all(section[:, :, 0] == section[:, :, 1]) and np.all(section[:, :, 1] == section[:, :, 2])
+        section = Frame_Handler.get_frame_section(card_center-0.01, 0.89, card_center+0.01, 0.91, grayscale=False).astype(int)
+        # (nearly) no colour: the live picture is compressed, so the grey isn't exactly R = G = B any more
+        spread = section.max(axis=2) - section.min(axis=2)
+        return float((spread <= 14).mean()) >= 0.9
 
     # Candidate deploy spots per side (screen fractions after zooming out). The other bot's log on
     # this game confirmed spots at the far left / far right of the screen at mid height; each one is
@@ -765,38 +787,56 @@ class Attacker:
 
     def deploy_leftovers(self, data):
         """
-        After a recording: every card still in colour on the army bar (a hero or troop that was not in the
-        army when the recording was made) is dropped where the recording dropped its army — no need to
-        record again every time the army changes. Spells left over are not thrown blindly.
+        After a recording: every card still in colour on the army bar (heroes, troops that weren't in the army when
+        the recording was made) is dropped — and checked: the card must change (a hero's card gets its ability / health
+        bar, a troop's number goes down). If a spot doesn't take it (inside the red line on this base), the next spot
+        is tried: the recording's own spots first, then the sides. Spells left over are not thrown blindly.
         """
         import time, numpy as np, army_learn
         mx, my = (data.get("max") or [1, 1])[:2]
-        field = []
+        spots = []
         for e in data.get("events", []):
             if e.get("type") != "down": continue
             x, y = army_learn.touch_to_screen(e["fx"], e["fy"], mx, my)
-            if y < 0.80: field.append((x, y))           # taps on the battlefield (not on the army bar)
-        if not field: return 0
-        spot = field[0]                                   # where the first troops went in
+            if y < 0.80 and all(abs(x - a) + abs(y - b) > 0.05 for a, b in spots): spots.append((x, y))
+        spots = spots[:6] + [p for side in self.SIDE_CANDIDATES.values() for p in side[:2]]
         time.sleep(0.2)
         frame = Frame_Handler.get_frame_section(0.0, 0.82, 1.0, 1.0, grayscale=False)
         centers, _b, types, _c, _g = self.detect_troop_positions(frame, return_boundaries=True, return_types=True, return_counts=True)
-        done = 0
+        done, missed = [], []
         for x, t in zip(centers, types):
             if t == "spell" or self.card_gray(x): continue
+            a, b = self.card_crop(x), self.card_crop(x)
+            noise = float(np.abs(a - b).mean())
             Input_Handler.click(x, 0.9)
             time.sleep(0.15)
-            for _ in range(12 if t not in ("hero", "clan") else 1):
-                Input_Handler.click(*spot)
-                time.sleep(0.07)
-                if t not in ("hero", "clan") and self.card_gray(x): break
-            if t == "hero": self.deployed_heroes.append(x)
-            done += 1
-        if done: logger.info(f"Recording: also deployed {done} new card(s) that were not in the recording")
+            out = False
+            for sp in spots:
+                for _ in range(1 if t in ("hero", "clan") else 4):
+                    Input_Handler.click(*sp)
+                    time.sleep(0.06)
+                time.sleep(0.3)
+                if self.card_gray(x) or self.card_changed(x, a, noise):
+                    out = True
+                    if t not in ("hero", "clan"):            # the rest of this troop on the spot that works
+                        for _ in range(14):
+                            if self.card_gray(x): break
+                            Input_Handler.click(*sp)
+                            time.sleep(0.06)
+                    break
+            if out:
+                done.append(t)
+                if t == "hero": self.deployed_heroes.append(x)
+            else:
+                missed.append(t)
+        heroes = done.count("hero")
+        if done: logger.info(f"Recording: also deployed {len(done)} card(s) that were still left ({heroes} hero(es))")
+        if missed: logger.info(f"Could not drop {len(missed)} card(s) on any spot")
         if self.deployed_heroes:
             self.heroes_done_at = time.monotonic()
             self.activate_hero_abilities()
-        return done
+        self.army_out = not missed
+        return len(done)
 
     def _watch_touches(self):
         """Start reading the screen's touch events (to tell your taps from the bot's own)."""

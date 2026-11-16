@@ -2801,10 +2801,6 @@
 "البوت جاهز (\\g<1> ثانية) — داخل على اللعبة"
 ],
 [
-"^Recording: also deployed (\\d+) new card\\(s\\).*",
-"التسجيل: نزّل كمان \\g<1> كارت جديد ماكانش في التسجيل (بطل أو وحدة جديدة)"
-],
-[
 "^Attack! pressed, looking for a base",
 "داس Attack! — بيدوّر على قرية"
 ],
@@ -2927,6 +2923,18 @@
 [
 "^Battle speed 4x",
 "⏩ سرّع الهجمة 4x"
+],
+[
+"^Nothing taken or destroyed for (\\d+)s, ending the battle",
+"⏱️ مفيش غنايم ولا تدمير بقاله \\1 ثانية — البوت أنهى الهجمة علشان يوفّر وقت"
+],
+[
+"^Recording: also deployed (\\d+) card\\(s\\) that were still left \\((\\d+) hero\\(es\\)\\)",
+"🦸 بعد التسجيل نزّل \\1 كارت فاضل (منهم \\2 بطل)"
+],
+[
+"^Could not drop (\\d+) card\\(s\\) on any spot",
+"⚠️ \\1 كارت ما نزلش في أي مكان"
 ]
 ]
 }
