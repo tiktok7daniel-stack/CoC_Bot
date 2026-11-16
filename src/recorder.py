@@ -35,8 +35,18 @@ def list_recordings():
 
 def load(name):
     p = REC_DIR / f"{_safe(name)}.json"
-    try: return json.loads(p.read_text(encoding="utf-8"))
+    try: d = json.loads(p.read_text(encoding="utf-8"))
     except (OSError, ValueError): return None
+    # taps added by versions before 5.15.7 could be the bot's own: back to the user's recording (added taps have id >= 5)
+    if any(m.get("v") != 2 for m in d.get("merged", [])):
+        ev = [e for e in d.get("events", []) if int(e.get("id", 0)) < 5]
+        d["events"] = ev
+        d["duration"] = ev[-1]["t"] if ev else 0
+        d["merged"] = [m for m in d.get("merged", []) if m.get("v") == 2]
+        d["cleaned"] = time.time()
+        try: p.write_text(json.dumps(d), encoding="utf-8")
+        except OSError: pass
+    return d
 
 def delete(name):
     try: (REC_DIR / f"{_safe(name)}.json").unlink()
@@ -240,7 +250,7 @@ def merge_user_part(name, strokes, t0):
     ev = sorted(data.get("events", []) + new, key=lambda e: e["t"])
     data["events"] = ev
     data["duration"] = ev[-1]["t"]
-    data.setdefault("merged", []).append({"t": time.time(), "taps": downs})
+    data.setdefault("merged", []).append({"t": time.time(), "taps": downs, "v": 2})
     REC_DIR.mkdir(parents=True, exist_ok=True)
     (REC_DIR / f"{_safe(data.get('name', name))}.json").write_text(json.dumps(data), encoding="utf-8")
     return downs

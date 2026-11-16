@@ -53,8 +53,40 @@ def _cfg():
         a = settings.load_app()
     except Exception:
         a = {}
-    return {"repo": normalize_repo(a.get("learn_repo") or ""), "token": (a.get("github_token") or "").strip(),
+    token = (a.get("github_token") or "").strip()
+    return {"repo": _canonical(normalize_repo(a.get("learn_repo") or ""), token), "token": token,
             "auto": a.get("learn_auto", True) is not False}
+
+
+_CANON = {}
+
+
+def _canonical(repo, token):
+    """
+    The repo's current name (it may have been renamed: GitHub forwards reads to the new name, but uploads to the old
+    name can fail with 404). Asked once per run; a new name is also saved in the app settings.
+    """
+    if not repo or "/" not in repo or not token: return repo
+    if repo in _CANON: return _CANON[repo]
+    _CANON[repo] = repo
+    try:
+        import requests
+        r = requests.get(f"https://api.github.com/repos/{repo}", headers=_headers(token), timeout=15, allow_redirects=True)
+        if r.status_code == 200:
+            name = r.json().get("full_name") or repo
+            _CANON[repo] = name
+            if name.lower() != repo.lower() or name != repo:
+                try:
+                    import settings
+                    app = settings.load_app()
+                    app["learn_repo"] = name
+                    settings.save_app(app)
+                except Exception:
+                    pass
+                _CANON[name] = name
+    except Exception:
+        _CANON.pop(repo, None)                 # offline: ask again next time
+    return _CANON.get(repo, repo)
 
 
 def configured():

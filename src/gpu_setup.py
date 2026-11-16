@@ -194,9 +194,13 @@ def status(refresh=False):
 
 
 def _index_url(driver):
-    """CUDA 12.6 needs driver 525+ (12.x minor-version compatibility); older drivers: CUDA 11.8."""
+    """
+    CUDA 12.8 (driver 570+): also built for the newest cards (RTX 50 / Blackwell) — with an older build those compile
+    for minutes on the first start. CUDA 12.6 for drivers 525+, else CUDA 11.8.
+    """
     try: major = int(str(driver).split(".")[0])
     except ValueError: major = 0
+    if major >= 570: return "https://download.pytorch.org/whl/cu128"
     return "https://download.pytorch.org/whl/cu126" if major >= 525 else "https://download.pytorch.org/whl/cu118"
 
 

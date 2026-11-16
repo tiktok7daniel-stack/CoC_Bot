@@ -166,8 +166,7 @@ def watch(id, get_frame, logger=None, every=0.25):
                     now = time.monotonic()
                     if label != _NOW["label"]: _NOW["since"] = now
                     _NOW.update(label=label, dist=dist, t=now)
-                    if label and label != last and logger is not None:
-                        logger.debug(f"Screen now: {label} ({dist:.3f})")
+
                     last = label
             except Exception:
                 pass

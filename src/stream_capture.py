@@ -14,7 +14,7 @@ from pathlib import Path
 
 JAR = "scrcpy-server-v1.24.jar"
 REMOTE = f"/data/local/tmp/{JAR}"
-RECHECK = 300
+RECHECK = 60              # seconds between checks against a real screenshot
 REST = 90
 
 _S = {"client": None, "ok_until": 0.0, "off_until": 0.0, "logged": None, "setting_t": 0.0, "setting": True, "starts": 0}
@@ -151,8 +151,7 @@ def _small(img):
 def _client(device):
     c = _S["client"]
     if c is not None and c.alive: return c
-    if c is not None:
-        _log(f"Live screen stopped ({c.error or 'closed'}), starting it again", "debug")
+
     _S["client"] = None
     _S["starts"] += 1
     c = Stream(device).start()

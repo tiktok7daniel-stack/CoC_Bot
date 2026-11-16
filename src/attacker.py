@@ -800,7 +800,7 @@ class Attacker:
         except Exception:
             return None
 
-    def _merge_touches(self, watch, data, start):
+    def _merge_touches(self, watch, data, start, replay_end=None):
         """Your taps made while the recording was playing (not the bot's) -> saved into the same recording."""
         import time
         if watch is None: return
@@ -809,7 +809,9 @@ class Attacker:
             time.sleep(0.3)
             watch.stop()
             until = getattr(self, "ended_at", None) or time.monotonic()
-            strokes = recorder.user_strokes(watch.events, since=start, until=until)
+            # only taps after the replay finished (during it the bot taps all the time) and away from the bot's own
+            if replay_end is None: return
+            strokes = recorder.user_strokes(watch.events, since=replay_end + 0.5, until=until, tol=0.6)
             mx, my = (data.get("max") or [1, 1])[:2]
             keep = []
             for st in strokes:            # a tap on Surrender / End Battle ends the battle: not part of the attack
@@ -875,15 +877,17 @@ class Attacker:
                 time.sleep(0.3)
                 replay_start = time.monotonic()
                 self.ended_at = None
+                replay_end = None
                 try:
                     taps = recorder.replay(data, ADB_Manager.minitouch_device.connection, lambda: not running())
+                    replay_end = time.monotonic()
                     logger.debug(f"Recording replayed: {taps} taps")
                 except Exception:
                     logger.exception("Recording replay failed")
                 try: self.deploy_leftovers(data)     # new heroes / troops the recording didn't know about
                 except Exception: logger.exception("Deploying the remaining cards failed")
                 self.finish_battle(restart)
-                self._merge_touches(watch, data, replay_start)
+                self._merge_touches(watch, data, replay_start, replay_end)
                 return
             logger.warning(f"Recording '{self.plan['recording']}' not found, using the loadout")
         
@@ -965,11 +969,27 @@ class Attacker:
     # ⚔️ Attack Management
     # ============================================================
 
+    def clear_leftover_screens(self):
+        """Results / reward screens (green button, chest, item) left from the last battle -> go through them."""
+        try:
+            import screen_model, utils as _u
+            frame = Frame_Handler.get_frame(grayscale=False)
+            label, _d = screen_model.classify(frame, _u.INSTANCE_ID)
+            if bottom_green_button(frame) or (label or "").startswith(("reward_", "battle_result")):
+                logger.info("Finishing the last battle's reward screens first")
+                collect_rewards()
+                return True
+        except Exception:
+            logger.debug("clear_leftover_screens failed", exc_info=True)
+        return False
+
     @require_exit()
     def run_home_base(self, timeout=10, restart=True):
         import time
         
         try:
+            # the last battle's results / reward screens still open: finish them first
+            self.clear_leftover_screens()
             # Make sure in home base
             start_time = time.time()
             found = False
@@ -988,9 +1008,17 @@ class Attacker:
             
             # Complete an attack
             if self.start_normal_attack(timeout):
+                self.open_fails = 0
                 self.complete_normal_attack(restart=restart, exclude_clan_troops=EXCLUDE_CLAN_TROOPS)
             else:
-                start_coc() # reset in case stuck on find a match screen
+                # couldn't open the attack: clear what is on the screen; twice in a row -> reopen the game
+                self.open_fails = getattr(self, "open_fails", 0) + 1
+                self.clear_leftover_screens()
+                if self.open_fails >= 2:
+                    self.open_fails = 0
+                    start_coc(force_restart="the attack could not be opened twice")
+                else:
+                    Auto_Learn.handle_unknown_screen("home_attack")
         
         except Exception:
             logger.exception("Error in run_home_base():")

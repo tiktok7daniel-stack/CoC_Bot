@@ -588,6 +588,17 @@ def in_home_base(fast=False):
         return True
     if fast: return False
     if in_builder_base(): return False          # the builder base has "Battle" / "Build" buttons too
+    frame = Frame_Handler.get_frame(grayscale=False, use_cached=True)
+    # results / reward screens have the big green button in the middle: never the village
+    if bottom_green_button(frame): return False
+    # the brain knows this screen by its look: trust it (e.g. "2x Battle Bake" has the word Battle but isn't the village)
+    try:
+        import screen_model
+        label, _d = screen_model.classify(frame, INSTANCE_ID)
+        if label in ("village_home", "village_building_selected"): return True
+        if label: return False
+    except Exception:
+        pass
     # last check: read the buttons at the bottom (cached a few seconds, OCR is slow)
     return _village_by_words(colours=hits)
 
@@ -627,7 +638,9 @@ def _village_by_words(colours=0):
         right = Frame_Handler.get_frame_section(0.84, 0.78, 1.0, 1.0, grayscale=False, use_cached=True)
         lw = [b[0] for b in ocr_boxes(left) if b[5] > 0.3]
         rw = [b[0] for b in ocr_boxes(right) if b[5] > 0.3]
-        battle = any(_word_hit(w, "battle") or _word_hit(w, "attack") for w in lw)
+        # the button says just "Battle" (not "2x Battle Bake" or other text with the word in it)
+        battle = any(w.strip().lower().strip("!") in ("battle", "attack") for w in lw) or \
+                 any(_word_hit(w, "battle") and len(w.strip()) <= 8 for w in lw)
         build = any(_word_hit(w, "build") for w in rw)
         # Battle + Build, or Battle + at least one resource colour at the top right (OCR misses small words sometimes)
         ok = battle and (build or colours >= 1)
@@ -763,8 +776,7 @@ def _read_resources_once(builder_base=False, save_debug=False):
             crops[name] = Frame_Handler.crop(frame, x1, y1, x2, y2)
             if save_debug or configs.DEBUG: Frame_Handler.save_frame(crops[name], f"resource_{name}.png")
         def limit_of(name):
-            cap = RESOURCE_CAPS.get(name)
-            return int(cap * 1.1) if cap else RESOURCE_LIMITS.get(name)
+            return RESOURCE_LIMITS.get(name)
         with ThreadPoolExecutor(max_workers=3) as ex:
             got = dict(zip(crops, ex.map(lambda n: _read_number_robust(crops[n], limit_of(n)), crops)))
         out = {"dark": None}
@@ -810,6 +822,28 @@ def collect_rewards(timeout=30):
         if in_builder_base():
             TEMP_CACHE["location"] = "builder_base"
             return True
+        # the brain knows the reward screens by their look (no reading): chest -> tap it, item / results -> the button
+        try:
+            import screen_model
+            label, _d = screen_model.classify(frame, INSTANCE_ID)
+        except Exception:
+            label = None
+        if label == "reward_chest":
+            for _ in range(3):
+                Input_Handler.click(0.5, 0.55)
+                time.sleep(0.1)
+            taps += 1
+            note("chest")
+            time.sleep(0.15)
+            continue
+        if label in ("reward_item_continue", "battle_result", "battle_result_claim"):
+            Input_Handler.click(0.5, 0.857)
+            taps += 1
+            greens += 1
+            last_ocr = time.time()
+            note("the green button")
+            time.sleep(0.3)
+            continue
         # not the button, not the village: the chest after Claim Reward (tap it till it opens), else read the screen
         if greens == 1 and time.time() - last_ocr < 2.5:      # after Claim Reward, before Continue
             for _ in range(3):
@@ -1899,7 +1933,12 @@ class OCR_Handler:
         if frame is None or frame.size == 0 or float(frame.std()) < 2: return []
         try: result = easyocr_reader().readtext(frame, detail=0)
         except (KeyboardInterrupt, SystemExit): raise
-        except RuntimeError: return []
+        except RuntimeError:                       # reader still loading / a plain picture: Tesseract
+            try:
+                t = Tesseract.read(frame, digits=False, psm=6) or ""
+                return [x for x in t.splitlines() if x.strip()]
+            except Exception:
+                return []
         return [text for text in result if text.strip()]
 
     @classmethod
@@ -3185,11 +3224,17 @@ DISMISS_WORDS = ["reload", "try again", "retry", "later", "not now", "close", "o
 
 import threading as _ocr_threading
 _OCR_LOCK = _ocr_threading.Lock()
+_OCR_LOADING = _ocr_threading.Event()
 
 
-def easyocr_reader():
+def easyocr_reader(wait=False):
     """The one easyocr reader of this process (loading it takes 20-40 s the first time, so it is started
     in the background when the bot starts: warm_up_ocr). GPU only when there really is one."""
+    r = getattr(OCR_Handler, "reader", None)
+    if r is not None: return r
+    # still loading in the background (the first start on a graphics card can take minutes): don't wait for it,
+    # the caller reads with Tesseract meanwhile
+    if _OCR_LOADING.is_set() and not wait: raise RuntimeError("text reader still loading")
     with _OCR_LOCK:
         r = getattr(OCR_Handler, "reader", None)
         if r is not None: return r
@@ -3208,12 +3253,19 @@ def warm_up_ocr():
     def work():
         import time
         t = time.time()
+        _OCR_LOADING.set()
+        def slow():
+            if _OCR_LOADING.is_set():
+                logger.info("Text reader still loading on the graphics card (the first time can take a few minutes) — reading with Tesseract meanwhile")
+        _ocr_threading.Timer(45, slow).start()
         try:
-            r = easyocr_reader()
+            r = easyocr_reader(wait=True)
             on = "the graphics card" if str(getattr(r, "device", "cpu")).startswith("cuda") else "the processor"
             logger.info(f"Text reader ready ({time.time() - t:.0f}s) on {on}")
         except Exception:
-            pass
+            logger.warning("Text reader could not load, reading with Tesseract", exc_info=True)
+        finally:
+            _OCR_LOADING.clear()
     _ocr_threading.Thread(target=work, daemon=True, name="ocr-warmup").start()
 
 

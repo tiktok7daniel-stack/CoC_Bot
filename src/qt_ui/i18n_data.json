@@ -2847,6 +2847,26 @@
 [
 "^Live screen not matching.*",
 "الشاشة اللايف مش مطابقة للعبة دلوقتي — بيجرّب طريقة تانية"
+],
+[
+"^Recording '(.*)': you added (\\d+) new tap\\(s\\).*",
+"🎬 التسجيل \"\\1\": اتضاف \\2 ضغطة جديدة عملتها انت"
+],
+[
+"^Finishing the last battle's reward screens first",
+"بيخلّص شاشات مكافأة الهجمة اللي فاتت الأول"
+],
+[
+"^Storage size of (\\w+) forgotten.*",
+"نسي حجم المخزن القديم (\\1) — هيتعلّمه تاني"
+],
+[
+"^Text reader still loading on the graphics card.*",
+"⏳ قارئ الكلام لسه بيتحمّل على كارت الشاشة (أول مرة ممكن ياخد كام دقيقة) — بيقرا بـ Tesseract لحد ما يخلص"
+],
+[
+"^Text reader could not load.*",
+"قارئ الكلام ما اتحمّلش — بيقرا بـ Tesseract"
 ]
 ]
 }

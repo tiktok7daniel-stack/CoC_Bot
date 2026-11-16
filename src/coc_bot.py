@@ -47,8 +47,7 @@ class CoC_Bot:
         if max_age and cache and cache[0] == builder_base and time.monotonic() - cache[1] < max_age:
             return cache[2]
         if not builder_base:      # the learned storage sizes: readings above them are misreads
-            try: _utils.RESOURCE_CAPS.update({k: v for k, v in self.caps().items() if v})
-            except Exception: pass
+            pass                  # (learned sizes are not used to reject readings: a wrong size made real numbers vanish)
         res = read_resources(builder_base=builder_base)
         self._res_cache = (builder_base, time.monotonic(), res)
         if res is not None and not builder_base: self.last_res = res
@@ -71,9 +70,11 @@ class CoC_Bot:
         after = self.read_and_record_resources(builder_base=builder)
         if not builder: self.learn_caps(before, after)
         loot = {}
+        most = {"gold": 4_000_000, "elixir": 4_000_000, "dark": 60_000}   # more than one attack can bring = misread
         for k in ("gold", "elixir", "dark"):
             b, a = (before or {}).get(k), (after or {}).get(k)
-            loot[k] = max(0, a - b) if a is not None and b is not None else 0
+            d = a - b if a is not None and b is not None else 0
+            loot[k] = d if 0 <= d <= most[k] else 0
         extra = {"strategy": self.attacker.last_strategy} if base == "home" else {}
         stats.record(_utils.INSTANCE_ID, "attack", base=base, **loot, **extra)
         self.session_attacks += 1
@@ -89,29 +90,45 @@ class CoC_Bot:
         return Path.home() / ".CoC_Bot" / f"caps_{_utils.INSTANCE_ID}.json"
 
     def caps(self):
+        """Learned storage sizes {"gold": n, "elixir": n} (file version 2: older files could hold misreads)."""
         import json
         if getattr(self, "_caps", None) is None:
-            try: self._caps = json.loads(self._caps_path().read_text())
-            except (OSError, ValueError): self._caps = {}
+            try: d = json.loads(self._caps_path().read_text())
+            except (OSError, ValueError): d = {}
+            if d.get("v") != 2: d = {"v": 2}
+            self._caps = d
         return self._caps
 
-    def learn_caps(self, before, after):
-        """A storage that didn't grow while the other one did is full: remember its size."""
+    def _save_caps(self):
         import json
+        try: self._caps_path().write_text(json.dumps(self._caps))
+        except OSError: pass
+
+    def learn_caps(self, before, after):
+        """
+        A storage that didn't grow while the other one did may be full. Only learned when the same size is seen
+        3 times and no bigger reading was ever seen (one misread can't set a wrong size any more).
+        """
         if not before or not after: return
         caps = self.caps()
+        seen = caps.setdefault("max_seen", {})
+        cand = caps.setdefault("cand", {})
         gained = {k: (after.get(k) or 0) - (before.get(k) or 0) for k in ("gold", "elixir")}
         for k, other in (("gold", "elixir"), ("elixir", "gold")):
             v = after.get(k)
-            if v and caps.get(k) and v > caps[k] * 1.02: # storage got bigger (upgraded)
+            if not v: continue
+            if v > seen.get(k, 0): seen[k] = v
+            if caps.get(k) and v > caps[k] * 1.02:                       # bigger than the size: upgraded / wrong
                 caps.pop(k)
-                try: self._caps_path().write_text(json.dumps(caps))
-                except OSError: pass
-            if v and v >= 500000 and gained[k] <= 0 and gained[other] > 20000 and v > caps.get(k, 0) * 0.98:
-                caps[k] = v
-                logger.info(f"Learned the {k} storage size: {v}")
-                try: self._caps_path().write_text(json.dumps(caps))
-                except OSError: pass
+                logger.info(f"Storage size of {k} forgotten (read {v:,})")
+            if v >= 1_000_000 and gained[k] <= 0 and gained[other] > 20000 and v >= seen.get(k, 0) * 0.98:
+                c = cand.get(k) or {"v": v, "n": 0}
+                c = {"v": v, "n": c["n"] + 1} if abs(c["v"] - v) <= v * 0.01 else {"v": v, "n": 1}
+                cand[k] = c
+                if c["n"] >= 3 and caps.get(k) != v:
+                    caps[k] = v
+                    logger.info(f"Learned the {k} storage size: {v}")
+        self._save_caps()
 
     def full_resources(self, s):
         """Which storages are full now (user amount, else the learned storage size)."""
