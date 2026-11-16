@@ -45,6 +45,9 @@ class CoC_Bot:
         cache = getattr(self, "_res_cache", None)
         if max_age and cache and cache[0] == builder_base and time.monotonic() - cache[1] < max_age:
             return cache[2]
+        if not builder_base:      # the learned storage sizes: readings above them are misreads
+            try: _utils.RESOURCE_CAPS.update({k: v for k, v in self.caps().items() if v})
+            except Exception: pass
         res = read_resources(builder_base=builder_base)
         self._res_cache = (builder_base, time.monotonic(), res)
         if res is not None and not builder_base: self.last_res = res

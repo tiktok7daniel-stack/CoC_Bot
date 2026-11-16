@@ -652,7 +652,8 @@ BUILDER_RESOURCE_BANDS = {
     "gold":   (0.72, 0.020, 0.948, 0.088),
     "elixir": (0.72, 0.088, 0.948, 0.155),
 }
-RESOURCE_LIMITS = {"gold": 60_000_000, "elixir": 60_000_000, "dark": 600_000}
+RESOURCE_LIMITS = {"gold": 30_000_000, "elixir": 30_000_000, "dark": 600_000}
+RESOURCE_CAPS = {}   # storage sizes the bot learned (set by CoC_Bot): a reading above size*1.1 is a misread
 
 def _parse_resource(lines):
     import re
@@ -662,18 +663,24 @@ def _parse_resource(lines):
         if digits: return int(digits)
     return None
 
+import os as _os
+# Tesseract uses every CPU core by itself; several readings at once then fight for the CPU and each one gets
+# 50-100x slower. One core per reading = fast, and the three numbers can be read in parallel.
+_os.environ.setdefault("OMP_THREAD_LIMIT", "1")
+
 def read_resources(builder_base=False, save_debug=False, samples=3):
     """
-    Read the storages several times and keep the value the readings agree on
-    (stops after 2 readings when they already match).
+    Read the storages; a second / third screenshot only when the first reading wasn't sure
+    (each number: two readings that agree = sure). The three numbers are read in parallel.
     """
     import time
-    reads = []
+    reads, sure_all = [], False
     for i in range(max(1, samples)):
-        r = _read_resources_once(builder_base, save_debug)
+        r, sure_all = _read_resources_once(builder_base, save_debug)
         if r is not None: reads.append(r)
+        if r is not None and sure_all: return r
         if len(reads) >= 2 and reads[-1] == reads[-2]: return reads[-1]
-        if i < samples - 1: time.sleep(0.25)
+        if i < samples - 1: time.sleep(0.2)
     if not reads: return None
     out = {}
     for k in ("gold", "elixir", "dark"):
@@ -683,52 +690,65 @@ def read_resources(builder_base=False, save_debug=False, samples=3):
         out[k] = best if vals.count(best) > 1 else sorted(vals)[len(vals) // 2] # majority, else median
     return out
 
-def _read_number_robust(raw):
+_NUMBER_CACHE = {}
+
+def _read_number_robust(raw, limit=None):
     """
     The storage numbers are white digits with a dark outline; one threshold sometimes loses a digit
-    (2,264,765 read as 22,647). Read the number with a few thresholds / sizes and keep the value the
-    readings agree on; with no agreement keep the longest reading (missing digits is the usual error).
+    (2,264,765 read as 22,647). Read with a few thresholds / sizes until two readings agree.
+    -> (value, sure). The same picture as last time is not read again.
     """
-    import re, cv2
+    import re, cv2, hashlib
     from collections import Counter
+    key = hashlib.md5(raw.tobytes()).hexdigest() + str(limit)
+    if key in _NUMBER_CACHE: return _NUMBER_CACHE[key]
     candidates = []
-    for thresh in (190, 160, 215):
+    result = None
+    for thresh, scale in ((190, 2), (160, 2), (215, 2), (190, 1), (160, 1), (215, 1)):
         crop = Frame_Handler.high_contrast(raw, thresh=thresh)
-        for scale in (1, 2):
-            img = crop if scale == 1 else cv2.resize(crop, None, fx=2, fy=2, interpolation=cv2.INTER_NEAREST)
-            text = Tesseract.read(img, digits=True)
-            digits = re.sub(r"[^0-9]", "", text or "")
-            if digits: candidates.append(int(digits))
-        counts = Counter(candidates)
-        best, n = counts.most_common(1)[0] if counts else (None, 0)
-        if n >= 3: return best # three readings agree: done early
-    if candidates:
-        counts = Counter(candidates)
-        best, n = counts.most_common(1)[0]
-        if n >= 2: return best
-        return max(candidates, key=lambda v: (len(str(v)), v))
-    return OCR_Handler.get_number(Frame_Handler.high_contrast(raw, thresh=190)) # slow OCR as the last resort
+        img = crop if scale == 1 else cv2.resize(crop, None, fx=2, fy=2, interpolation=cv2.INTER_NEAREST)
+        digits = re.sub(r"[^0-9]", "", Tesseract.read(img, digits=True) or "")
+        if digits and (limit is None or int(digits) <= limit): candidates.append(int(digits))   # impossible values: misread
+        best, n = Counter(candidates).most_common(1)[0] if candidates else (None, 0)
+        if n >= 2:                                   # two readings agree: sure
+            result = (best, True)
+            break
+    if result is None:
+        if candidates: result = (max(candidates, key=lambda v: (len(str(v)), v)), False)
+        else: result = (OCR_Handler.get_number(Frame_Handler.high_contrast(raw, thresh=190)), False) # slow OCR as the last resort
+    if len(_NUMBER_CACHE) > 300: _NUMBER_CACHE.clear()
+    _NUMBER_CACHE[key] = result
+    return result
 
 def _read_resources_once(builder_base=False, save_debug=False):
     """
-    Read gold / elixir / dark elixir from the village screen with OCR.
-    Returns {"gold": int|None, "elixir": int|None, "dark": int|None} or None if nothing was readable.
+    Read gold / elixir / dark elixir from the village screen (the three numbers in parallel).
+    Returns ({"gold": int|None, "elixir": int|None, "dark": int|None} or None, all sure).
     """
+    from concurrent.futures import ThreadPoolExecutor
     try:
         frame = Frame_Handler.get_frame(grayscale=False)
-        out = {}
-        out["dark"] = None
-        for name, (x1, y1, x2, y2) in (BUILDER_RESOURCE_BANDS if builder_base else RESOURCE_BANDS).items():
-            raw = Frame_Handler.crop(frame, x1, y1, x2, y2)
-            if save_debug or configs.DEBUG: Frame_Handler.save_frame(raw, f"resource_{name}.png")
-            value = _read_number_robust(raw)
+        bands = (BUILDER_RESOURCE_BANDS if builder_base else RESOURCE_BANDS)
+        crops = {}
+        for name, (x1, y1, x2, y2) in bands.items():
+            crops[name] = Frame_Handler.crop(frame, x1, y1, x2, y2)
+            if save_debug or configs.DEBUG: Frame_Handler.save_frame(crops[name], f"resource_{name}.png")
+        def limit_of(name):
+            cap = RESOURCE_CAPS.get(name)
+            return int(cap * 1.1) if cap else RESOURCE_LIMITS.get(name)
+        with ThreadPoolExecutor(max_workers=3) as ex:
+            got = dict(zip(crops, ex.map(lambda n: _read_number_robust(crops[n], limit_of(n)), crops)))
+        out = {"dark": None}
+        sure = True
+        for name, (value, ok) in got.items():
             out[name] = value if value is not None and 0 <= value <= RESOURCE_LIMITS[name] else None
-        if all(v is None for v in out.values()): return None
-        return out
+            sure = sure and ok and out[name] is not None
+        if all(v is None for v in out.values()): return None, False
+        return out, sure
     except (KeyboardInterrupt, SystemExit): raise
     except Exception:
         logger.exception("read_resources:")
-        return None
+        return None, False
 
 def game_ready():
     """True when the game is already open and showing a village (nothing to restart)."""
