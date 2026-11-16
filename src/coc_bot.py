@@ -123,10 +123,15 @@ class CoC_Bot:
         logger.info("Storages full: upgrading walls and buildings")
         set_phase("spend_full")
         self.upgrader.wall_budget = 10**6
+        # storages full = spend on walls even when "wall upgrades" is off in the quick tasks
+        prio = [list(l) for l in configs.HOME_BASE_UPGRADE_PRIORITY]
+        if not any("Wall" in l for l in prio):
+            configs.HOME_BASE_UPGRADE_PRIORITY = prio + [["Wall"]]
         to_home_base()
         try: self.upgrader.run_home_base(self.excluded("home_base"), self.excluded("home_lab"), self.excluded("pet_house"))
         except (KeyboardInterrupt, SystemExit): raise
         except Exception: logger.exception("Spending when full failed")
+        configs.HOME_BASE_UPGRADE_PRIORITY = prio
         to_home_base()
         after = self.read_and_record_resources() or {}
         spent = any((before.get(k) or 0) - (after.get(k) or 0) > 1000 for k in ("gold", "elixir"))
@@ -377,7 +382,9 @@ class CoC_Bot:
                             self.load_settings()
                             if not self.settings["attack"].get("farm", {}).get("enabled", True): break
                             if self.full_resources(self.settings):
-                                if self.spend_when_full(self.settings) and not self.full_resources(self.settings): continue
+                                # spent something: go round again (more walls to buy, or attack once not full);
+                                # rest only when nothing at all could be bought
+                                if self.spend_when_full(self.settings): continue
                                 rest = max(1, float(self.settings["attack"]["farm"].get("rest_minutes", 30)))
                                 logger.info(f"Storages full and nothing to spend on: closing the game for {rest:.0f} minutes")
                                 stop_coc(reason="storages full")
