@@ -16,7 +16,7 @@ from ..i18n import tr
 from ..theme import TOKENS
 from ..widgets.controls import Box, GlassCard, IconButton, StatusPill, bind_line, form_row, label, note, toggle_row
 
-STATE_PILL = {"local": ("info", "ln_st_local"), "sent": ("warn", "ln_st_sent"), "learned": ("ok", "ln_st_learned")}
+STATE_PILL = {"local": ("info", "ln_st_local"), "sent": ("warn", "ln_st_sent"), "learned": ("learned", "ln_st_learned")}
 
 
 class ShotRow(Box):
@@ -41,9 +41,16 @@ class ShotRow(Box):
         words = " · ".join(it.get("words", [])[:8])
         v.addWidget(label(words or "—", "sub", wrap=True))
         if it.get("note"):
-            n = label("✓ " + it["note"], wrap=True)
-            n.setStyleSheet(f"color: {TOKENS['ok']};")
-            v.addWidget(n)
+            nr = QHBoxLayout()
+            nr.setSpacing(6)
+            seal = QLabel()
+            seal.setPixmap(icons.pixmap("verified_gold", 16))
+            seal.setAlignment(Qt.AlignTop)
+            nr.addWidget(seal)
+            n = label(it["note"], wrap=True)
+            n.setStyleSheet("color: #FFD36E;")
+            nr.addWidget(n, 1)
+            v.addLayout(nr)
         h.addLayout(v, 1)
 
     def _got(self, data):
@@ -65,7 +72,7 @@ class LearnPanel(QWidget):
         steps = QHBoxLayout()
         steps.setSpacing(10)
         self.step_vals = {}
-        for i, (ic, key) in enumerate((("camera", "ln_step1"), ("upload", "ln_step2"), ("sparkle", "ln_step3"), ("ok", "ln_step4"))):
+        for i, (ic, key) in enumerate((("camera", "ln_step1"), ("upload", "ln_step2"), ("verified_gold", "ln_step3"), ("verified", "ln_step4"))):
             b = Box(radius=12)
             bl = QVBoxLayout(b)
             bl.setContentsMargins(12, 10, 12, 10)
@@ -77,7 +84,7 @@ class LearnPanel(QWidget):
             num.setStyleSheet(f"background: {TOKENS['accent']}; color: {TOKENS['on_accent']}; border-radius: 11px; font-weight: 800;")
             hh.addWidget(num)
             icl = QLabel()
-            icl.setPixmap(icons.pixmap(ic, 18, TOKENS["accent"]))
+            icl.setPixmap(icons.pixmap(ic, 20 if ic.startswith("verified") else 18, TOKENS["accent"]))
             hh.addWidget(icl)
             hh.addStretch(1)
             val = label("—", "numsm")
@@ -166,9 +173,15 @@ class LearnPanel(QWidget):
         self._clear(self.rules)
         if not d.get("rule_list"): self.rules.addWidget(label(key="ln_no_rules", role="sub", wrap=True))
         for r in d.get("rule_list", []):
-            line = label("✓  " + str(r.get("title") or r.get("id")))
-            line.setStyleSheet(f"color: {TOKENS['text']};")
-            self.rules.addWidget(line)
+            row = QWidget()
+            rh = QHBoxLayout(row)
+            rh.setContentsMargins(0, 2, 0, 2)
+            rh.setSpacing(8)
+            seal = QLabel()
+            seal.setPixmap(icons.pixmap("verified_gold", 18))
+            rh.addWidget(seal)
+            rh.addWidget(label(str(r.get("title") or r.get("id"))), 1)
+            self.rules.addWidget(row)
 
     # ---------------------------------------------------------------- actions
     def test(self):

@@ -113,8 +113,8 @@ class TimerRow(Box):
         left = ends - now
         done = left <= 0
         kind = self.t.get("kind", "builder")
-        self.ic.setPixmap(icons.pixmap("ok" if done else ("flask" if kind == "lab" else "builder_hammer"), 18,
-                                       TOKENS["ok"] if done else "#F5B740"))
+        self.ic.setPixmap(icons.pixmap("verified", 20) if done else
+                          icons.pixmap("flask" if kind == "lab" else "builder_hammer", 18, "#F5B740"))
         self.left.setText(tr("dk_done") if done else fmt_left(left))
         self.left.setStyleSheet(f"color: {TOKENS['ok'] if done else '#FFD36E'}; font-weight: 700;")
         self.bar.set(1 - left / total if total > 0 else 0.0, done)

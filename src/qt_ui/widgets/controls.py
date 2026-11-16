@@ -299,7 +299,9 @@ class StatusPill(QLabel):
 
     def set(self, key, text=None):
         c = TOKENS[self.COLORS.get(key, "dim")]
-        self.setText(f'<span style="color:{c};font-size:13pt">&#9679;</span>&nbsp;{text if text is not None else tr("st_" + key)}')
+        mark = icons.img_tag("verified", 15) if key in ("ok", "learned") else f'<span style="color:{c};font-size:13pt">&#9679;</span>'
+        if key == "learned": mark = icons.img_tag("verified_gold", 15)
+        self.setText(f'{mark}&nbsp;{text if text is not None else tr("st_" + key)}')
         self.setStyleSheet(f"QLabel {{ background: rgba(255,255,255,0.03); border: 1px solid {TOKENS['border']};"
                            f" border-radius: 13px; padding: 2px 12px; font-weight: 600; }}")
 

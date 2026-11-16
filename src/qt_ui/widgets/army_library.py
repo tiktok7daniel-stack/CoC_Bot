@@ -42,7 +42,7 @@ class ArmyCard(Box):
         go = IconButton("bolt", "al_prepare", "primary", size=13)
         go.clicked.connect(lambda: lib.prepare(a["name"]))
         b.addWidget(go, 1)
-        use = IconButton("check", None, "ghost", tip_key="al_use", size=15)
+        use = IconButton("verified" if in_use else "check", None, "ghost", tip_key="al_use", size=17 if in_use else 15)
         use.clicked.connect(lambda: lib.use(a["name"]))
         b.addWidget(use)
         rm = IconButton("trash", None, "ghost", icon_color=TOKENS["bad"], tip_key="al_delete", size=14)
@@ -74,7 +74,7 @@ class ArmyLibrary(QWidget):
         self.learn_btn = IconButton("eye", "al_learn", "go", size=15)
         self.learn_btn.clicked.connect(self.learn)
         row.addWidget(self.learn_btn)
-        self.done_btn = IconButton("check", "al_done", "primary", size=15)
+        self.done_btn = IconButton("verified", "al_done", "primary", size=18)
         self.done_btn.clicked.connect(self.done)
         self.done_btn.hide()
         row.addWidget(self.done_btn)
@@ -141,7 +141,9 @@ class ArmyLibrary(QWidget):
             if not isinstance(st, dict) or not st.get("text"): return
             t = st["text"]
             col = {"failed": TOKENS["bad"], "saved": TOKENS["ok"], "watching": TOKENS["accent_hi"]}.get(t, TOKENS["info"])
-            self.live.setText(tr("al_st_" + t).format(taps=st.get("taps", 0), words=st.get("words", 0), name=st.get("name", "")))
+            seal = icons.img_tag("verified", 18) + "&nbsp;" if t == "saved" else ""
+            self.live.setTextFormat(Qt.RichText)
+            self.live.setText(seal + tr("al_st_" + t).format(taps=st.get("taps", 0), words=st.get("words", 0), name=st.get("name", "")))
             self.live.setStyleSheet(f"color: {col};")
             self.live.show()
             watching = t == "watching"

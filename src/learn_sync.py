@@ -145,8 +145,25 @@ def upload_pending(id, limit=MAX_PER_ROUND):
     return n
 
 
+def _seals():
+    """The check seals (same design as in the app) uploaded once to the repo for the README."""
+    st = _load(STATE, {})
+    if st.get("seals_v") == 1: return
+    try:
+        from qt_ui.icons import GLYPHS
+        for name in ("verified", "verified_gold"):
+            _put(f"assets/{name}.svg", GLYPHS[name].encode("utf-8"), f"assets: {name} seal")
+        st = _load(STATE, {})
+        st["seals_v"] = 1
+        _save(STATE, st)
+    except Exception:
+        pass
+
+
 def write_index():
-    """README.md of the learning repo: every picture the bot didn't know, its words and its state (⏳ / ✓)."""
+    """README.md of the learning repo: every picture the bot didn't know, its words and its state (waiting / learned)."""
+    _seals()
+    OK = '<img src="assets/verified_gold.svg" width="18" align="center">'
     st = _load(STATE, {})
     status = _load(STATUS, {}).get("items", {})
     rows = [v for v in st.get("uploaded", {}).values() if isinstance(v, dict) and v.get("path")]
@@ -155,13 +172,13 @@ def write_index():
     armies = [v for v in rows if v.get("army")]
     learned = sum(1 for v in screens if (status.get(v["path"].split("/")[-1]) or {}).get("done"))
     out = ["# Clash Farmer — شاشات البوت ماكانش يعرفها", "",
-           f"**{len(screens)}** شاشة اتبعتت — **{learned}** اتعلّمت ✓ — **{len(screens) - learned}** مستنية Claude ⏳", "",
+           f"**{len(screens)}** شاشة اتبعتت — {OK} **{learned}** اتعلّمت — ⏳ **{len(screens) - learned}** مستنية Claude", "",
            "> Claude: اتبع `docs/LEARNING.md` في ريبو البوت. اكتب القواعد في `knowledge/screens.json` والحالة في `knowledge/status.json`.", "",
            "| الصورة | الحالة | اللي البوت قراه | كان بيعمل إيه |", "|---|---|---|---|"]
     for v in screens:
         name = v["path"].split("/")[-1]
         s_ = status.get(name) or {}
-        state = ("✓ " + (s_.get("note_ar") or s_.get("note") or "اتعلّمت")) if s_.get("done") else "⏳ مستنية Claude"
+        state = (OK + " " + (s_.get("note_ar") or s_.get("note") or "اتعلّمت")) if s_.get("done") else "⏳ مستنية Claude"
         words = " · ".join(str(w).replace("|", "/") for w in v.get("words", [])[:8]) or "—"
         when = time.strftime("%Y-%m-%d %H:%M", time.localtime(v.get("t", 0)))
         out.append(f"| <img src=\"{v['path']}.jpg\" width=\"240\"><br>{when} | {state} | {words} | {v.get('phase') or '—'} {v.get('action') or ''} |")

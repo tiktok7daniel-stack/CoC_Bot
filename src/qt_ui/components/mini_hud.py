@@ -257,6 +257,10 @@ class MiniHud(QWidget):
             h = QHBoxLayout(row)
             h.setContentsMargins(0, 0, 0, 0)
             h.addWidget(label(t.get("name", "?")), 1)
+            if left <= 0:
+                seal = QLabel()
+                seal.setPixmap(icons.pixmap("verified", 18))
+                h.addWidget(seal)
             v = label(tr("dk_done") if left <= 0 else fmt_left(left), "num")
             v.setStyleSheet(f"color: {TOKENS['ok'] if left <= 0 else '#FFD36E'}; font-weight: 700;")
             h.addWidget(v)
