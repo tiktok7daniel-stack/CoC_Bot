@@ -43,6 +43,13 @@ EXTRA = {
         "tess_found": "Tesseract موجود", "tess_missing": "Tesseract مش موجود", "install": "تثبيت",
         "easyocr_fallback": "EasyOCR شغال كبديل لو Tesseract مش موجود", "privacy": "قبل الرفع البوت بيشيل الأسماء والمسارات من الرسائل",
         "account_n": "حساب", "no_recordings": "مفيش تسجيلات لسه",
+        "upd_sub": "تحديث البرنامج لآخر إصدار", "discard": "تراجع عن التغييرات", "up": "لفوق", "down": "لتحت", "add": "إضافة",
+        "emu_ld": "LDPlayer", "emu_bs": "BlueStacks", "emu_mumu": "MuMu Player", "lang_ar": "العربية", "lang_en": "English",
+        "recent_attacks": "آخر الهجمات", "session_results_sub": "نتايج الجلسة الحالية من أول ما البوت اشتغل",
+        "strategies": "اللي البوت اتعلمه", "strategies_sub": "متوسط اللوت لكل طريقة إنزال",
+        "tg_need_token": "اكتب توكن بوت تيليجرام الأول", "ui_kind": "شكل البرنامج", "ui_kind_sub": "الواجهة الجديدة أو القديمة (بيتطبق لما تفتح البرنامج تاني)",
+        "ui_qt": "الواجهة الجديدة (v4)", "ui_web": "الواجهة القديمة", "up_building": "مبنى", "up_wall": "سور", "up_lab": "مختبر",
+        "up_pet": "حيوان", "session_since": "الجلسة من", "no_attacks": "مفيش هجمات لسه",
     },
     "en": {
         "app_sub": "Clash of Clans automation", "soon": "Soon", "search_ph": "Search every setting… (Ctrl+K)",
@@ -78,6 +85,13 @@ EXTRA = {
         "tess_found": "Tesseract found", "tess_missing": "Tesseract missing", "install": "Install",
         "easyocr_fallback": "EasyOCR is used when Tesseract is missing", "privacy": "Names and paths are removed before upload",
         "account_n": "Account", "no_recordings": "No recordings yet",
+        "upd_sub": "Get the latest version", "discard": "Discard changes", "up": "Up", "down": "Down", "add": "Add",
+        "emu_ld": "LDPlayer", "emu_bs": "BlueStacks", "emu_mumu": "MuMu Player", "lang_ar": "العربية", "lang_en": "English",
+        "recent_attacks": "Recent attacks", "session_results_sub": "Results of the current session",
+        "strategies": "What the bot learned", "strategies_sub": "Average loot per deployment strategy",
+        "tg_need_token": "Enter the Telegram bot token first", "ui_kind": "Interface", "ui_kind_sub": "New or classic window (applies on next start)",
+        "ui_qt": "New interface (v4)", "ui_web": "Classic interface", "up_building": "Building", "up_wall": "Wall", "up_lab": "Lab",
+        "up_pet": "Pet", "session_since": "Session since", "no_attacks": "No attacks yet",
     },
 }
 

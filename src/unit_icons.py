@@ -6,7 +6,8 @@ comparing it with every picture (only the opaque pixels count) at a few sizes.
 """
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+import sys
+ROOT = Path(getattr(sys, "_MEIPASS", "")) if getattr(sys, "frozen", False) else Path(__file__).resolve().parent.parent
 GROUPS = {"troops": ROOT / "army_training", "spells": ROOT / "army_training" / "spells",
           "sieges": ROOT / "army_training" / "sieges", "pets": ROOT / "army_training" / "pets"}
 

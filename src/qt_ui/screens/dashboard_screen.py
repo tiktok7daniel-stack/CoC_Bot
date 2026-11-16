@@ -49,6 +49,11 @@ class Tile(QFrame):
                            f" border-top: 3px solid {TOKENS[tint]}; border-radius: 12px; }}")
 
     def set(self, text, spark_value=None):
+        arabic = any("\u0600" <= ch <= "\u06FF" for ch in str(text))
+        self.value.setProperty("role", "h3" if arabic else "numsm")
+        self.value.setStyleSheet("font-size: 12.5pt; font-weight: 700;" if arabic else "font-size: 13pt;")
+        self.value.style().unpolish(self.value)
+        self.value.style().polish(self.value)
         self.value.setText(text)
         if self.spark is not None and spark_value is not None: self.spark.push(spark_value)
 

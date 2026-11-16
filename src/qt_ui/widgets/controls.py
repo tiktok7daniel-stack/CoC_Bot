@@ -54,6 +54,7 @@ class GlassCard(QFrame):
         if title_key or icon_name:
             self.header = QHBoxLayout()
             self.header.setSpacing(10)
+            self.header.setAlignment(Qt.AlignTop)
             if icon_name:
                 badge = IconBadge(icon_name)
                 self.header.addWidget(badge)
@@ -72,6 +73,7 @@ class GlassCard(QFrame):
         self.body = QVBoxLayout()
         self.body.setSpacing(4)
         self.v.addLayout(self.body)
+        self.v.addStretch(1)   # a card taller than its content keeps everything at the top
         if glow:
             eff = QGraphicsDropShadowEffect(self)
             eff.setBlurRadius(42)
@@ -82,6 +84,9 @@ class GlassCard(QFrame):
     def add(self, w, stretch=0):
         if isinstance(w, QLayout): self.body.addLayout(w, stretch)
         else: self.body.addWidget(w, stretch)
+        if stretch: # this card's content should grow with the card instead of the spacer under it
+            self.v.setStretch(self.v.indexOf(self.body), 1)
+            self.v.setStretch(self.v.count() - 1, 0)
         return w
 
     def add_tool(self, w):
@@ -201,6 +206,7 @@ class NumField(QSpinBox):
         self.setFocusPolicy(Qt.StrongFocus)
         self.setGroupSeparatorShown(True)
         self.setButtonSymbols(QSpinBox.NoButtons)
+        self.setLayoutDirection(Qt.LeftToRight)
 
     def wheelEvent(self, e):
         if self.hasFocus(): super().wheelEvent(e)
@@ -217,6 +223,7 @@ class FloatField(QDoubleSpinBox):
         self.setAlignment(Qt.AlignCenter)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setButtonSymbols(QDoubleSpinBox.NoButtons)
+        self.setLayoutDirection(Qt.LeftToRight)
 
     def wheelEvent(self, e):
         if self.hasFocus(): super().wheelEvent(e)
@@ -529,13 +536,8 @@ def bind_line(store, w, path, scope="s"):
 
 
 def bind_time(store, w, path, scope="s"):
-    from PySide6.QtCore import QTime
-
-    def put(v):
-        t = QTime.fromString(str(v or "00:00"), "HH:mm")
-        w.setTime(t if t.isValid() else QTime(0, 0))
-    store.bind(scope, path, put)
-    w.timeChanged.connect(lambda t: store.set(path, t.toString("HH:mm"), scope))
+    store.bind(scope, path, lambda v: w.set_text_time(v))
+    w.time_changed.connect(lambda t: store.set(path, t, scope))
     return w
 
 
@@ -555,13 +557,48 @@ def combo_row(store, key, path, items, sub_key=None, width=260, scope="s"):
     return form_row(key, sub_key, bind_combo(store, Combo(items, width), path, scope))
 
 
+class TimeField(QLineEdit):
+    """HH:MM field. (QTimeEdit swaps the hour and minute sections in right-to-left layouts.)"""
+    time_changed = Signal(str)
+
+    def __init__(self):
+        super().__init__()
+        self.setInputMask("99:99")
+        self.setFixedWidth(100)
+        self.setAlignment(Qt.AlignCenter)
+        self.setLayoutDirection(Qt.LeftToRight)
+        self.setStyleSheet("font-family: 'JetBrains Mono';")
+        self.editingFinished.connect(self._commit)
+        self._last = "00:00"
+
+    def set_text_time(self, v):
+        self._last = self._norm(v) or "00:00"
+        self.setText(self._last)
+
+    @staticmethod
+    def _norm(v):
+        try:
+            h, m = str(v or "").replace(" ", "0").split(":")[:2]
+            h, m = int(h or 0), int(m or 0)
+        except ValueError:
+            return None
+        if not (0 <= h <= 23 and 0 <= m <= 59): return None
+        return f"{h:02d}:{m:02d}"
+
+    def _commit(self):
+        v = self._norm(self.text())
+        if v is None:
+            self.setText(self._last)
+            return
+        self.setText(v)
+        if v != self._last:
+            self._last = v
+            self.time_changed.emit(v)
+
+
 def time_edit():
-    t = QTimeEdit()
-    t.setDisplayFormat("HH:mm")
-    t.setFixedWidth(100)
-    t.setAlignment(Qt.AlignCenter)
-    t.setButtonSymbols(QTimeEdit.NoButtons)
-    return t
+    return TimeField()
+
 
 
 # ====================================================================== painted box (no style-sheet cascade)

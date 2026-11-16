@@ -11,7 +11,25 @@ def find_open_port():
         s.bind(('', 0))
         return s.getsockname()[1]
 
+def _want_qt():
+    """The v4 Qt window unless the user chose the classic web window (or PySide6 is missing)."""
+    try:
+        import settings
+        if settings.load_app().get("ui", "qt") == "web": return False
+        import PySide6  # noqa: F401
+        return True
+    except Exception:
+        return False
+
 def run_gui(server_port, pipe, debug=False):
+    if _want_qt():
+        try:
+            from qt_ui.app import run_qt
+            run_qt(server_port, pipe, debug)
+            return
+        except Exception:
+            import traceback
+            traceback.print_exc() # fall back to the classic window below
     import sys, webview
     
     url = f"http://127.0.0.1:{server_port}"

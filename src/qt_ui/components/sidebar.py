@@ -78,7 +78,8 @@ class NavButton(QAbstractButton):
             p.drawPixmap(int(ix), int(r.center().y() - isz / 2), pm)
             p.setPen(QColor(fg))
             p.setFont(ui_font(10.5, 700 if self.isChecked() else 500))
-            tr_rect = QRectF(r.left() + 16, r.top(), r.width() - 32 - isz - 10, r.height())
+            reserve = 64 if self.soon else 0   # room for the "soon" badge
+            tr_rect = QRectF(r.left() + 16 + reserve, r.top(), r.width() - 32 - isz - 10 - reserve, r.height())
             if not rtl: tr_rect.moveLeft(r.left() + 16 + isz + 10)
             p.drawText(tr_rect, (Qt.AlignRight if rtl else Qt.AlignLeft) | Qt.AlignVCenter, tr(self.text_key))
             if self.soon:
@@ -231,7 +232,7 @@ class FooterCapsule(QFrame):
         h.addWidget(self.state, 1)
         self.emu = QLabel("—")
         self.emu.setProperty("role", "dim")
-        h.addWidget(self.emu)
+        self.emu.hide()
         self.ver = QLabel("")
         self.ver.setStyleSheet(f"background: rgba(139,92,246,0.18); border: 1px solid {TOKENS['border']}; border-radius: 8px;"
                                f" padding: 1px 7px; font-family: 'JetBrains Mono'; font-size: 8pt; color: #C4B5FD;")
@@ -246,7 +247,7 @@ class FooterCapsule(QFrame):
         self.ver.setText(f"v{version}" if version else "")
 
     def set_collapsed(self, c):
-        for w in (self.state, self.emu, self.ver): w.setVisible(not c)
+        for w in (self.state, self.ver): w.setVisible(not c)
 
 
 class PulseDot(QWidget):

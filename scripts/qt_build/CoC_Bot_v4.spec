@@ -1,0 +1,40 @@
+# PyInstaller spec for CoC Bot v4 (Windows, one folder build).
+# Build with scripts\qt_build\build_exe.bat  ->  dist\CoC_Bot_v4\CoC_Bot_v4.exe
+import os
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+
+ROOT = os.path.abspath(os.path.join(SPECPATH, "..", ".."))
+SRC = os.path.join(ROOT, "src")
+
+datas = [
+    (os.path.join(ROOT, "assets"), "assets"),
+    (os.path.join(ROOT, "army_training"), "army_training"),
+    (os.path.join(SRC, "gui_server"), "gui_server"),
+    (os.path.join(SRC, "qt_ui", "fonts"), os.path.join("qt_ui", "fonts")),
+    (os.path.join(SRC, "qt_ui", "i18n_data.json"), "qt_ui"),
+]
+datas += collect_data_files("easyocr", include_py_files=False)
+hidden = collect_submodules("qt_ui") + collect_submodules("gui_server") + [
+    "PySide6.QtSvg", "flask", "webview", "adbutils", "uiautomator2", "pyminitouch", "cv2", "numpy", "scipy.signal",
+    "psutil", "requests", "loguru", "settings", "stats", "teach", "recorder", "unit_icons", "updater", "version",
+]
+
+a = Analysis(
+    [os.path.join(SPECPATH, "coc_bot_v4_entry.py")],
+    pathex=[SRC],
+    datas=datas,
+    hiddenimports=hidden,
+    hookspath=[os.path.join(ROOT, "hooks")],
+    excludes=["tkinter", "PySide6.QtWebEngineCore", "PySide6.QtWebEngineWidgets", "PySide6.Qt3DCore"],
+    noarchive=False,
+)
+pyz = PYZ(a.pure)
+exe = EXE(
+    pyz, a.scripts, [],
+    exclude_binaries=True,
+    name="CoC_Bot_v4",
+    icon=os.path.join(SRC, "qt_ui", "assets", "app_icon.ico"),
+    console=False,
+    disable_windowed_traceback=False,
+)
+coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name="CoC_Bot_v4")

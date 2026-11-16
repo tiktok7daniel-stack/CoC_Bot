@@ -263,7 +263,7 @@ class MainWindow(QMainWindow):
         super().mouseMoveEvent(e)
 
     def closeEvent(self, e):
-        if self.store.dirty: self.store.save(silent=True)
+        if self.store.dirty: self.store.save_blocking()
         if self.pipe is not None:
             try: self.pipe.send(-1)
             except (OSError, EOFError): pass

@@ -183,5 +183,14 @@ class Store(QObject):
         else:
             self.api.post(f"/api/settings/{acc}", S, got_s)
 
+    def save_blocking(self):
+        """Save right now on the calling thread (window closing: the process ends right after)."""
+        self._timer.stop()
+        if self.account: self.api.request("POST", f"/api/settings/{self.account}", self.S, timeout=10)
+        self.api.request("POST", "/api/app_settings", self.APP, timeout=10)
+        self._saved_S = json.dumps(self.S, sort_keys=True)
+        self._saved_APP = json.dumps(self.APP, sort_keys=True)
+        self._set_dirty(False)
+
     def discard(self):
         self.load_all()

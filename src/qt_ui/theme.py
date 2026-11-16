@@ -56,15 +56,19 @@ def ui_font(size=10, weight=QFont.Normal):
     f = QFont(FONTS["ui"])
     f.setFamilies([FONTS["ui"], FONTS["ui2"], "Segoe UI", "Tahoma"])
     f.setPointSizeF(size)
-    f.setWeight(weight)
+    f.setWeight(_weight(weight))
     return f
+
+
+def _weight(w):
+    return w if isinstance(w, QFont.Weight) else QFont.Weight(int(w))
 
 
 def mono_font(size=9.5, weight=QFont.Normal):
     f = QFont(FONTS["mono"])
     f.setFamilies([FONTS["mono"], "Consolas", "DejaVu Sans Mono"])
     f.setPointSizeF(size)
-    f.setWeight(weight)
+    f.setWeight(_weight(weight))
     f.setStyleHint(QFont.Monospace)
     return f
 
