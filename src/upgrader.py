@@ -108,6 +108,14 @@ class Upgrader:
     def get_home_builders(self, timeout=60, use_cached_frame=False):
             import time, numpy as np
             
+            # the current village: the "free/all" counter next to Build, read directly
+            try:
+                import builder_menu
+                free, _all = builder_menu.free_builders()
+                if free is not None: return free
+            except (KeyboardInterrupt, SystemExit): raise
+            except Exception:
+                pass
             start = time.time()
             tries = 0
             while time.time() < start + timeout:
@@ -1528,7 +1536,29 @@ class Upgrader:
         base_priority = [list(lvl) for lvl in configs.HOME_BASE_UPGRADE_PRIORITY]
         walls_wanted = any("Wall" in lvl for lvl in base_priority) and self.wall_budget > 0
         self.last_walls_done = 0
+        # the current game: the "Buildings & Heroes" panel, read row by row (builder_menu). One builder always stays
+        # free for the walls. The old way below only runs when the new panel isn't there.
+        new_menu_done = False
         if not exclude_base or walls_wanted:
+            try:
+                import builder_menu, settings as _st
+                if builder_menu.free_builders()[0] is not None:
+                    keep = 1 if _st.load_app().get("keep_wall_builder", True) is not False else 0
+                    res = builder_menu.run(self, reserve=max(keep, int(OPEN_HOME_BUILDERS)), heroes=not Task_Handler.excluded("heroes"),
+                                           walls_budget=self.wall_budget if walls_wanted else 0, buildings=not exclude_base)
+                    upgrades_started += res["buildings"]
+                    self.last_walls_done = res["walls"]
+                    if res["walls"]:
+                        logger.info(f"Walls finished: {res['walls']} upgraded")
+                        try: send_notification(f"🧱 البوت خلّص الأسوار: طوّر {res['walls']} سور")
+                        except Exception: pass
+                    new_menu_done = True
+            except (KeyboardInterrupt, SystemExit): raise
+            except Exception:
+                logger.warning("The new builder menu could not be used, trying the old way", exc_info=True)
+            try: Input_Handler.click_exit(n=1)
+            except Exception: pass
+        if (not exclude_base or walls_wanted) and not new_menu_done:
             walls_done = 0
             wall_misses = 0
             counter = 0

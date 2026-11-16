@@ -17,7 +17,7 @@ datas += collect_data_files("easyocr", include_py_files=False)
 hidden = collect_submodules("qt_ui") + collect_submodules("gui_server") + [
     "PySide6.QtSvg", "flask", "webview", "adbutils", "uiautomator2", "pyminitouch", "cv2", "numpy", "scipy.signal",
     "psutil", "requests", "loguru", "settings", "stats", "teach", "recorder", "unit_icons", "updater", "version",
-    "learn_sync", "capture_session", "today_plan", "army_learn", "village", "screen_memory", "win_capture", "nowindow", "stream_capture", "av", "gpu_setup", "screen_model",
+    "learn_sync", "capture_session", "today_plan", "army_learn", "village", "screen_memory", "win_capture", "nowindow", "stream_capture", "av", "gpu_setup", "screen_model", "game_digits", "builder_menu",
 ]
 
 a = Analysis(

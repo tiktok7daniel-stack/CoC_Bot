@@ -192,6 +192,11 @@ def translate_log(msg):
         if rep == "fn:troopbar":
             names = [n.strip() for n in m.group(1).split(",")]
             return "شريط الجيش: " + "، ".join("؟" if n == "?" else "بطل" if n == "hero" else unit_name(n) for n in names)
+        if rep.startswith("res:"):            # the resource names in Arabic too
+            try: out = rx.sub(rep[4:], msg, count=1)
+            except (re.error, IndexError): return msg
+            for en, ar in ((" elixir", " إكسير"), (" gold", " دهب"), (" dark", " دارك")): out = out.replace(en, ar)
+            return out
         try: return rx.sub(rep, msg, count=1)
         except (re.error, IndexError): return msg
     return msg

@@ -716,6 +716,10 @@ def read_resources(builder_base=False, save_debug=False, samples=3):
     (each number: two readings that agree = sure). The three numbers are read in parallel.
     """
     import time
+    # the game's own font (game_digits): ~10 ms per look; two equal readings in a row = sure (the numbers count up
+    # for a moment after a battle). Text reading below only when this can't be sure.
+    fast = _read_resources_digits(builder_base)
+    if fast is not None: return fast
     reads, sure_all = [], False
     for i in range(max(1, samples)):
         r, sure_all = _read_resources_once(builder_base, save_debug)
@@ -731,6 +735,28 @@ def read_resources(builder_base=False, save_debug=False, samples=3):
         best = max(set(vals), key=vals.count)
         out[k] = best if vals.count(best) > 1 else sorted(vals)[len(vals) // 2] # majority, else median
     return out
+
+def _read_resources_digits(builder_base=False, tries=10):
+    """Storages read with the game font; None when two readings in a row don't agree (then OCR is used)."""
+    import time
+    try:
+        import game_digits
+    except Exception:
+        return None
+    bands = BUILDER_RESOURCE_BANDS if builder_base else RESOURCE_BANDS
+    prev = None
+    for i in range(tries):
+        frame = Frame_Handler.get_frame(grayscale=False)
+        cur = {}
+        for k, box in bands.items():
+            v, c = game_digits.read(Frame_Handler.crop(frame, *box), want_conf=True)
+            cur[k] = v if v is not None and c >= 0.3 and 0 <= v <= RESOURCE_LIMITS.get(k, 10**9) else None
+        if prev is not None and cur == prev and all(cur.get(k) is not None for k in ("gold", "elixir")):
+            if not builder_base: cur.setdefault("dark", None)
+            return cur
+        prev = cur
+        time.sleep(0.12)
+    return None
 
 _NUMBER_CACHE = {}
 

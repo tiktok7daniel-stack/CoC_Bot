@@ -2181,10 +2181,6 @@
 "خلّص الأسوار: طوّر \\g<1> سور"
 ],
 [
-"^Wall upgraded \\((\\d+)\\)",
-"طوّر سور (\\g<1>)"
-],
-[
 "^Walls done: (\\d+) upgraded",
 "خلّص الأسوار: طوّر \\g<1>"
 ],
@@ -2867,6 +2863,46 @@
 [
 "^Text reader could not load.*",
 "قارئ الكلام ما اتحمّلش — بيقرا بـ Tesseract"
+],
+[
+"^Builders: (\\S+) free of (\\S+) \\(keeping (\\d+) free for walls\\)",
+"👷 البنّائين: \\1 فاضيين من \\2 (هيسيب \\3 فاضي للأسوار)"
+],
+[
+"^Upgrading (.*) for ([\\d,]+) (\\w*)",
+"res:🔨 هيرقّي \\1 بـ \\2 \\3"
+],
+[
+"^Upgrade started: (.*) — (\\d+) builder\\(s\\) free now",
+"✅ بدأ ترقية \\1 — فاضل \\2 بنّاء فاضي"
+],
+[
+"^The upgrade of (.*) did not start.*",
+"⚠️ ترقية \\1 ما بدأتش (ما عرفش شاشة الترقية) — ابعتلي صورتها"
+],
+[
+"^Builder menu read \\((\\d+) upgrades\\): nothing that can be paid now",
+"قرا قايمة البنّاء (\\1 ترقية): مفيش حاجة الفلوس تكفيها دلوقتي"
+],
+[
+"^No wall can be paid now",
+"مفيش سور الفلوس تكفيه دلوقتي"
+],
+[
+"^Wall upgraded \\((\\d+)\\) for ([\\d,]+) (\\w*)",
+"res:🧱 رقّى سور (\\1) بـ \\2 \\3"
+],
+[
+"^The wall upgrade did not go through.*",
+"⚠️ ترقية السور ما تمّتش (ما عرفش الشاشة) — ابعتلي صورتها"
+],
+[
+"^The builder menu did not open",
+"قايمة البنّاء ما اتفتحتش"
+],
+[
+"^The new builder menu could not be used.*",
+"ما قدرش يستخدم قايمة البنّاء الجديدة — بيجرّب الطريقة القديمة"
 ]
 ]
 }
