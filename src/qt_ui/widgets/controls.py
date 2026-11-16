@@ -107,14 +107,24 @@ class GlassCard(QFrame):
         r = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         path = QPainterPath()
         path.addRoundedRect(r, 14, 14)
-        p.fillPath(path, QColor(19, 17, 29, 200))
-        if self._glow:
+        # frosted glass: a white sheen fading top-left -> bottom-right over the dark base
+        p.fillPath(path, QColor(12, 10, 16, 205))
+        sheen = QLinearGradient(r.topLeft(), r.bottomRight())
+        sheen.setColorAt(0, QColor(255, 255, 255, 0x22))
+        sheen.setColorAt(1, QColor(255, 255, 255, 0x08))
+        p.fillPath(path, QBrush(sheen))
+        if self._glow or self._hover:
             g = QRadialGradient(QPointF(r.right() - 30, r.top() + 10), max(r.width(), r.height()) * 0.8)
-            g.setColorAt(0, QColor(139, 92, 246, 50))
-            g.setColorAt(1, QColor(139, 92, 246, 0))
+            g.setColorAt(0, QColor(255, 30, 66, 60 if self._glow else 34))
+            g.setColorAt(1, QColor(255, 30, 66, 0))
             p.fillPath(path, QBrush(g))
-        border = QColor(168, 85, 247, 122 if self._hover else 46)
-        p.setPen(QPen(border, 1))
+        # crimson -> gold border that fades out toward the bottom
+        bg = QLinearGradient(r.topLeft(), r.bottomRight())
+        a = 1.0 if self._hover else 0.55
+        bg.setColorAt(0, QColor(255, 30, 66, int(200 * a)))
+        bg.setColorAt(0.45, QColor(255, 184, 0, int(150 * a)))
+        bg.setColorAt(1, QColor(255, 184, 0, int(18 * a)))
+        p.setPen(QPen(QBrush(bg), 1.2))
         p.drawPath(path)
         p.end()
 
@@ -122,12 +132,12 @@ class GlassCard(QFrame):
 class IconBadge(QLabel):
     """Rounded square with a duotone icon inside (card headers)."""
 
-    def __init__(self, name, size=34, tint="#C4B5FD"):
+    def __init__(self, name, size=34, tint="#FFC7A8"):
         super().__init__()
         self.setFixedSize(size, size)
         self.setAlignment(Qt.AlignCenter)
         self.setPixmap(icons.pixmap(name, int(size * 0.55), tint))
-        self.setStyleSheet(f"background: rgba(139,92,246,0.16); border: 1px solid {TOKENS['border']}; border-radius: 10px;")
+        self.setStyleSheet(f"background: rgba(255,30,66,0.16); border: 1px solid {TOKENS['border']}; border-radius: 10px;")
 
 
 # ====================================================================== toggle switch
@@ -180,7 +190,7 @@ class Toggle(QAbstractButton):
             p.setBrush(QBrush(g) if self._pos > 0.5 else off)
         else:
             p.setBrush(off)
-        p.setPen(QPen(QColor(168, 85, 247, 90), 1))
+        p.setPen(QPen(QColor(255, 184, 0, 90), 1))
         p.drawRoundedRect(r, r.height() / 2, r.height() / 2)
         d = r.height() - 6
         rtl = self.layoutDirection() == Qt.RightToLeft
@@ -465,7 +475,7 @@ class Toast(QLabel):
     def show_msg(self, text, kind="info"):
         c = {"info": TOKENS["purple"], "ok": TOKENS["ok"], "bad": TOKENS["bad"], "warn": TOKENS["warn"]}[kind]
         self.setText(text)
-        self.setStyleSheet(f"QLabel {{ background: #1C1830; border: 1px solid {c}; border-radius: 12px; padding: 12px 22px;"
+        self.setStyleSheet(f"QLabel {{ background: #1A1418; border: 1px solid {c}; border-radius: 12px; padding: 12px 22px;"
                            f" font-weight: 700; color: {TOKENS['text']}; }}")
         self.adjustSize()
         par = self.parentWidget()
@@ -494,7 +504,7 @@ class Banner(QFrame):
         self.hide()
 
     def show_msg(self, text, kind="ok", icon_name="check"):
-        c1, c2 = {"ok": ("#0E9F6E", "#047857"), "bad": ("#DC2626", "#991B1B"), "rec": ("#DC2626", "#7E22CE")}.get(kind, ("#7C3AED", "#A21CAF"))
+        c1, c2 = {"ok": ("#0E9F6E", "#047857"), "bad": ("#DC2626", "#991B1B"), "rec": ("#DC2626", "#7E22CE")}.get(kind, ("#C8102E", "#A21CAF"))
         self.setStyleSheet(f"Banner {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 {c1}, stop:1 {c2}); border-radius: 14px; }}"
                            " QPushButton { background: rgba(255,255,255,0.18); border: 0; color: white; }")
         self.ic.setPixmap(icons.pixmap(icon_name, 22, "#FFFFFF"))

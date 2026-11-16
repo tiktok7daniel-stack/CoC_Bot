@@ -85,7 +85,7 @@ class ErrorRow(Box):
             d.setWordWrap(True)
             d.setLayoutDirection(Qt.LeftToRight)
             d.setTextInteractionFlags(Qt.TextSelectableByMouse)
-            d.setStyleSheet(f"color: #8F86A8; font-family: 'JetBrains Mono'; font-size: 8pt; background: #07060C; border-radius: 8px; padding: 6px;")
+            d.setStyleSheet(f"color: #9A8C8E; font-family: 'JetBrains Mono'; font-size: 8pt; background: #060507; border-radius: 8px; padding: 6px;")
             box.addWidget(d)
         v.addLayout(box, 1)
         if e.get("shot"):
@@ -240,7 +240,7 @@ class LogsScreen(Screen):
         if pm is None: return
         from PySide6.QtWidgets import QDialog
         d = QDialog(self)
-        d.setWindowTitle("CoC Bot")
+        d.setWindowTitle("Clash Farmer")
         v = QVBoxLayout(d)
         lb = QLabel()
         lb.setPixmap(pm.scaled(1280, 720, Qt.KeepAspectRatio, Qt.SmoothTransformation))

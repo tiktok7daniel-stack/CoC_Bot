@@ -125,30 +125,43 @@ GLYPHS = {
     "builder_hammer": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M19 15 8 26a2.8 2.8 0 0 1-4-4l11-11" fill="none" stroke="#B7791F" stroke-width="3" stroke-linecap="round"/><path d="M23 5l4 4-5 5-4-4-2 2-2-2 5-5z" fill="#94A3B8" stroke="#334155" stroke-width="1.2" stroke-linejoin="round"/></svg>',
 }
 
-# the CoC Bot crest: violet shield, golden bevel, crossed swords, glowing amethyst core
+# the Clash Farmer crest: isometric 3D shield, polished gold bevel, neon red crystal core,
+# a war axe and a sword crossed behind it, specular highlights for depth
 CREST = '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
 <defs>
- <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FDE68A"/><stop offset=".45" stop-color="#F59E0B"/><stop offset="1" stop-color="#92400E"/></linearGradient>
- <linearGradient id="body" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4C1D95"/><stop offset=".55" stop-color="#2E1065"/><stop offset="1" stop-color="#1E0B3B"/></linearGradient>
- <linearGradient id="inner" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7C3AED" stop-opacity=".55"/><stop offset="1" stop-color="#1E0B3B" stop-opacity="0"/></linearGradient>
- <linearGradient id="blade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#F1F5F9"/><stop offset=".5" stop-color="#CBD5E1"/><stop offset="1" stop-color="#64748B"/></linearGradient>
- <radialGradient id="core" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#FAE8FF"/><stop offset=".35" stop-color="#E879F9"/><stop offset=".75" stop-color="#A855F7"/><stop offset="1" stop-color="#6D28D9"/></radialGradient>
- <radialGradient id="glow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#D946EF" stop-opacity=".75"/><stop offset="1" stop-color="#D946EF" stop-opacity="0"/></radialGradient>
+ <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFF4B0"/><stop offset=".3" stop-color="#FFD700"/><stop offset=".65" stop-color="#E0A100"/><stop offset="1" stop-color="#8A5A00"/></linearGradient>
+ <linearGradient id="goldside" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#B8860B"/><stop offset="1" stop-color="#5C3A00"/></linearGradient>
+ <linearGradient id="face" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2A0A12"/><stop offset=".55" stop-color="#14060A"/><stop offset="1" stop-color="#060205"/></linearGradient>
+ <linearGradient id="faceR" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3A0010"/><stop offset="1" stop-color="#12030A"/></linearGradient>
+ <linearGradient id="steel" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".45" stop-color="#C9D1DB"/><stop offset="1" stop-color="#56606C"/></linearGradient>
+ <linearGradient id="wood" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#A86A3A"/><stop offset="1" stop-color="#4A2510"/></linearGradient>
+ <radialGradient id="ruby" cx=".38" cy=".3" r=".75"><stop offset="0" stop-color="#FFE0E6"/><stop offset=".22" stop-color="#FF6A85"/><stop offset=".55" stop-color="#FF1E42"/><stop offset="1" stop-color="#7A0016"/></radialGradient>
+ <radialGradient id="halo" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#FF1E42" stop-opacity=".85"/><stop offset="1" stop-color="#FF1E42" stop-opacity="0"/></radialGradient>
+ <linearGradient id="spec" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".55"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
 </defs>
-<path d="M64 6 112 22v34c0 34-26 54-48 66C42 110 16 90 16 56V22z" fill="url(#rim)"/>
-<path d="M64 13 105 27v29c0 29-22 47-41 58C45 103 23 85 23 56V27z" fill="url(#body)"/>
-<path d="M64 13 105 27v14C90 33 77 30 64 30S38 33 23 41V27z" fill="url(#inner)"/>
+<!-- crossed axe and sword behind the shield -->
 <g stroke-linecap="round">
- <path d="M34 92 86 34" stroke="url(#blade)" stroke-width="7"/>
- <path d="M94 92 42 34" stroke="url(#blade)" stroke-width="7"/>
- <path d="M86 34l6-6M42 34l-6-6" stroke="#E2E8F0" stroke-width="4"/>
- <path d="M28 86l12 12M100 86 88 98" stroke="url(#rim)" stroke-width="6"/>
- <path d="M30 98l-5 5M98 98l5 5" stroke="#92400E" stroke-width="6"/>
+ <path d="M24 108 104 22" stroke="url(#wood)" stroke-width="6"/>
+ <path d="M97 14c10 2 17 10 17 20-8-2-14-6-17-12-3 4-8 6-12 6 1-6 6-12 12-14z" fill="url(#steel)" stroke="#2B3138" stroke-width="1.5"/>
+ <path d="M104 108 30 28" stroke="url(#steel)" stroke-width="6"/>
+ <path d="M30 28 22 14l14 8z" fill="url(#steel)" stroke="#2B3138" stroke-width="1.2"/>
+ <path d="M92 100l16 -6M98 114l12 -14" stroke="url(#gold)" stroke-width="5"/>
 </g>
-<circle cx="64" cy="63" r="26" fill="url(#glow)"/>
-<path d="M64 46 77 58 70 78H58L51 58z" fill="url(#core)" stroke="#FAE8FF" stroke-width="1.5" stroke-linejoin="round"/>
-<path d="M64 46v32M51 58h26M58 78 64 58l6 20" stroke="#FAE8FF" stroke-width="1" opacity=".55" fill="none"/>
-<path d="M54 18c6-2 14-2 20 0" stroke="#FEF3C7" stroke-width="2.5" stroke-linecap="round" opacity=".7" fill="none"/>
+<!-- shield: extruded side (depth) then the bevel and the face -->
+<path d="M64 14 106 28v30c0 30-22 48-42 60C44 106 22 88 22 58V28z" fill="url(#goldside)" transform="translate(3 4)"/>
+<path d="M64 14 106 28v30c0 30-22 48-42 60C44 106 22 88 22 58V28z" fill="url(#gold)"/>
+<path d="M64 22 98 33v25c0 25-18 40-34 50C48 98 30 83 30 58V33z" fill="url(#face)"/>
+<path d="M64 22 98 33v25c0 25-18 40-34 50z" fill="url(#faceR)" opacity=".55"/>
+<path d="M30 40 64 30l34 10" fill="none" stroke="#FF1E42" stroke-opacity=".35" stroke-width="1"/>
+<path d="M34 64h60M64 30v76" stroke="#FF1E42" stroke-opacity=".18" stroke-width="1"/>
+<!-- red crystal core with glow -->
+<circle cx="64" cy="62" r="26" fill="url(#halo)"/>
+<path d="M64 40 80 56 72 82H56L48 56z" fill="url(#ruby)" stroke="#FFD1DA" stroke-width="1.4" stroke-linejoin="round"/>
+<path d="M64 40v42M48 56h32M56 82l8-26 8 26" fill="none" stroke="#FFE0E6" stroke-opacity=".5" stroke-width=".9"/>
+<path d="M58 46 64 40l6 6-6 8z" fill="#FFFFFF" opacity=".55"/>
+<!-- specular highlights on the gold rim -->
+<path d="M30 30 64 19l18 6" fill="none" stroke="url(#spec)" stroke-width="3" stroke-linecap="round"/>
+<path d="M27 40v18c0 8 2 15 5 21" fill="none" stroke="#FFF7CC" stroke-opacity=".5" stroke-width="2" stroke-linecap="round"/>
 </svg>'''
 
 

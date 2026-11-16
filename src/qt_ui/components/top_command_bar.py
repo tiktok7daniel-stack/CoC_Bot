@@ -72,7 +72,7 @@ class TopCommandBar(QFrame):
         self.avatar = QLabel("M")
         self.avatar.setFixedSize(38, 38)
         self.avatar.setAlignment(Qt.AlignCenter)
-        self.avatar.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #7C3AED, stop:1 #C026D3);"
+        self.avatar.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #C8102E, stop:1 #FF8A00);"
                                   " border-radius: 10px; font-weight: 800; font-size: 13pt; color: white;")
         ah.addWidget(self.avatar)
         box = QVBoxLayout()
@@ -104,7 +104,7 @@ class TopCommandBar(QFrame):
         self.btn_stop = IconButton("stop", "stop", kind="stop", icon_color="#FCA5A5", size=15)
         self.btn_pause = IconButton("pause", "pause_title", icon_color=TOKENS["warn"], size=15)
         self.btn_wake = IconButton("bolt", "run_now", icon_color=TOKENS["gold"], size=16)
-        self.btn_setup = IconButton("plug", "su_title", icon_color="#C4B5FD", size=16)
+        self.btn_setup = IconButton("plug", "su_title", icon_color="#FFC7A8", size=16)
         for b, a in ((self.btn_start, "start"), (self.btn_stop, "stop"), (self.btn_pause, "pause"),
                      (self.btn_wake, "wake"), (self.btn_setup, "setup")):
             b.setMinimumHeight(40)
@@ -191,7 +191,7 @@ class CommandPalette(QDialog):
         self.resize(640, 460)
         box = QFrame(self)
         box.setObjectName("Pal")
-        box.setStyleSheet(f"#Pal {{ background: #15121F; border: 1px solid {TOKENS['border_hover']}; border-radius: 16px; }}")
+        box.setStyleSheet(f"#Pal {{ background: #121016; border: 1px solid {TOKENS['border_hover']}; border-radius: 16px; }}")
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(box)
@@ -229,7 +229,7 @@ class CommandPalette(QDialog):
             key = (e["text"], e["where"])
             if key in seen: continue
             seen.add(key)
-            it = QListWidgetItem(icons.icon(e.get("icon", "sliders"), "#C4B5FD", 16), f"{e['text']}    —    {e['where']}")
+            it = QListWidgetItem(icons.icon(e.get("icon", "sliders"), "#FFC7A8", 16), f"{e['text']}    —    {e['where']}")
             it.setData(Qt.UserRole, e)
             self.list.addItem(it)
             if self.list.count() >= 60: break
@@ -270,7 +270,7 @@ class StatusBar(QFrame):
         self.conn.setStyleSheet(f"color: {TOKENS['muted']}; font-size: 8.5pt;")
         h.addWidget(self.conn)
         h.addStretch(1)
-        self.ver = QLabel("CoC Bot")
+        self.ver = QLabel("Clash Farmer")
         self.ver.setStyleSheet(f"color: {TOKENS['muted']}; font-family: 'JetBrains Mono'; font-size: 8.5pt;")
         h.addWidget(self.ver)
         self.setStyleSheet(f"StatusBar {{ background: {TOKENS['glass_solid']}; border: 1px solid {TOKENS['border']}; border-radius: 10px; }}")
@@ -286,4 +286,4 @@ class StatusBar(QFrame):
         self.emu.setText(emu_text)
         self.conn.setText(tr("conn_ok") if online else tr("conn_lost"))
         self.conn.setStyleSheet(f"color: {TOKENS['muted'] if online else TOKENS['bad']}; font-size: 8.5pt;")
-        self.ver.setText(f"CoC Bot  v{version}" if version else "CoC Bot")
+        self.ver.setText(f"Clash Farmer  v{version}" if version else "Clash Farmer")

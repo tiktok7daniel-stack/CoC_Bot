@@ -60,7 +60,7 @@ class LogView(QTextBrowser):
         self.level = "all"
         self.raw = False
         self.setOpenLinks(False)
-        self.setStyleSheet(f"QTextBrowser {{ background: #050409; border: 1px solid {TOKENS['border']}; border-radius: 12px;"
+        self.setStyleSheet(f"QTextBrowser {{ background: #040305; border: 1px solid {TOKENS['border']}; border-radius: 12px;"
                            f" padding: 8px; font-family: 'JetBrains Mono', 'IBM Plex Sans Arabic'; font-size: 9pt; }}")
         self._last_sig = None
 
@@ -104,7 +104,7 @@ class LogView(QTextBrowser):
                 f'<div style="color:{TOKENS["dim"]};font-size:8pt" dir="ltr">{_esc(e["msg"])}</div>'
             trace = ""
             if e["trace"] and not self.mini:
-                trace = f'<pre style="color:#7C7396;font-size:8pt;margin:2px 0 0 0" dir="ltr">{_esc(chr(10).join(e["trace"][-25:]))}</pre>'
+                trace = f'<pre style="color:#8A7C80;font-size:8pt;margin:2px 0 0 0" dir="ltr">{_esc(chr(10).join(e["trace"][-25:]))}</pre>'
             align = "right" if rtl else "left"
             rows.append(
                 f'<tr><td width="18" valign="top"><img src="{_BADGES[lvl]}" width="14" height="14"></td>'

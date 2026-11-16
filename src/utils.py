@@ -2503,7 +2503,7 @@ def set_phase(name):
 # Watchdog: a step that writes nothing to the log for too long is stuck (a popup the bot doesn't
 # know, a screen that never came, a loop waiting forever). It is released and the game reopened.
 # ======================================================================
-WATCHDOG_LIMITS = {"home_attack": 600, "builder_attack": 600, "spend_full": 1500, "home_upgrades": 900,
+WATCHDOG_LIMITS = {"commands": 900, "village_scan": 300, "home_attack": 600, "builder_attack": 600, "spend_full": 1500, "home_upgrades": 900,
                    "builder_upgrades": 900, "walls_farming": 900, "start_game": 300}
 WATCHDOG_SKIP = {"idle", "recording", "break", "", None}
 

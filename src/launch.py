@@ -34,8 +34,10 @@ def launch_proc(args):
             update_status("error")
             time.sleep(min(60, 10 * attempt))
     install_error_reporter()
-    from utils import start_watchdog
+    from utils import start_watchdog, send_notification
     start_watchdog()
+    import village, settings as _st
+    village.start_notifier(args.id, lambda text: send_notification(text) if _st.load(args.id).get("notify", {}).get("upgrade_done", True) else None)
     start_capture_service()
     preflight()
     bot = CoC_Bot()

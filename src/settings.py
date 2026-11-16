@@ -97,6 +97,11 @@ def default_settings():
             "smart_end": True,       # end the battle when the enemy loot stops going down
             "smart_end_after": 15,   # ... for this many seconds
         },
+        "notify": {                  # phone (Telegram) + desktop notifications
+            "upgrade_done": True,    # a running upgrade / lab research finished
+            "auto_upgrade": True,    # the bot upgraded something
+            "loot": False,           # loot summary after every attack
+        },
         "limits": {
             "max_attacks": 0,        # stop after this many attacks in the session (0 = no limit)
             "max_hours": 0,          # stop after running this many hours (0 = no limit)
@@ -165,6 +170,9 @@ def default_app_settings():
         "accounts": list(_cfg("INSTANCE_IDS", ["main"])),
         "emulator_links": {},        # account -> emulator copy (LDPlayer index / BlueStacks instance) chosen on the setup screen
         "show_setup": True,          # show the setup screen when the app opens
+        "show_hud": False,           # floating mini HUD orb (Clash Farmer)
+        "desktop_notify": True,      # Windows notifications when upgrades / research finish
+        "intro": True,               # 3D animated intro at startup
         "ui": "qt",                  # "qt" = v4 desktop window, "web" = classic window
         "sync_settings": False,      # one set of settings for every account (saving one saves all)
         "display_w": 1920, "display_h": 1080, "display_dpi": 240, # emulator display the bot checks / sets

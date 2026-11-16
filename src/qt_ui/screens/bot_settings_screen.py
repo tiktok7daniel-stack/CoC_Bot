@@ -105,6 +105,12 @@ class BotSettingsScreen(Screen):
         tg.add(form_row(None, None, tb, text=""))
         self.tg_note = label("", "sub", wrap=True)
         tg.add(self.tg_note)
+        tg.add(toggle_row(st, "nf_upgrade_done", "notify.upgrade_done", "nf_upgrade_done_sub"))
+        tg.add(toggle_row(st, "nf_auto_upgrade", "notify.auto_upgrade"))
+        tg.add(toggle_row(st, "nf_loot", "notify.loot"))
+        tg.add(toggle_row(st, "nf_desktop", "desktop_notify", "nf_desktop_sub", scope="app"))
+        tg.add(toggle_row(st, "nf_hud", "show_hud", None, scope="app"))
+        tg.add(toggle_row(st, "nf_intro", "intro", None, scope="app"))
         g.addWidget(tg, 1, 0)
 
         ocr = GlassCard("ocr_title", "text", "ocr_sub")

@@ -69,8 +69,8 @@ class QuickCard(QPushButton):
         ic = QLabel()
         ic.setFixedSize(40, 40)
         ic.setAlignment(Qt.AlignCenter)
-        ic.setPixmap(icons.pixmap(icon_name, 22, "#E9D5FF"))
-        ic.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 rgba(139,92,246,0.55), stop:1 rgba(217,70,239,0.35)); border-radius: 11px;")
+        ic.setPixmap(icons.pixmap(icon_name, 22, "#FFE3B0"))
+        ic.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 rgba(255,30,66,0.55), stop:1 rgba(255,215,0,0.35)); border-radius: 11px;")
         h.addWidget(ic)
         box = QVBoxLayout()
         box.setSpacing(0)
@@ -78,7 +78,7 @@ class QuickCard(QPushButton):
         box.addWidget(label(key=sub_key, role="dim"))
         h.addLayout(box, 1)
         self.setStyleSheet(f"QuickCard {{ background: {TOKENS['glass2']}; border: 1px solid {TOKENS['border']}; border-radius: 14px; text-align: right; }}"
-                           f" QuickCard:hover {{ border-color: {TOKENS['border_hover']}; background: #211B33; }}")
+                           f" QuickCard:hover {{ border-color: {TOKENS['border_hover']}; background: #1F1820; }}")
 
 
 class ResourceStat(QFrame):
@@ -172,7 +172,7 @@ class DashboardScreen(Screen):
         kp.setSpacing(8)
         self.kpis = {}
         for k in ("kpi_attacks", "kpi_searches", "kpi_skipped", "kpi_walls", "kpi_upgrades", "kpi_cycles", "kpi_avg"):
-            box = Box(bg="#171226")
+            box = Box(bg="#16111A")
             bl = QVBoxLayout(box)
             bl.setContentsMargins(8, 6, 8, 6)
             bl.setSpacing(0)
@@ -291,7 +291,7 @@ class DashboardScreen(Screen):
             h.setContentsMargins(10, 8, 10, 8)
             h.setSpacing(10)
             ic = QLabel()
-            ic.setPixmap(icons.pixmap("film", 22, "#E9D5FF"))
+            ic.setPixmap(icons.pixmap("film", 22, "#FFE3B0"))
             h.addWidget(ic)
             box = QVBoxLayout()
             box.setSpacing(0)
@@ -403,7 +403,7 @@ class DashboardScreen(Screen):
             av = QLabel(acc[:1].upper())
             av.setFixedSize(36, 36)
             av.setAlignment(Qt.AlignCenter)
-            av.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #7C3AED, stop:1 #C026D3); border-radius: 9px; font-weight: 800; color: white;")
+            av.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #C8102E, stop:1 #FF8A00); border-radius: 9px; font-weight: 800; color: white;")
             h.addWidget(av)
             box = QVBoxLayout()
             box.setSpacing(2)

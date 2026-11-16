@@ -10,7 +10,7 @@ _DATA = json.loads((Path(__file__).resolve().parent / "i18n_data.json").read_tex
 
 EXTRA = {
     "ar": {
-        "app_sub": "أتمتة كلاش أوف كلانس", "soon": "قريبًا", "search_ph": "ابحث في كل الإعدادات… (Ctrl+K)",
+        "app_sub": "مزرعة كلاش الذكية", "soon": "قريبًا", "search_ph": "ابحث في كل الإعدادات… (Ctrl+K)",
         "search_none": "مفيش نتائج", "unsaved": "فيه تغييرات ما اتحفظتش", "all_saved": "كل التغييرات محفوظة",
         "autosave": "حفظ تلقائي", "start_all": "تشغيل الكل", "stop_all": "إيقاف الكل",
         "uptime": "مدة التشغيل", "ver": "الإصدار", "open_full_log": "فتح السجل الكامل",
@@ -64,7 +64,7 @@ EXTRA = {
         "up_pet": "حيوان", "session_since": "الجلسة من", "no_attacks": "مفيش هجمات لسه",
     },
     "en": {
-        "app_sub": "Clash of Clans automation", "soon": "Soon", "search_ph": "Search every setting… (Ctrl+K)",
+        "app_sub": "Smart Clash farming", "soon": "Soon", "search_ph": "Search every setting… (Ctrl+K)",
         "search_none": "No results", "unsaved": "Unsaved changes", "all_saved": "All changes saved",
         "autosave": "Auto-save", "start_all": "Start all", "stop_all": "Stop all",
         "uptime": "Uptime", "ver": "Version", "open_full_log": "Open full log",

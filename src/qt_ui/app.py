@@ -7,7 +7,7 @@ import os, sys
 
 from PySide6.QtCore import QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QGuiApplication, QIcon, QLinearGradient, QPainter, QPixmap, QRadialGradient
-from PySide6.QtWidgets import QApplication, QSplashScreen
+from PySide6.QtWidgets import QApplication
 
 from . import icons, theme
 from .api import Api
@@ -25,14 +25,14 @@ def splash_pixmap(text):
     p.setBrush(QColor(theme.TOKENS["void"]))
     p.drawRoundedRect(QRectF(0, 0, w, h), 22, 22)
     g = QRadialGradient(w / 2, 110, 260)
-    g.setColorAt(0, QColor(139, 92, 246, 120))
-    g.setColorAt(1, QColor(139, 92, 246, 0))
+    g.setColorAt(0, QColor(255, 30, 66, 120))
+    g.setColorAt(1, QColor(255, 30, 66, 0))
     p.setBrush(g)
     p.drawRoundedRect(QRectF(0, 0, w, h), 22, 22)
     p.drawPixmap(int(w / 2 - 56), 34, icons.pixmap("crest", 112))
     p.setPen(QColor(theme.TOKENS["text"]))
     p.setFont(theme.ui_font(24, QFont.Bold))
-    p.drawText(QRectF(0, 160, w, 44), Qt.AlignCenter, "CoC Bot")
+    p.drawText(QRectF(0, 160, w, 44), Qt.AlignCenter, "Clash Farmer")
     p.setPen(QColor(theme.TOKENS["muted"]))
     p.setFont(theme.ui_font(11))
     p.drawText(QRectF(0, 204, w, 26), Qt.AlignCenter, tr("app_sub"))
@@ -52,7 +52,7 @@ def splash_pixmap(text):
 def create_app(argv=None):
     QGuiApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     app = QApplication.instance() or QApplication(argv or sys.argv)
-    app.setApplicationName("CoC Bot")
+    app.setApplicationName("Clash Farmer")
     app.setOrganizationName("CoC_Bot")
     theme.load_fonts()
     app.setFont(theme.ui_font(10))
@@ -74,20 +74,44 @@ def _saved_language():
 
 def run_qt(port, pipe=None, debug=False):
     app = create_app()
-    splash = QSplashScreen(splash_pixmap(tr("splash_loading")))
-    splash.setWindowFlag(Qt.FramelessWindowHint)
-    splash.setAttribute(Qt.WA_TranslucentBackground)
-    splash.show()
-    app.processEvents()
     from .window import MainWindow
     api = Api(port)
-    win = MainWindow(api, pipe)
-
-    def go():
+    try:
+        import settings
+        show_intro = settings.load_app().get("intro", True) is not False
+    except Exception:
+        show_intro = True
+    if not show_intro:
+        win = MainWindow(api, pipe)
         win.show()
-        splash.finish(win)
         win.start()
-    QTimer.singleShot(900, go)
+    else:
+        from PySide6.QtCore import QPropertyAnimation
+        from .components.intro import Intro
+        intro = Intro()
+        intro.start()
+        holder = {}
+
+        def build():
+            holder["win"] = MainWindow(api, pipe)
+            intro.mark_ready()
+
+        def reveal():
+            win = holder["win"]
+            win.setWindowOpacity(0.0)
+            win.show()
+            win.raise_()
+            win.activateWindow()
+            fade = QPropertyAnimation(win, b"windowOpacity", win)
+            fade.setDuration(420)
+            fade.setStartValue(0.0)
+            fade.setEndValue(1.0)
+            fade.start()
+            win._fade_in = fade
+            intro.deleteLater()
+            win.start()
+        intro.finished.connect(reveal)
+        QTimer.singleShot(120, build)   # let the first intro frames render before the heavy build
     code = app.exec()
     if pipe is not None:
         try: pipe.send(-1)

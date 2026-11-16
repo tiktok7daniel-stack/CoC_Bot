@@ -13,7 +13,7 @@ from ..i18n import on_lang, tr
 from ..theme import TOKENS, color, ui_font
 
 NAV = [
-    ("dash", "nv_home", "trophy"), ("acc", "nv_acc", "id"), ("atk", "nv_atk", "swords"), ("bb", "nv_bb", "moon"),
+    ("dash", "nv_home", "trophy"), ("deck", "nv_deck", "bolt"), ("acc", "nv_acc", "id"), ("atk", "nv_atk", "swords"), ("bb", "nv_bb", "moon"),
     ("res", "nv_stats", "chart"), ("upg", "nv_village", "home"), ("teach", "nv_manager", "hammer"),
     ("log", "nv_log", "scroll"), ("set", "nv_bot", "bot"),
 ]
@@ -64,10 +64,10 @@ class NavButton(QAbstractButton):
             p.drawRoundedRect(r, r.height() / 2, r.height() / 2)
         elif self._hover and not self.soon:
             p.setPen(Qt.NoPen)
-            p.setBrush(QColor(139, 92, 246, 30))
+            p.setBrush(QColor(255, 30, 66, 30))
             p.drawRoundedRect(r, r.height() / 2, r.height() / 2)
         fg = "#FFFFFF" if self.isChecked() else (TOKENS["dim"] if self.soon else TOKENS["text"])
-        ic_color = "#FFFFFF" if self.isChecked() else (TOKENS["dim"] if self.soon else "#C4B5FD")
+        ic_color = "#FFFFFF" if self.isChecked() else (TOKENS["dim"] if self.soon else "#FFC7A8")
         isz = 20
         if self.collapsed:
             pm = icons.pixmap(self.icon_name, isz, ic_color)
@@ -88,7 +88,7 @@ class NavButton(QAbstractButton):
                 w = p.fontMetrics().horizontalAdvance(txt) + 14
                 br = QRectF(r.left() + 10 if rtl else r.right() - 10 - w, r.center().y() - 9, w, 18)
                 p.setPen(QPen(QColor(TOKENS["border_hover"]), 1))
-                p.setBrush(QColor(139, 92, 246, 30))
+                p.setBrush(QColor(255, 30, 66, 30))
                 p.drawRoundedRect(br, 9, 9)
                 p.setPen(QColor(TOKENS["muted"]))
                 p.drawText(br, Qt.AlignCenter, txt)
@@ -137,7 +137,7 @@ class Sidebar(QFrame):
         brand.addWidget(self.crest)
         names = QVBoxLayout()
         names.setSpacing(0)
-        self.title = QLabel("CoC Bot")
+        self.title = QLabel("Clash Farmer")
         self.title.setStyleSheet("font-size: 15pt; font-weight: 800;")
         self.subtitle = QLabel(tr("app_sub"))
         self.subtitle.setProperty("role", "sub")
@@ -209,10 +209,10 @@ class Sidebar(QFrame):
         path.addRoundedRect(r, 18, 18)
         p.fillPath(path, QColor(19, 17, 29, 215))
         g = QRadialGradient(r.center().x(), r.top() + 90, 200)
-        g.setColorAt(0, QColor(139, 92, 246, 56))
-        g.setColorAt(1, QColor(139, 92, 246, 0))
+        g.setColorAt(0, QColor(255, 30, 66, 56))
+        g.setColorAt(1, QColor(255, 30, 66, 0))
         p.fillPath(path, QBrush(g))
-        p.setPen(QPen(QColor(168, 85, 247, 46), 1))
+        p.setPen(QPen(QColor(255, 184, 0, 46), 1))
         p.drawPath(path)
         p.end()
 
@@ -234,8 +234,8 @@ class FooterCapsule(QFrame):
         self.emu.setProperty("role", "dim")
         self.emu.hide()
         self.ver = QLabel("")
-        self.ver.setStyleSheet(f"background: rgba(139,92,246,0.18); border: 1px solid {TOKENS['border']}; border-radius: 8px;"
-                               f" padding: 1px 7px; font-family: 'JetBrains Mono'; font-size: 8pt; color: #C4B5FD;")
+        self.ver.setStyleSheet(f"background: rgba(255,30,66,0.18); border: 1px solid {TOKENS['border']}; border-radius: 8px;"
+                               f" padding: 1px 7px; font-family: 'JetBrains Mono'; font-size: 8pt; color: #FFC7A8;")
         h.addWidget(self.ver)
         self.setStyleSheet(f"FooterCapsule {{ background: {TOKENS['glass2']}; border: 1px solid {TOKENS['border']}; border-radius: 16px; }}")
 

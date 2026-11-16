@@ -258,7 +258,7 @@ class AttackScreen(Screen):
             h = QHBoxLayout(row)
             h.setContentsMargins(12, 6, 8, 6)
             ic = QLabel()
-            ic.setPixmap(icons.pixmap("film", 18, "#C4B5FD"))
+            ic.setPixmap(icons.pixmap("film", 18, "#FFC7A8"))
             h.addWidget(ic)
             h.addWidget(label(r["name"], "h3"))
             h.addWidget(label(f"{r.get('touches', 0)} {tr('rec_taps')} · {int(r.get('duration') or 0)} {tr('seconds')}", "dim"), 1)
@@ -268,7 +268,7 @@ class AttackScreen(Screen):
             self.rec_list.addWidget(row)
 
     def delete_recording(self, name):
-        if QMessageBox.question(self, "CoC Bot", tr("rec_confirm")) != QMessageBox.Yes: return
+        if QMessageBox.question(self, "Clash Farmer", tr("rec_confirm")) != QMessageBox.Yes: return
         self.api.post("/api/recordings/delete", {"name": name}, lambda r: self.load_recordings())
 
     def start_recording(self):

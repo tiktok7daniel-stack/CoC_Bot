@@ -325,6 +325,31 @@ def unit_picture(group, name):
     if p is None: abort(404)
     return send_file(str(p), mimetype="image/png", max_age=86400)
 
+# ---------------------------------------------------------------- village intelligence (Clash Farmer)
+
+@app.route("/api/village/<id>", methods=["GET"])
+def api_village(id):
+    import village
+    if not valid_id(id): abort(404)
+    data = village.load(id)
+    data["pending"] = village.pending(id)
+    data["now"] = time.time()
+    return jsonify(data)
+
+@app.route("/api/village/<id>/command", methods=["POST"])
+def api_village_command(id):
+    """1-tap upgrade {cmd: "upgrade", name} / batch walls {cmd: "walls", count} / rescan {cmd: "scan"}."""
+    import village
+    if not valid_id(id): abort(404)
+    d = request.json or {}
+    if d.get("cmd") not in ("upgrade", "walls", "scan"): return jsonify({"ok": False, "error": "bad_cmd"}), 400
+    n = village.push_command(id, d["cmd"], name=str(d.get("name", ""))[:60], count=int(d.get("count", 10) or 10))
+    inst = instances.get(id)
+    if inst is None: return jsonify({"ok": True, "queued": n, "running": False})
+    inst.end_time = 0                       # a paused bot would never pick it up
+    bot_settings.request_wake(id)
+    return jsonify({"ok": True, "queued": n, "running": True})
+
 # ---------------------------------------------------------------- battle recordings
 
 @app.route("/api/recordings", methods=["GET"])

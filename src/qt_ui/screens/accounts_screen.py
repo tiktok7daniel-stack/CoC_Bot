@@ -98,7 +98,7 @@ class AccountsScreen(Screen):
             av = QLabel(acc[:1].upper())
             av.setFixedSize(44, 44)
             av.setAlignment(Qt.AlignCenter)
-            av.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #7C3AED, stop:1 #C026D3); border-radius: 11px;"
+            av.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #C8102E, stop:1 #FF8A00); border-radius: 11px;"
                              " font-weight: 800; font-size: 14pt; color: white;")
             h.addWidget(av)
             box = QVBoxLayout()
@@ -155,7 +155,7 @@ class AccountsScreen(Screen):
         if not others:
             self.ctx.toast(tr("copy_no_other"), "bad")
             return
-        if QMessageBox.question(self, "CoC Bot", tr("copy_confirm").replace("{a}", src).replace("{n}", str(len(others)))) != QMessageBox.Yes: return
+        if QMessageBox.question(self, "Clash Farmer", tr("copy_confirm").replace("{a}", src).replace("{n}", str(len(others)))) != QMessageBox.Yes: return
 
         def go(_ok=True):
             self.api.post("/api/settings_copy", {"from": src, "to": "all"},
@@ -164,7 +164,7 @@ class AccountsScreen(Screen):
         else: go()
 
     def remove(self, acc):
-        if QMessageBox.question(self, "CoC Bot", tr("confirm_remove")) != QMessageBox.Yes: return
+        if QMessageBox.question(self, "Clash Farmer", tr("confirm_remove")) != QMessageBox.Yes: return
         st = self.poller.account_state(acc)
         if st.get("running"): self.ctx.window.account_action(acc, "stop")
         accs = [a for a in self.store.APP.get("accounts", []) if a != acc]

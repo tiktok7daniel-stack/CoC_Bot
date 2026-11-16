@@ -120,7 +120,7 @@ def ensure_env(root):
 
 def main():
     root = home()
-    say(f"CoC Bot - {root}")
+    say(f"Clash Farmer - {root}")
     try:
         if not (root / "src" / "main.py").exists():
             download_and_extract(root)

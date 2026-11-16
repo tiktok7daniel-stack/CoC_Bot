@@ -46,7 +46,7 @@ def cell(text, color=None, mono=False):
 
 class ResCard(Box):
     def __init__(self, glyph, key, tint):
-        super().__init__(bg="#14101F", border=f"rgba(168,85,247,0.25)", radius=16, top=TOKENS[tint])
+        super().__init__(bg="#120F15", border=f"rgba(255,184,0,0.25)", radius=16, top=TOKENS[tint])
         self.tint = tint
         v = QVBoxLayout(self)
         v.setContentsMargins(16, 14, 16, 14)
@@ -102,7 +102,7 @@ class StatisticsScreen(Screen):
         kp.setSpacing(10)
         self.kpis = {}
         for k in ("kpi_attacks", "kpi_searches", "kpi_skipped", "kpi_upgrades", "kpi_walls", "kpi_cycles", "kpi_avg"):
-            b = Box(bg="#171226", radius=12)
+            b = Box(bg="#16111A", radius=12)
             bl = QVBoxLayout(b)
             bl.setContentsMargins(10, 8, 10, 8)
             bl.setSpacing(0)
@@ -164,7 +164,7 @@ class StatisticsScreen(Screen):
         self.poller.refresh("stats")
 
     def reset(self):
-        if QMessageBox.question(self, "CoC Bot", tr("confirm_reset")) != QMessageBox.Yes: return
+        if QMessageBox.question(self, "Clash Farmer", tr("confirm_reset")) != QMessageBox.Yes: return
         self.api.post(f"/api/stats/{self.store.account}/reset", {}, lambda r: self.poller.refresh("stats"))
 
     def render(self, d):
@@ -199,7 +199,7 @@ class StatisticsScreen(Screen):
             self.t_att.setItem(i, 2, cell(tr("home_v") if a.get("base") == "home" else tr("builder_v")))
             self.t_att.setItem(i, 3, cell(fmt_num(a.get("gold")), TOKENS["gold"], True))
             self.t_att.setItem(i, 4, cell(fmt_num(a.get("elixir")), TOKENS["elixir"], True))
-            self.t_att.setItem(i, 5, cell(fmt_num(a.get("dark")), "#A5B4FC", True))
+            self.t_att.setItem(i, 5, cell(fmt_num(a.get("dark")), "#B4B8FF", True))
         ups = d.get("recent_upgrades", []) or []
         self.t_up.setRowCount(0)
         for i, u in enumerate(ups[:60]):
@@ -215,4 +215,4 @@ class StatisticsScreen(Screen):
             self.strat.setItem(i, 1, cell(s.get("attacks", 0), None, True))
             self.strat.setItem(i, 2, cell(fmt_num(s.get("gold")), TOKENS["gold"], True))
             self.strat.setItem(i, 3, cell(fmt_num(s.get("elixir")), TOKENS["elixir"], True))
-            self.strat.setItem(i, 4, cell(fmt_num(s.get("dark")), "#A5B4FC", True))
+            self.strat.setItem(i, 4, cell(fmt_num(s.get("dark")), "#B4B8FF", True))

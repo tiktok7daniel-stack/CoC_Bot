@@ -77,7 +77,7 @@ class UnitTile(QFrame):
 
     def _style(self):
         if self.selected:
-            css = f"background: rgba(139,92,246,0.24); border: 2px solid {TOKENS['purple']}; border-radius: 12px;"
+            css = f"background: rgba(255,30,66,0.24); border: 2px solid {TOKENS['purple']}; border-radius: 12px;"
         else:
             css = f"background: {TOKENS['glass2']}; border: 1px solid {TOKENS['border']}; border-radius: 12px;"
         self.setStyleSheet(f"UnitTile {{ {css} }}")

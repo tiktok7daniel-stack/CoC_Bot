@@ -17,7 +17,7 @@ class CoC_Bot:
         self.session_start = None
         self.session_attacks = 0
         self.next_break = None
-        self.upgrader.on_upgrade = lambda kind, name: stats.record(_utils.INSTANCE_ID, "upgrade", kind=kind, name=name)
+        self.upgrader.on_upgrade = self._on_upgrade
 
     def load_settings(self):
         """Re-read the account's GUI settings every cycle so changes apply without a restart."""
@@ -74,6 +74,9 @@ class CoC_Bot:
         self.session_attacks += 1
         logger.info(f"Attack ({base}) loot: gold={loot['gold']} elixir={loot['elixir']} dark={loot['dark']}")
         logger.info(f"Attack took {time.monotonic() - t0:.0f}s")
+        if (self.settings or {}).get("notify", {}).get("loot"):
+            try: send_notification(f"غنيمة الهجوم: ذهب {loot['gold']:,} — إكسير {loot['elixir']:,} — دارك {loot['dark']:,}")
+            except Exception: pass
 
     # ---------------------------------------------------------------- farm until full
     def _caps_path(self):
@@ -193,6 +196,49 @@ class CoC_Bot:
             recorder.set_status(iid, "failed")
             logger.exception("Battle recording failed")
 
+    def _on_upgrade(self, kind, name):
+        stats.record(_utils.INSTANCE_ID, "upgrade", kind=kind, name=name)
+        if kind != "wall": logger.info(f"Auto upgrade started: {name}")
+        if (getattr(self, "settings", {}) or {}).get("notify", {}).get("auto_upgrade", True) and kind != "wall":
+            try: send_notification(f"تم تطوير {name} بنجاح")
+            except Exception: pass
+
+    # ---------------------------------------------------------------- 1-tap commands from the window
+    def run_commands(self):
+        """Upgrade-now / batch walls / rescan requested from the window; True when something ran."""
+        import village
+        cmds = village.take_commands(_utils.INSTANCE_ID)
+        if not cmds: return False
+        set_phase("commands")
+        start_coc()
+        to_home_base()
+        for c in cmds:
+            if c.get("cmd") == "upgrade" and c.get("name"):
+                logger.info(f"1-tap upgrade requested: {c['name']}")
+                name = None
+                try: name = self.upgrader.home_specified_upgrade([c["name"].lower()])
+                except Exception: logger.exception("1-tap upgrade failed")
+                if name:
+                    logger.info(f"1-tap upgrade done: {name}")
+                    self._on_upgrade("building", name)
+                else:
+                    logger.warning(f"1-tap upgrade not possible now: {c['name']} (busy builders, resources, or not in the menu)")
+                to_home_base()
+            elif c.get("cmd") == "walls":
+                n = max(1, int(c.get("count", 10)))
+                logger.info(f"Batch wall upgrade requested: up to {n}")
+                self.upgrader.wall_budget = n
+                prio = [list(l) for l in configs.HOME_BASE_UPGRADE_PRIORITY]
+                configs.HOME_BASE_UPGRADE_PRIORITY = [["Wall"]]
+                try: self.upgrader.run_home_base(True, True, True)
+                except Exception: logger.exception("Batch wall upgrade failed")
+                finally: configs.HOME_BASE_UPGRADE_PRIORITY = prio
+                to_home_base()
+        try: village.scan(self.upgrader, _utils.INSTANCE_ID)  # fresh list + timers after every command
+        except Exception: logger.exception("Village scan failed")
+        to_home_base()
+        return True
+
     def run_routines(self, s):
         """Tap the taught buttons of every enabled routine, in order (missing steps are skipped)."""
         import time, teach
@@ -237,6 +283,8 @@ class CoC_Bot:
             try:
                 import recorder
                 if recorder.pending(_utils.INSTANCE_ID): return
+                import village
+                if village.pending(_utils.INSTANCE_ID): return
             except Exception: pass
             if anti_idle and time.monotonic() >= next_nudge and running():
                 next_nudge = time.monotonic() + random.uniform(70, 110)
@@ -281,6 +329,12 @@ class CoC_Bot:
                     time.sleep(3)
                     continue
                 self._offline_logged = False
+
+                import village
+                if village.pending(_utils.INSTANCE_ID):
+                    update_status("now")
+                    self.run_commands()
+                    continue
 
                 import recorder
                 req = recorder.take_request(_utils.INSTANCE_ID)
@@ -381,13 +435,21 @@ class CoC_Bot:
                         logger.info("Upgrading home base")
                         self.load_settings()
                         self.upgrader.run_home_base(self.excluded("home_base"), self.excluded("home_lab"), self.excluded("pet_house"))
+                        try:
+                            import village
+                            set_phase("village_scan")
+                            to_home_base()
+                            village.scan(self.upgrader, _utils.INSTANCE_ID)
+                        except Exception: logger.exception("Village scan failed")
 
                     farm = self.settings["attack"].get("farm", {})
                     if running() and not self.excluded("home_attacks") and (farm.get("enabled", True) or farm.get("max_walls")):
                         # attack non-stop; when the storages are full spend them, then attack again
                         attacks = 0
                         import recorder
-                        while running() and not self.excluded("home_attacks") and attacks < 300 and not recorder.pending(_utils.INSTANCE_ID):
+                        import village
+                        while running() and not self.excluded("home_attacks") and attacks < 300 and not recorder.pending(_utils.INSTANCE_ID) \
+                                and not village.pending(_utils.INSTANCE_ID):
                             self.load_settings()
                             f_now = self.settings["attack"].get("farm", {})
                             if not (f_now.get("enabled", True) or f_now.get("max_walls")): break

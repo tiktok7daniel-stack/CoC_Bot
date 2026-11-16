@@ -1,5 +1,5 @@
 """
-Obsidian & Neon-Violet design tokens, font loading and the Qt style sheet (QSS) for the whole app.
+Clash Farmer design tokens (AMOLED black, crimson & gold), font loading and the Qt style sheet (QSS) for the whole app.
 Every color used anywhere in the UI comes from TOKENS so the look stays consistent.
 """
 from pathlib import Path
@@ -9,23 +9,23 @@ from PySide6.QtGui import QColor, QFont, QFontDatabase
 FONT_DIR = Path(__file__).resolve().parent / "fonts"
 
 TOKENS = {
-    "void": "#08070D",            # window canvas
-    "void2": "#0D0B15",           # framed content area
-    "glass": "rgba(19, 17, 29, 0.72)",
-    "glass_solid": "#13111D",     # glass color for painters (no alpha blending of children)
-    "glass2": "#1A1727",          # inputs, inner rows
-    "glass3": "#221E33",          # hover / raised rows
-    "border": "rgba(168, 85, 247, 0.18)",
-    "border_hover": "rgba(168, 85, 247, 0.48)",
-    "border_solid": "#2A2340",
-    "text": "#EDEAF7",
-    "muted": "#A49DBB",
-    "dim": "#6F6885",
-    "violet": "#8B5CF6",
-    "purple": "#A855F7",
-    "fuchsia": "#D946EF",
-    "nav_from": "#9333EA",
-    "nav_to": "#C026D3",
+    "void": "#050508",            # window canvas
+    "void2": "#08080D",           # framed content area
+    "glass": "rgba(20, 16, 22, 0.72)",
+    "glass_solid": "#0F0D12",     # glass color for painters (no alpha blending of children)
+    "glass2": "#16131A",          # inputs, inner rows
+    "glass3": "#201A22",          # hover / raised rows
+    "border": "rgba(255, 184, 0, 0.16)",
+    "border_hover": "rgba(255, 184, 0, 0.50)",
+    "border_solid": "#2C2026",
+    "text": "#F6F1EC",
+    "muted": "#B3A7A3",
+    "dim": "#766A6C",
+    "violet": "#FF1E42",
+    "purple": "#FFB800",
+    "fuchsia": "#FFD700",
+    "nav_from": "#C8102E",
+    "nav_to": "#FF8A00",
     "ok": "#10B981",
     "bad": "#EF4444",
     "warn": "#F59E0B",
@@ -117,7 +117,7 @@ QPushButton:hover {{ border-color: {t['border_hover']}; background: {t['glass3']
 QPushButton:pressed {{ background: {t['border_solid']}; }}
 QPushButton:disabled {{ color: {t['dim']}; border-color: {t['border_solid']}; background: {t['glass_solid']}; }}
 QPushButton[kind="primary"] {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 {t['violet']}, stop:0.5 {t['purple']}, stop:1 {t['fuchsia']}); border: 0; color: white; }}
-QPushButton[kind="primary"]:hover {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #9B70F8, stop:0.5 #B46BF8, stop:1 #E065F1); }}
+QPushButton[kind="primary"]:hover {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #FF3355, stop:0.5 #FF6A2A, stop:1 #FFC233); }}
 QPushButton[kind="go"] {{ background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #19C98E, stop:1 #0E9F6E); border: 1px solid #34D399; color: white; }}
 QPushButton[kind="go"]:disabled {{ background: #10392D; border-color: #155E47; color: #6FAF97; }}
 QPushButton[kind="stop"] {{ background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.55); color: #FCA5A5; }}
@@ -148,15 +148,15 @@ QScrollBar::handle:horizontal {{ background: {t['border_solid']}; border-radius:
 QScrollBar::add-line, QScrollBar::sub-line, QScrollBar::add-page, QScrollBar::sub-page {{ background: none; border: 0; width: 0; height: 0; }}
 
 /* ---------- tables ---------- */
-QTableWidget {{ background: transparent; border: 0; gridline-color: {t['border_solid']}; alternate-background-color: rgba(139,92,246,0.04); }}
+QTableWidget {{ background: transparent; border: 0; gridline-color: {t['border_solid']}; alternate-background-color: rgba(255,30,66,0.04); }}
 QTableWidget::item {{ padding: 6px; border-bottom: 1px solid {t['border_solid']}; }}
-QTableWidget::item:selected {{ background: rgba(139,92,246,0.22); }}
+QTableWidget::item:selected {{ background: rgba(255,30,66,0.22); }}
 QHeaderView::section {{ background: transparent; color: {t['muted']}; border: 0; border-bottom: 1px solid {t['border_hover']}; padding: 8px 6px; font-weight: 700; }}
 
 /* ---------- lists ---------- */
 QListWidget {{ background: {t['glass2']}; border: 1px solid {t['border']}; border-radius: 10px; padding: 4px; }}
 QListWidget::item {{ padding: 8px; border-radius: 6px; }}
-QListWidget::item:selected {{ background: rgba(139,92,246,0.28); }}
+QListWidget::item:selected {{ background: rgba(255,30,66,0.28); }}
 QListWidget::item:hover {{ background: {t['glass3']}; }}
 
 /* ---------- menus ---------- */

@@ -7,7 +7,7 @@ import time
 
 from PySide6.QtCore import QPoint, QRectF, Qt, QTimer
 from PySide6.QtGui import QBrush, QColor, QIcon, QPainter, QPainterPath, QPen, QRadialGradient
-from PySide6.QtWidgets import QApplication, QHBoxLayout, QMainWindow, QStackedWidget, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon, QHBoxLayout, QMainWindow, QStackedWidget, QVBoxLayout, QWidget
 
 from . import i18n, icons
 from .api import Poller, status_key
@@ -25,6 +25,8 @@ from .screens.setup_wizard_dialog import SetupWizard
 from .screens.statistics_screen import StatisticsScreen
 from .screens.village_manager_screen import VillageManagerScreen
 from .screens.village_screen import VillageScreen
+from .screens.upgrade_deck_screen import UpgradeDeckScreen
+from .components.mini_hud import MiniHud
 from .store import Store
 from .theme import TOKENS
 from .widgets.controls import Banner, Toast
@@ -45,9 +47,14 @@ class Canvas(QWidget):
         for cx, cy, rad, a in ((r.right() - 140 if rtl else r.left() + 140, r.top() + 40, 420, 56),
                                (r.center().x(), r.top() + 160, 520, 26)):
             g = QRadialGradient(cx, cy, rad)
-            g.setColorAt(0, QColor(139, 92, 246, a))
-            g.setColorAt(1, QColor(139, 92, 246, 0))
+            g.setColorAt(0, QColor(255, 30, 66, a))
+            g.setColorAt(1, QColor(255, 30, 66, 0))
             p.fillPath(path, QBrush(g))
+        # gold ambient orb in the opposite bottom corner
+        g = QRadialGradient(r.left() + 180 if rtl else r.right() - 180, r.bottom() - 60, 460)
+        g.setColorAt(0, QColor(255, 184, 0, 34))
+        g.setColorAt(1, QColor(255, 184, 0, 0))
+        p.fillPath(path, QBrush(g))
         p.setPen(QPen(QColor(TOKENS["border_solid"]), 1))
         p.drawPath(path)
         p.end()
@@ -60,8 +67,8 @@ class ContentFrame(QWidget):
         r = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         path = QPainterPath()
         path.addRoundedRect(r, 16, 16)
-        p.fillPath(path, QColor(13, 11, 21, 235))
-        p.setPen(QPen(QColor(168, 85, 247, 46), 1))
+        p.fillPath(path, QColor(8, 6, 10, 225))
+        p.setPen(QPen(QColor(255, 184, 0, 46), 1))
         p.drawPath(path)
         p.end()
 
@@ -70,7 +77,7 @@ class MainWindow(QMainWindow):
     def __init__(self, api, pipe=None):
         super().__init__()
         self.api, self.pipe = api, pipe
-        self.setWindowTitle("CoC Bot")
+        self.setWindowTitle("Clash Farmer")
         self.setWindowIcon(QIcon(icons.pixmap("crest", 64)))
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
         self.setAttribute(Qt.WA_TranslucentBackground)
@@ -111,7 +118,7 @@ class MainWindow(QMainWindow):
         self.toast = Toast(canvas)
         self.banner = Banner(canvas)
         self.screens = {}
-        for cls in (DashboardScreen, AccountsScreen, AttackScreen, BuilderBaseScreen, StatisticsScreen, VillageScreen,
+        for cls in (DashboardScreen, UpgradeDeckScreen, AccountsScreen, AttackScreen, BuilderBaseScreen, StatisticsScreen, VillageScreen,
                     VillageManagerScreen, LogsScreen, BotSettingsScreen):
             s = cls(self.ctx)
             self.screens[s.key] = s
@@ -124,6 +131,9 @@ class MainWindow(QMainWindow):
         self.poller.system.connect(self.on_system)
         self.poller.log.connect(self.notify_from_log)
         self._notified = None
+        self._seen_lines = None
+        self.setup_tray()
+        self.hud = MiniHud(self)
         self.poller.errors.connect(lambda items: self.sidebar.set_badge("log", sum(1 for e in items if e.get("type") == "error")))
         self.store.accounts_changed.connect(lambda accs: self.top.set_accounts(accs, self.store.account))
         self.store.account_changed.connect(lambda a: (self.top.set_accounts(self.store.APP.get("accounts", []), a), self.poller.refresh_all()))
@@ -143,6 +153,9 @@ class MainWindow(QMainWindow):
                 return
             self.apply_language(self.store.APP.get("language", "ar"))
             self.poller.refresh_all()
+            if self.store.APP.get("show_hud", False):
+                self.hud.place()
+                self.hud.show()
             if self.store.APP.get("show_setup", True) is not False:
                 QTimer.singleShot(400, self.setup.open_wizard)
         self.store.load_all(loaded)
@@ -233,7 +246,56 @@ class MainWindow(QMainWindow):
     def on_system(self, sysd):
         self.on_state(self.poller.last.get("state") or {})
 
+    # ---------------------------------------------------------------- tray + desktop notifications
+    def setup_tray(self):
+        self.tray = None
+        if not QSystemTrayIcon.isSystemTrayAvailable(): return
+        self.tray = QSystemTrayIcon(QIcon(icons.pixmap("crest", 64)), self)
+        self.tray.setToolTip("Clash Farmer")
+        m = QMenu()
+        m.addAction(tr("hud_open_main"), lambda: (self.showNormal(), self.raise_(), self.activateWindow()))
+        m.addAction(tr("hud_toggle"), self.toggle_hud)
+        m.addSeparator()
+        m.addAction(tr("start"), lambda: self.run_action("start"))
+        m.addAction(tr("stop"), lambda: self.run_action("stop"))
+        self.tray.setContextMenu(m)
+        self.tray.activated.connect(lambda r: self.toggle_hud() if r == QSystemTrayIcon.Trigger else None)
+        self.tray.show()
+        self._tray_menu = m
+
+    def toggle_hud(self):
+        if self.hud.isVisible(): self.hud.hide()
+        else:
+            self.hud.place()
+            self.hud.show()
+        self.store.set("show_hud", self.hud.isVisible(), "app")
+
+    def desktop_notify(self, title, text, icon_name="bell"):
+        """Windows toast (tray balloon) + an in-app banner."""
+        if self.store.APP.get("desktop_notify", True) and self.tray is not None:
+            self.tray.showMessage(title, text, QIcon(icons.pixmap(icon_name, 64, "#FFB800")), 8000)
+        self.banner.show_msg(f"{title} — {text}", "ok", icon_name)
+
+    NOTIFY_KEYS = (("Upgrade finished:", "nt_upgrade_done", "builder_hammer"), ("Lab research finished:", "nt_lab_done", "flask"),
+                   ("1-tap upgrade done:", "nt_tap_done", "bolt"), ("Auto upgrade started:", "nt_auto_up", "hammer"),
+                   ("Batch wall upgrade", "nt_walls", "brick"))
+
+    def notify_events(self, lines):
+        """New log lines -> desktop notifications (first poll only remembers what is already there)."""
+        if self._seen_lines is None:
+            self._seen_lines = set(lines)
+            return
+        new = [l for l in lines if l not in self._seen_lines]
+        self._seen_lines.update(new)
+        if len(self._seen_lines) > 5000: self._seen_lines = set(lines)
+        for l in new[-6:]:
+            for needle, key, ic in self.NOTIFY_KEYS:
+                if needle in l:
+                    self.desktop_notify(tr(key), i18n.translate_log(l.split("|")[-1].strip()), ic)
+                    break
+
     def notify_from_log(self, lines):
+        self.notify_events(lines)
         """Big notice for the moments the user waits for (walls done, every wall maxed); new lines only."""
         import re
         hits = [l for l in lines if "Walls finished:" in l or "All walls are maxed" in l]
@@ -283,6 +345,10 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, e):
         if self.store.dirty: self.store.save_blocking()
+        try:
+            self.hud.close()
+            if self.tray is not None: self.tray.hide()
+        except RuntimeError: pass
         if self.pipe is not None:
             try: self.pipe.send(-1)
             except (OSError, EOFError): pass

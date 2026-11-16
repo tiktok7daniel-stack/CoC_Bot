@@ -53,7 +53,7 @@ class AccountCard(Box):
         v.setSpacing(10)
         head = QHBoxLayout()
         ic = QLabel()
-        ic.setPixmap(icons.pixmap("users", 18, "#C4B5FD"))
+        ic.setPixmap(icons.pixmap("users", 18, "#FFC7A8"))
         head.addWidget(ic)
         head.addWidget(label(a["id"], "h2"))
         su = wizard.data
@@ -128,7 +128,7 @@ class SetupWizard(QDialog):
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setModal(True)
         self.resize(1040, 780)
-        frame = Box(bg="#120F1C", border=TOKENS["border_hover"], radius=18)
+        frame = Box(bg="#0E0C12", border=TOKENS["border_hover"], radius=18)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(frame)
@@ -173,7 +173,7 @@ class SetupWizard(QDialog):
         dv.setContentsMargins(14, 10, 14, 10)
         dh = QHBoxLayout()
         di = QLabel()
-        di.setPixmap(icons.pixmap("monitor", 18, "#C4B5FD"))
+        di.setPixmap(icons.pixmap("monitor", 18, "#FFC7A8"))
         dh.addWidget(di)
         dh.addWidget(label(key="su_disp", role="h3"))
         dh.addStretch(1)
@@ -207,7 +207,7 @@ class SetupWizard(QDialog):
         # add account
         add = QHBoxLayout()
         ai = QLabel()
-        ai.setPixmap(icons.pixmap("plus", 16, "#C4B5FD"))
+        ai.setPixmap(icons.pixmap("plus", 16, "#FFC7A8"))
         add.addWidget(ai)
         add.addWidget(label(key="su_add", role="h3"))
         self.new_name = QLineEdit()
@@ -335,10 +335,10 @@ class SetupWizard(QDialog):
     def do(self, action, acc):
         if action == "start":
             a = next((x for x in self.data.get("accounts", []) if x["id"] == acc), {})
-            if not self.ready(a) and QMessageBox.question(self, "CoC Bot", tr("su_start_anyway")) != QMessageBox.Yes: return
+            if not self.ready(a) and QMessageBox.question(self, "Clash Farmer", tr("su_start_anyway")) != QMessageBox.Yes: return
             self.ctx.window.account_action(acc, "start", after=lambda r: self.refresh())
             return
-        if action == "fix_res" and QMessageBox.question(self, "CoC Bot", tr("su_res_confirm")) != QMessageBox.Yes: return
+        if action == "fix_res" and QMessageBox.question(self, "Clash Farmer", tr("su_res_confirm")) != QMessageBox.Yes: return
 
         def run(_ok=True):
             def done(r):
@@ -351,7 +351,7 @@ class SetupWizard(QDialog):
 
     def auto_all(self):
         txt = tr("su_auto_confirm").replace("{s}", f"{self.w.value()}x{self.h.value()} · {self.d.value()} DPI")
-        if QMessageBox.question(self, "CoC Bot", txt) != QMessageBox.Yes: return
+        if QMessageBox.question(self, "Clash Farmer", txt) != QMessageBox.Yes: return
 
         def go(_ok):
             for a in self.data.get("accounts", []):
