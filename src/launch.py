@@ -34,6 +34,16 @@ def launch_proc(args):
             update_status("error")
             time.sleep(min(60, 10 * attempt))
     install_error_reporter()
+    try:   # a new version starts with a clean problem list (reports then show only what still happens)
+        import stats, version
+        from pathlib import Path
+        mark = Path.home() / ".CoC_Bot" / f"version_{args.id}.txt"
+        if not mark.exists() or mark.read_text().strip() != version.VERSION:
+            stats.record(args.id, "errors_cleared")
+            mark.parent.mkdir(parents=True, exist_ok=True)
+            mark.write_text(version.VERSION)
+    except Exception:
+        pass
     from utils import start_watchdog, send_notification
     start_watchdog()
     import village, settings as _st

@@ -87,11 +87,34 @@ class Upgrader:
     # 💰 Resource & Builder Tracking
     # ============================================================
     
+    def _builders_by_text(self):
+        """Free builders read with OCR: the "free/total" counter at the top of the village (or the old spot)."""
+        import re
+        frame = Frame_Handler.get_frame(grayscale=False)
+        h, w = frame.shape[:2]
+        for x1, y1, x2, y2 in ((0.30, 0.0, 0.70, 0.13), (0.86, 0.70, 0.98, 0.84)):
+            crop = frame[int(y1 * h):int(y2 * h), int(x1 * w):int(x2 * w)]
+            try: boxes = ocr_boxes(crop)
+            except Exception: continue
+            text = " ".join(b[0] for b in boxes if b[5] > 0.25).replace("O", "0").replace("o", "0").replace("l", "1").replace("I", "1")
+            for a, b in re.findall(r"(\d)\s*/\s*(\d)", text):
+                if 1 <= int(b) <= 6 and int(a) <= int(b):
+                    if not getattr(self, "_builders_text_logged", False):
+                        logger.info(f"Builders read as text: {a}/{b}")
+                        self._builders_text_logged = True
+                    return int(a)
+        return None
+
     def get_home_builders(self, timeout=60, use_cached_frame=False):
             import time, numpy as np
             
             start = time.time()
+            tries = 0
             while time.time() < start + timeout:
+                tries += 1
+                if tries > 1:   # the font template didn't match: read the "N/M" builders counter as text
+                    n = self._builders_by_text()
+                    if n is not None: return n
                 try:
                     section = Frame_Handler.get_frame_section(0.89, 0.75, -0.07, -0.21, high_contrast=True, use_cached=use_cached_frame)
                     if configs.DEBUG: Frame_Handler.save_frame(section, "home_builders.png")

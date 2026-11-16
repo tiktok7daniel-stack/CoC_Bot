@@ -123,13 +123,20 @@ class CoC_Bot:
 
     def spend_when_full(self, s):
         """Walls first (all of them that can be paid), then the normal upgrades. True if anything was spent."""
+        # today's plan says no walls and no buildings -> don't spend, keep doing what was asked
+        walls_ok = s.get("walls", {}).get("enabled") or s.get("attack", {}).get("farm", {}).get("max_walls")
+        if not walls_ok and self.excluded("home_base"):
+            if not getattr(self, "_full_plan_logged", False):
+                logger.info("Storages full, but today's plan has no upgrades: going on with the plan")
+                self._full_plan_logged = True
+            return False
         before = dict(getattr(self, "last_res", None) or {})
         logger.info("Storages full: upgrading walls and buildings")
         set_phase("spend_full")
         self.upgrader.wall_budget = 10**6
         # storages full = spend on walls even when "wall upgrades" is off in the quick tasks
         prio = [list(l) for l in configs.HOME_BASE_UPGRADE_PRIORITY]
-        if not any("Wall" in l for l in prio):
+        if walls_ok and not any("Wall" in l for l in prio):
             configs.HOME_BASE_UPGRADE_PRIORITY = prio + [["Wall"]]
         to_home_base()
         try: self.upgrader.run_home_base(self.excluded("home_base"), self.excluded("home_lab"), self.excluded("pet_house"))
@@ -752,7 +759,9 @@ class CoC_Bot:
                             self.load_settings()
                             f_now = self.settings["attack"].get("farm", {})
                             if not (f_now.get("enabled", True) or f_now.get("max_walls")): break
-                            if self.full_resources(self.settings):
+                            plan_blocks_spending = not (self.settings.get("walls", {}).get("enabled") or f_now.get("max_walls")) \
+                                and self.excluded("home_base")
+                            if self.full_resources(self.settings) and not plan_blocks_spending:
                                 # spent something: go round again (more walls to buy, or attack once not full);
                                 # rest only when nothing at all could be bought
                                 if self.spend_when_full(self.settings): continue

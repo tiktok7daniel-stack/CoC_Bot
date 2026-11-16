@@ -1475,8 +1475,25 @@ class LDPlayer_Manager(_Emulator_Manager):
         for line in cls._run("list2").splitlines():
             c = line.strip().split(",")
             if len(c) < 6 or not c[0].strip().isdigit(): continue
-            out.append((int(c[0]), c[1], c[4].strip() == "1", int(c[5]) if c[5].strip().lstrip("-").isdigit() else -1))
+            pid = int(c[5]) if c[5].strip().lstrip("-").isdigit() else -1
+            # running = Android up, OR its window exists, OR it has a process (the Android flag alone is 0 for a
+            # while and on some LDPlayer versions; "launch" on a running copy restarts Android -> device offline)
+            window = c[2].strip() not in ("", "0")
+            out.append((int(c[0]), c[1], c[4].strip() == "1" or window or pid > 0, pid))
         return out
+
+    @classmethod
+    def _adb_alive(cls):
+        """The copy answers on its ADB port = it is running (independent of ldconsole)."""
+        import subprocess
+        try:
+            adb = emulator_adb() or "adb"
+            addr = f"127.0.0.1:{cls.adb_port}"
+            subprocess.run([adb, "connect", addr], capture_output=True, timeout=8, **_no_window())
+            r = subprocess.run([adb, "-s", addr, "get-state"], capture_output=True, text=True, timeout=8, **_no_window())
+            return r.stdout.strip() == "device"
+        except Exception:
+            return False
 
     @classproperty
     def index(cls, instance_id=None):
@@ -1512,9 +1529,10 @@ class LDPlayer_Manager(_Emulator_Manager):
     @classmethod
     def check(cls):
         try:
-            return any(i == cls.index and running for i, _, running, _ in cls.instances())
+            if any(i == cls.index and running for i, _, running, _ in cls.instances()): return True
         except Exception:
-            return False
+            pass
+        return cls._adb_alive()
 
     @classmethod
     def start(cls, timeout=120):

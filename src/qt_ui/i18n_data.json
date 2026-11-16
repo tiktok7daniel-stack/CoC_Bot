@@ -2617,6 +2617,18 @@
 [
 "^Round (\\d+): (.*)",
 "fn:round"
+],
+[
+"^Builders read as text: (\\d)/(\\d)",
+"عدد البنّائين اتقرا: \\g<1> فاضي من \\g<2>"
+],
+[
+"^Storages full, but today's plan has no upgrades.*",
+"المخازن مليانة، بس خطة النهارده مفيهاش ترقيات — بيكمّل الخطة"
+],
+[
+"^Home base upgrades stopped: the builder menu could not be read 3 times in a row",
+"وقف الترقيات: مش قادر يقرا قايمة البنّائين 3 مرات ورا بعض"
 ]
 ]
 }
