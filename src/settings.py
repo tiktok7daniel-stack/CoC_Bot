@@ -171,7 +171,8 @@ def default_app_settings():
         "emulator_links": {},        # account -> emulator copy (LDPlayer index / BlueStacks instance) chosen on the setup screen
         "show_setup": True,          # show the setup screen when the app opens
         "show_hud": False,           # floating mini HUD orb (Clash Farmer)
-        "keep_wall_builder": True,   # always keep one builder free (for walls)
+        "keep_wall_builder": True,
+        "daily_rewards": True,       # the daily "Free!" gift and free season pass rewards (never anything paid)   # always keep one builder free (for walls)
         "live_stream": True,         # live video of the emulator screen (scrcpy): every look at the screen is instant
         "fast_capture": True,        # read the LDPlayer window directly (much faster than ADB screenshots)
         "desktop_notify": True,      # Windows notifications when upgrades / research finish

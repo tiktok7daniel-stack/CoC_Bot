@@ -221,6 +221,8 @@ class BotSettingsScreen(Screen):
         inter = GlassCard("interval_title", "hourglass", "interval_sub")
         inter.add(num_row(st, "check_interval", "schedule.check_interval", None, "minutes", 0, 1440, 1, 90))
         inter.add(toggle_row(st, "live_stream", "live_stream", "live_stream_sub", scope="app"))
+        inter.add(toggle_row(st, "keep_wall_builder", "keep_wall_builder", "keep_wall_builder_sub", scope="app"))
+        inter.add(toggle_row(st, "daily_rewards", "daily_rewards", "daily_rewards_sub", scope="app"))
         inter.add(toggle_row(st, "fast_capture", "fast_capture", "fast_capture_sub", scope="app"))
         inter.add(toggle_row(st, "never_close", "game.never_close", "never_close_sub"))
         inter.add(toggle_row(st, "keep_open", "game.keep_open", "keep_open_sub"))

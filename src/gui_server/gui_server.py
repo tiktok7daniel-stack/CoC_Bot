@@ -1053,6 +1053,11 @@ def start_server(pipe, port, id=None, debug=False):
     bot_settings.apply_app_settings()
     import threading
     threading.Thread(target=auto_report_loop, daemon=True).start()
+    try:
+        from gui_server import telegram_remote
+        telegram_remote.start(app)        # control from the phone (Telegram): status, picture, pause / resume…
+    except Exception:
+        pass
     for i in ([id] if isinstance(id, str) else (id or [])): # accounts launched together with the GUI
         instances[i] = Instance(i)
 

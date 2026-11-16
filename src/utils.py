@@ -3417,6 +3417,12 @@ class Auto_Learn:
             if label:
                 rule = next((r for r in learn_sync._load(learn_sync.KNOW, {}).get("screens", []) if r.get("id") == label), None)
                 if rule and rule.get("no_action"): return False
+                if label == "season_pass":            # take the free rewards before closing it (never the paid offer)
+                    try:
+                        import daily_rewards
+                        daily_rewards.claim_visible()
+                    except Exception:
+                        pass
                 if rule and rule.get("actions") and learn_sync.run_actions(rule, []):
                     if time.time() - cls.tried.get("brain_log:" + label, 0) > 60:
                         cls.tried["brain_log:" + label] = time.time()

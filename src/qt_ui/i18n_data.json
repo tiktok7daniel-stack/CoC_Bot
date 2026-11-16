@@ -999,7 +999,11 @@
 "pw_gpu_armed": "✅ {name} متفعّل — البوت هيقرا عليه أول ما يشتغل",
 "pw_gpu_bot_cpu": "{name} متسطّب، بس البوت اللي شغال دلوقتي لسه على البروسيسور — وقّف البوت وشغّله تاني",
 "pw_live_why": "🔴 الشاشة اللايف مش شغالة: {w}",
-"pw_window_why": "⚡ التصوير من النافذة مش شغال: {w}"
+"pw_window_why": "⚡ التصوير من النافذة مش شغال: {w}",
+"keep_wall_builder": "سيب بنّاء فاضي للأسوار 🧱",
+"keep_wall_builder_sub": "البوت مايشغّلش كل البنّائين في المباني — واحد دايمًا فاضي للأسوار",
+"daily_rewards": "الهدايا المجانية 🎁",
+"daily_rewards_sub": "يستلم هدية Free! اليومية وجوايز الباس المجانية — عمره ما يدوس على حاجة بفلوس"
 },
 "en": {
 "gold": "Gold",
@@ -2001,7 +2005,11 @@
 "pw_gpu_armed": "✅ {name} on — the bot reads on it as soon as it runs",
 "pw_gpu_bot_cpu": "{name} is installed, but the running bot still reads on the processor — stop and start the bot",
 "pw_live_why": "🔴 Live screen not working: {w}",
-"pw_window_why": "⚡ Window capture not working: {w}"
+"pw_window_why": "⚡ Window capture not working: {w}",
+"keep_wall_builder": "Keep a builder free for walls 🧱",
+"keep_wall_builder_sub": "Never all builders on buildings — one always stays free for walls",
+"daily_rewards": "Free gifts 🎁",
+"daily_rewards_sub": "Takes the daily Free! gift and the free season pass rewards — never anything paid"
 },
 "unit_ar": {
 "healing": "العلاج",
@@ -2903,6 +2911,14 @@
 [
 "^The new builder menu could not be used.*",
 "ما قدرش يستخدم قايمة البنّاء الجديدة — بيجرّب الطريقة القديمة"
+],
+[
+"^Free rewards claimed: (\\d+)",
+"🎁 استلم \\1 جايزة مجانية"
+],
+[
+"^Daily free gift claimed",
+"🎁 استلم الهدية المجانية اليومية"
 ]
 ]
 }

@@ -50,6 +50,7 @@ class Attacker:
         start = time.monotonic()
         surrendered = False
         self._next_words = 0
+        self._left_battle = None
         leave = self.battle_end == "leave"
         surrender_after = (self.leave_after if leave else self.surrender_after)
         if leave:
@@ -127,7 +128,13 @@ class Attacker:
                 TEMP_CACHE["location"] = "builder_base"
                 return
             # results screen not recognised by colour: read it now and then (reading takes ~1 s)
-            if time.monotonic() - start > 1.5 and time.monotonic() >= getattr(self, "_next_words", 0) and not self.in_battle():
+            # (only when the colours haven't told what the screen is for a few seconds after the battle ended)
+            if time.monotonic() - start > 1.5 and not self.in_battle():
+                if self._left_battle is None: self._left_battle = time.monotonic()
+            else:
+                self._left_battle = None
+            if self._left_battle is not None and time.monotonic() - self._left_battle > 4 \
+                    and time.monotonic() >= getattr(self, "_next_words", 0):
                 self._next_words = time.monotonic() + 3
                 words = " ".join(b[0].lower() for b in ocr_boxes(frame) if b[5] > 0.3)
                 if ("claim" in words and "reward" in words) or "continue" in words or "delivered" in words or "storage" in words \

@@ -736,6 +736,14 @@ class CoC_Bot:
                         to_home_base(ref_cache=True)
                         set_phase("read_resources")
                         self.read_and_record_resources()
+                        # free things now and then (the daily "Free!" gift): every few hours, never anything paid
+                        try:
+                            import daily_rewards
+                            if bot_settings.load_app().get("daily_rewards", True) is not False:
+                                set_phase("daily_rewards")
+                                daily_rewards.run()
+                        except (KeyboardInterrupt, SystemExit): raise
+                        except Exception: logger.debug("Daily rewards failed", exc_info=True)
 
                     if running():
                         self.run_routines(s)
