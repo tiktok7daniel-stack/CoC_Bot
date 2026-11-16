@@ -365,8 +365,15 @@ class SetupWizard(QDialog):
         if not name:
             self.ctx.toast(tr("su_need_name"), "bad")
             return
-        self.ctx.api.post("/api/setup/add_account", {"name": name, "copy": self.new_copy.currentData() or ""},
-                          lambda r: (self.new_name.clear(), self.ctx.store.load_all(), self.refresh(), self.ctx.toast(tr("saved"), "ok")))
+        src = self.ctx.store.account
+
+        def added(r):
+            self.new_name.clear()
+            if src and src != name: self.ctx.api.post("/api/settings_copy", {"from": src, "to": [name]})
+            self.ctx.store.load_all()
+            self.refresh()
+            self.ctx.toast(tr("copied_from").replace("{a}", src) if src else tr("saved"), "ok")
+        self.ctx.api.post("/api/setup/add_account", {"name": name, "copy": self.new_copy.currentData() or ""}, added)
 
     def start_ready(self):
         ready = [a for a in self.data.get("accounts", []) if self.ready(a) and not a.get("bot")]

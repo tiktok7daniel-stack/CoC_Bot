@@ -5,13 +5,13 @@ start/stop, open its settings, delete), and add an account (instance name instru
 import time
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QMessageBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QVBoxLayout, QWidget
 
 from .. import icons
 from ..api import fmt_dur, status_key
 from ..i18n import on_lang, tr
 from ..theme import TOKENS
-from ..widgets.controls import Box, GlassCard, IconButton, StatusPill, label, note
+from ..widgets.controls import Box, GlassCard, IconButton, StatusPill, label, note, toggle_row
 from .base import Screen, page
 
 
@@ -36,6 +36,18 @@ class AccountsScreen(Screen):
         card.add(self.list_host)
         v.addWidget(card)
 
+        # ---------------- same play on every account
+        sync = GlassCard("sync_title", "layers", "sync_sub", glow=True)
+        sync.add(toggle_row(self.store, "sync_on", "sync_settings", "sync_on_sub", "app"))
+        crow = QHBoxLayout()
+        crow.addWidget(label(key="copy_to_all_lbl"), 1)
+        cp = IconButton("copy", "copy_to_all", kind="primary", size=14)
+        cp.clicked.connect(self.copy_to_all)
+        crow.addWidget(cp)
+        sync.add(crow)
+        sync.add(note("sync_note", "info"))
+        v.addWidget(sync)
+
         add = GlassCard("add_acc", "plus", "add_acc_sub")
         row = QHBoxLayout()
         self.name = QLineEdit()
@@ -43,6 +55,10 @@ class AccountsScreen(Screen):
         self.name.setFixedWidth(240)
         self.name.returnPressed.connect(self.add_account)
         row.addWidget(self.name)
+        row.addWidget(label(key="copy_from"))
+        self.copy_from = QComboBox()
+        self.copy_from.setMinimumWidth(160)
+        row.addWidget(self.copy_from)
         b = IconButton("plus", "add", kind="primary", size=14)
         b.clicked.connect(self.add_account)
         row.addWidget(b)
@@ -61,6 +77,12 @@ class AccountsScreen(Screen):
         self.render()
 
     def render(self):
+        cur = self.copy_from.currentData()
+        self.copy_from.clear()
+        self.copy_from.addItem(tr("copy_none"), "")
+        for a in self.store.APP.get("accounts", []): self.copy_from.addItem(a, a)
+        i = self.copy_from.findData(cur if cur is not None else self.store.account)
+        self.copy_from.setCurrentIndex(i if i >= 0 else min(1, self.copy_from.count() - 1))
         while self.list.count():
             it = self.list.takeAt(0)
             if it.widget(): it.widget().deleteLater()
@@ -115,8 +137,31 @@ class AccountsScreen(Screen):
         accs = self.store.APP.setdefault("accounts", [])
         if name not in accs: accs.append(name)
         self.name.clear()
+        src = self.copy_from.currentData()
         self.store.changed()
-        self.store.save(done=lambda ok: (self.ctx.toast(tr("added"), "ok"), self.render()))
+
+        def saved(ok):
+            if src and src != name:   # the new account plays exactly like the chosen one
+                self.api.post("/api/settings_copy", {"from": src, "to": [name]},
+                              lambda r: self.ctx.toast(tr("copied_from").replace("{a}", src), "ok"))
+            else:
+                self.ctx.toast(tr("added"), "ok")
+            self.render()
+        self.store.save(done=saved)
+
+    def copy_to_all(self):
+        src = self.store.account
+        others = [a for a in self.store.APP.get("accounts", []) if a != src]
+        if not others:
+            self.ctx.toast(tr("copy_no_other"), "bad")
+            return
+        if QMessageBox.question(self, "CoC Bot", tr("copy_confirm").replace("{a}", src).replace("{n}", str(len(others)))) != QMessageBox.Yes: return
+
+        def go(_ok=True):
+            self.api.post("/api/settings_copy", {"from": src, "to": "all"},
+                          lambda r: self.ctx.toast(tr("copy_done").replace("{n}", str(len((r or {}).get("copied", [])))), "ok"))
+        if self.store.dirty: self.store.save(silent=True, done=go)
+        else: go()
 
     def remove(self, acc):
         if QMessageBox.question(self, "CoC Bot", tr("confirm_remove")) != QMessageBox.Yes: return

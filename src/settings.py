@@ -165,6 +165,7 @@ def default_app_settings():
         "emulator_links": {},        # account -> emulator copy (LDPlayer index / BlueStacks instance) chosen on the setup screen
         "show_setup": True,          # show the setup screen when the app opens
         "ui": "qt",                  # "qt" = v4 desktop window, "web" = classic window
+        "sync_settings": False,      # one set of settings for every account (saving one saves all)
         "display_w": 1920, "display_h": 1080, "display_dpi": 240, # emulator display the bot checks / sets
         "display_reset_1920": False, # one-time move back to 1920x1080 (3.8.0)
     }

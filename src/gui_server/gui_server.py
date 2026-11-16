@@ -108,8 +108,31 @@ def handle_instance_start_stop():
 def api_settings(id):
     if not valid_id(id): abort(404)
     if request.method == "POST":
-        return jsonify(bot_settings.save(id, request.json or {}))
+        saved = bot_settings.save(id, request.json or {})
+        # "same settings for every account": what is saved on one account is saved on all of them
+        app_cfg = bot_settings.load_app()
+        if app_cfg.get("sync_settings"):
+            for other in app_cfg.get("accounts", []):
+                if other != id and valid_id(other): bot_settings.save(other, saved)
+        return jsonify(saved)
     return jsonify(bot_settings.load(id))
+
+@app.route("/api/settings_copy", methods=["POST"])
+def api_settings_copy():
+    """Copy one account's settings to other accounts ({"from": id, "to": [ids] | "all"})."""
+    d = request.json or {}
+    src = d.get("from", "")
+    if not valid_id(src): abort(404)
+    accounts = bot_settings.load_app().get("accounts", [])
+    targets = [a for a in accounts if a != src] if d.get("to") == "all" else [a for a in (d.get("to") or []) if a != src]
+    data = bot_settings.load(src)
+    done = []
+    for t in targets:
+        if valid_id(t):
+            bot_settings.save(t, data)
+            bot_settings.request_wake(t) if t in instances else None
+            done.append(t)
+    return jsonify({"ok": True, "copied": done})
 
 @app.route("/api/app_settings", methods=["GET", "POST"])
 def api_app_settings():
