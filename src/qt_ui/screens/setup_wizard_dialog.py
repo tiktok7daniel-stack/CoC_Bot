@@ -18,7 +18,7 @@ EMULATORS = [("ldplayer", "LDPlayer"), ("bluestacks", "BlueStacks"), ("mumu", "M
 
 class StepBadge(Box):
     def __init__(self):
-        super().__init__(radius=10)
+        super().__init__(radius=13)
         h = QHBoxLayout(self)
         h.setContentsMargins(10, 8, 10, 8)
         h.setSpacing(8)
@@ -45,7 +45,7 @@ class StepBadge(Box):
 
 class AccountCard(Box):
     def __init__(self, wizard, a):
-        super().__init__(radius=14)
+        super().__init__(radius=18)
         self.wizard = wizard
         self.acc = a["id"]
         v = QVBoxLayout(self)
@@ -168,7 +168,7 @@ class SetupWizard(QDialog):
         v.addLayout(emu)
         self.emu.currentIndexChanged.connect(lambda _i: self.path.setVisible(self.emu.currentData() == "ldplayer"))
         # display
-        disp = Box(border=TOKENS["purple"], radius=14)
+        disp = Box(border=TOKENS["purple"], radius=18)
         dv = QVBoxLayout(disp)
         dv.setContentsMargins(14, 10, 14, 10)
         dh = QHBoxLayout()

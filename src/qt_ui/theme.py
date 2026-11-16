@@ -111,7 +111,7 @@ QLabel[role="ok"] {{ color: {t['ok']}; }}
 
 /* ---------- inputs ---------- */
 QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QTimeEdit, QPlainTextEdit, QTextEdit {{
-  background: {t['glass2']}; border: 1px solid {t['border']}; border-radius: 9px; padding: 6px 10px;
+  background: {t['glass2']}; border: 1px solid {t['border']}; border-radius: 12px; padding: 6px 12px;
   selection-background-color: {t['accent']}; selection-color: {t['on_accent']}; min-height: 22px; }}
 QLineEdit:hover, QSpinBox:hover, QDoubleSpinBox:hover, QComboBox:hover, QTimeEdit:hover {{ border-color: rgba(255,255,255,0.16); }}
 QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus, QTimeEdit:focus, QPlainTextEdit:focus {{ border-color: {t['accent']}; background: #17171F; }}
@@ -124,7 +124,7 @@ QComboBox QAbstractItemView {{ background: #15151C; border: 1px solid {t['border
 QLineEdit[role="search"] {{ padding-left: 30px; padding-right: 30px; border-radius: 10px; }}
 
 /* ---------- buttons: neutral by default, gold only for the main action ---------- */
-QPushButton {{ background: {t['glass2']}; border: 1px solid {t['border']}; border-radius: 10px; padding: 8px 15px; font-weight: 600; }}
+QPushButton {{ background: {t['glass2']}; border: 1px solid {t['border']}; border-radius: 13px; padding: 8px 16px; font-weight: 600; }}
 QPushButton:hover {{ border-color: rgba(255,255,255,0.18); background: {t['glass3']}; color: #FFFFFF; }}
 QPushButton:pressed {{ background: #101016; }}
 QPushButton:disabled {{ color: {t['dim']}; border-color: {t['border_solid']}; background: {t['glass_solid']}; }}
@@ -141,7 +141,7 @@ QPushButton[kind="warn"] {{ background: rgba(245,183,64,0.08); border: 1px solid
 QPushButton[kind="warn"]:hover {{ background: rgba(245,183,64,0.16); }}
 QPushButton[kind="ghost"] {{ background: transparent; border: 1px solid transparent; }}
 QPushButton[kind="ghost"]:hover {{ background: rgba(255,255,255,0.05); border-color: {t['border']}; }}
-QPushButton[kind="chip"] {{ border-radius: 15px; padding: 5px 14px; font-weight: 600; color: {t['muted']}; }}
+QPushButton[kind="chip"] {{ border-radius: 16px; padding: 5px 14px; font-weight: 600; color: {t['muted']}; }}
 QPushButton[kind="chip"]:hover {{ color: {t['text']}; }}
 QPushButton[kind="chip"]:checked {{ background: rgba(245,183,64,0.14); border-color: rgba(245,183,64,0.65); color: {t['accent_hi']}; }}
 QPushButton[kind="win"] {{ background: transparent; border: 0; border-radius: 6px; padding: 4px; }}
@@ -174,13 +174,13 @@ QTableWidget QWidget#qt_scrollarea_viewport, QTableView {{ background: transpare
 QHeaderView::section {{ background: transparent; color: {t['dim']}; border: 0; border-bottom: 1px solid rgba(255,255,255,0.10); padding: 9px 6px; font-weight: 700; font-size: 8.5pt; }}
 
 /* ---------- lists ---------- */
-QListWidget {{ background: {t['glass2']}; border: 1px solid {t['border']}; border-radius: 10px; padding: 4px; }}
+QListWidget {{ background: {t['glass2']}; border: 1px solid {t['border']}; border-radius: 14px; padding: 4px; }}
 QListWidget::item {{ padding: 8px; border-radius: 7px; }}
 QListWidget::item:selected {{ background: rgba(245,183,64,0.14); color: {t['accent_hi']}; }}
 QListWidget::item:hover {{ background: rgba(255,255,255,0.04); }}
 
 /* ---------- menus ---------- */
-QMenu {{ background: #15151C; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 5px; }}
+QMenu {{ background: #15151C; border: 1px solid rgba(255,255,255,0.10); border-radius: 14px; padding: 5px; }}
 QMenu::item {{ padding: 8px 20px; border-radius: 6px; }}
 QMenu::item:selected {{ background: rgba(245,183,64,0.14); color: {t['accent_hi']}; }}
 QMenu::separator {{ height: 1px; background: rgba(255,255,255,0.08); margin: 4px 8px; }}

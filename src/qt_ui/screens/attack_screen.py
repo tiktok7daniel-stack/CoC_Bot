@@ -26,7 +26,7 @@ class PlanCard(Box):
     """One attack loadout. Edits go straight into store.S["plans"][i]."""
 
     def __init__(self, screen, i):
-        super().__init__(radius=14)
+        super().__init__(radius=18)
         self.screen, self.i = screen, i
         store = screen.store
         p = store.S["plans"][i]
@@ -149,7 +149,7 @@ class AttackScreen(Screen):
         L["plans"].addWidget(rec)
         # ======================= plans: loadouts
         plans = GlassCard("pl_title", "layers", "pl_sub")
-        self.classic = Box(radius=14)
+        self.classic = Box(radius=18)
         ch = QHBoxLayout(self.classic)
         ch.setContentsMargins(14, 12, 14, 12)
         self.classic_ic = QLabel()
@@ -276,7 +276,7 @@ class AttackScreen(Screen):
             self.rec_list.addWidget(label(key="rec_empty", role="sub"))
             return
         for r in self.recordings:
-            row = Box(radius=10)
+            row = Box(radius=13)
             h = QHBoxLayout(row)
             h.setContentsMargins(12, 6, 8, 6)
             ic = QLabel()

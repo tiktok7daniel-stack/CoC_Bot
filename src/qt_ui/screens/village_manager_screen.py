@@ -21,7 +21,7 @@ GROUP_KEYS = {"farm": "tg_farm", "army": "tg_army", "general": "tg_general", "co
 
 class TeachItem(Box):
     def __init__(self, screen, item, learned):
-        super().__init__(radius=10)
+        super().__init__(radius=13)
         self.screen, self.key = screen, item["key"]
         self.setCursor(Qt.PointingHandCursor)
         h = QHBoxLayout(self)
@@ -224,7 +224,7 @@ class VillageManagerScreen(Screen):
             self.disc_box.addWidget(label(key="disc_empty", role="sub", wrap=True))
             return
         for d in items[:12]:
-            row = Box(radius=10)
+            row = Box(radius=13)
             h = QHBoxLayout(row)
             h.setContentsMargins(8, 6, 8, 6)
             thumb = QLabel()
@@ -262,7 +262,7 @@ class VillageManagerScreen(Screen):
             if it.widget(): it.widget().deleteLater()
         routines = self.store.S.get("routines", []) if self.store.S else []
         for ri, r in enumerate(routines):
-            box = Box(radius=12)
+            box = Box(radius=15)
             v = QVBoxLayout(box)
             v.setContentsMargins(12, 8, 12, 10)
             head = QHBoxLayout()

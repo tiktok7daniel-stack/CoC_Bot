@@ -51,7 +51,7 @@ class RoiCanvas(QGraphicsView):
         self.setDragMode(QGraphicsView.NoDrag)
         self.setMouseTracking(True)
         self.setLayoutDirection(Qt.LeftToRight)   # screenshots are never mirrored
-        self.setStyleSheet(f"QGraphicsView {{ border: 1px solid {TOKENS['border']}; border-radius: 12px; }}")
+        self.setStyleSheet(f"QGraphicsView {{ border: 1px solid {TOKENS['border']}; border-radius: 16px; }}")
         self.pix = None
         self.sel = None
         self.saved_items = []

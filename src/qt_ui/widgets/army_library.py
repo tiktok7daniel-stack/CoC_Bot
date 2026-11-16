@@ -17,7 +17,7 @@ from .controls import Box, IconButton, StatusPill, label, note
 
 class ArmyCard(Box):
     def __init__(self, lib, a, in_use):
-        super().__init__(radius=14, top=TOKENS["accent"] if in_use else None)
+        super().__init__(radius=18, top=TOKENS["accent"] if in_use else None)
         self.lib, self.a = lib, a
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
@@ -80,9 +80,15 @@ class ArmyLibrary(QWidget):
         row.addWidget(self.done_btn)
         row.addStretch(1)
         v.addLayout(row)
+        lr = QHBoxLayout()
+        from .seal import AnimatedSeal
+        self.seal = AnimatedSeal(26)
+        self.seal.hide()
+        lr.addWidget(self.seal)
         self.live = label("", "h3", wrap=True)
         self.live.hide()
-        v.addWidget(self.live)
+        lr.addWidget(self.live, 1)
+        v.addLayout(lr)
         v.addWidget(note("al_how", "lightbulb"))
         self.grid_w = QWidget()
         self.grid = QGridLayout(self.grid_w)
@@ -141,9 +147,12 @@ class ArmyLibrary(QWidget):
             if not isinstance(st, dict) or not st.get("text"): return
             t = st["text"]
             col = {"failed": TOKENS["bad"], "saved": TOKENS["ok"], "watching": TOKENS["accent_hi"]}.get(t, TOKENS["info"])
-            seal = icons.img_tag("verified", 18) + "&nbsp;" if t == "saved" else ""
-            self.live.setTextFormat(Qt.RichText)
-            self.live.setText(seal + tr("al_st_" + t).format(taps=st.get("taps", 0), words=st.get("words", 0), name=st.get("name", "")))
+            if t == "saved" and getattr(self, "_shown", "") != "saved":
+                self.seal.show()
+                self.seal.play()
+            elif t != "saved":
+                self.seal.hide()
+            self.live.setText(tr("al_st_" + t).format(taps=st.get("taps", 0), words=st.get("words", 0), name=st.get("name", "")))
             self.live.setStyleSheet(f"color: {col};")
             self.live.show()
             watching = t == "watching"

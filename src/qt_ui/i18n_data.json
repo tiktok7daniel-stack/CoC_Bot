@@ -842,7 +842,11 @@
 "ln_syncing": "بيبعت ويستلم…",
 "ln_synced": "اتبعت {up} صورة — البوت يعرف {rules} قاعدة",
 "ln_sync_fail": "فشل:",
-"ln_err_http_403": "GitHub رفض الطلب — التوكن مالوش صلاحية على الريبو ده"
+"ln_err_http_403": "GitHub رفض الطلب — التوكن مالوش صلاحية على الريبو ده",
+"pf_change": "غيّر الصورة",
+"pf_remove": "شيل الصورة",
+"pf_change_tip": "دوس علشان تختار صورة للحساب",
+"pf_name_ph": "اسم الحساب"
 },
 "en": {
 "gold": "Gold",
@@ -1687,7 +1691,11 @@
 "ln_syncing": "Sending and receiving…",
 "ln_synced": "Sent {up} pictures — the bot knows {rules} rules",
 "ln_sync_fail": "Failed:",
-"ln_err_http_403": "GitHub refused — the token has no access to this repo"
+"ln_err_http_403": "GitHub refused — the token has no access to this repo",
+"pf_change": "Change picture",
+"pf_remove": "Remove picture",
+"pf_change_tip": "Click to choose a picture for this account",
+"pf_name_ph": "Account name"
 },
 "unit_ar": {
 "healing": "العلاج",

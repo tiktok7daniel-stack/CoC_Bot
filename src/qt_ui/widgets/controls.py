@@ -106,7 +106,7 @@ class GlassCard(QFrame):
         p.setRenderHint(QPainter.Antialiasing)
         r = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         path = QPainterPath()
-        path.addRoundedRect(r, 14, 14)
+        path.addRoundedRect(r, 20, 20)
         # card: solid dark surface, a faint top light, a hairline border; gold edge + glow when hovered
         p.fillPath(path, QColor(14, 14, 19, 236))
         sheen = QLinearGradient(r.topLeft(), r.bottomLeft())
@@ -494,7 +494,10 @@ class Banner(QFrame):
     def __init__(self, parent):
         super().__init__(parent)
         h = QHBoxLayout(self)
-        h.setContentsMargins(18, 12, 12, 12)
+        h.setContentsMargins(14, 8, 12, 8)
+        from .seal import AnimatedSeal
+        self.seal = AnimatedSeal(28)
+        h.addWidget(self.seal)
         self.ic = QLabel()
         h.addWidget(self.ic)
         self.text = QLabel()
@@ -511,6 +514,9 @@ class Banner(QFrame):
         self.setStyleSheet(f"Banner {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 {c1}, stop:1 {c2}); border-radius: 14px; }}"
                            " QPushButton { background: rgba(255,255,255,0.18); border: 0; color: white; }")
         self.ic.setPixmap(icons.pixmap(icon_name, 22, "#FFFFFF"))
+        done = kind == "ok"
+        self.seal.setVisible(done)
+        self.ic.setVisible(not done)
         self.text.setText(text)
         self.adjustSize()
         par = self.parentWidget()
@@ -518,6 +524,7 @@ class Banner(QFrame):
         self.move((par.width() - self.width()) // 2, 96)
         self.raise_()
         self.show()
+        if done: self.seal.play()
 
 
 # ====================================================================== store bindings
@@ -618,7 +625,7 @@ def time_edit():
 class Box(QFrame):
     """Rounded panel painted directly (style sheets on a QFrame would also style the QLabels inside it)."""
 
-    def __init__(self, bg=None, border=None, radius=12, top=None, parent=None):
+    def __init__(self, bg=None, border=None, radius=16, top=None, parent=None):
         super().__init__(parent)
         self.bg = QColor(bg or TOKENS["glass2"])
         self.border = border or TOKENS["border"]

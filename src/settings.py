@@ -173,6 +173,7 @@ def default_app_settings():
         "show_hud": False,           # floating mini HUD orb (Clash Farmer)
         "desktop_notify": True,      # Windows notifications when upgrades / research finish
         "intro": True,               # 3D animated intro at startup
+        "profiles": {},              # account -> {"name": display name} (pictures: ~/.CoC_Bot/avatars)
         "learn_repo": "",            # "owner/name" of the (private) GitHub repo Claude learns from
         "learn_auto": True,          # send unknown screens / fetch what Claude taught automatically
         "ui": "qt",                  # "qt" = v4 desktop window, "web" = classic window

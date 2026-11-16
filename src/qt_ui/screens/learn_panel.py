@@ -21,7 +21,7 @@ STATE_PILL = {"local": ("info", "ln_st_local"), "sent": ("warn", "ln_st_sent"), 
 
 class ShotRow(Box):
     def __init__(self, panel, it):
-        super().__init__(radius=12)
+        super().__init__(radius=15)
         h = QHBoxLayout(self)
         h.setContentsMargins(10, 8, 10, 8)
         h.setSpacing(12)
@@ -43,10 +43,8 @@ class ShotRow(Box):
         if it.get("note"):
             nr = QHBoxLayout()
             nr.setSpacing(6)
-            seal = QLabel()
-            seal.setPixmap(icons.pixmap("verified_gold", 16))
-            seal.setAlignment(Qt.AlignTop)
-            nr.addWidget(seal)
+            from ..widgets.seal import AnimatedSeal
+            nr.addWidget(AnimatedSeal(18, gold=True, autoplay=True), 0, Qt.AlignTop)
             n = label(it["note"], wrap=True)
             n.setStyleSheet("color: #FFD36E;")
             nr.addWidget(n, 1)
@@ -73,7 +71,7 @@ class LearnPanel(QWidget):
         steps.setSpacing(10)
         self.step_vals = {}
         for i, (ic, key) in enumerate((("camera", "ln_step1"), ("upload", "ln_step2"), ("verified_gold", "ln_step3"), ("verified", "ln_step4"))):
-            b = Box(radius=12)
+            b = Box(radius=15)
             bl = QVBoxLayout(b)
             bl.setContentsMargins(12, 10, 12, 10)
             bl.setSpacing(4)

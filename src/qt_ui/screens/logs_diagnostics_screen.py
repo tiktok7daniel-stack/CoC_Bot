@@ -21,7 +21,7 @@ from .base import Screen
 
 class CheckRow(Box):
     def __init__(self, item):
-        super().__init__(radius=12)
+        super().__init__(radius=15)
         h = QHBoxLayout(self)
         h.setContentsMargins(14, 10, 14, 10)
         h.setSpacing(12)
@@ -60,7 +60,7 @@ class CheckRow(Box):
 
 class ErrorRow(Box):
     def __init__(self, screen, e):
-        super().__init__(radius=12)
+        super().__init__(radius=15)
         v = QHBoxLayout(self)
         v.setContentsMargins(12, 10, 12, 10)
         v.setSpacing(12)

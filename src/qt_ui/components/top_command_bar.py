@@ -43,6 +43,7 @@ class TopCommandBar(QFrame):
 
     def __init__(self, window):
         super().__init__()
+        self.window_ref = window
         self.window = window
         self._drag = None
         v = QVBoxLayout(self)
@@ -59,28 +60,29 @@ class TopCommandBar(QFrame):
         self.search.setCursor(Qt.PointingHandCursor)
         self.search.setIcon(icons.icon("search", TOKENS["muted"], 16))
         self.search.setMinimumWidth(300)
-        self.search.setStyleSheet(f"QPushButton {{ text-align: right; color: {TOKENS['muted']}; border-radius: 11px; padding: 8px 14px; }}")
+        self.search.setStyleSheet(f"QPushButton {{ text-align: right; color: {TOKENS['muted']}; border-radius: 15px; padding: 8px 14px; }}")
         retext(self.search, "search_ph")
         self.search.clicked.connect(self.search_requested.emit)
         r1.addWidget(self.search)
         acc = QFrame()
-        acc.setStyleSheet(f"QFrame#Acc {{ background: {TOKENS['glass2']}; border: 1px solid {TOKENS['border']}; border-radius: 12px; }}")
+        acc.setStyleSheet(f"QFrame#Acc {{ background: {TOKENS['glass2']}; border: 1px solid {TOKENS['border']}; border-radius: 16px; }}")
         acc.setObjectName("Acc")
         ah = QHBoxLayout(acc)
         ah.setContentsMargins(8, 4, 12, 4)
         ah.setSpacing(10)
-        self.avatar = QLabel("M")
-        self.avatar.setFixedSize(38, 38)
-        self.avatar.setAlignment(Qt.AlignCenter)
-        self.avatar.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #D9952A, stop:1 #F5B740);"
-                                  " border-radius: 10px; font-weight: 800; font-size: 13pt; color: white;")
+        from ..widgets.avatar import Avatar, profiles
+        self.avatar = Avatar("", 40)
+        self.avatar.setCursor(Qt.PointingHandCursor)
+        self.avatar.setToolTip(tr("pf_change_tip"))
+        self.avatar.mousePressEvent = lambda e: window.show_screen("acc")
         ah.addWidget(self.avatar)
+        profiles.changed.connect(lambda _a: self.set_accounts(self._accs, self._cur) if hasattr(self, "_accs") else None)
         box = QVBoxLayout()
         box.setSpacing(0)
         self.accounts = QComboBox()
         self.accounts.setMinimumWidth(110)
         self.accounts.setStyleSheet("QComboBox { background: transparent; border: 0; font-weight: 800; font-size: 11pt; padding: 0; min-height: 18px; }")
-        self.accounts.activated.connect(lambda i: self.account_selected.emit(self.accounts.itemText(i)))
+        self.accounts.activated.connect(lambda i: self.account_selected.emit(self.accounts.itemData(i) or self.accounts.itemText(i)))
         box.addWidget(self.accounts)
         self.uptime = QLabel("--:--:--")
         self.uptime.setStyleSheet(f"color: {TOKENS['muted']}; font-family: 'JetBrains Mono'; font-size: 8.5pt;")
@@ -171,13 +173,15 @@ class TopCommandBar(QFrame):
 
     # ---------------------------------------------------------------- state
     def set_accounts(self, accounts, current):
+        from ..widgets.avatar import display_name
+        self._accs, self._cur = list(accounts), current
         self.accounts.blockSignals(True)
         self.accounts.clear()
-        self.accounts.addItems(accounts)
-        i = self.accounts.findText(current)
+        for a in accounts: self.accounts.addItem(display_name(self.window_ref.store, a), a)
+        i = self.accounts.findData(current)
         if i >= 0: self.accounts.setCurrentIndex(i)
         self.accounts.blockSignals(False)
-        self.avatar.setText((current or "?")[:1].upper())
+        self.avatar.set_account(current or "")
 
     def set_state(self, acc_state, now):
         k = status_key(acc_state)
@@ -295,7 +299,7 @@ class StatusBar(QFrame):
         self.ver = QLabel("Clash Farmer")
         self.ver.setStyleSheet(f"color: {TOKENS['muted']}; font-family: 'JetBrains Mono'; font-size: 8.5pt;")
         h.addWidget(self.ver)
-        self.setStyleSheet(f"StatusBar {{ background: {TOKENS['glass_solid']}; border: 1px solid {TOKENS['border']}; border-radius: 10px; }}")
+        self.setStyleSheet(f"StatusBar {{ background: {TOKENS['glass_solid']}; border: 1px solid {TOKENS['border']}; border-radius: 16px; }}")
 
     def _sep(self):
         s = QLabel("|")

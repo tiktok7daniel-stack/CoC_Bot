@@ -89,7 +89,7 @@ class ProgressBar(QWidget):
 
 class TimerRow(Box):
     def __init__(self, t):
-        super().__init__(radius=12)
+        super().__init__(radius=15)
         self.t = t
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 9, 12, 10)
@@ -97,6 +97,11 @@ class TimerRow(Box):
         h = QHBoxLayout()
         self.ic = QLabel()
         h.addWidget(self.ic)
+        from ..widgets.seal import AnimatedSeal
+        self.seal = AnimatedSeal(22)
+        self.seal.hide()
+        h.addWidget(self.seal)
+        self._was_done = None
         name = label(t.get("name", "?"), "h3")
         h.addWidget(name, 1)
         self.left = label("", "num")
@@ -113,8 +118,13 @@ class TimerRow(Box):
         left = ends - now
         done = left <= 0
         kind = self.t.get("kind", "builder")
-        self.ic.setPixmap(icons.pixmap("verified", 20) if done else
-                          icons.pixmap("flask" if kind == "lab" else "builder_hammer", 18, "#F5B740"))
+        if done != self._was_done:
+            self.ic.setVisible(not done)
+            self.seal.setVisible(done)
+            if not done: self.ic.setPixmap(icons.pixmap("flask" if kind == "lab" else "builder_hammer", 18, "#F5B740"))
+            elif self._was_done is False: self.seal.play()      # it just finished while you watch
+            else: self.seal.finish()
+            self._was_done = done
         self.left.setText(tr("dk_done") if done else fmt_left(left))
         self.left.setStyleSheet(f"color: {TOKENS['ok'] if done else '#FFD36E'}; font-weight: 700;")
         self.bar.set(1 - left / total if total > 0 else 0.0, done)
@@ -123,7 +133,7 @@ class TimerRow(Box):
 
 class ItemCard(Box):
     def __init__(self, screen, item, pinned):
-        super().__init__(radius=14, top="#F5B740" if pinned else None)
+        super().__init__(radius=18, top="#F5B740" if pinned else None)
         self.screen, self.item = screen, item
         v = QVBoxLayout(self)
         v.setContentsMargins(14, 12, 14, 12)
@@ -237,7 +247,7 @@ class UpgradeDeckScreen(Screen):
         QTimer.singleShot(400, self.refresh)
 
     def _kpi(self, row, icon_name, key):
-        b = Box(radius=12)
+        b = Box(radius=15)
         h = QHBoxLayout(b)
         h.setContentsMargins(12, 8, 12, 8)
         ic = QLabel()

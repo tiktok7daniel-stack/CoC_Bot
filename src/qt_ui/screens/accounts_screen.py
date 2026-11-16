@@ -20,6 +20,9 @@ class AccountsScreen(Screen):
 
     def __init__(self, ctx):
         super().__init__(ctx)
+        from PySide6.QtCore import QTimer
+        from ..widgets.avatar import profiles
+        profiles.changed.connect(lambda _a: QTimer.singleShot(0, self.render))
         sa, v = page()
         self.root.addWidget(sa)
         card = GlassCard("acc_title", "users", "acc_sub")
@@ -91,23 +94,44 @@ class AccountsScreen(Screen):
         for acc in self.store.APP.get("accounts", []):
             a = next((x for x in st.get("accounts", []) if x.get("id") == acc), {})
             k = status_key(a)
-            row = Box(border=TOKENS["purple"] if acc == self.store.account else TOKENS["border"], radius=14)
+            row = Box(border=TOKENS["purple"] if acc == self.store.account else TOKENS["border"], radius=18)
             h = QHBoxLayout(row)
             h.setContentsMargins(14, 10, 14, 10)
             h.setSpacing(12)
-            av = QLabel(acc[:1].upper())
-            av.setFixedSize(44, 44)
-            av.setAlignment(Qt.AlignCenter)
-            av.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #D9952A, stop:1 #F5B740); border-radius: 11px;"
-                             " font-weight: 800; font-size: 14pt; color: white;")
+            from ..widgets.avatar import Avatar, choose_picture, display_name, remove_picture, set_display_name, picture
+            av = Avatar(acc, 58)
+            av.setCursor(Qt.PointingHandCursor)
+            av.setToolTip(tr("pf_change_tip"))
+            av.mousePressEvent = lambda e, x=acc: choose_picture(self, x)
             h.addWidget(av)
             box = QVBoxLayout()
-            box.setSpacing(1)
-            box.addWidget(label(acc, "h2"))
+            box.setSpacing(3)
+            nm = QLineEdit(display_name(self.store, acc))
+            nm.setPlaceholderText(tr("pf_name_ph"))
+            nm.setMaximumWidth(240)
+            nm.setMinimumWidth(160)
+            nm.setAlignment(Qt.AlignLeading | Qt.AlignVCenter)
+            nm.setStyleSheet("QLineEdit { font-size: 12.5pt; font-weight: 800; background: transparent; border: 1px solid transparent; padding: 2px 6px; }"
+                             " QLineEdit:hover { border-color: rgba(255,255,255,0.12); } QLineEdit:focus { border-color: #F5B740; background: #15151C; }")
+            nm.editingFinished.connect(lambda x=acc, w=nm: set_display_name(self.store, x, w.text() or x))
+            box.addWidget(nm)
+            ids = label(f"ID: {acc}", "dim")
+            box.addWidget(ids)
+            pics = QHBoxLayout()
+            pics.setSpacing(4)
+            cp = IconButton("image", "pf_change", "ghost", size=13)
+            cp.clicked.connect(lambda _=False, x=acc: choose_picture(self, x))
+            pics.addWidget(cp)
+            if picture(acc) is not None:
+                rp = IconButton("x", None, "ghost", icon_color=TOKENS["dim"], tip_key="pf_remove", size=12)
+                rp.clicked.connect(lambda _=False, x=acc: remove_picture(x))
+                pics.addWidget(rp)
+            pics.addStretch(1)
+            box.addLayout(pics)
             run = f"{tr('acc_runtime')} {fmt_dur(now - a['started_at'])}" if a.get("running") and a.get("started_at") else tr("not_running")
             box.addWidget(label(run, "dim"))
             h.addLayout(box, 1)
-            h.addWidget(StatusPill(k))
+            h.addWidget(StatusPill(k), 0, Qt.AlignVCenter)
             if a.get("running"):
                 b = IconButton("stop", "stop", kind="stop", icon_color="#FCA5A5", size=14)
                 b.clicked.connect(lambda _=False, x=acc: self.ctx.window.account_action(x, "stop"))

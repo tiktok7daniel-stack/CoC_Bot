@@ -106,7 +106,7 @@ class StatisticsScreen(Screen):
         kp.setSpacing(10)
         self.kpis = {}
         for k in ("kpi_attacks", "kpi_searches", "kpi_skipped", "kpi_upgrades", "kpi_walls", "kpi_cycles", "kpi_avg"):
-            b = Box(bg="#16111A", radius=12)
+            b = Box(bg="#16111A", radius=15)
             bl = QVBoxLayout(b)
             bl.setContentsMargins(10, 8, 10, 8)
             bl.setSpacing(0)

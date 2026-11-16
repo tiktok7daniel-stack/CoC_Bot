@@ -141,7 +141,7 @@ class LevelBox(QFrame):
         comp.activated.connect(lambda _t: self._add_typed())
         v.addWidget(self.input)
         self._hl = False
-        self.setStyleSheet(f"LevelBox {{ background: {TOKENS['glass2']}; border: 1px solid {TOKENS['border']}; border-radius: 12px; }}")
+        self.setStyleSheet(f"LevelBox {{ background: {TOKENS['glass2']}; border: 1px solid {TOKENS['border']}; border-radius: 16px; }}")
 
     def _add_tag(self, name):
         t = Tag(name)
@@ -168,13 +168,13 @@ class LevelBox(QFrame):
         if e.mimeData().hasFormat(MIME):
             e.acceptProposedAction()
             self._hl = True
-            self.setStyleSheet(f"LevelBox {{ background: rgba(245, 183, 64,0.12); border: 1px dashed {TOKENS['purple']}; border-radius: 12px; }}")
+            self.setStyleSheet(f"LevelBox {{ background: rgba(245, 183, 64,0.12); border: 1px dashed {TOKENS['purple']}; border-radius: 16px; }}")
 
     def dragLeaveEvent(self, e):
         self._unhl()
 
     def _unhl(self):
-        self.setStyleSheet(f"LevelBox {{ background: {TOKENS['glass2']}; border: 1px solid {TOKENS['border']}; border-radius: 12px; }}")
+        self.setStyleSheet(f"LevelBox {{ background: {TOKENS['glass2']}; border: 1px solid {TOKENS['border']}; border-radius: 16px; }}")
 
     def dragMoveEvent(self, e):
         if e.mimeData().hasFormat(MIME): e.acceptProposedAction()

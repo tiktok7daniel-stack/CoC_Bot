@@ -5,8 +5,8 @@ Interaction polish for every button in the app, installed once on the QApplicati
 Nothing to wire per widget: new buttons get it automatically.
 """
 from PySide6.QtCore import QEasingCurve, QEvent, QObject, QPointF, QVariantAnimation, Qt
-from PySide6.QtGui import QColor, QPainter, QRadialGradient
-from PySide6.QtWidgets import QAbstractButton, QGraphicsDropShadowEffect, QWidget
+from PySide6.QtGui import QColor, QPainter, QPen, QRadialGradient
+from PySide6.QtWidgets import QAbstractButton, QGraphicsDropShadowEffect, QMainWindow, QWidget
 
 GLOW = {"primary": QColor(245, 183, 64), "go": QColor(61, 214, 140), "stop": QColor(240, 85, 90), "warn": QColor(245, 183, 64)}
 
@@ -53,9 +53,63 @@ class Ripple(QWidget):
         p.end()
 
 
+class ClickPulse(QWidget):
+    """A light gold ring that opens where you clicked (anywhere in the window) and fades in 0.4 s."""
+    SIZE = 64
+
+    def __init__(self, host, pos):
+        super().__init__(host)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.setAttribute(Qt.WA_NoSystemBackground)
+        self.setGeometry(int(pos.x() - self.SIZE / 2), int(pos.y() - self.SIZE / 2), self.SIZE, self.SIZE)
+        self.k = 0.0
+        self.anim = QVariantAnimation(self)
+        self.anim.setDuration(420)
+        self.anim.setStartValue(0.0)
+        self.anim.setEndValue(1.0)
+        self.anim.setEasingCurve(QEasingCurve.OutCubic)
+        self.anim.valueChanged.connect(self._step)
+        self.anim.finished.connect(self.deleteLater)
+        self.show()
+        self.raise_()
+        self.anim.start()
+
+    def _step(self, v):
+        self.k = v
+        self.update()
+
+    def paintEvent(self, e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        c = QPointF(self.SIZE / 2, self.SIZE / 2)
+        r = 5 + 24 * self.k
+        p.setPen(QPen(QColor(245, 183, 64, int(170 * (1 - self.k))), 1.6))
+        p.setBrush(QColor(245, 183, 64, int(40 * (1 - self.k))))
+        p.drawEllipse(c, r, r)
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(255, 236, 190, int(200 * (1 - self.k) ** 2)))
+        p.drawEllipse(c, 3.2 * (1 - self.k) + 0.5, 3.2 * (1 - self.k) + 0.5)
+        p.end()
+
+
 class FX(QObject):
+    _last_press = None
+
+    def _pulse(self, obj, ev):
+        """Ring on the window's central area at the click (one per click, whatever widget got it)."""
+        stamp = (ev.timestamp(), int(ev.globalPosition().x()), int(ev.globalPosition().y()))
+        if stamp == self._last_press: return
+        self._last_press = stamp
+        win = obj.window() if isinstance(obj, QWidget) else None
+        if not isinstance(win, QMainWindow) or win.centralWidget() is None: return
+        host = win.centralWidget()
+        ClickPulse(host, host.mapFromGlobal(ev.globalPosition().toPoint()))
+
     def eventFilter(self, obj, ev):
         t = ev.type()
+        if t == QEvent.MouseButtonPress and ev.button() == Qt.LeftButton and isinstance(obj, QWidget) and not isinstance(obj, (Ripple, ClickPulse)):
+            try: self._pulse(obj, ev)
+            except Exception: pass
         if t not in (QEvent.MouseButtonPress, QEvent.Enter, QEvent.Leave) or not isinstance(obj, QAbstractButton):
             return False
         if not obj.isEnabled(): return False

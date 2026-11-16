@@ -99,7 +99,7 @@ class ResourceStat(QFrame):
         self.sub = label("", "dim")
         box.addWidget(self.sub)
         h.addLayout(box, 1)
-        self.setStyleSheet(f"ResourceStat {{ background: {TOKENS['glass2']}; border: 1px solid {TOKENS['border']}; border-radius: 12px; }}")
+        self.setStyleSheet(f"ResourceStat {{ background: {TOKENS['glass2']}; border: 1px solid {TOKENS['border']}; border-radius: 16px; }}")
 
 
 class DashboardScreen(Screen):
@@ -263,6 +263,8 @@ class DashboardScreen(Screen):
         self.store.loaded.connect(self.render_recordings)
         self.store.on_change(self.render_recordings)
         self.recordings = []
+        from ..widgets.avatar import profiles
+        profiles.changed.connect(lambda _a: self.render_accounts())
         on_lang(lambda: (self.render_accounts(), self.render_recordings()))
         self.load_recordings()
 
@@ -424,14 +426,11 @@ class DashboardScreen(Screen):
             h = QHBoxLayout(card)
             h.setContentsMargins(10, 8, 10, 8)
             h.setSpacing(10)
-            av = QLabel(acc[:1].upper())
-            av.setFixedSize(36, 36)
-            av.setAlignment(Qt.AlignCenter)
-            av.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #D9952A, stop:1 #F5B740); border-radius: 9px; font-weight: 800; color: white;")
-            h.addWidget(av)
+            from ..widgets.avatar import Avatar, display_name
+            h.addWidget(Avatar(acc, 42))
             box = QVBoxLayout()
             box.setSpacing(2)
-            box.addWidget(label(acc, "h3"))
+            box.addWidget(label(display_name(self.store, acc), "h3"))
             box.addWidget(StatusPill(k))
             h.addLayout(box)
             if a.get("running"):

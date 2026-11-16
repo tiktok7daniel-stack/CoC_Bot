@@ -34,13 +34,25 @@ from .widgets.controls import Banner, Toast
 EDGE = 7
 
 
+def round_corners_windows(win):
+    """Windows 11: ask the desktop compositor for real rounded corners (smooth edges, soft shadow)."""
+    import sys
+    if sys.platform != "win32": return
+    try:
+        import ctypes
+        pref = ctypes.c_int(2)                         # DWMWCP_ROUND
+        ctypes.windll.dwmapi.DwmSetWindowAttribute(int(win.winId()), 33, ctypes.byref(pref), ctypes.sizeof(pref))
+    except Exception:
+        pass
+
+
 class Canvas(QWidget):
     def paintEvent(self, e):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         r = QRectF(self.rect()).adjusted(1, 1, -1, -1)
         path = QPainterPath()
-        radius = 0 if self.window().isMaximized() else 16
+        radius = 0 if self.window().isMaximized() else 26
         path.addRoundedRect(r, radius, radius)
         p.fillPath(path, QColor(TOKENS["void"]))
         rtl = self.layoutDirection() == Qt.RightToLeft
@@ -60,7 +72,7 @@ class ContentFrame(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         r = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         path = QPainterPath()
-        path.addRoundedRect(r, 16, 16)
+        path.addRoundedRect(r, 22, 22)
         p.fillPath(path, QColor(10, 10, 14, 230))
         p.setPen(QPen(QColor(255, 255, 255, 14), 1))
         p.drawPath(path)
@@ -336,6 +348,10 @@ class MainWindow(QMainWindow):
         elif edges in cursors: self.setCursor(cursors[edges])
         else: self.unsetCursor()
         super().mouseMoveEvent(e)
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        round_corners_windows(self)
 
     def closeEvent(self, e):
         if self.store.dirty: self.store.save_blocking()
