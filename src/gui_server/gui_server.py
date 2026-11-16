@@ -441,6 +441,66 @@ def api_army_status(id):
     if not valid_id(id): abort(404)
     return jsonify(army_learn.get_status(id) or {})
 
+# ---------------------------------------------------------------- capture mode (the user plays, the bot photographs)
+
+@app.route("/api/capture/<id>/start", methods=["POST"])
+def api_capture_start(id):
+    import capture_session as cs
+    if not valid_id(id): abort(404)
+    cs.request(id)
+    cs.set_status(id, "waiting")
+    inst = instances.get(id)
+    if inst is None:
+        instances[id] = Instance(id)
+        bot_pipe.send({"action": "start", "id": id})
+    else:
+        inst.end_time = 0
+        bot_settings.request_wake(id)
+    return jsonify({"ok": True})
+
+@app.route("/api/capture/<id>/stop", methods=["POST"])
+def api_capture_stop(id):
+    import capture_session as cs
+    if not valid_id(id): abort(404)
+    cs.request_stop(id)
+    return jsonify({"ok": True})
+
+@app.route("/api/capture/<id>/status", methods=["GET"])
+def api_capture_status(id):
+    import capture_session as cs
+    if not valid_id(id): abort(404)
+    st = cs.get_status(id) or {}
+    session = st.get("session") or cs.latest(id)
+    data = cs.load_session(id, session) if session else None
+    return jsonify({"status": st, "session": session, "data": data, "sessions": cs.sessions(id)[:10]})
+
+@app.route("/api/capture/<id>/img/<session>/<name>", methods=["GET"])
+def api_capture_img(id, session, name):
+    from flask import send_from_directory
+    import capture_session as cs
+    if not valid_id(id) or any(c in name + session for c in "/\\") or ".." in name + session: abort(404)
+    return send_from_directory(cs.session_dir(id, session), name)
+
+@app.route("/api/capture/<id>/delete", methods=["POST"])
+def api_capture_delete(id):
+    import capture_session as cs
+    if not valid_id(id): abort(404)
+    d = request.json or {}
+    if d.get("file"): cs.delete_shot(id, str(d.get("session", "")), str(d["file"]))
+    else: cs.delete_session(id, str(d.get("session", "")))
+    return jsonify({"ok": True})
+
+@app.route("/api/capture/<id>/send", methods=["POST"])
+def api_capture_send(id):
+    import threading, capture_session as cs, learn_sync
+    if not valid_id(id): abort(404)
+    if not learn_sync.configured(): return jsonify({"ok": False, "error": "not_configured"})
+    session = str((request.json or {}).get("session", "")) or cs.latest(id)
+    if not session: return jsonify({"ok": False, "error": "empty"})
+    cs.set_status(id, "sending", session=session, sent=0)
+    threading.Thread(target=learn_sync.send_capture, args=(id, session), daemon=True).start()
+    return jsonify({"ok": True, "session": session})
+
 # ---------------------------------------------------------------- Claude learning inbox (GitHub)
 
 @app.route("/api/learn/<id>", methods=["GET"])

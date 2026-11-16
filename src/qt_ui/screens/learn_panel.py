@@ -65,6 +65,11 @@ class LearnPanel(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(14)
 
+        # ---------------- capture mode (you play, the bot photographs every new screen)
+        from .capture_panel import CapturePanel
+        self.capture = CapturePanel(ctx)
+        v.addWidget(self.capture)
+
         # ---------------- how it works: 4 steps with live numbers
         flow = GlassCard("ln_title", "school", "ln_sub", glow=True)
         steps = QHBoxLayout()
@@ -138,6 +143,7 @@ class LearnPanel(QWidget):
 
     # ---------------------------------------------------------------- data
     def load(self):
+        self.capture.load()
         acc = self.store.account
         if acc: self.api.get(f"/api/learn/{acc}", self.render)
 

@@ -311,3 +311,70 @@ def run_actions(rule, boxes):
         elif kind == "wait":
             _t.sleep(min(10.0, float(a.get("s", 1))))
     return did
+
+
+# ====================================================================== capture sessions (one commit for all pictures)
+def _api(method, path, body=None, timeout=60):
+    import requests
+    c = _cfg()
+    r = requests.request(method, f"https://api.github.com/repos/{c['repo']}/{path}", headers=_headers(c["token"]), json=body, timeout=timeout)
+    if r.status_code >= 300: raise RuntimeError(f"GitHub {r.status_code}: {r.text[:160]}")
+    return r.json()
+
+
+def commit_files(files, message, progress=None):
+    """files: {repo path: bytes} -> one commit on the default branch (Git Data API)."""
+    repo = _api("GET", "")
+    branch = repo.get("default_branch") or "main"
+    head = _api("GET", f"git/ref/heads/{branch}")["object"]["sha"]
+    base_tree = _api("GET", f"git/commits/{head}")["tree"]["sha"]
+    tree = []
+    for i, (path, data) in enumerate(files.items()):
+        blob = _api("POST", "git/blobs", {"content": base64.b64encode(data).decode("ascii"), "encoding": "base64"}, timeout=120)
+        tree.append({"path": path, "mode": "100644", "type": "blob", "sha": blob["sha"]})
+        if progress: progress(i + 1, len(files))
+    new_tree = _api("POST", "git/trees", {"base_tree": base_tree, "tree": tree})["sha"]
+    commit = _api("POST", "git/commits", {"message": message, "tree": new_tree, "parents": [head]})["sha"]
+    _api("PATCH", f"git/refs/heads/{branch}", {"sha": commit})
+    return commit
+
+
+def send_capture(id, session):
+    """Upload a capture session: pictures + their words + an index page, in one commit."""
+    import capture_session as cs, version
+    s = cs.load_session(id, session)
+    if not s or not s.get("shots"): return {"ok": False, "error": "empty"}
+    folder = cs.session_dir(id, session)
+    root = f"captures/{session}_{cs._safe(id)}"
+    files = {}
+    lines = [f"# التقاط {session} — {len(s['shots'])} شاشة", "",
+             "> Claude: افهم كل صورة (الشاشة بتاعة إيه، الأزرار، الجيش لو موجود) واكتب القواعد في `knowledge/` زي `LEARNING.md`، "
+             "وحط الحالة في `knowledge/status.json` بالمفتاح `captures/<session>/<NNN>`.", "",
+             "| # | الصورة | دوس على إيه قبلها | الكلام اللي اتقرا |", "|---|---|---|---|"]
+    for sh in s["shots"]:
+        p = folder / sh["file"]
+        if not p.exists(): continue
+        stem = sh["file"][:-4]
+        files[f"{root}/{sh['file']}"] = p.read_bytes()
+        meta = {"file": sh["file"], "t": sh.get("t"), "tap": sh.get("tap"), "words": sh.get("words", []), "account": id,
+                "session": session, "bot_version": version.VERSION, "kind": "capture"}
+        files[f"{root}/{stem}.json"] = json.dumps(meta, ensure_ascii=False, indent=1).encode("utf-8")
+        tap = f"({sh['tap'][0]:.2f}, {sh['tap'][1]:.2f})" if sh.get("tap") else "—"
+        words = " · ".join(str(w).replace("|", "/") for w in (sh.get("words") or [])[:10]) or "—"
+        lines.append(f"| {stem} | <img src=\"{sh['file']}\" width=\"260\"> | {tap} | {words} |")
+    files[f"{root}/README.md"] = "\n".join(lines).encode("utf-8")
+    files[f"{root}/session.json"] = json.dumps(dict(s, account=id), ensure_ascii=False, indent=1).encode("utf-8")
+
+    def prog(i, n):
+        cs.set_status(id, "sending", session=session, shots=len(s["shots"]), sent=i, total=n)
+    try:
+        sha = commit_files(files, f"capture {session}: {len(s['shots'])} screens", prog)
+    except Exception as e:
+        cs.set_status(id, "send_failed", session=session, shots=len(s["shots"]), error=str(e)[:200])
+        return {"ok": False, "error": str(e)[:200]}
+    s["sent"] = time.time()
+    s["sent_path"] = root
+    s["commit"] = sha
+    cs.save_session(id, session, s)
+    cs.set_status(id, "sent", session=session, shots=len(s["shots"]), path=root)
+    return {"ok": True, "path": root, "shots": len(s["shots"])}

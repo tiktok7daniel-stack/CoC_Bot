@@ -846,7 +846,29 @@
 "pf_change": "غيّر الصورة",
 "pf_remove": "شيل الصورة",
 "pf_change_tip": "دوس علشان تختار صورة للحساب",
-"pf_name_ph": "اسم الحساب"
+"pf_name_ph": "اسم الحساب",
+"cp_title": "وضع التصوير — علّم Claude بإيدك",
+"cp_sub": "العب إنت والبوت يتفرج ويصوّر كل شاشة جديدة لوحده (من غير تكرار). بعدها تراجع الصور وتبعتها لـ Claude",
+"cp_start": "ابدأ التصوير",
+"cp_done": "خلصت",
+"cp_shots": "صورة",
+"cp_delete_one": "امسح الصورة دي",
+"cp_discard": "امسح الكل",
+"cp_send": "ابعت {n} صورة لـ Claude",
+"cp_resend": "ابعتهم تاني",
+"cp_how": "دوس «ابدأ التصوير» ← العب عادي ودوس على كل حاجة عاوز البوت يفهمها (الجيش، المحل، النوافذ…) ← دوس «خلصت» ← راجع الصور وامسح المكرر ← «ابعت لـ Claude» ← قولّي في الشات «بعتّ التصوير». الدايرة الدهبي على كل صورة = المكان اللي دوست عليه قبلها.",
+"cp_banner": "البوت بيصوّر دلوقتي 📸 العب عادي وكل شاشة جديدة هتتصوّر — دوس «خلصت» لما تخلص",
+"cp_st_waiting": "في الانتظار… البوت هيبدأ بعد خطوته الحالية",
+"cp_st_starting": "بيفتح اللعبة…",
+"cp_st_capturing": "📸 بيصوّر — العب ودوس على الحاجات اللي عاوز Claude يفهمها",
+"cp_st_reading": "بيقرا الكلام اللي في الـ {n} صورة…",
+"cp_st_ready": "خلصت وصوّرت {n} شاشة جديدة — راجعهم تحت وامسح اللي مش عاوزه، وبعدين ابعت",
+"cp_st_sending": "بيبعت لـ GitHub… ({i}/{n})",
+"cp_st_sent": "اتبعتت {n} صورة — قولّي في الشات «بعتّ التصوير» وأنا أفهمهم وأعلّم البوت",
+"cp_st_send_failed": "الإرسال فشل:",
+"cp_st_failed": "التصوير مانجحش — جرّب تاني",
+"cp_confirm_new": "فيه صور لسه ما اتبعتتش — تبدأ تصوير جديد برضه؟ (الصور القديمة هتفضل محفوظة)",
+"cp_confirm_discard": "تمسح كل صور التصوير ده؟"
 },
 "en": {
 "gold": "Gold",
@@ -1695,7 +1717,29 @@
 "pf_change": "Change picture",
 "pf_remove": "Remove picture",
 "pf_change_tip": "Click to choose a picture for this account",
-"pf_name_ph": "Account name"
+"pf_name_ph": "Account name",
+"cp_title": "Capture mode — teach Claude yourself",
+"cp_sub": "You play, the bot watches and photographs every new screen (no repeats). Then review and send them to Claude",
+"cp_start": "Start capturing",
+"cp_done": "Done",
+"cp_shots": "pictures",
+"cp_delete_one": "Delete this picture",
+"cp_discard": "Delete all",
+"cp_send": "Send {n} pictures to Claude",
+"cp_resend": "Send again",
+"cp_how": "Start capturing → play and tap everything you want the bot to understand (army, shop, windows…) → Done → review and delete repeats → Send to Claude → tell me in the chat “I sent the capture”. The gold ring on each picture marks where you tapped before it.",
+"cp_banner": "The bot is capturing 📸 play normally, every new screen is photographed — press Done when finished",
+"cp_st_waiting": "Waiting… the bot starts after its current step",
+"cp_st_starting": "Opening the game…",
+"cp_st_capturing": "📸 Capturing — play and tap what you want Claude to learn",
+"cp_st_reading": "Reading the words on the {n} pictures…",
+"cp_st_ready": "Done: {n} new screens captured — review them below, delete what you don't want, then send",
+"cp_st_sending": "Sending to GitHub… ({i}/{n})",
+"cp_st_sent": "{n} pictures sent — tell me in the chat “I sent the capture” and I'll teach the bot",
+"cp_st_send_failed": "Sending failed:",
+"cp_st_failed": "Capture failed — try again",
+"cp_confirm_new": "Some pictures were not sent yet — start a new capture anyway? (the old ones stay saved)",
+"cp_confirm_discard": "Delete all pictures of this capture?"
 },
 "unit_ar": {
 "healing": "العلاج",
@@ -2385,6 +2429,26 @@
 [
 "^Known screen \\(taught by Claude\\): (.*)",
 "شاشة معروفة (Claude علّمها للبوت): \\g<1>"
+],
+[
+"^Capture mode: opening the game",
+"وضع التصوير: بيفتح اللعبة"
+],
+[
+"^Capture mode: play now.*",
+"📸 وضع التصوير: العب دلوقتي — كل شاشة جديدة بتتصوّر. دوس «خلصت» لما تخلص"
+],
+[
+"^Capture mode: (\\d+) screens photographed, reading them",
+"اتصوّرت \\g<1> شاشة — بيقرا الكلام اللي فيها"
+],
+[
+"^Capture finished: (\\d+) new screens ready.*",
+"خلص التصوير: \\g<1> شاشة جديدة جاهزة للمراجعة والإرسال"
+],
+[
+"^Capture mode failed",
+"وضع التصوير فشل"
 ]
 ]
 }

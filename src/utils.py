@@ -2505,7 +2505,7 @@ def set_phase(name):
 # ======================================================================
 WATCHDOG_LIMITS = {"commands": 900, "village_scan": 300, "home_attack": 600, "builder_attack": 600, "spend_full": 1500, "home_upgrades": 900,
                    "builder_upgrades": 900, "walls_farming": 900, "start_game": 300, "army_prepare": 300}
-WATCHDOG_SKIP = {"idle", "recording", "army_learning", "break", "", None}
+WATCHDOG_SKIP = {"idle", "recording", "army_learning", "capturing", "break", "", None}
 
 def start_watchdog(default_limit=420):
     import threading, time

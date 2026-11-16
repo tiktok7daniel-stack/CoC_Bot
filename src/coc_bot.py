@@ -273,6 +273,77 @@ class CoC_Bot:
         finally:
             if rec is not None: rec.stop()
 
+    def capture_screens(self):
+        """Capture mode: the user plays, the bot photographs every new screen (no taps by the bot)."""
+        import time, cv2, capture_session as cs, recorder
+        iid = _utils.INSTANCE_ID
+        set_phase("capturing")
+        session, folder = cs.new_session(iid)
+        data = {"session": session, "account": iid, "started": time.time(), "state": "capturing", "shots": []}
+        cs.save_session(iid, session, data)
+        cs.set_status(iid, "starting", session=session, shots=0)
+        logger.info("Capture mode: opening the game")
+        rec = None
+        try:
+            start_coc()
+            found = None
+            try: found = recorder.find_touch_device(lambda c: ADB_Manager.adbutils_device.shell(c))
+            except Exception: found = None
+            if found:   # the user's taps: what was pressed to reach each screen
+                rec = recorder.Recorder(ADB_Manager._adb_exe or "adb", _utils.ADB_ADDRESS, *found)
+                rec.start()
+            max_x, max_y = (found[1], found[2]) if found else (1, 1)
+            cs.set_status(iid, "capturing", session=session, shots=0)
+            logger.info("Capture mode: play now — every new screen is photographed. Press Done when finished")
+            saved, prev_h, last_tap, start = [], None, None, time.monotonic()
+            seen = 0
+            while time.monotonic() - start < cs.MAX_MINUTES * 60 and len(saved) < cs.MAX_SHOTS:
+                if cs.stop_requested(iid): break
+                frame = Frame_Handler.get_frame(grayscale=False)
+                if rec is not None:
+                    downs = [e for e in rec.events[seen:] if e["type"] == "down"]
+                    seen = len(rec.events)
+                    if downs:
+                        import army_learn
+                        x, y = army_learn.touch_to_screen(downs[-1]["fx"], downs[-1]["fy"], max_x, max_y)
+                        last_tap = [round(x, 4), round(y, 4)]
+                h = cs.dhash(frame)
+                stable = prev_h is not None and cs.distance(h, prev_h) <= cs.STABLE
+                prev_h = h
+                if stable and cs.is_new(h, saved):
+                    saved.append(h)
+                    name = f"{len(saved):03d}.jpg"
+                    small = cv2.resize(frame, (1280, int(1280 * frame.shape[0] / frame.shape[1])))
+                    cv2.imwrite(str(folder / name), cv2.cvtColor(small, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 82])
+                    data["shots"].append({"file": name, "t": time.time(), "tap": last_tap, "hash": [str(h[0]), str(h[1])]})
+                    cs.save_session(iid, session, data)
+                    cs.set_status(iid, "capturing", session=session, shots=len(saved))
+                    last_tap = None
+                time.sleep(0.35)
+            if rec is not None: rec.stop()
+            # read the words of every picture (Claude gets them with the picture)
+            cs.set_status(iid, "reading", session=session, shots=len(saved))
+            logger.info(f"Capture mode: {len(saved)} screens photographed, reading them")
+            for sh in data["shots"]:
+                try:
+                    img = cv2.cvtColor(cv2.imread(str(folder / sh["file"])), cv2.COLOR_BGR2RGB)
+                    sh["words"] = [b[0] for b in ocr_boxes(img) if b[5] > 0.3][:60]
+                except Exception:
+                    sh["words"] = []
+            data["state"] = "ready"
+            data["ended"] = time.time()
+            cs.save_session(iid, session, data)
+            cs.set_status(iid, "ready", session=session, shots=len(saved))
+            logger.info(f"Capture finished: {len(saved)} new screens ready to review and send")
+        except (KeyboardInterrupt, SystemExit): raise
+        except Exception:
+            data["state"] = "ready"
+            cs.save_session(iid, session, data)
+            cs.set_status(iid, "ready" if data["shots"] else "failed", session=session, shots=len(data["shots"]))
+            logger.exception("Capture mode failed")
+        finally:
+            if rec is not None: rec.stop()
+
     def run_army(self, name):
         """Prepare a learned army: repeat the user's steps, finding each button by its word."""
         import time, army_learn
@@ -400,6 +471,8 @@ class CoC_Bot:
                 if village.pending(_utils.INSTANCE_ID): return
                 import army_learn
                 if army_learn.pending(_utils.INSTANCE_ID): return
+                import capture_session
+                if capture_session.pending(_utils.INSTANCE_ID): return
                 import learn_sync
                 learn_sync.tick(_utils.INSTANCE_ID)    # upload unknown screens / fetch what Claude taught
             except Exception: pass
@@ -451,6 +524,12 @@ class CoC_Bot:
                 if village.pending(_utils.INSTANCE_ID):
                     update_status("now")
                     self.run_commands()
+                    continue
+
+                import capture_session
+                if capture_session.take_request(_utils.INSTANCE_ID):
+                    update_status("now")
+                    self.capture_screens()
                     continue
 
                 import army_learn
@@ -574,7 +653,8 @@ class CoC_Bot:
                         import village
                         import army_learn
                         while running() and not self.excluded("home_attacks") and attacks < 300 and not recorder.pending(_utils.INSTANCE_ID) \
-                                and not village.pending(_utils.INSTANCE_ID) and not army_learn.pending(_utils.INSTANCE_ID):
+                                and not village.pending(_utils.INSTANCE_ID) and not army_learn.pending(_utils.INSTANCE_ID) \
+                                and not __import__("capture_session").pending(_utils.INSTANCE_ID):
                             self.load_settings()
                             f_now = self.settings["attack"].get("farm", {})
                             if not (f_now.get("enabled", True) or f_now.get("max_walls")): break
