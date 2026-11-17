@@ -14,7 +14,7 @@ from ..i18n import on_lang, tr
 from ..theme import TOKENS
 from ..widgets.charts import MeterBar, NeonBarChart, RingGauge, Sparkline
 from ..widgets.controls import (Box, Chip, FlowLayout, GlassCard, IconButton, NumField, StatusPill, Toggle, bind_num,
-                                bind_toggle, form_row, label, num_row, toggle_row)
+                                bind_toggle, combo_row, form_row, label, num_row, toggle_row)
 from ..widgets.log_view import LogView
 from .base import Screen, grid, page
 
@@ -232,6 +232,9 @@ class DashboardScreen(Screen):
         # ---------- gameplay mode + live state/pause + quick tasks
         w3, g3 = grid(3)
         farm = GlassCard("farm_title", "layers", "farm_sub")
+        farm.add(toggle_row(self.store, "farm_only", "attack.farm.only", "farm_only_sub"))
+        farm.add(combo_row(self.store, "farm_when_full", "attack.farm.when_full",
+                           [("wait", "fwf_wait"), ("pause", "fwf_pause"), ("stop", "fwf_stop")], width=320))
         farm.add(toggle_row(self.store, "farm_on", "attack.farm.enabled", "farm_on_sub"))
         farm.add(toggle_row(self.store, "farm_max_walls", "attack.farm.max_walls", "farm_max_walls_sub"))
         farm.add(toggle_row(self.store, "farm_walls_first", "attack.farm.walls_first", "farm_walls_first_sub"))

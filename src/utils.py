@@ -2984,6 +2984,11 @@ def install_error_reporter():
 
     state = {"last_shot": 0.0, "busy": False}
     shot_dir = ERRORS_DIR / str(INSTANCE_ID)
+    import collections
+    tail = collections.deque(maxlen=80)             # the last log lines: sent with every error (what led to it)
+    logger.add(lambda m: tail.append(f"{m.record['time']:%H:%M:%S} {m.record['level'].name[:4]} "
+                                     f"{str(m.record['message']).splitlines()[0][:220] if m.record['message'] else ''}"),
+               level="DEBUG", catch=True)
 
     def save_screenshot(path):
         # raw device, no proxy / no logging: must never recurse into the logger
@@ -3026,7 +3031,12 @@ def install_error_reporter():
                 name = time.strftime("%Y%m%d_%H%M%S") + ".jpg"
                 entry["shot"] = name
                 threading.Thread(target=save_screenshot, args=(shot_dir / name,), daemon=True).start()
+            if level in ("ERROR", "CRITICAL"):
+                entry["log_tail"] = list(tail)[:-1]
             _stats.record(INSTANCE_ID, "error" if level in ("ERROR", "CRITICAL") else "warning", **entry)
+            if level in ("ERROR", "CRITICAL"):
+                try: __import__("learn_sync").errors_now(INSTANCE_ID)     # to Claude now, not at the next sync
+                except Exception: pass
         except Exception:
             pass
 

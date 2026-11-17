@@ -204,34 +204,8 @@ def upload_pending(id, limit=MAX_PER_ROUND):
             st["battles_sent"] = sent_b[-500:]
     except Exception:
         pass
-    # the program's errors (with the screenshot taken at that moment): Claude reads and fixes them.
-    # The same error (message + place) is sent once a day; the last 7 days on the first run.
-    try:
-        import stats
-        if settings.load_app().get("send_errors", True) is not False:
-            since = st.get("errors_sent_t") or time.time() - 7 * 86400
-            day = time.strftime("%Y%m%d")
-            seen = st.get("errors_seen", {}) if st.get("errors_day") == day else {}
-            ne = 0
-            newest = since
-            shots = Path.home() / ".CoC_Bot" / "errors" / str(id)
-            import version
-            for e in stats.read(id, since=since + 0.001):
-                if e.get("type") != "error": continue
-                newest = max(newest, e.get("t", 0))
-                sig = f"{e.get('message', '')[:80]}|{e.get('where', '')}"
-                if sig in seen: continue
-                if ne >= 10: break
-                seen[sig] = 1
-                stem = f"inbox/errors/{teach._safe(id)}_{time.strftime('%Y%m%d_%H%M%S', time.localtime(e.get('t', 0)))}_{abs(hash(sig)) % 1000:03d}"
-                _put(stem + ".json", json.dumps(dict(e, account=id, bot_version=version.VERSION), ensure_ascii=False,
-                                                indent=1).encode("utf-8"), f"error: {e.get('message', '')[:60]}")
-                shot = shots / str(e.get("shot", ""))
-                if e.get("shot") and shot.exists(): _put(stem + ".jpg", shot.read_bytes(), "error screenshot")
-                ne += 1
-            st.update(errors_sent_t=newest, errors_day=day, errors_seen=seen)
-    except Exception:
-        pass
+    try: n += upload_errors(id, st)
+    except Exception: pass
     # learned armies
     if QUEUE.exists():
         import army_learn
@@ -253,6 +227,59 @@ def upload_pending(id, limit=MAX_PER_ROUND):
     _save(STATE, st)
     if n: write_index()
     return n
+
+
+def upload_errors(id, st=None):
+    """
+    The program's errors (with the log lines before them and the screenshot taken then) -> inbox/errors/.
+    Claude reads and fixes them. The same error (message + place) is sent once a day; the last 7 days on the
+    first run. Called right after an error happens (at most once a minute) and with every sync. -> number sent.
+    """
+    import stats, settings, teach, version
+    own = st is None
+    if own: st = _load(STATE, {})
+    if settings.load_app().get("send_errors", True) is False or not configured(): return 0
+    since = st.get("errors_sent_t") or time.time() - 7 * 86400
+    day = time.strftime("%Y%m%d")
+    seen = st.get("errors_seen", {}) if st.get("errors_day") == day else {}
+    ne, newest = 0, since
+    shots = Path.home() / ".CoC_Bot" / "errors" / str(id)
+    for e in stats.read(id, since=since + 0.001):
+        if e.get("type") != "error": continue
+        newest = max(newest, e.get("t", 0))
+        sig = f"{e.get('message', '')[:80]}|{e.get('where', '')}"
+        if sig in seen: continue
+        if ne >= 10: break
+        seen[sig] = 1
+        stem = f"inbox/errors/{teach._safe(id)}_{time.strftime('%Y%m%d_%H%M%S', time.localtime(e.get('t', 0)))}_{abs(hash(sig)) % 1000:03d}"
+        _put(stem + ".json", json.dumps(dict(e, account=id, bot_version=version.VERSION), ensure_ascii=False,
+                                        indent=1).encode("utf-8"), f"error: {e.get('message', '')[:60]}")
+        shot = shots / str(e.get("shot", ""))
+        if e.get("shot") and shot.exists(): _put(stem + ".jpg", shot.read_bytes(), "error screenshot")
+        ne += 1
+    st.update(errors_sent_t=newest, errors_day=day, errors_seen=seen)
+    if own: _save(STATE, st)
+    return ne
+
+
+_ERR_NOW = {"t": 0.0, "busy": False}
+
+
+def errors_now(id):
+    """An error just happened: send it in the background (a few seconds later, so its screenshot is saved)."""
+    import threading
+    if _ERR_NOW["busy"] or time.time() - _ERR_NOW["t"] < 60: return
+    _ERR_NOW.update(t=time.time(), busy=True)
+
+    def work():
+        try:
+            time.sleep(4)
+            upload_errors(id)
+        except Exception:
+            pass
+        finally:
+            _ERR_NOW["busy"] = False
+    threading.Thread(target=work, daemon=True, name="errors-now").start()
 
 
 def _seals():

@@ -89,6 +89,8 @@ def default_settings():
                 "rest_minutes": 30,  # full and nothing to spend on: close the game and rest this long
                 "walls_first": True, # storages full: all the walls the gold / elixir can pay first, then buildings
                 "max_walls": False,  # wall-max mode: farm + walls until every wall is maxed, buildings too but 1 builder kept free
+                "only": False,       # farm only: attack and collect, nothing else (no upgrades / walls / builder base / extras)
+                "when_full": "wait", # farm only, gold + elixir full: "wait" (attack again once you spent) | "pause" | "stop"
             },
             "skip_when_full": {      # don't attack while the storages are (nearly) full
                 "enabled": False, "gold": 0, "elixir": 0,

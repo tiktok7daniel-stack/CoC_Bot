@@ -299,6 +299,12 @@ class Attacker:
                 continue
             time.sleep(0.15)
         if not started and not army_done:
+            try:                                         # what was on the screen: to Claude (picture + words)
+                import learn_sync, utils as _u
+                fr = Frame_Handler.get_frame(grayscale=False)
+                learn_sync.report_stuck(_u.INSTANCE_ID, fr, [b[0] for b in ocr_boxes(fr) if b[5] > 0.3], "open_attack")
+            except Exception:
+                pass
             logger.error("Failed to open the attack (no Find a Match / Attack! button)")
             return False
 

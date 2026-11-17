@@ -404,6 +404,12 @@
 "ca_err_limit": "طلبات كتير — جرّب بعد دقيقة",
 "ca_err_net": "مفيش اتصال بـ Supercell دلوقتي",
 "pl_mode": "نظام الهجوم",
+"farm_only": "فارم بس (هجوم وجمع فلوس)",
+"farm_only_sub": "البوت يهاجم ويجمع بس — من غير ترقيات ولا أسوار ولا القرية الليلية ولا أي حاجة تانية. لما الدهب والإكسير يتملوا يوقف الهجوم ويقولك",
+"farm_when_full": "لما المخازن تتملي",
+"fwf_wait": "يستنى — ولما تصرف الفلوس يرجع يهاجم لوحده",
+"fwf_pause": "يوقف مؤقتًا لحد ما تقوله كمّل",
+"fwf_stop": "يقفل البوت",
 "pw_brain_deep": "المخ العميق DINOv2 ({n} مثال)",
 "pl_red": "يشوف الخط الأحمر بالظبط",
 "pl_red_sub": "أول الهجمة يختار وحش ويدوس في نص القرية — اللعبة بتنوّر المنطقة الممنوعة بالأحمر والبوت يقراها (مفيش وحش بينزل)",
@@ -1480,6 +1486,12 @@
 "ca_err_limit": "Too many requests — try again in a minute",
 "ca_err_net": "Can't reach Supercell right now",
 "pl_mode": "Attack system",
+"farm_only": "Farm only (attack and collect)",
+"farm_only_sub": "Only attacks and collects — no upgrades, walls, builder base or extras. When gold and elixir are full it stops attacking and tells you",
+"farm_when_full": "When the storages are full",
+"fwf_wait": "Wait — attack again by itself once you spent the money",
+"fwf_pause": "Pause until you resume it",
+"fwf_stop": "Stop the bot",
 "pw_brain_deep": "deep brain DINOv2 ({n} examples)",
 "pl_red": "Read the exact red line",
 "pl_red_sub": "At the start it selects a troop and taps the middle of the base — the game lights the forbidden area red and the bot reads it (nothing is dropped)",
@@ -3155,6 +3167,14 @@
 [
 "^Lab: its counter isn't on the village screen — lab upgrades skipped for now",
 "🧪 المعمل: عدّاده مش ظاهر في القرية في الشكل الجديد للعبة — ترقيات المعمل متوقفة لحد ما نعلّمه"
+],
+[
+"^Farm only: storages full \\(gold ([\\d,]+), elixir ([\\d,]+)\\) — attacks stopped \\((\\w+)\\)",
+"✅ خلّصت: المخازن اتملت (دهب \\1 — إكسير \\2) — الهجوم وقف"
+],
+[
+"^Farm only: the money was spent — attacking again",
+"▶️ الفلوس اتصرفت — رجع يهاجم ويجمع"
 ],
 [
 "^PaddleOCR failed, reading with easyocr",

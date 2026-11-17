@@ -142,6 +142,50 @@ class CoC_Bot:
             elif limit <= 0 and caps.get(k) and v >= caps[k] * 0.98: full.append(k)
         return full
 
+    def farm_full(self, action="wait"):
+        """
+        Farm only: gold and elixir are full. Tell the user once, then:
+          wait  -> look every 5 minutes; once the money was spent (not full any more) -> True (attack again)
+          pause -> the bot is paused until the user resumes it (app / Telegram "كمل") -> False
+          stop  -> the bot is stopped -> False
+        """
+        import time, requests
+        res = getattr(self, "last_res", None) or {}
+        g, e = res.get("gold") or 0, res.get("elixir") or 0
+        logger.info(f"Farm only: storages full (gold {g:,}, elixir {e:,}) — attacks stopped ({action})")
+        nxt = {"wait": "هستنى لحد ما تصرف الفلوس وأرجع أهاجم لوحدي",
+               "pause": "البوت اتوقف مؤقتًا — اكتب كمل أو دوس كمّل في البرنامج لما تخلص",
+               "stop": "البوت اتقفل"}.get(action, "")
+        try: send_notification(f"✅ خلّصت: المخازن اتملت — دهب {g:,} — إكسير {e:,}\n{nxt}")
+        except Exception: pass
+        set_phase("farm_full")
+        if action in ("pause", "stop"):
+            port = _utils.TEMP_CACHE.get("gui_port")
+            try:
+                if port:
+                    if action == "pause":
+                        requests.post(f"http://127.0.0.1:{port}/api/account/{_utils.INSTANCE_ID}/pause", json={"minutes": 7 * 24 * 60}, timeout=5)
+                    else:
+                        requests.post(f"http://127.0.0.1:{port}/api/account/{_utils.INSTANCE_ID}/stop", timeout=5)
+            except Exception:
+                logger.warning("Could not pause / stop the bot by itself", exc_info=True)
+            return False
+        while running():                            # wait: the user spends the money, then the bot goes on
+            self.idle(5)
+            if not running(): return False
+            try:
+                to_home_base()
+                self.read_and_record_resources()
+            except (KeyboardInterrupt, SystemExit): raise
+            except Exception:
+                continue
+            if len(self.full_resources(self.settings)) < 2:
+                logger.info("Farm only: the money was spent — attacking again")
+                try: send_notification("▶️ الفلوس اتصرفت — رجعت أهاجم وأجمع")
+                except Exception: pass
+                return True
+        return False
+
     def spend_when_full(self, s):
         """Walls first (all of them that can be paid), then the normal upgrades. True if anything was spent."""
         # today's plan says no walls and no buildings -> don't spend, keep doing what was asked
@@ -741,6 +785,11 @@ class CoC_Bot:
                         if not up_turn: return False
                         return not (self.excluded("builder_base") and self.excluded("builder_lab"))
 
+                    # farm only: attack and collect money, nothing else (the user upgrades by hand)
+                    farm_only = bool(s["attack"].get("farm", {}).get("only"))
+                    if farm_only:
+                        home_upgrades_wanted = builder_upgrades_wanted = lambda: False
+
                     # ---- Home village
                     if running() and (home_upgrades_wanted() or not self.excluded("home_attacks")):
                         set_phase("to_home")
@@ -750,13 +799,13 @@ class CoC_Bot:
                         # free things now and then (the daily "Free!" gift): every few hours, never anything paid
                         try:
                             import daily_rewards
-                            if bot_settings.load_app().get("daily_rewards", True) is not False:
+                            if not farm_only and bot_settings.load_app().get("daily_rewards", True) is not False:
                                 set_phase("daily_rewards")
                                 daily_rewards.run()
                         except (KeyboardInterrupt, SystemExit): raise
                         except Exception: logger.debug("Daily rewards failed", exc_info=True)
 
-                    if running():
+                    if running() and not farm_only:
                         self.run_routines(s)
 
                     if running() and home_upgrades_wanted():
@@ -789,7 +838,12 @@ class CoC_Bot:
                             if not (f_now.get("enabled", True) or f_now.get("max_walls")): break
                             plan_blocks_spending = not (self.settings.get("walls", {}).get("enabled") or f_now.get("max_walls")) \
                                 and self.excluded("home_base")
-                            if self.full_resources(self.settings) and not plan_blocks_spending:
+                            if f_now.get("only"):
+                                # farm only: gold + elixir full -> stop attacking, tell the user, then wait / pause / stop
+                                if len(self.full_resources(self.settings)) >= 2:
+                                    if not self.farm_full(f_now.get("when_full", "wait")): break
+                                    continue
+                            elif self.full_resources(self.settings) and not plan_blocks_spending:
                                 # spent something: go round again (more walls to buy, or attack once not full);
                                 # rest only when nothing at all could be bought
                                 if self.spend_when_full(self.settings): continue
@@ -825,7 +879,7 @@ class CoC_Bot:
                                 self.upgrader.run_home_base(False, True, True)
 
                     # ---- Builder base
-                    if running() and (builder_upgrades_wanted() or not self.excluded("builder_attacks")):
+                    if running() and not farm_only and (builder_upgrades_wanted() or not self.excluded("builder_attacks")):
                         set_phase("to_builder")
                         to_builder_base(ref_cache=True)
 
