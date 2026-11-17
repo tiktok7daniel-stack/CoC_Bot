@@ -192,6 +192,10 @@ def translate_log(msg):
         if rep == "fn:troopbar":
             names = [n.strip() for n in m.group(1).split(",")]
             return "شريط الجيش: " + "، ".join("؟" if n == "?" else "بطل" if n == "hero" else unit_name(n) for n in names)
+        if rep == "fn:missed":
+            kinds = m.group(2).strip(" ()")
+            for en, ar in (("troop", "وحش"), ("hero", "بطل"), ("clan", "كلان كاسل"), ("None", "مش معروف")): kinds = kinds.replace(en, ar)
+            return f"⚠️ {m.group(1)} كارت ما نزلش في أي مكان" + (f" ({kinds})" if kinds else "")
         if rep == "fn:btiming":
             t = m.group(1)
             for en, ar in (("waiting for the base", "انتظار القرية"), ("clouds", "السحاب"), ("zoom", "الزووم"),

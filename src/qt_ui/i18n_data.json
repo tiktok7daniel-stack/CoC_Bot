@@ -3081,8 +3081,8 @@
 "🦸 بعد التسجيل نزّل \\1 كارت فاضل (منهم \\2 بطل)"
 ],
 [
-"^Could not drop (\\d+) card\\(s\\) on any spot",
-"⚠️ \\1 كارت ما نزلش في أي مكان"
+"^Could not drop (\\d+) card\\(s\\) on any spot(.*)",
+"fn:missed"
 ],
 [
 "^Upgrading walls until the gold / elixir runs out",

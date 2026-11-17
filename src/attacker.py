@@ -482,11 +482,10 @@ class Attacker:
         dists_discrete = dist_categories[closest_idx]
         dists_discrete[closest_dist > tol] = np.nan
         
-        # Remove partially visible card edges
-        remove_left = 0
-        remove_right = len(dists_discrete) - 1
-        while dists_discrete[remove_left] != dist_categories[2]: remove_left += 1
-        while dists_discrete[remove_right] != dist_categories[2]: remove_right -= 1
+        # Remove partially visible card edges (no whole card at all, e.g. the bar after the army is out: no cards)
+        whole = np.where(dists_discrete == dist_categories[2])[0]
+        if len(whole) == 0: raise ValueError("No troop cards found")
+        remove_left, remove_right = int(whole[0]), int(whole[-1])
         peaks = peaks[remove_left:remove_right+2]
         peaks_norm = peaks_norm[remove_left:remove_right+2]
         dists_discrete = dists_discrete[remove_left:remove_right+1]
@@ -531,10 +530,10 @@ class Attacker:
                 number_locs = Frame_Handler.batch_locate([render_text(str(n), "SupercellMagic", 25) for n in range(0, 12)], frame=count_section, grayscale=True, thresh=0.8, ref="cc")
                 
                 count = 1
-                for i in reversed(range(0, 12)):
-                    loc = number_locs[i]
+                for n in reversed(range(0, 12)):
+                    loc = number_locs[n]
                     if loc[0] is not None and loc[1] is not None:
-                        count = i
+                        count = n
                         break
                 
                 # Clan troops either have a clan badge rather than a smooth background
@@ -890,7 +889,11 @@ class Attacker:
             spots = base.outside_spots(spots)              # spots outside the base first (the model saw its outline)
         time.sleep(0.2)
         frame = Frame_Handler.get_frame_section(0.0, 0.82, 1.0, 1.0, grayscale=False)
-        centers, _b, types, _c, _g = self.detect_troop_positions(frame, return_boundaries=True, return_types=True, return_counts=True)
+        try:
+            centers, _b, types, _c, _g = self.detect_troop_positions(frame, return_boundaries=True, return_types=True, return_counts=True)
+        except ValueError:                           # no card left on the bar: the whole army is out
+            self.army_out = True
+            return 0
         done, missed = [], []
         for x, t in zip(centers, types):
             if t == "spell" or self.card_gray(x): continue
@@ -919,7 +922,7 @@ class Attacker:
                 missed.append(t)
         heroes = done.count("hero")
         if done: logger.info(f"Recording: also deployed {len(done)} card(s) that were still left ({heroes} hero(es))")
-        if missed: logger.info(f"Could not drop {len(missed)} card(s) on any spot")
+        if missed: logger.info(f"Could not drop {len(missed)} card(s) on any spot ({', '.join(missed)})")
         if self.deployed_heroes:
             self.heroes_done_at = time.monotonic()
             self.activate_hero_abilities()
