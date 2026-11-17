@@ -1,0 +1,24 @@
+{
+ "names": [
+  "ad",
+  "airsweeper",
+  "bombtower",
+  "canon",
+  "clancastle",
+  "eagle",
+  "inferno",
+  "kingpad",
+  "mortar",
+  "queenpad",
+  "rcpad",
+  "scattershot",
+  "th13",
+  "wardenpad",
+  "wizztower",
+  "xbow"
+ ],
+ "imgsz": 640,
+ "map50": 0.921,
+ "map50_95": 0.704,
+ "trained_on": "Find This Base CC BY 4.0, 88 pictures, 80 rounds"
+}

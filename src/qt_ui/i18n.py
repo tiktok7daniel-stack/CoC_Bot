@@ -192,6 +192,11 @@ def translate_log(msg):
         if rep == "fn:troopbar":
             names = [n.strip() for n in m.group(1).split(",")]
             return "شريط الجيش: " + "، ".join("؟" if n == "?" else "بطل" if n == "hero" else unit_name(n) for n in names)
+        if rep == "fn:smart":
+            sides = {"bottom-left": "اللي تحت شمال", "bottom-right": "اللي تحت يمين", "top-left": "اللي فوق شمال",
+                     "top-right": "اللي فوق يمين"}
+            return (f"🧠 هجوم ذكي: اختار الجهة {sides.get(m.group(1), m.group(1))} (أضعف جهة — خطورتها {m.group(2)}) "
+                    f"— {m.group(3)} أماكن إنزال على العشب")
         if rep.startswith("res:"):            # the resource names in Arabic too
             try: out = rx.sub(rep[4:], msg, count=1)
             except (re.error, IndexError): return msg

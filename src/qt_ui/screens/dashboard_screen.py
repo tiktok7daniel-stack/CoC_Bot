@@ -343,9 +343,59 @@ class DashboardScreen(Screen):
         plan = next((p for p in S.get("plans", []) if p.get("name") == S.get("active_plan")), None)
         return (plan or {}).get("recording", "")
 
+    def smart_active(self):
+        S = self.store.S
+        plan = next((p for p in S.get("plans", []) if p.get("name") == S.get("active_plan")), None)
+        return (plan or {}).get("mode") == "smart"
+
+    def use_smart(self):
+        """The second attack system: the vision model picks the weakest side of every base."""
+        S = self.store.S
+        plans = S.setdefault("plans", [])
+        plan = next((p for p in plans if p.get("mode") == "smart"), None)
+        if plan is None:
+            plan = {"name": "هجوم ذكي", "mode": "smart", "army": "", "recording": "", "troops_where": "sides",
+                    "heroes_where": "sides", "clan_where": "sides", "spells_where": "center", "spells_delay": 5,
+                    "abilities_after": 12, "second_wave_spells": "", "second_wave_after": 18}
+            plans.insert(0, plan)
+        S["active_plan"] = plan["name"]
+        S.setdefault("tasks", {})["home_attacks"] = True
+        self.store.changed()
+        acc = self.store.account
+
+        def after_save(ok):
+            st = self.poller.account_state()
+            self.ctx.window.account_action(acc, "wake" if st.get("running") else "start")
+            self.ctx.toast(tr("hr_smart_on"), "ok")
+        self.store.save(silent=True, done=after_save)
+        self.render_recordings()
+
     def render_recordings(self):
         self.rec_flow.clear()
-        cur = self.active_recording()
+        cur = "" if self.smart_active() else self.active_recording()
+        # the smart attack, next to the recordings: one tap switches between the two systems
+        card = Box(border=TOKENS["purple"] if self.smart_active() else TOKENS["border"])
+        h = QHBoxLayout(card)
+        h.setContentsMargins(10, 8, 10, 8)
+        h.setSpacing(10)
+        ic = QLabel()
+        ic.setPixmap(icons.pixmap("bolt", 22, "#F7E3BC"))
+        h.addWidget(ic)
+        box = QVBoxLayout()
+        box.setSpacing(0)
+        box.addWidget(label(key="mode_smart", role="h3"))
+        box.addWidget(label(key="hr_smart_sub", role="dim"))
+        h.addLayout(box, 1)
+        if self.smart_active():
+            h.addWidget(StatusPill("ok", tr("hr_active")))
+            off = IconButton("stop", "hr_off", size=13)
+            off.clicked.connect(self.recording_off)
+            h.addWidget(off)
+        else:
+            use = IconButton("play", "hr_use", kind="go", size=13)
+            use.clicked.connect(lambda _=False: self.use_smart())
+            h.addWidget(use)
+        self.rec_flow.addWidget(card)
         if not self.recordings:
             self.rec_flow.addWidget(label(key="hr_none", role="sub"))
             return
@@ -381,6 +431,7 @@ class DashboardScreen(Screen):
             base = dict(plans[0]) if plans else {}
             plan = dict(base, name="REC " + name, army="", recording=name)
             plans.append(plan)
+        plan["mode"] = "recording"
         S["active_plan"] = plan["name"]
         S.setdefault("tasks", {})["home_attacks"] = True
         self.store.changed()

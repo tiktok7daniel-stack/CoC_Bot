@@ -525,14 +525,18 @@ def upload_shot(id, session, file, wait_words=10):
     return True
 
 
-# ====================================================================== stuck on an unknown screen -> straight to Claude
+# ====================================================================== unknown screens -> straight to Claude
+# Automatic learning: every screen the bot doesn't understand is photographed and sent at once (when it stays still
+# for a moment: a screen that flashes by is an animation), the user is told, and the bot carries on.
+# A screen it keeps getting stuck on is sent as "stuck" (those come first for Claude).
 STUCK_SECONDS = 20       # the same unknown screen for this long (or seen 3 times) = stuck
+UNKNOWN_PER_DAY = 60     # never more pictures than this a day (a flood of the same kind of screen)
 _stuck = {"hash": None, "since": 0.0, "seen": 0}
 
 
 def note_unknown(id, frame, words, phase):
-    """Called for every screen the bot doesn't know. When it keeps seeing the same one, send it right away
-    (once per screen: screens already sent or already taught are not sent again)."""
+    """Called for every screen the bot doesn't know: sent as soon as it is seen twice in a row (once per screen:
+    screens already sent or already taught are not sent again); sent as "stuck" when it doesn't go away."""
     import capture_session as cs
     try: h = cs.dhash(frame)
     except Exception: return False
@@ -542,13 +546,24 @@ def note_unknown(id, frame, words, phase):
     else:
         _stuck.update(hash=h, since=now, seen=1)
         return False
+    if _stuck["seen"] == 2:
+        report_unknown(id, frame, phase, words=words, h=h)
     if now - _stuck["since"] < STUCK_SECONDS and _stuck["seen"] < 3: return False
     _stuck.update(hash=None, since=0.0, seen=0)
     return report_stuck(id, frame, words, phase, h)
 
 
+def report_unknown(id, frame, phase, words=(), h=None, why="screen"):
+    """A screen (or battle base, builder-menu row…) the bot doesn't understand: to Claude now, the bot carries on."""
+    return _report(id, frame, words, phase, h, kind="unknown", why=why)
+
+
 def report_stuck(id, frame, words, phase, h=None):
     """Save + send one screen the bot got stuck on (in the background), and tell the user."""
+    return _report(id, frame, words, phase, h, kind="stuck")
+
+
+def _report(id, frame, words, phase, h=None, kind="stuck", why="screen"):
     import capture_session as cs, threading
     try:
         import settings
@@ -557,30 +572,38 @@ def report_stuck(id, frame, words, phase, h=None):
         pass
     h = h or cs.dhash(frame)
     st = _load(STATE, {})
-    sent = st.setdefault("stuck_sent", [])
+    key = "stuck_sent" if kind == "stuck" else "unknown_sent"
+    sent = st.setdefault(key, [])
     if any(cs.distance(h, (int(a), int(b))) <= 12 for a, b in sent): return False   # this screen was sent already
-    rule, _d = match_picture(frame)
-    if rule is not None: return False                                               # taught meanwhile
+    if why == "screen":
+        rule, _d = match_picture(frame)
+        if rule is not None: return False                                           # taught meanwhile
+    if kind != "stuck":
+        day = time.strftime("%Y%m%d")
+        if st.get("unknown_day") != day: st.update(unknown_day=day, unknown_n=0)
+        if st.get("unknown_n", 0) >= UNKNOWN_PER_DAY: return False
+        st["unknown_n"] = st.get("unknown_n", 0) + 1
     sent.append([str(h[0]), str(h[1])])
-    st["stuck_sent"] = sent[-300:]
+    st[key] = sent[-500:]
     _save(STATE, st)
     import cv2
     name = time.strftime("%Y%m%d_%H%M%S")
-    folder = BASE / "stuck"
+    folder = BASE / kind
     folder.mkdir(parents=True, exist_ok=True)
     small = cv2.resize(frame, (1280, int(1280 * frame.shape[0] / frame.shape[1])))
     cv2.imwrite(str(folder / f"{name}.jpg"), cv2.cvtColor(small, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 85])
-    meta = {"t": time.time(), "account": id, "phase": phase, "words": list(words)[:60], "kind": "stuck",
-            "note": "the bot got stuck on this screen (auto)"}
+    meta = {"t": time.time(), "account": id, "phase": phase, "words": list(words)[:60], "kind": kind, "why": why,
+            "note": "the bot got stuck on this screen (auto)" if kind == "stuck" else
+                    f"the bot didn't understand this {why} and carried on (auto)"}
     (folder / f"{name}.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
 
     def send():
         if not configured(): return
         try:
             import version
-            stem = f"inbox/stuck/{_safe_id(id)}_{name}"
-            _put(stem + ".jpg", (folder / f"{name}.jpg").read_bytes(), f"stuck: {name}")
-            _put(stem + ".json", json.dumps(dict(meta, bot_version=version.VERSION), ensure_ascii=False, indent=1).encode("utf-8"), f"stuck words: {name}")
+            stem = f"inbox/{kind}/{_safe_id(id)}_{name}"
+            _put(stem + ".jpg", (folder / f"{name}.jpg").read_bytes(), f"{kind}: {name}")
+            _put(stem + ".json", json.dumps(dict(meta, bot_version=version.VERSION), ensure_ascii=False, indent=1).encode("utf-8"), f"{kind} words: {name}")
         except Exception as e:
             st2 = _load(STATE, {})
             st2["error"] = str(e)[:200]
@@ -588,8 +611,12 @@ def report_stuck(id, frame, words, phase, h=None):
     threading.Thread(target=send, daemon=True).start()
     try:
         from utils import logger, send_notification
-        logger.info(f"Stuck on a screen the bot doesn't know — picture sent to Claude ({phase})")
-        send_notification("🤔 البوت وقف على شاشة مايعرفهاش — صوّرها وبعتها لـ Claude علشان يتعلّمها")
+        if kind == "stuck":
+            logger.info(f"Stuck on a screen the bot doesn't know — picture sent to Claude ({phase})")
+            send_notification("🤔 البوت وقف على شاشة مايعرفهاش — صوّرها وبعتها لـ Claude علشان يتعلّمها")
+        else:
+            what = {"screen": "screen", "vision": "base", "builder_row": "builder menu row"}.get(why, why)
+            logger.info(f"Picture sent to Claude: did not understand this {what} ({phase}), carrying on")
     except Exception:
         pass
     return True

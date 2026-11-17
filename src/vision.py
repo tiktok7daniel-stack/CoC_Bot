@@ -106,11 +106,45 @@ def detect(frame, conf=CONF):
     return res
 
 
+def off_map(frame):
+    """
+    The forest and water around the map (troops can't be dropped there) -> bool mask at 1/8 scale.
+    The forest is the grass's hue but deeper (more saturated) or in shadow; water is blue. Only big areas that touch
+    the edge of the battlefield count (a dark patch inside the base is not the forest).
+    """
+    import cv2
+    H, W = frame.shape[0] // 8, frame.shape[1] // 8
+    small = cv2.resize(frame, (W, H), interpolation=cv2.INTER_AREA)
+    hsv = cv2.cvtColor(small, cv2.COLOR_RGB2HSV).astype(int)
+    h, sat, v = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+    raw = ((h >= 24) & (h <= 55) & ((sat > 158) | (v < 75))) | ((h >= 85) & (h <= 130) & (sat > 60))
+    dense = (cv2.blur(raw.astype(np.float32), (5, 5)) > 0.55).astype(np.uint8)
+    y1, y2 = int(0.08 * H), int(0.80 * H)                       # the field (not the top bar / the troop cards)
+    dense[:y1] = 0
+    dense[y2:] = 0
+    n, lab, st, _c = cv2.connectedComponentsWithStats(dense, 8)
+    out = np.zeros((H, W), bool)
+    for k in range(1, n):
+        x, y, w, hh, area = st[k]
+        touches = x <= 1 or x + w >= W - 1 or y <= y1 + 1 or y + hh >= y2 - 1
+        if touches and area >= 0.03 * W * (y2 - y1):
+            out |= lab == k
+    return out
+
+
 class Base:
     """What the bot sees of the enemy base."""
 
-    def __init__(self, objs):
+    def __init__(self, objs, frame=None):
         self.objs = objs
+        self.off = self.grass = None
+        if frame is not None:                    # 1/8 scale: the map's light grass, and the forest / water around it
+            self.off = off_map(frame)
+            import cv2
+            small = cv2.resize(frame, (self.off.shape[1], self.off.shape[0]), interpolation=cv2.INTER_AREA)
+            hsv = cv2.cvtColor(small, cv2.COLOR_RGB2HSV).astype(int)
+            h, sat, v = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+            self.grass = (h >= 24) & (h <= 50) & (sat >= 60) & (sat <= 158) & (v >= 100) & ~self.off
         self.th = next((o for o in objs if o.name.startswith("th")), None)
         self.hull = None
         if len(objs) >= 4:
@@ -134,6 +168,91 @@ class Base:
         import cv2
         return cv2.pointPolygonTest(self.hull, (float(x), float(y)), True) >= -margin
 
+    # how dangerous each defense is for an attack coming in (more = avoid that side)
+    DANGER = {"inferno": 3.0, "eagle": 3.0, "scattershot": 2.5, "xbow": 2.0, "wizztower": 1.5, "bombtower": 1.5,
+              "ad": 1.0, "mortar": 1.0, "canon": 1.0, "airsweeper": 0.8, "clancastle": 1.0}
+    # the map is a diamond: the 4 sides a base can be attacked from (screen directions), the bottom ones first when
+    # equal (the view is scrolled up: the bottom of the map is on screen)
+    SIDES = {"bottom-left": (-0.7071, 0.7071), "bottom-right": (0.7071, 0.7071),
+             "top-left": (-0.7071, -0.7071), "top-right": (0.7071, -0.7071)}
+    FIELD = (0.03, 0.10, 0.97, 0.78)
+
+    def on_grass(self, x, y):
+        """On the map's grass (not the forest / water / sand / rocks around it, not a building)."""
+        if self.grass is None: return True
+        H, W = self.grass.shape
+        i, j = int(min(H - 1, max(0, y * H))), int(min(W - 1, max(0, x * W)))
+        if self.off[i, j]: return False
+        win = self.grass[max(0, i - 1):i + 2, max(0, j - 1):j + 2]        # a 3x3 patch: a flower is not the end
+        return bool(win.mean() >= 0.4)
+
+    def _room(self, x, y, dx, dy, limit=0.4):
+        """
+        From (x, y) outward in direction (dx, dy): where the open grass starts and how far it goes (then the forest /
+        sand / water / the screen's edge) -> (start, length) as distances.
+        """
+        x1, y1, x2, y2 = self.FIELD
+        d, start, miss = 0.0, None, 0
+        while d < limit:
+            px, py = x + dx * d, y + dy * d
+            if not (x1 <= px <= x2 and y1 <= py <= y2): break
+            ok = self.on_grass(px, py)
+            if start is None:
+                if ok: start = d
+                elif d > 0.10: return 0.0, 0.0           # no grass right after the base: that side is off the map
+            else:
+                miss = 0 if ok else miss + 1
+                if miss >= 3: return start, max(0.0, d - start - 0.03)
+            d += 0.01
+        return (start or 0.0), (max(0.0, d - start - 0.01) if start is not None else 0.0)
+
+    def attack_plan(self, n_points=5, out=0.05, spread=0.13):
+        """
+        The weakest side of the base and where to drop on it -> {"side", "points", "spell", "danger"} or None.
+        points: a line of deploy spots just outside the base on that side; spell: the defenses packed together a bit
+        inside from that side (rage / heal / freeze go there).
+        """
+        if self.hull is None: return None
+        hull = self.hull.reshape(-1, 2)
+        cx, cy = hull.mean(axis=0)
+        x1, y1, x2, y2 = self.FIELD
+        best = None
+        for name, (dx, dy) in self.SIDES.items():
+            proj = hull @ np.array([dx, dy])
+            edge = hull[int(np.argmax(proj))]
+            px, py = -dy, dx                                     # along the side
+            # between the base and the end of the map: every spot on its own, from the base's side outward over the
+            # open grass (the forest / sand / water is no-go), in the middle of it
+            onscreen = []
+            for t in np.linspace(-1, 1, n_points):
+                sx, sy = float(edge[0] + px * spread * t), float(edge[1] + py * spread * t)
+                for _ in range(40):                                # out of the base's outline first
+                    if not self.inside(sx, sy, margin=0.01): break
+                    sx, sy = sx + dx * 0.01, sy + dy * 0.01
+                st, room = self._room(sx, sy, dx, dy)
+                if room < 0.02: continue
+                d = st + min(room * 0.5, max(out, 0.3 * room))
+                qx, qy = sx + dx * d, sy + dy * d
+                if x1 <= qx <= x2 and y1 <= qy <= y2 and self.on_grass(qx, qy):
+                    onscreen.append((float(qx), float(qy)))
+            if len(onscreen) < max(2, n_points // 2): continue    # that side is off the screen
+            # danger: the defenses near that side's edge (closer counts more)
+            danger = 0.0
+            for o in self.objs:
+                ox, oy = o.center
+                d = ((ox - edge[0]) ** 2 + (oy - edge[1]) ** 2) ** 0.5
+                if d < 0.30: danger += self.DANGER.get(o.name, 0.5) * (1.0 - d / 0.30)
+            # a side with room for every spot first (a cramped side spreads the troops badly)
+            score = danger + 1.5 * (n_points - len(onscreen)) - (0.15 if name.startswith("bottom") else 0)
+            if best is None or score < best[0]:
+                inner = edge - np.array([dx, dy]) * 0.12           # a bit inside the base from that side
+                near = [o.center for o in self.objs if self.DANGER.get(o.name, 0) >= 1.5 and
+                        ((o.center[0] - inner[0]) ** 2 + (o.center[1] - inner[1]) ** 2) ** 0.5 < 0.18]
+                spell = (float(np.mean([p[0] for p in near])), float(np.mean([p[1] for p in near]))) if near else \
+                        (float(inner[0]), float(inner[1]))
+                best = (score, {"side": name, "points": onscreen, "spell": spell, "danger": round(danger, 1)})
+        return best[1] if best else None
+
     def outside_spots(self, spots, margin=0.03):
         """The spots that are not inside the base (kept in their order), then the others."""
         out = [p for p in spots if not self.inside(*p, margin=margin)]
@@ -147,7 +266,7 @@ def look(frame, keep_for_learning=True, logger=None):
         objs = detect(frame)
     except Exception:
         objs = []
-    base = Base(objs)
+    base = Base(objs, frame)
     _LAST["summary"] = base.summary()
     if logger is not None and objs:
         logger.info(f"Base seen ({(time.time() - t) * 1000:.0f} ms): {base.summary()}")

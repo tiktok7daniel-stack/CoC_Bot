@@ -367,6 +367,14 @@
 "rec_not_running": "شغّل الحساب الأول عشان يقدر يسجّل",
 "rec_started": "البوت بيدخل معركة لوحده — أول ما يقولك \"سجّل دلوقتي\" نزّل الجيش",
 "rec_note": "لازم الجيش يكون نفسه وبنفس ترتيب الكروت تحت. نزّل الوحوش على أطراف الخريطة البعيدة عشان كل قرية شكلها مختلف. البوت بيبعّد الكاميرا لوحده أول ما المعركة تبدأ — ما تحركش الكاميرا وانت بتهاجم.",
+"pl_mode": "نظام الهجوم",
+"hr_smart_sub": "بيشوف كل قرية بالموديل ويختار أضعف جهة — من غير تسجيل",
+"hr_smart_on": "🧠 الهجوم الذكي اشتغل",
+"pl_mode_sub": "التسجيل = يعيد هجومك المتسجّل • الذكي = الموديل يشوف القرية ويختار أضعف جهة وينزّل عليها • العادي = الإنزال اللي تحت",
+"mode_rec": "🎬 التسجيل بتاعي",
+"mode_smart": "🧠 الهجوم الذكي",
+"mode_classic": "📍 الإنزال العادي",
+"nt_unknown": "📸 بعت صورة لـ Claude علشان مش فاهمها — وكمّل شغله",
 "pl_rec": "إعادة تسجيل",
 "pl_rec_sub": "لو اخترت تسجيل البوت هيعيد هجومك المتسجّل بدل طريقة الإنزال اللي تحت",
 "pl_rec_none": "من غير تسجيل",
@@ -1381,6 +1389,14 @@
 "rs_failed": "Recording failed — see the log",
 "rs_banner": "Record now — deploy by hand",
 "rec_note": "Use the same army in the same card order. Deploy on the far edges. Don't move the camera while attacking.",
+"pl_mode": "Attack system",
+"hr_smart_sub": "Looks at every base with the model and picks its weakest side — no recording needed",
+"hr_smart_on": "🧠 Smart attack is on",
+"pl_mode_sub": "Recording = replays your recorded attack • Smart = the model looks at the base, picks its weakest side and drops there • Classic = the deployment below",
+"mode_rec": "🎬 My recording",
+"mode_smart": "🧠 Smart attack",
+"mode_classic": "📍 Classic deployment",
+"nt_unknown": "📸 Sent a picture to Claude (didn't understand it) — carrying on",
 "pl_rec": "Replay recording",
 "pl_rec_sub": "Replays your recorded attack instead of the deployment below",
 "pl_rec_none": "No recording",
@@ -2955,6 +2971,26 @@
 [
 "^Walls done: (\\d+) upgraded, not enough gold / elixir for the next one",
 "🧱 خلّص: رقّى \\1 سور — الفلوس مش كفاية للسور اللي بعده، راجع يهاجم"
+],
+[
+"^Picture sent to Claude: did not understand this screen \\((.*)\\), carrying on",
+"📸 بعتّ صورة لـ Claude علشان مش فاهم الشاشة دي — وكمّلت شغلي"
+],
+[
+"^Picture sent to Claude: did not understand this base \\((.*)\\), carrying on",
+"📸 بعتّ صورة القرية لـ Claude علشان ماعرفتش مبانيها كويس — وكمّلت الهجوم"
+],
+[
+"^Picture sent to Claude: did not understand this (.*) \\((.*)\\), carrying on",
+"📸 بعتّ صورة لـ Claude علشان مش فاهم الحاجة دي (\\1) — وكمّلت شغلي"
+],
+[
+"^Smart attack: (.*) side \\(danger (.*)\\), (\\d+) deploy spots",
+"fn:smart"
+],
+[
+"^Smart attack: the base wasn't recognised, attacking from the sides",
+"🧠 هجوم ذكي: ماعرفش القرية كويس — بيهاجم من الجنبين وبعت صورتها لـ Claude"
 ],
 [
 "^Base seen \\((\\d+) ms\\): (.*)",

@@ -20,6 +20,7 @@ from .base import Screen, grid
 
 WHERE = [("sides", "w_sides"), ("left", "w_left"), ("right", "w_right"), ("bottom", "w_bottom")]
 SPELLS_WHERE = [("center", "w_center"), ("none", "w_none")]
+MODES = [("recording", "mode_rec"), ("smart", "mode_smart"), ("classic", "mode_classic")]
 
 
 class PlanCard(Box):
@@ -52,6 +53,10 @@ class PlanCard(Box):
             use.clicked.connect(lambda: screen.set_active(p.get("name", "")))
             head.addWidget(use)
         v.addLayout(head)
+        mode = Combo(MODES, 220)                 # which attack system this loadout uses (switch any time)
+        mode.set_value(p.get("mode") or ("recording" if p.get("recording") else "classic"))
+        mode.currentIndexChanged.connect(lambda _i: self._set("mode", mode.value()))
+        v.addWidget(form_row("pl_mode", "pl_mode_sub", mode))
         rec = QComboBox()
         rec.addItem(tr("pl_rec_none"), "")
         for r in screen.recordings: rec.addItem(r["name"], r["name"])

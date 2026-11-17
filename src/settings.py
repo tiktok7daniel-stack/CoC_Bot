@@ -115,6 +115,9 @@ def default_settings():
         # Loadouts: a saved army (by its in-game name) + how to deploy it
         "active_plan": "",           # name of the active loadout ("" = classic single point)
         "plans": [
+            {"name": "هجوم ذكي", "mode": "smart", "army": "", "army_macro": "", "recording": "", "troops_where": "sides",
+             "heroes_where": "sides", "clan_where": "sides", "spells_where": "center", "spells_delay": 5, "abilities_after": 12,
+             "second_wave_spells": "", "second_wave_after": 18},
             {"name": "تنانين", "army": "", "army_macro": "", "recording": "", "troops_where": "sides", "heroes_where": "sides", "clan_where": "sides",
              "spells_where": "center", "spells_delay": 3, "abilities_after": 15, "second_wave_spells": "", "second_wave_after": 20},
             {"name": "أرضي", "army": "", "recording": "", "troops_where": "sides", "heroes_where": "sides", "clan_where": "bottom",
@@ -217,7 +220,13 @@ def _safe_id(id):
     return "".join(c for c in str(id) if c.isalnum() or c in "-_") or "main"
 
 def load(id):
-    return _merge(default_settings(), _read(SETTINGS_DIR / f"{_safe_id(id)}.json"))
+    data = _merge(default_settings(), _read(SETTINGS_DIR / f"{_safe_id(id)}.json"))
+    # 5.17: the smart attack is a loadout of its own (saved plan lists are kept as they are: it is added once)
+    plans = data.get("plans") or []
+    if not any(p.get("mode") == "smart" for p in plans if isinstance(p, dict)):
+        plans.insert(0, copy.deepcopy(default_settings()["plans"][0]))
+        data["plans"] = plans
+    return data
 
 def save(id, data):
     merged = _merge(default_settings(), data)

@@ -620,6 +620,10 @@ class Attacker:
                 logger.warning(f"No valid deploy spot found on the {side}, using the bottom spot")
 
     def points_for(self, where):
+        if where == "smart":                     # the weakest side the vision model chose (spots on its grass)
+            sp = getattr(self, "smart_points", None)
+            if sp: return list(sp)
+            where = "sides"
         pts = getattr(self, "side_points", None) or {}
         if where == "sides": return [pts.get("left", self.DEPLOY_POINT), pts.get("right", self.DEPLOY_POINT)]
         if where in ("left", "right"): return [pts.get(where, self.DEPLOY_POINT)]
@@ -667,6 +671,10 @@ class Attacker:
             return
 
         # ---- plan (loadout) deployment
+        if plan.get("mode") == "smart":          # smart attack: everything on the side the model chose
+            plan = dict(plan, troops_where="smart", heroes_where="smart", clan_where="smart")
+            if not getattr(self, "smart_points", None):
+                plan.update(troops_where="sides", heroes_where="sides", clan_where="sides")
         uses_sides = any(plan.get(k) in ("sides", "left", "right") for k in ("troops_where", "heroes_where", "clan_where"))
         order = {"troop": 0, "clan": 1, None: 1, "hero": 2, "spell": 3}
         idx = sorted([i for i in range(len(card_centers)) if available_slots[i]], key=lambda i: order.get(card_types[i], 1))
@@ -680,10 +688,14 @@ class Attacker:
             if t == "troop" and uses_sides and not getattr(self, "side_points", None):
                 self.calibrate_sides(cx)
             if t == "troop":
+                smart = plan.get("troops_where") == "smart"
                 pts = self.points_for(plan.get("troops_where", "sides"))
+                if smart and len(pts) >= 3:      # the two ends first (they make the funnel), then the middle
+                    pts = [pts[0], pts[-1]] + pts[1:-1]
                 Input_Handler.click(cx, 0.9)
                 share = TROOP_DEPLOY_TIME / len(pts)
                 for k, pt in enumerate(pts):
+                    before = self.card_crop(cx) if smart else None
                     Input_Handler.down(*pt, pointer=0)
                     end_time = time.monotonic() + share
                     while time.monotonic() < end_time and not self.card_gray(cx): time.sleep(0.05)
@@ -691,15 +703,22 @@ class Attacker:
                         end2 = time.monotonic() + TROOP_DEPLOY_TIME
                         while time.monotonic() < end2 and not self.card_gray(cx): time.sleep(0.05)
                     Input_Handler.up(pointer=0)
+                    if smart and before is not None and not self.card_gray(cx) and not self.card_changed(cx, before, 2.0):
+                        self.smart_bad(pt)       # that spot doesn't take troops (inside the red line): not again
+                    if self.card_gray(cx): break
                 self.deployed_troops.append(cx)
                 self.troops_done_at = time.monotonic()
             elif t in ("clan", None):
                 pts = self.points_for(plan.get("clan_where", "sides"))
+                if plan.get("clan_where") == "smart": pts = [pts[len(pts) // 2]]
                 Input_Handler.click(cx, 0.9)
                 Input_Handler.click(*pts[0], n=max(1, card_counts[i]) if t is None else 1)
             elif t == "hero":
                 pts = self.points_for(plan.get("heroes_where", "sides"))
                 Input_Handler.click(cx, 0.9)
+                if plan.get("heroes_where") == "smart":   # heroes behind the troops: the middle spots
+                    mid = len(pts) // 2
+                    pts = [pts[mid]] + [p for p in pts[max(0, mid - 1):mid + 2] if p != pts[mid]]
                 Input_Handler.click(*pts[hero_n % len(pts)]) # heroes alternate between the sides
                 hero_n += 1
                 self.deployed_heroes.append(cx)
@@ -741,9 +760,26 @@ class Attacker:
         k = min(names, key=lambda c: abs(c - cx))
         return names[k] if abs(k - cx) < 0.02 else None
 
+    def smart_bad(self, pt):
+        """A smart spot the game refused (the red line is further out there): push it outward, drop it if it can't."""
+        sp = getattr(self, "smart_points", None) or []
+        if pt not in sp: return
+        i = sp.index(pt)
+        side = (getattr(self, "smart_plan", None) or {}).get("side", "")
+        dx = -0.035 if "left" in side else 0.035
+        dy = 0.035 if "bottom" in side else -0.035
+        nx, ny = pt[0] + dx, pt[1] + dy
+        base = getattr(self, "base_seen", None)
+        if 0.02 < nx < 0.98 and 0.10 < ny < 0.79 and (base is None or base.on_grass(nx, ny)): sp[i] = (nx, ny)
+        else: sp.pop(i)
+        logger.debug(f"Smart spot {pt} refused -> {sp[i] if i < len(sp) and sp[i] != pt else 'dropped'}")
+
     def cast_spell(self, n):
         import random
         x0, y0 = self.SPELL_CENTER
+        sm = getattr(self, "smart_plan", None)
+        if sm and (getattr(self, "plan", None) or {}).get("mode") == "smart" and sm.get("spell"):
+            x0, y0 = sm["spell"]                 # the defenses packed together behind the side we attack
         for _ in range(max(1, n)):
             Input_Handler.click(x0 + random.uniform(-0.04, 0.04), y0 + random.uniform(-0.04, 0.04))
 
@@ -769,8 +805,9 @@ class Attacker:
         Returns how many troop cards were used up in the end.
         """
         import time
-        pts = self.points_for((getattr(self, "plan", None) or {}).get("troops_where", "bottom"))
-        px, py = pts[-1]
+        plan = getattr(self, "plan", None) or {}
+        pts = self.points_for("smart" if plan.get("mode") == "smart" else plan.get("troops_where", "bottom"))
+        px, py = pts[len(pts) // 2] if plan.get("mode") == "smart" else pts[-1]
         used = 0
         for x in self.deployed_troops:
             if self.card_gray(x):
@@ -977,6 +1014,31 @@ class Attacker:
             self.base_seen = vision.look(Frame_Handler.get_frame(grayscale=False), logger=logger)
         except Exception:
             logger.debug("vision look failed", exc_info=True)
+        self.smart_plan, self.smart_points = None, None
+        smart = (getattr(self, "plan", None) or {}).get("mode") == "smart"
+        if not smart and self.base_seen is not None and len(self.base_seen.objs) < 6:
+            self._learn_unknown_base()           # the model hardly saw anything here: Claude labels it for training
+        if smart:
+            try:
+                sp = self.base_seen.attack_plan() if self.base_seen is not None else None
+            except Exception:
+                sp = None
+                logger.debug("smart plan failed", exc_info=True)
+            if sp:
+                self.smart_plan, self.smart_points = sp, list(sp["points"])
+                logger.info(f"Smart attack: {sp['side']} side (danger {sp['danger']}), {len(sp['points'])} deploy spots")
+            else:
+                logger.info("Smart attack: the base wasn't recognised, attacking from the sides")
+                self._learn_unknown_base()
+
+    def _learn_unknown_base(self):
+        """The model saw too little of this base: the picture goes to Claude (for the next training)."""
+        try:
+            import learn_sync, utils
+            learn_sync.report_unknown(utils.INSTANCE_ID, Frame_Handler.get_frame(grayscale=False), "battle_base",
+                                      why="vision")
+        except Exception:
+            logger.debug("could not send the base", exc_info=True)
 
     def complete_normal_attack(self, restart=True, exclude_clan_troops=False):
         import time, numpy as np
@@ -991,7 +1053,7 @@ class Attacker:
         self.troops_done_at = self.heroes_done_at = None
         self._later = []
         if getattr(self, "plan", None): logger.debug(f"Attack plan: {self.plan.get('name', '')}")
-        if getattr(self, "plan", None) and self.plan.get("recording"):
+        if getattr(self, "plan", None) and self.plan.get("recording") and self.plan.get("mode", "recording") == "recording":
             import recorder
             data = recorder.load(self.plan["recording"])
             if data and data.get("events"):
