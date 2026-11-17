@@ -192,6 +192,13 @@ def translate_log(msg):
         if rep == "fn:troopbar":
             names = [n.strip() for n in m.group(1).split(",")]
             return "شريط الجيش: " + "، ".join("؟" if n == "?" else "بطل" if n == "hero" else unit_name(n) for n in names)
+        if rep == "fn:btiming":
+            t = m.group(1)
+            for en, ar in (("waiting for the base", "انتظار القرية"), ("clouds", "السحاب"), ("zoom", "الزووم"),
+                           ("eyes", "العيون"), ("red line", "الخط الأحمر"), ("recording ready", "تجهيز التسجيل"),
+                           ("pictures:", "التصوير:"), ("stream", "لايف"), ("window", "النافذة"), ("adb", "ADB")):
+                t = t.replace(en, ar)
+            return "⏱️ وقت بداية الهجمة: " + t.replace("s,", " ث،").replace("s ", " ث ")
         if rep == "fn:smart":
             sides = {"bottom-left": "اللي تحت شمال", "bottom-right": "اللي تحت يمين", "top-left": "اللي فوق شمال",
                      "top-right": "اللي فوق يمين"}

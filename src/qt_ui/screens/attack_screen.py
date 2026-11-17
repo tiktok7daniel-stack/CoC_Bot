@@ -70,7 +70,7 @@ class PlanCard(Box):
         adapt.toggled.connect(lambda on: self._set("adapt", bool(on)))
         v.addWidget(form_row("pl_adapt", "pl_adapt_sub", adapt))
         red = Toggle()
-        red.setChecked(bool(p.get("red_line", True)))
+        red.setChecked(bool(p.get("red_line", p.get("mode") == "smart")))
         red.toggled.connect(lambda on: self._set("red_line", bool(on)))
         v.addWidget(form_row("pl_red", "pl_red_sub", red))
         army = QLineEdit(p.get("army", ""))

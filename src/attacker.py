@@ -1038,24 +1038,31 @@ class Attacker:
         Zooming while the clouds are still there is ignored by the game.
         """
         import time, numpy as np
-        prev, end = None, time.monotonic() + 3.0
+        T = self.timing = {"start": time.monotonic()}
+        prev, end = None, time.monotonic() + 1.5
         while time.monotonic() < end:
             cur = Frame_Handler.get_frame_section(0.0, 0.1, 1.0, 0.8, grayscale=True)[::8, ::8].astype(int)
             if prev is not None and cur.shape == prev.shape and float(np.abs(cur - prev).mean()) < 4: break
             prev = cur
-            time.sleep(0.1)
+            time.sleep(0.05)
+        T["clouds"] = time.monotonic()
         for _ in range(2):
             Input_Handler.zoom(dir="out")
             time.sleep(0.08)
         Input_Handler.swipe_up(y1=0.5, duration=80, inter_points=3, fast=True)
         time.sleep(0.12)
+        T["zoom"] = time.monotonic()
         # one look with the YOLO model: what the base has, where its outline is (deploy spots outside it)
         self.base_seen = None
+        field = None
         try:
             import vision
-            self.base_seen = vision.look(Frame_Handler.get_frame(grayscale=False), logger=logger)
+            field = Frame_Handler.get_frame(grayscale=False)
+            self.base_seen = vision.look(field, logger=logger)
         except Exception:
             logger.debug("vision look failed", exc_info=True)
+        self._field_frame = field
+        T["eyes"] = time.monotonic()
         self.smart_plan, self.smart_points = None, None
         plan = getattr(self, "plan", None) or {}
         smart = plan.get("mode") == "smart"
@@ -1063,12 +1070,14 @@ class Attacker:
         import deploy_zone
         self.zone = deploy_zone.Zone()
         uses_rec = bool(plan.get("recording")) and plan.get("mode", "recording") == "recording"
-        if plan and (smart or uses_rec) and plan.get("red_line", True):
+        # recordings: off unless switched on (your own drop spots are valid; it costs a few pictures = time)
+        if plan and (smart or uses_rec) and plan.get("red_line", smart):
             probe = None
             b = self.base_seen
             if b is not None and b.hull is not None:
                 probe = b.th.center if b.th is not None else tuple(float(v) for v in b.hull.reshape(-1, 2).mean(axis=0))
             self.zone = deploy_zone.reveal(self, probe=probe, logger=logger)
+        T["red_line"] = time.monotonic()
         try:                                     # a model that didn't load is a bug (logged), not an unknown base
             import vision as _v
             loaded = _v._NET.get("net") is not None
@@ -1099,8 +1108,11 @@ class Attacker:
         """The model saw too little of this base: the picture goes to Claude (for the next training)."""
         try:
             import learn_sync, utils
-            learn_sync.report_unknown(utils.INSTANCE_ID, Frame_Handler.get_frame(grayscale=False), "battle_base",
-                                      why="vision")
+            import threading                       # in the background: the battle doesn't wait for it
+            fr = getattr(self, "_field_frame", None)
+            if fr is None: fr = Frame_Handler.get_frame(grayscale=False)
+            threading.Thread(target=learn_sync.report_unknown, args=(utils.INSTANCE_ID, fr, "battle_base"),
+                             kwargs={"why": "vision"}, daemon=True).start()
         except Exception:
             logger.debug("could not send the base", exc_info=True)
 
@@ -1149,6 +1161,21 @@ class Attacker:
                 replay_start = time.monotonic()
                 if getattr(self, "base_at", None):
                     logger.info(f"Battle: first tap of the recording {replay_start + 0.05 - self.base_at:.1f}s after the base appeared")
+                    T = getattr(self, "timing", {}) or {}
+                    try:
+                        p = Frame_Handler._power
+                        cap = f"{max(p['src'], key=p['src'].get)} {p['ms'] / max(1, p['n']):.0f} ms" if p.get("n") else "?"
+                    except Exception:
+                        cap = "?"
+                    st = [("clouds", "clouds"), ("zoom", "zoom"), ("eyes", "eyes"), ("red_line", "red line")]
+                    parts, last = [], T.get("start", self.base_at)
+                    for k, name in st:
+                        if k in T:
+                            parts.append(f"{name} {T[k] - last:.1f}s")
+                            last = T[k]
+                    parts.append(f"recording ready {replay_start - last:.1f}s")
+                    logger.info(f"Battle timing: waiting for the base {T.get('start', self.base_at) - self.base_at:.1f}s, "
+                                + ", ".join(parts) + f" (pictures: {cap})")
                 self.ended_at = None
                 replay_end = None
                 try:

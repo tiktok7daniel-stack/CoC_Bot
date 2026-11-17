@@ -3141,6 +3141,10 @@
 "⚡ الهجمة: أول دوسة من تسجيلك نزلت بعد \\1 ثانية من ظهور القرية"
 ],
 [
+"^Battle timing: (.*)",
+"fn:btiming"
+],
+[
 "^PaddleOCR failed, reading with easyocr",
 "⚠️ PaddleOCR وقع — بيقرا بـ easyocr"
 ],
