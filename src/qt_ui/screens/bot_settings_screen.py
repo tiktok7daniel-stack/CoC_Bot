@@ -142,7 +142,8 @@ class BotSettingsScreen(Screen):
         self.pw_live = StatusPill("warn", "—")
         self.pw_gpu = StatusPill("warn", "—")
         self.pw_brain = StatusPill("warn", "—")
-        for key, pill in (("pw_live", self.pw_live), ("pw_gpu", self.pw_gpu), ("pw_brain", self.pw_brain)):
+        self.pw_eyes = StatusPill("warn", "—")
+        for key, pill in (("pw_live", self.pw_live), ("pw_gpu", self.pw_gpu), ("pw_brain", self.pw_brain), ("pw_eyes", self.pw_eyes)):
             pw.add(form_row(key, None, pill))
         pb = QHBoxLayout()
         self.gpu_btn = IconButton("bolt", "pw_gpu_install", kind="primary", size=14)
@@ -375,6 +376,12 @@ class BotSettingsScreen(Screen):
             self.pw_brain.set("ok" if m.get("screens") else "warn",
                               tr("pw_brain_txt").format(kinds=m.get("kinds", 0), pics=m.get("screens", 0), mem=mem.get("screens", 0)))
             if m.get("now_title"): self.pw_brain.setToolTip(tr("pw_now").format(t=m["now_title"]))
+            v = b.get("vision") or {}
+            if v.get("model"):
+                self.pw_eyes.set("ok", tr("pw_eyes_on").format(n=v.get("classes", 0), acc=int(round((v.get("map50") or 0) * 100))))
+                if v.get("last"): self.pw_eyes.setToolTip(tr("pw_eyes_last").format(t=v["last"]))
+            else:
+                self.pw_eyes.set("warn", tr("pw_eyes_off"))
             log = [l for l in (r.get("log") or "").strip().splitlines() if l.strip()]
             self.gpu_log.setText("\n".join(log[-14:]) or "—")
             for b in (self.links_btn, self.files_btn, self.log_btn): b.setVisible(bool(card))

@@ -2671,6 +2671,11 @@ class Frame_Handler:
             except Exception:
                 pass
             try:
+                import vision
+                info["vision"] = vision.info()
+            except Exception:
+                pass
+            try:
                 import screen_model
                 info["model"] = screen_model.info()
             except Exception:

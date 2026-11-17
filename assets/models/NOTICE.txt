@@ -1,0 +1,10 @@
+coc_vision.onnx — the bot's battle vision model (YOLOv8n, Ultralytics, AGPL-3.0 code; the trained weights are this
+project's), trained by Claude on:
+
+  * "Clash of Clans Dataset" by Find This Base — https://universe.roboflow.com/find-this-base/clash-of-clans-vop4y
+    (via https://huggingface.co/datasets/keremberke/clash-of-clans-object-detection), licensed CC BY 4.0
+    https://creativecommons.org/licenses/by/4.0/ — images resized / converted to YOLO format, unchanged otherwise.
+  * pictures of this bot's own battles, labelled for this project.
+
+Not used: datasets or models whose licence forbids bots (e.g. paid "no use in bots" datasets), and model files from
+unknown sources (a .pt file can run code when it is opened).

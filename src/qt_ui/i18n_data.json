@@ -1007,7 +1007,11 @@
 "battle_speed": "سرّع آخر دقيقة في الهجمة ⏩",
 "battle_speed_sub": "لما يظهر زرار 1x الأخضر في آخر دقيقة، البوت يدوس عليه لحد ما يبقى 4x",
 "farm_walls_first": "لما المخازن تتملا: الأسوار الأول 🧱",
-"farm_walls_first_sub": "يرقّي كل الأسوار اللي الدهب أو الإكسير يكفّوها، وبعدين المباني باللي فاضل، وبعدين يرجع يهاجم"
+"farm_walls_first_sub": "يرقّي كل الأسوار اللي الدهب أو الإكسير يكفّوها، وبعدين المباني باللي فاضل، وبعدين يرجع يهاجم",
+"pw_eyes": "عيون البوت (YOLO)",
+"pw_eyes_on": "👁️ شغالة — بتعرف {n} نوع مبنى (دقة {acc}%)",
+"pw_eyes_off": "مش متحمّلة لسه",
+"pw_eyes_last": "آخر قرية شافها: {t}"
 },
 "en": {
 "gold": "Gold",
@@ -2017,7 +2021,11 @@
 "battle_speed": "Speed up the last minute ⏩",
 "battle_speed_sub": "When the green 1x button shows in the last minute, the bot taps it until it says 4x",
 "farm_walls_first": "Storages full: walls first 🧱",
-"farm_walls_first_sub": "Upgrades every wall the gold or elixir can pay, then buildings with the rest, then back to attacking"
+"farm_walls_first_sub": "Upgrades every wall the gold or elixir can pay, then buildings with the rest, then back to attacking",
+"pw_eyes": "Bot's eyes (YOLO)",
+"pw_eyes_on": "👁️ on — knows {n} kinds of building ({acc}% accuracy)",
+"pw_eyes_off": "not loaded yet",
+"pw_eyes_last": "Last base seen: {t}"
 },
 "unit_ar": {
 "healing": "العلاج",
@@ -2947,6 +2955,10 @@
 [
 "^Walls done: (\\d+) upgraded, not enough gold / elixir for the next one",
 "🧱 خلّص: رقّى \\1 سور — الفلوس مش كفاية للسور اللي بعده، راجع يهاجم"
+],
+[
+"^Base seen \\((\\d+) ms\\): (.*)",
+"👁️ شاف القرية (\\1 ملّي ثانية): \\2"
 ]
 ]
 }

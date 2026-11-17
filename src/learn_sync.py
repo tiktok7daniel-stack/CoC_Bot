@@ -186,6 +186,22 @@ def upload_pending(id, limit=MAX_PER_ROUND):
         done[key] = {"t": time.time(), "path": stem, "words": d.get("words", [])[:10], "phase": d.get("phase", ""),
                      "action": d.get("action", ""), "account": id}
         n += 1
+    # battle pictures (+ what the vision model found): Claude checks them and trains the next model with them
+    try:
+        import vision
+        sent_b = st.setdefault("battles_sent", [])
+        if settings.load_app().get("share_battles", True) is not False:
+            for jpg in sorted(vision.KEEP.glob("*.jpg"))[-20:]:
+                if n >= limit or jpg.stem in sent_b: continue
+                meta = jpg.with_suffix(".json")
+                stem = f"inbox/battles/{teach._safe(id)}_{jpg.stem}"
+                _put(stem + ".jpg", jpg.read_bytes(), f"battle picture {jpg.stem}")
+                if meta.exists(): _put(stem + ".json", meta.read_bytes(), f"battle objects {jpg.stem}")
+                sent_b.append(jpg.stem)
+                n += 1
+            st["battles_sent"] = sent_b[-500:]
+    except Exception:
+        pass
     # learned armies
     if QUEUE.exists():
         import army_learn

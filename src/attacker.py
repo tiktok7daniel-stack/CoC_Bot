@@ -800,6 +800,9 @@ class Attacker:
             x, y = army_learn.touch_to_screen(e["fx"], e["fy"], mx, my)
             if y < 0.80 and all(abs(x - a) + abs(y - b) > 0.05 for a, b in spots): spots.append((x, y))
         spots = spots[:6] + [p for side in self.SIDE_CANDIDATES.values() for p in side[:2]]
+        base = getattr(self, "base_seen", None)
+        if base is not None and base.hull is not None:
+            spots = base.outside_spots(spots)              # spots outside the base first (the model saw its outline)
         time.sleep(0.2)
         frame = Frame_Handler.get_frame_section(0.0, 0.82, 1.0, 1.0, grayscale=False)
         centers, _b, types, _c, _g = self.detect_troop_positions(frame, return_boundaries=True, return_types=True, return_counts=True)
@@ -967,6 +970,13 @@ class Attacker:
             time.sleep(0.25)
         Input_Handler.swipe_up(y1=0.5)
         time.sleep(0.2)
+        # one look with the YOLO model: what the base has, where its outline is (deploy spots outside it)
+        self.base_seen = None
+        try:
+            import vision
+            self.base_seen = vision.look(Frame_Handler.get_frame(grayscale=False), logger=logger)
+        except Exception:
+            logger.debug("vision look failed", exc_info=True)
 
     def complete_normal_attack(self, restart=True, exclude_clan_troops=False):
         import time, numpy as np
