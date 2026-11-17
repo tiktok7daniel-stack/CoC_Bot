@@ -166,6 +166,8 @@ def default_app_settings():
         "telegram_bot_token": _cfg("TELEGRAM_BOT_TOKEN", ""),
         "groq_api_key": _cfg("GROQ_API_KEY", ""),
         "clash_api_key": "",         # developer.clashofclans.com key (allowed IP = this PC's public IP)
+        "clash_dev_email": "",       # developer.clashofclans.com login: the bot makes a key for every new IP itself
+        "clash_dev_password": "",
         "tesseract_path": _cfg("TESSERACT_PATH", ""),  # empty = find automatically
         "ldplayer_path": _cfg("LDPLAYER_BIN_PATH", ""), # ldconsole.exe; empty = find automatically
         "github_token": "",          # fine-grained token with Issues: read & write on the bot repo

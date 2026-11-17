@@ -57,18 +57,111 @@ class ApiError(Exception):
 
 
 def _get(path, key):
-    import requests
+    import re, requests
     from urllib.parse import quote
     r = requests.get(API + quote(path, safe="/"), headers={"Authorization": f"Bearer {key}", "Accept": "application/json"},
                      timeout=15)
     if r.status_code == 200: return r.json()
-    try: reason = (r.json() or {}).get("reason", "")
-    except ValueError: reason = ""
-    if r.status_code == 403 and "invalidIp" in reason: raise ApiError("ip", "the key does not allow this PC's IP")
+    try: body = r.json() or {}
+    except ValueError: body = {}
+    reason, msg = body.get("reason", ""), body.get("message", "")
+    if r.status_code == 403 and "invalidIp" in reason:
+        m = re.search(r"(\d{1,3}(?:\.\d{1,3}){3})", msg)        # Supercell says which IP it saw
+        e = ApiError("ip", "the key does not allow this PC's IP")
+        e.ip = m.group(1) if m else ""
+        raise e
     if r.status_code == 403: raise ApiError("key", "the key was refused")
     if r.status_code == 404: raise ApiError("tag", "no player with this tag")
     if r.status_code == 429: raise ApiError("limit", "too many requests, try again in a minute")
     raise ApiError("http", f"HTTP {r.status_code} {reason}".strip())
+
+
+# ---------------------------------------------------------------- keys made automatically (the IP keeps changing)
+# Many connections (mobile data, VPNs, company proxies) change their public IP often; a key only works from the IPs
+# written in it. With the developer-site login in the settings, the bot does what the well-known API libraries do:
+# it logs in to developer.clashofclans.com, reads the IP Supercell sees right now, and makes a key for it (or reuses
+# the one it made before for that IP). At most 10 keys exist per account: the oldest "ClashFarmer" key is removed.
+DEV = "https://developer.clashofclans.com/api"
+KEYS = CACHE / "keys.json"
+KEY_NAME = "ClashFarmer"
+
+
+def _dev_login():
+    try:
+        import settings
+        a = settings.load_app()
+        return (a.get("clash_dev_email") or "").strip(), a.get("clash_dev_password") or ""
+    except Exception:
+        return "", ""
+
+
+def _saved_keys():
+    try: return json.loads(KEYS.read_text(encoding="utf-8"))
+    except (OSError, ValueError): return {}
+
+
+def auto_key():
+    """Log in to the developer site, make / reuse a key for the IP Supercell sees now -> (key, ip). Raises ApiError."""
+    import base64, requests
+    email, password = _dev_login()
+    if not email or not password: raise ApiError("no_login", "no developer-site login in the settings")
+    s = requests.Session()
+    r = s.post(f"{DEV}/login", json={"email": email, "password": password}, timeout=20)
+    if r.status_code in (401, 403): raise ApiError("login", "the developer-site email / password were refused")
+    if r.status_code != 200: raise ApiError("http", f"developer site: HTTP {r.status_code}")
+    tok = (r.json() or {}).get("temporaryAPIToken", "")
+    ip = ""
+    try:                                                   # the IP Supercell sees, written in the temporary token
+        part = tok.split(".")[1]
+        data = json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4)))
+        for lim in data.get("limits", []):
+            if lim.get("cidrs"): ip = lim["cidrs"][0].split("/")[0]
+    except Exception:
+        pass
+    if not ip: ip = public_ip()
+    keys = (s.post(f"{DEV}/apikey/list", json={}, timeout=20).json() or {}).get("keys", [])
+    have = next((k for k in keys if k.get("name") == KEY_NAME and ip in (k.get("cidrRanges") or [])), None)
+    if have is None:
+        if len(keys) >= 10:                                # the account's limit: drop our oldest key
+            ours = [k for k in keys if k.get("name") == KEY_NAME]
+            if not ours: raise ApiError("keys_full", "10 keys already exist on the developer site (none made by the bot)")
+            s.post(f"{DEV}/apikey/revoke", json={"id": ours[0]["id"]}, timeout=20)
+        r = s.post(f"{DEV}/apikey/create", json={"name": KEY_NAME, "description": "made by Clash Farmer for " + ip,
+                                                  "cidrRanges": [ip], "scopes": ["clash"]}, timeout=20)
+        have = (r.json() or {}).get("key") or {}
+        if not have.get("key"): raise ApiError("http", f"developer site: could not make a key (HTTP {r.status_code})")
+    saved = _saved_keys()
+    saved[ip] = have["key"]
+    CACHE.mkdir(parents=True, exist_ok=True)
+    KEYS.write_text(json.dumps(dict(list(saved.items())[-10:])), encoding="utf-8")
+    return have["key"], ip
+
+
+def _fetch(path):
+    """GET with the right key: the one typed in, the ones made for each IP seen, a new one when the IP is new."""
+    tried, last = set(), None
+    cands = [k for k in [_key()] + list(reversed(list(_saved_keys().values()))) if k]
+    for k in cands:
+        if k in tried: continue
+        tried.add(k)
+        try:
+            return _get(path, k)
+        except ApiError as e:
+            if e.code not in ("ip", "key"): raise
+            last = e
+            want = getattr(e, "ip", "")                  # a key made for exactly this IP: that one next
+            sk = _saved_keys().get(want)
+            if sk and sk not in tried:
+                tried.add(sk)
+                try: return _get(path, sk)
+                except ApiError as e2:
+                    if e2.code not in ("ip", "key"): raise
+    email, password = _dev_login()
+    if email and password:                              # a new IP: make its key now
+        k, _ip = auto_key()
+        return _get(path, k)
+    if last: raise last
+    raise ApiError("no_key", "no API key in the settings")
 
 
 def profile(account="main", max_age=1800, force=False):
@@ -81,14 +174,13 @@ def profile(account="main", max_age=1800, force=False):
             if time.time() - d.get("_t", 0) < max_age: return d
         except (OSError, ValueError):
             pass
-    key, tag = _key(), _tag(account)
-    if not key: return {"error": "no_key", "message": "no API key in the settings"}
+    tag = _tag(account)
     if not tag: return {"error": "no_tag", "message": "no player tag in this account's settings"}
     try:
-        d = _get(f"/players/{tag}", key)
+        d = _fetch(f"/players/{tag}")
     except ApiError as e:
         out = {"error": e.code, "message": str(e)}
-        if e.code == "ip": out["ip"] = public_ip()
+        if e.code == "ip": out["ip"] = getattr(e, "ip", "") or public_ip()
         return out
     except Exception as e:
         return {"error": "net", "message": str(e)[:200]}

@@ -88,6 +88,13 @@ class VillageScreen(Screen):
         w, g = grid(2)
         ca = GlassCard("ca_title", "id", "ca_sub")
         from .bot_settings_screen import secret_field
+        em = QLineEdit()
+        em.setPlaceholderText("you@gmail.com")
+        em.setLayoutDirection(Qt.LeftToRight)
+        em.setMinimumWidth(320)
+        bind_line(st, em, "clash_dev_email", "app")
+        ca.add(form_row("ca_email", "ca_email_sub", em))
+        ca.add(form_row("ca_pass", None, secret_field(st, "clash_dev_password", "••••••••")))
         ca.add(form_row("ca_key", "ca_key_sub", secret_field(st, "clash_api_key", "eyJ0eXAiOiJKV1Qi…")))
         tag = QLineEdit()
         tag.setPlaceholderText("#2PP0JCLQ8")
