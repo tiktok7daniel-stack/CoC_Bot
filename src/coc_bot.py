@@ -630,6 +630,11 @@ class CoC_Bot:
             screen_model.watch(_utils.INSTANCE_ID, newest, logger)
         except Exception:
             logger.debug("Screen watcher not started", exc_info=True)
+        try:                                       # the deep brain (DINOv2): download once, load in the background
+            import screen_cnn, threading as _th
+            _th.Thread(target=screen_cnn.ready, daemon=True, name="cnn-load").start()
+        except Exception:
+            pass
         while True:
             try:
                 s = self.load_settings()

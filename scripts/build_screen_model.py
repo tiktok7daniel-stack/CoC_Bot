@@ -27,7 +27,7 @@ def main(repo):
     for i in range(len(pairs)):
         m = sm.build(pairs[:i] + pairs[i + 1:])
         sm._M.update(t=time.time(), ex=np.array([sm._unpack(x["v"]) for x in m["items"]]), labels=[x["rule"] for x in m["items"]])
-        lab, d = sm.classify(pairs[i][1])
+        lab, d = sm._classify(pairs[i][1])
         if lab is None: unsure += 1
         elif lab == pairs[i][0]: right += 1
         else:
@@ -37,6 +37,25 @@ def main(repo):
     model = sm.build(pairs, {r["id"]: r.get("title_ar", r["id"]) for r in sc.get("screens", [])})
     for out in (os.path.join(repo, "knowledge", "model.json"), os.path.join(ROOT, "assets", "screen_model.json")):
         json.dump(model, open(out, "w"))
+    # the deep brain (DINOv2): the same pictures as examples (the network downloads itself the first time)
+    import screen_cnn
+    screen_cnn.download()
+    if screen_cnn._S["dl"] is not None: screen_cnn._S["dl"].join()
+    screen_cnn._S["tried"] = 0.0
+    if screen_cnn.ready():
+        bank = screen_cnn.build(pairs)
+        E = np.array([screen_cnn._unpack(x["v"]) for x in bank["items"]])
+        L = [x["rule"] for x in bank["items"]]
+        ok = 0
+        for i in range(len(L)):
+            sim = E @ E[i]
+            sim[i] = -9
+            ok += L[int(np.argmax(sim))] == L[i]
+        print(f"deep brain (DINOv2): pictures it never saw: right {ok} of {len(L)}")
+        for out in (os.path.join(repo, "knowledge", "model_cnn.json"), os.path.join(ROOT, "assets", "screen_cnn.json")):
+            json.dump(bank, open(out, "w"))
+    else:
+        print("deep brain: network not available —", screen_cnn._S["error"])
     print(f"model: {len(model['items'])} pictures, {len(set(r for r, _ in pairs))} kinds of screen")
 
 

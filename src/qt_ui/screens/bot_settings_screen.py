@@ -378,8 +378,10 @@ class BotSettingsScreen(Screen):
             if not r.get("installing"): self._gpu_timer.stop()
             m = b.get("model") or {}
             mem = b.get("memory") or {}
-            self.pw_brain.set("ok" if m.get("screens") else "warn",
-                              tr("pw_brain_txt").format(kinds=m.get("kinds", 0), pics=m.get("screens", 0), mem=mem.get("screens", 0)))
+            btxt = tr("pw_brain_txt").format(kinds=m.get("kinds", 0), pics=m.get("screens", 0), mem=mem.get("screens", 0))
+            dp = m.get("deep") or {}
+            if dp.get("ready") or dp.get("downloaded"): btxt += " · " + tr("pw_brain_deep").format(n=dp.get("examples", 0))
+            self.pw_brain.set("ok" if m.get("screens") else "warn", btxt)
             if m.get("now_title"): self.pw_brain.setToolTip(tr("pw_now").format(t=m["now_title"]))
             v = b.get("vision") or {}
             if v.get("model"):

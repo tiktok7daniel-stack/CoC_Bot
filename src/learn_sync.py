@@ -277,6 +277,11 @@ def fetch_knowledge():
     if isinstance(k, dict): _save(KNOW, k)
     s = _get_json("knowledge/status.json")
     if isinstance(s, dict): _save(STATUS, s)
+    c = _get_json("knowledge/model_cnn.json")             # the deep brain's examples (same pictures)
+    if isinstance(c, dict) and c.get("items"):
+        _save(BASE / "model_cnn.json", c)
+        try: __import__("screen_cnn").load(force=True)
+        except Exception: pass
     m = _get_json("knowledge/model.json")                 # the screen model Claude trained on the labelled pictures
     if isinstance(m, dict) and m.get("items"):
         _save(BASE / "model.json", m)

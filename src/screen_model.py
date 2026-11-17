@@ -94,8 +94,22 @@ def load(id="main", force=False):
         return _M
 
 
-def classify(img, id="main"):
-    """-> (screen kind, distance) of the nearest example, or (None, distance) when nothing is close enough."""
+def classify(img, id="main", deep=True):
+    """-> (screen kind, distance) of the nearest example, or (None, distance) when nothing is close enough.
+    deep: when this (1 ms) brain is not sure, ask the deep network (screen_cnn, DINOv2) for a second opinion."""
+    label, dist = _classify(img, id)
+    if label is None and deep:
+        try:
+            import screen_cnn
+            if screen_cnn._S["sess"] is not None or screen_cnn.MODEL.exists():
+                lab2, sim = screen_cnn.classify(img, id)
+                if lab2: return lab2, round(1.0 - sim, 4)
+        except Exception:
+            pass
+    return label, dist
+
+
+def _classify(img, id="main"):
     import numpy as np
     m = load(id)
     if m["ex"] is None or not len(m["labels"]): return None, None
@@ -119,6 +133,12 @@ def teach_self(id, img, label):
     import numpy as np
     key = (id, label)
     if time.time() - _RATE.get(key, 0) < 120: return False      # at most every 2 minutes per screen kind
+    try:                                                         # the deep brain collects it too (in the background)
+        import screen_cnn
+        if screen_cnn.MODEL.exists():
+            threading.Thread(target=screen_cnn.teach_self, args=(id, img.copy(), label), daemon=True).start()
+    except Exception:
+        pass
     _RATE[key] = time.time()
     try:
         p = _self_path(id)
@@ -143,8 +163,14 @@ def teach_self(id, img, label):
 
 def info(id="main"):
     m = load(id)
-    return {"screens": len(m["labels"]), "kinds": len(set(m["labels"])), "now": _NOW.get("label"),
-            "now_title": title(_NOW.get("label")) if _NOW.get("label") else ""}
+    out = {"screens": len(m["labels"]), "kinds": len(set(m["labels"])), "now": _NOW.get("label"),
+           "now_title": title(_NOW.get("label")) if _NOW.get("label") else ""}
+    try:
+        import screen_cnn
+        out["deep"] = screen_cnn.info(id)
+    except Exception:
+        pass
+    return out
 
 
 # ---------------------------------------------------------------- live watcher
@@ -162,7 +188,7 @@ def watch(id, get_frame, logger=None, every=0.25):
             try:
                 img = get_frame()
                 if img is not None:
-                    label, dist = classify(img, id)
+                    label, dist = classify(img, id, deep=False)
                     now = time.monotonic()
                     if label != _NOW["label"]: _NOW["since"] = now
                     _NOW.update(label=label, dist=dist, t=now)
