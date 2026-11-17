@@ -191,8 +191,10 @@ def upload_pending(id, limit=MAX_PER_ROUND):
         import vision
         sent_b = st.setdefault("battles_sent", [])
         if settings.load_app().get("share_battles", True) is not False:
-            for jpg in sorted(vision.KEEP.glob("*.jpg"))[-20:]:
-                if n >= limit or jpg.stem in sent_b: continue
+            nb = 0                                   # their own budget: every base attacked reaches Claude
+            for jpg in sorted(vision.KEEP.glob("*.jpg"))[-40:]:
+                if nb >= 12 or jpg.stem in sent_b: continue
+                nb += 1
                 meta = jpg.with_suffix(".json")
                 stem = f"inbox/battles/{teach._safe(id)}_{jpg.stem}"
                 _put(stem + ".jpg", jpg.read_bytes(), f"battle picture {jpg.stem}")

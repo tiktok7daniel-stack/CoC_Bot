@@ -731,7 +731,10 @@ class Attacker:
                 if plan.get("spells_where", "center") == "none": continue
                 delay = float(plan.get("spells_delay", 3))
                 waited = time.monotonic() - getattr(self, "troops_done_at", time.monotonic())
-                if delay > waited: time.sleep(delay - waited)
+                sm = getattr(self, "smart_plan", None)
+                if plan.get("mode") == "smart" and sm and sm.get("spell"):
+                    self.wait_for_fight(sm["spell"], max_wait=max(4.0, delay + 12 - waited))
+                elif delay > waited: time.sleep(delay - waited)
                 Input_Handler.click(cx, 0.9)
                 self.cast_spell(card_counts[i])
         Input_Handler.click(0.01, 0.9)
@@ -759,6 +762,35 @@ class Attacker:
         if not names: return None
         k = min(names, key=lambda c: abs(c - cx))
         return names[k] if abs(k - cx) < 0.02 else None
+
+    def wait_for_fight(self, target, max_wait=15.0, box=0.07):
+        """
+        Live battle watching: wait until the army reaches the spell's target (the picture around it starts to move a
+        lot: troops arriving, defenses shooting), then return -> seconds waited. Only the first spell waits; once
+        the fight is seen the next ones go straight away. max_wait: cast anyway.
+        """
+        import time, numpy as np
+        if getattr(self, "fight_seen", False): return 0.0
+        x, y = target
+        t0 = time.monotonic()
+        prev, base, hot = None, [], 0
+        while time.monotonic() - t0 < max_wait:
+            cur = Frame_Handler.get_frame_section(max(0, x - box), max(0.07, y - box), min(1, x + box), min(0.8, y + box),
+                                                  grayscale=True).astype(np.int16)
+            if prev is not None and cur.shape == prev.shape:
+                d = float(np.abs(cur - prev).mean())
+                if len(base) < 4: base.append(d)
+                else:
+                    calm = float(np.median(base))
+                    hot = hot + 1 if d > max(6.0, calm * 2.2) else 0
+                    if hot >= 2:
+                        self.fight_seen = True
+                        logger.info(f"Spells: the army reached the target after {time.monotonic() - t0:.1f}s — casting now")
+                        return time.monotonic() - t0
+            prev = cur
+            time.sleep(0.2)
+        self.fight_seen = True
+        return time.monotonic() - t0
 
     def smart_bad(self, pt):
         """A smart spot the game refused (the red line is further out there): push it outward, drop it if it can't."""
@@ -1015,7 +1047,18 @@ class Attacker:
         except Exception:
             logger.debug("vision look failed", exc_info=True)
         self.smart_plan, self.smart_points = None, None
-        smart = (getattr(self, "plan", None) or {}).get("mode") == "smart"
+        plan = getattr(self, "plan", None) or {}
+        smart = plan.get("mode") == "smart"
+        # the exact red line, shown by the game itself (smart attacks and recordings: they decide where to drop)
+        import deploy_zone
+        self.zone = deploy_zone.Zone()
+        uses_rec = bool(plan.get("recording")) and plan.get("mode", "recording") == "recording"
+        if plan and (smart or uses_rec) and plan.get("red_line", True):
+            probe = None
+            b = self.base_seen
+            if b is not None and b.hull is not None:
+                probe = b.th.center if b.th is not None else tuple(float(v) for v in b.hull.reshape(-1, 2).mean(axis=0))
+            self.zone = deploy_zone.reveal(self, probe=probe, logger=logger)
         if not smart and self.base_seen is not None and len(self.base_seen.objs) < 6:
             self._learn_unknown_base()           # the model hardly saw anything here: Claude labels it for training
         if smart:
@@ -1024,6 +1067,12 @@ class Attacker:
             except Exception:
                 sp = None
                 logger.debug("smart plan failed", exc_info=True)
+            if sp and self.zone:                 # right at the red line (+ a small gap), on the map's grass
+                pts = []
+                for x, y in sp["points"]:
+                    q = self.zone.snap(x, y)
+                    pts.append(q if self.base_seen.on_grass(*q) else (x, y))
+                sp = dict(sp, points=pts)
             if sp:
                 self.smart_plan, self.smart_points = sp, list(sp["points"])
                 logger.info(f"Smart attack: {sp['side']} side (danger {sp['danger']}), {len(sp['points'])} deploy spots")
@@ -1051,6 +1100,7 @@ class Attacker:
         self.spell_no = 0
         self.card_names = {}
         self.troops_done_at = self.heroes_done_at = None
+        self.fight_seen = False
         self._later = []
         if getattr(self, "plan", None): logger.debug(f"Attack plan: {self.plan.get('name', '')}")
         if getattr(self, "plan", None) and self.plan.get("recording") and self.plan.get("mode", "recording") == "recording":
@@ -1058,18 +1108,30 @@ class Attacker:
             data = recorder.load(self.plan["recording"])
             if data and data.get("events"):
                 logger.info(f"Replaying recording '{data.get('name')}'")
+                play = data
+                if self.plan.get("adapt", True):        # your attack re-shaped for this base (the model saw it)
+                    try:
+                        play, moved = recorder.adapt(data, getattr(self, "base_seen", None))
+                        if getattr(self, "zone", None):    # whatever still falls inside the red line: just outside it
+                            play, fixed = recorder.apply_zone(play, self.zone)
+                            if fixed: logger.info(f"Red line: {fixed} drop(s) of the recording moved out of it")
+                        if moved: logger.info(f"Recording adapted to this base: {moved} drop(s) moved"
+                                              + ("" if data.get("base") else " (old recording: only out of the base)"))
+                    except Exception:
+                        play = data
+                        logger.debug("adapting the recording failed", exc_info=True)
                 watch = self._watch_touches()            # your own taps during the battle are added to the recording
                 time.sleep(0.3)
                 replay_start = time.monotonic()
                 self.ended_at = None
                 replay_end = None
                 try:
-                    taps = recorder.replay(data, ADB_Manager.minitouch_device.connection, lambda: not running())
+                    taps = recorder.replay(play, ADB_Manager.minitouch_device.connection, lambda: not running())
                     replay_end = time.monotonic()
                     logger.debug(f"Recording replayed: {taps} taps")
                 except Exception:
                     logger.exception("Recording replay failed")
-                try: self.deploy_leftovers(data)     # new heroes / troops the recording didn't know about
+                try: self.deploy_leftovers(play)     # new heroes / troops the recording didn't know about
                 except Exception: logger.exception("Deploying the remaining cards failed")
                 self.finish_battle(restart)
                 self._merge_touches(watch, data, replay_start, replay_end)

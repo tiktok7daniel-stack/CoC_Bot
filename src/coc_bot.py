@@ -216,7 +216,8 @@ class CoC_Bot:
                 if gone >= 3: break
             rec.stop()
             time.sleep(0.3)
-            data = rec.save(name)
+            base = getattr(self.attacker, "base_seen", None)
+            data = rec.save(name, base=base.outline() if base is not None and len(base.objs) >= 8 else None)
             taps = sum(1 for e in data["events"] if e["type"] == "down")
             recorder.set_status(iid, "saved")
             logger.info(f"Battle recording '{name}' saved: {taps} taps, {data['duration']:.0f} seconds")

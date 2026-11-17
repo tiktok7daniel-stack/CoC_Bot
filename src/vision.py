@@ -253,10 +253,30 @@ class Base:
                 best = (score, {"side": name, "points": onscreen, "spell": spell, "danger": round(danger, 1)})
         return best[1] if best else None
 
+    def outline(self):
+        """The outline as plain lists (saved with a recording), or None."""
+        return None if self.hull is None else [[round(float(x), 4), round(float(y), 4)] for x, y in self.hull.reshape(-1, 2)]
+
     def outside_spots(self, spots, margin=0.03):
         """The spots that are not inside the base (kept in their order), then the others."""
         out = [p for p in spots if not self.inside(*p, margin=margin)]
         return out + [p for p in spots if p not in out]
+
+
+def ray_radius(poly, cx, cy, dx, dy):
+    """From (cx, cy) in direction (dx, dy): how far to the outline poly ([[x, y], ...]) -> distance or None."""
+    best = None
+    n = len(poly)
+    for i in range(n):
+        ax, ay = poly[i]
+        bx, by = poly[(i + 1) % n]
+        ex, ey = bx - ax, by - ay
+        den = dx * ey - dy * ex
+        if abs(den) < 1e-12: continue
+        t = ((ax - cx) * ey - (ay - cy) * ex) / den           # along the ray
+        u = ((ax - cx) * dy - (ay - cy) * dx) / den           # along the edge
+        if t > 0 and -1e-9 <= u <= 1 + 1e-9 and (best is None or t > best): best = t
+    return best
 
 
 def look(frame, keep_for_learning=True, logger=None):

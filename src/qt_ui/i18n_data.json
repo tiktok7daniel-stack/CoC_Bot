@@ -368,6 +368,10 @@
 "rec_started": "البوت بيدخل معركة لوحده — أول ما يقولك \"سجّل دلوقتي\" نزّل الجيش",
 "rec_note": "لازم الجيش يكون نفسه وبنفس ترتيب الكروت تحت. نزّل الوحوش على أطراف الخريطة البعيدة عشان كل قرية شكلها مختلف. البوت بيبعّد الكاميرا لوحده أول ما المعركة تبدأ — ما تحركش الكاميرا وانت بتهاجم.",
 "pl_mode": "نظام الهجوم",
+"pl_red": "يشوف الخط الأحمر بالظبط",
+"pl_red_sub": "أول الهجمة يختار وحش ويدوس في نص القرية — اللعبة بتنوّر المنطقة الممنوعة بالأحمر والبوت يقراها (مفيش وحش بينزل)",
+"pl_adapt": "التسجيل يتكيّف مع القرية",
+"pl_adapt_sub": "البوت يشوف القرية وينقل هجمتك عليها: نفس المسافة من حرف القرية ونفس مكان السبيلات، حتى لو القرية أكبر أو أصغر",
 "pw_ocr": "قارئ الكلام",
 "pw_ocr_on": "PaddleOCR {m} على {dev} — {ms} ملّي ثانية",
 "pw_ocr_off": "بيحمّل… (easyocr مؤقتًا)",
@@ -1403,6 +1407,10 @@
 "rs_banner": "Record now — deploy by hand",
 "rec_note": "Use the same army in the same card order. Deploy on the far edges. Don't move the camera while attacking.",
 "pl_mode": "Attack system",
+"pl_red": "Read the exact red line",
+"pl_red_sub": "At the start it selects a troop and taps the middle of the base — the game lights the forbidden area red and the bot reads it (nothing is dropped)",
+"pl_adapt": "Recording adapts to the base",
+"pl_adapt_sub": "The bot looks at the base and moves your attack onto it: same distance from its edge, spells in the same place, even on a bigger / smaller base",
 "pw_ocr": "Text reader",
 "pw_ocr_on": "PaddleOCR {m} on {dev} — {ms} ms",
 "pw_ocr_off": "Loading… (easyocr meanwhile)",
@@ -3029,6 +3037,30 @@
 [
 "^PaddleOCR installed — the strongest text reader is used from now on",
 "🔤 PaddleOCR اتسطّب — البوت بيقرا بأقوى قارئ من دلوقتي"
+],
+[
+"^Recording adapted to this base: (\\d+) drop\\(s\\) moved \\(old recording: only out of the base\\)",
+"🎯 التسجيل اتكيّف مع القرية دي: نقل \\1 إنزال لبرّه حرف القرية (تسجيل قديم — سجّل هجمة جديدة علشان يتكيّف بالكامل)"
+],
+[
+"^Recording adapted to this base: (\\d+) drop\\(s\\) moved",
+"🎯 التسجيل اتكيّف مع القرية دي: نقل \\1 إنزال على مقاسها"
+],
+[
+"^Spells: the army reached the target after ([\\d.]+)s — casting now",
+"🪄 السبيلات: الجيش وصل للدفاعات بعد \\1 ثانية — رماها دلوقتي"
+],
+[
+"^Red line found: drops go right outside it",
+"🟥 شاف الخط الأحمر بالظبط — الإنزال هيبقى برّه الخط على طول"
+],
+[
+"^Red line not seen: deploying without it",
+"🟥 ماشافش الخط الأحمر — بينزّل من غيره وبعت الصورة لـ Claude"
+],
+[
+"^Red line: (\\d+) drop\\(s\\) of the recording moved out of it",
+"🟥 الخط الأحمر: نقل \\1 إنزال من التسجيل لبرّه الخط"
 ],
 [
 "^PaddleOCR failed, reading with easyocr",

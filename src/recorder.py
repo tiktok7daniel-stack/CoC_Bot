@@ -163,11 +163,12 @@ class Recorder:
                     elif s["active"] and s["dirty"]:
                         self._emit("move", sl, s); s["dirty"] = False
 
-    def save(self, name):
+    def save(self, name, base=None):
         REC_DIR.mkdir(parents=True, exist_ok=True)
         events = [{k: v for k, v in e.items() if k not in ("k", "m")} for e in self.events]
         data = {"name": name, "created": time.time(), "duration": events[-1]["t"] if events else 0,
                 "max": [self.max_x, self.max_y], "events": events}
+        if base: data["base"] = {"hull": base}           # the base's outline when you recorded (adaptive replay)
         (REC_DIR / f"{_safe(name)}.json").write_text(json.dumps(data), encoding="utf-8")
         return data
 
@@ -203,6 +204,95 @@ def replay(data, connection, should_stop=lambda: False):
     try: connection.send(b._content)
     except Exception: pass
     return taps
+
+
+# ---------------------------------------------------------------- adaptive replay: your attack moved onto this base
+UI_BOTTOM = 0.80            # the troop bar / hero abilities: never moved
+UI_BOXES = ((0.0, 0.62, 0.16, 0.80), (0.90, 0.48, 1.0, 0.66))   # End Battle / Surrender, the speed button
+
+
+def _is_ui(x, y):
+    return y >= UI_BOTTOM or any(x1 <= x <= x2 and y1 <= y <= y2 for x1, y1, x2, y2 in UI_BOXES)
+
+
+def adapt(data, base, min_objs=8):
+    """
+    Your recorded attack, re-shaped for the base on the screen now (seen by the vision model) -> (data, moved).
+
+    Every battlefield touch keeps its place RELATIVE to the base: a troop dropped 1 tile outside the recorded base's
+    edge is dropped 1 tile outside this base's edge in the same direction; a spell thrown halfway between the centre
+    and the edge lands halfway on this base. Bigger / smaller / shifted bases get the same attack.
+    Recordings made before this existed (no outline saved) only get the touches that would fall inside this base
+    pushed out to its edge (the game ignores those). Taps on the troop bar / buttons never move.
+    """
+    import copy
+    from vision import ray_radius
+    import army_learn
+    if base is None or getattr(base, "hull", None) is None or len(getattr(base, "objs", [])) < min_objs: return data, 0
+    new = base.outline()
+    ref = (data.get("base") or {}).get("hull")
+    nc = [sum(p[0] for p in new) / len(new), sum(p[1] for p in new) / len(new)]
+    rc = [sum(p[0] for p in ref) / len(ref), sum(p[1] for p in ref) / len(ref)] if ref else nc
+    mx, my = (data.get("max") or [1, 1])[:2]
+    portrait = mx < my
+
+    def to_touch(x, y):
+        return (1 - y, x) if portrait else (x, y)
+
+    def move(x, y):
+        dx, dy = x - rc[0], y - rc[1]
+        d = (dx * dx + dy * dy) ** 0.5
+        if d < 1e-6: return nc[0], nc[1]
+        ux, uy = dx / d, dy / d
+        rn = ray_radius(new, nc[0], nc[1], ux, uy)
+        if rn is None: return x, y
+        if ref:
+            rr = ray_radius(ref, rc[0], rc[1], ux, uy)
+            if rr is None: return x, y
+            drop = d > rr                                      # outside the recorded base: a troop / hero drop
+            nd = rn + (d - rr) if drop else d / rr * rn        # outside: same gap; inside: same share of the way
+        else:
+            if not base.inside(x, y, margin=0.015): return x, y
+            drop, nd = True, rn + 0.035                        # old recording: only out of this base
+        qx, qy = nc[0] + ux * nd, nc[1] + uy * nd
+        if drop:                                               # it must land on the map's grass, outside the base
+            back = 0.0
+            while back < 0.12 and not (base.on_grass(qx, qy) and 0.02 < qx < 0.98 and 0.08 < qy < UI_BOTTOM):
+                back += 0.01
+                k = max(rn + 0.01, nd - back)
+                qx, qy = nc[0] + ux * k, nc[1] + uy * k
+        return min(0.99, max(0.01, qx)), min(UI_BOTTOM - 0.005, max(0.01, qy))
+
+    out = copy.deepcopy(data)
+    moved = 0
+    for e in out.get("events", []):
+        if e.get("type") not in ("down", "move"): continue
+        x, y = army_learn.touch_to_screen(e["fx"], e["fy"], mx, my)
+        if _is_ui(x, y): continue
+        qx, qy = move(x, y)
+        if abs(qx - x) + abs(qy - y) > 0.004:
+            if e["type"] == "down": moved += 1
+            e["fx"], e["fy"] = to_touch(qx, qy)
+    return out, moved
+
+
+def apply_zone(data, zone):
+    """Touches that would land inside the red line (deploy_zone.Zone) moved just outside it -> (data, moved)."""
+    import copy, army_learn
+    if not zone: return data, 0
+    mx, my = (data.get("max") or [1, 1])[:2]
+    portrait = mx < my
+    out = copy.deepcopy(data)
+    moved = 0
+    for e in out.get("events", []):
+        if e.get("type") not in ("down", "move"): continue
+        x, y = army_learn.touch_to_screen(e["fx"], e["fy"], mx, my)
+        if _is_ui(x, y) or not zone.inside(x, y): continue
+        qx, qy = zone.fix(x, y)
+        if (qx, qy) != (x, y):
+            if e["type"] == "down": moved += 1
+            e["fx"], e["fy"] = (1 - qy, qx) if portrait else (qx, qy)
+    return out, moved
 
 
 # ---------------------------------------------------------------- your own taps on top of a replay
