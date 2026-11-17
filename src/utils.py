@@ -3006,6 +3006,11 @@ def install_error_reporter():
                 where = f"{Path(rec['file'].path).name}:{rec['line']} {rec['function']}"
             entry = {"level": level, "message": first, "detail": detail, "where": where,
                      "phase": TEMP_CACHE.get("phase", "")}
+            if exc is not None and exc.type is not None and level in ("ERROR", "CRITICAL"):
+                try:                               # the whole story for Claude (errors are sent to the learning repo)
+                    entry["trace"] = "".join(traceback.format_exception(exc.type, exc.value, exc.traceback))[-4000:]
+                except Exception:
+                    pass
             now = time.time()
             if level in ("ERROR", "CRITICAL") and not state["busy"] and now - state["last_shot"] > 20:
                 state["busy"], state["last_shot"] = True, now

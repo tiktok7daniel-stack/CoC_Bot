@@ -306,7 +306,11 @@
    ]
   },
   "note": "each Upgrade shows its price on the button (above the word); the blue one uses Wall Rings (magic item)",
-  "source": "captures/20261116_053431_main/007.jpg"
+  "source": "captures/20261116_053431_main/007.jpg",
+  "low_level_layout": {
+   "note": "walls below level ~9: Remove Wall / Add Wall on top, one gold Upgrade at (0.31, 0.874), blue Wall Ring Upgrade (NEVER) at (0.42, 0.874)",
+   "source": "inbox/stuck/main_20261117_010239.jpg"
+  }
  },
  "shop_offers": {
   "title_ar": "المحل — العروض",
@@ -328,5 +332,16 @@
    ]
   },
   "source": "inbox/stuck/main_20261116_100928.jpg"
+ },
+ "ldplayer_topup_ad": {
+  "title_ar": "إعلان شحن جواهر من LDPlayer",
+  "buttons": {
+   "close_x": [
+    0.759,
+    0.185
+   ]
+  },
+  "never_tap": "Top Up / any € price (LDPlayer's own ad over the game)",
+  "source": "inbox/stuck/main_20261117_014617.jpg"
  }
 }

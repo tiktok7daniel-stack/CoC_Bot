@@ -226,6 +226,14 @@ def _upgrade_buttons(frame):
     return out
 
 
+def _wall_level(frame):
+    """ "Wall (Level 12)" over the selected wall's buttons -> 12 (None when not read)."""
+    for t, *_r in ocr_boxes(Frame_Handler.crop(frame, 0.10, 0.48, 0.70, 0.66)):
+        m = re.search(r"level\s*(\d{1,2})", t.lower())
+        if m: return int(m.group(1))
+    return None
+
+
 def _pick_button(btns, res=None):
     """The Upgrade button to press: one whose price can be paid with what is in the storages (the fuller one)."""
     if not btns: return None
@@ -275,9 +283,15 @@ def upgrade(row, upgrader=None, tries=12, res=None):
     import utils
     if not find_and_tap(row): return False
     pressed_upgrade = False
+    level0 = None
     for _ in range(tries):
         time.sleep(0.35)
         frame = Frame_Handler.get_frame(grayscale=False)
+        if row.get("name") == "Wall":
+            lv = _wall_level(frame)
+            if level0 is None and not pressed_upgrade: level0 = lv
+            elif pressed_upgrade and lv is not None and level0 is not None and lv > level0:
+                return True                         # walls can upgrade at once, with no window to confirm
         c = _confirm_button(frame)
         if c:
             Input_Handler.click(*c)
@@ -311,7 +325,8 @@ def upgrade(row, upgrader=None, tries=12, res=None):
     # not recognised: the picture goes to Claude (once per screen) so the next version knows it
     try:
         import learn_sync
-        learn_sync.report_stuck(utils.INSTANCE_ID, Frame_Handler.get_frame(grayscale=False), [], "upgrade_window")
+        fr = Frame_Handler.get_frame(grayscale=False)
+        learn_sync.report_stuck(utils.INSTANCE_ID, fr, [b[0] for b in ocr_boxes(fr) if b[5] > 0.3], "upgrade_window")
     except Exception:
         pass
     utils.Input_Handler.click_exit(n=2)
