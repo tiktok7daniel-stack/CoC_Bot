@@ -1059,7 +1059,12 @@ class Attacker:
             if b is not None and b.hull is not None:
                 probe = b.th.center if b.th is not None else tuple(float(v) for v in b.hull.reshape(-1, 2).mean(axis=0))
             self.zone = deploy_zone.reveal(self, probe=probe, logger=logger)
-        if not smart and self.base_seen is not None and len(self.base_seen.objs) < 6:
+        try:                                     # a model that didn't load is a bug (logged), not an unknown base
+            import vision as _v
+            loaded = _v._NET.get("net") is not None
+        except Exception:
+            loaded = False
+        if not smart and loaded and self.base_seen is not None and len(self.base_seen.objs) < 6:
             self._learn_unknown_base()           # the model hardly saw anything here: Claude labels it for training
         if smart:
             try:
@@ -1078,7 +1083,7 @@ class Attacker:
                 logger.info(f"Smart attack: {sp['side']} side (danger {sp['danger']}), {len(sp['points'])} deploy spots")
             else:
                 logger.info("Smart attack: the base wasn't recognised, attacking from the sides")
-                self._learn_unknown_base()
+                if loaded: self._learn_unknown_base()
 
     def _learn_unknown_base(self):
         """The model saw too little of this base: the picture goes to Claude (for the next training)."""

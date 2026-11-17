@@ -208,7 +208,8 @@ def replay(data, connection, should_stop=lambda: False):
 
 # ---------------------------------------------------------------- adaptive replay: your attack moved onto this base
 UI_BOTTOM = 0.80            # the troop bar / hero abilities: never moved
-UI_BOXES = ((0.0, 0.62, 0.16, 0.80), (0.90, 0.48, 1.0, 0.66))   # End Battle / Surrender, the speed button
+UI_BOXES = ((0.0, 0.62, 0.16, 0.80), (0.90, 0.48, 1.0, 0.66),  # End Battle / Surrender, the speed button
+            (0.74, 0.0, 1.0, 0.23), (0.0, 0.0, 0.22, 0.30))         # resource bars, available loot
 
 
 def _is_ui(x, y):

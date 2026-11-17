@@ -575,6 +575,8 @@ def note_unknown(id, frame, words, phase):
     """Called for every screen the bot doesn't know: sent as soon as it is seen twice in a row (once per screen:
     screens already sent or already taught are not sent again); sent as "stuck" when it doesn't go away."""
     import capture_session as cs
+    if any(str(w).strip().lower().startswith("loading") for w in words or []):
+        return False                                     # the game is loading: wait, nothing to learn
     try: h = cs.dhash(frame)
     except Exception: return False
     now = time.time()

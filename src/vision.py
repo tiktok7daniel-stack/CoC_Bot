@@ -31,18 +31,43 @@ def _model_dir():
 
 
 def _load():
+    """onnxruntime first (fast, any graphics card with DirectML / CUDA), OpenCV's dnn as the fallback.
+    A model that can't load is logged as an error (it reaches Claude) instead of silently seeing nothing."""
     with _LOCK:
         if _NET["tried"]: return _NET["net"]
         _NET["tried"] = True
         d = _model_dir()
-        if d is None: return None
+        if d is None:
+            _log_error("Vision model file missing (assets/models/coc_vision.onnx)")
+            return None
+        _NET["names"] = json.loads((d / "coc_vision.json").read_text(encoding="utf-8"))["names"]
+        errs = []
+        try:
+            import onnxruntime as ort
+            av = ort.get_available_providers()
+            prov = [p for p in ("CUDAExecutionProvider", "DmlExecutionProvider") if p in av] + ["CPUExecutionProvider"]
+            sess = ort.InferenceSession(str(d / "coc_vision.onnx"), providers=prov)
+            _NET.update(net=sess, kind="ort", device=sess.get_providers()[0])
+            return sess
+        except Exception as e:
+            errs.append(f"onnxruntime: {type(e).__name__}: {e}")
         try:
             import cv2
-            _NET["net"] = cv2.dnn.readNetFromONNX(str(d / "coc_vision.onnx"))
-            _NET["names"] = json.loads((d / "coc_vision.json").read_text(encoding="utf-8"))["names"]
-        except Exception:
-            _NET["net"] = None
-        return _NET["net"]
+            _NET.update(net=cv2.dnn.readNetFromONNX(str(d / "coc_vision.onnx")), kind="cv2", device="cv2")
+            return _NET["net"]
+        except Exception as e:
+            errs.append(f"opencv {getattr(__import__('cv2'), '__version__', '?')}: {type(e).__name__}: {e}")
+        _NET["net"] = None
+        _log_error("Vision model could not load — " + " | ".join(errs)[:500])
+        return None
+
+
+def _log_error(msg):
+    try:
+        from utils import logger
+        logger.error(msg)
+    except Exception:
+        pass
 
 
 class Obj:
@@ -66,7 +91,7 @@ def info():
     if d is not None:
         try: meta = json.loads((d / "coc_vision.json").read_text(encoding="utf-8"))
         except (OSError, ValueError): meta = {}
-    return {"model": d is not None, "map50": meta.get("map50"), "classes": len(meta.get("names", [])),
+    return {"model": d is not None, "loaded": _NET.get("net") is not None, "engine": _NET.get("device"), "map50": meta.get("map50"), "classes": len(meta.get("names", [])),
             "last": _LAST.get("summary", "")}
 
 
@@ -85,8 +110,11 @@ def detect(frame, conf=CONF):
     square[oy:oy + h, ox:ox + w] = frame
     blob = cv2.dnn.blobFromImage(square, 1 / 255.0, (SIZE, SIZE), swapRB=False, crop=False)
     with _LOCK:
-        net.setInput(blob)
-        out = net.forward()
+        if _NET.get("kind") == "ort":
+            out = net.run(None, {net.get_inputs()[0].name: blob})[0]
+        else:
+            net.setInput(blob)
+            out = net.forward()
     out = np.squeeze(out, 0).T                      # (8400, 4 + classes)
     scores = out[:, 4:]
     cls = scores.argmax(1)
@@ -176,9 +204,20 @@ class Base:
     SIDES = {"bottom-left": (-0.7071, 0.7071), "bottom-right": (0.7071, 0.7071),
              "top-left": (-0.7071, -0.7071), "top-right": (0.7071, -0.7071)}
     FIELD = (0.03, 0.10, 0.97, 0.78)
+    # the game's buttons / counters over the battlefield: never a drop spot
+    UI = ((0.74, 0.0, 1.0, 0.23),        # gold / elixir / dark elixir bars (top right)
+          (0.0, 0.0, 0.22, 0.30),        # player name + available loot (top left)
+          (0.38, 0.0, 0.62, 0.09),       # battle timer
+          (0.0, 0.68, 0.50, 0.80),       # End Battle / Surrender / boosts (bottom left)
+          (0.80, 0.60, 1.0, 0.80),       # Next / damage % (bottom right)
+          (0.92, 0.45, 1.0, 0.66))       # speed button
+
+    def on_ui(self, x, y):
+        return any(x1 <= x <= x2 and y1 <= y <= y2 for x1, y1, x2, y2 in self.UI)
 
     def on_grass(self, x, y):
-        """On the map's grass (not the forest / water / sand / rocks around it, not a building)."""
+        """On the map's grass (not the forest / water / sand / rocks around it, not a building, not the game's UI)."""
+        if self.on_ui(x, y): return False
         if self.grass is None: return True
         H, W = self.grass.shape
         i, j = int(min(H - 1, max(0, y * H))), int(min(W - 1, max(0, x * W)))
