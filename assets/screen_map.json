@@ -1,0 +1,332 @@
+{
+ "village_home": {
+  "title_ar": "القرية الرئيسية",
+  "source": "captures/20261116_051848_main/008.jpg",
+  "buttons": {
+   "battle": [
+    0.06,
+    0.94
+   ],
+   "build (builder menu)": [
+    0.93,
+    0.94
+   ],
+   "free builders counter": [
+    0.91,
+    0.76
+   ],
+   "shop / free gems": [
+    0.95,
+    0.54
+   ],
+   "chat / clan": [
+    0.035,
+    0.5
+   ],
+   "trophies / leagues": [
+    0.035,
+    0.27
+   ],
+   "profile": [
+    0.05,
+    0.08
+   ],
+   "inventory / items": [
+    0.85,
+    0.94
+   ],
+   "builders_counter": [
+    0.89,
+    0.765
+   ]
+  }
+ },
+ "builder_menu": {
+  "title_ar": "قايمة البنّاء (Buildings & Heroes)",
+  "how_to_open": [
+   [
+    "Build",
+    0.93,
+    0.94
+   ]
+  ],
+  "source": "captures/20261116_051848_main/010-016",
+  "area": [
+   0.73,
+   0.0,
+   1.0,
+   0.93
+  ],
+  "close": [
+   0.982,
+   0.03
+  ],
+  "tabs": {
+   "builders": [
+    0.76,
+    0.95
+   ],
+   "builder apprentice": [
+    0.84,
+    0.95
+   ],
+   "blacksmith / forge": [
+    0.92,
+    0.95
+   ],
+   "other": [
+    0.98,
+    0.95
+   ]
+  },
+  "rows": {
+   "area": [
+    0.735,
+    0.06,
+    1.0,
+    0.885
+   ],
+   "name_x": 0.78,
+   "price_x": [
+    0.845,
+    0.979
+   ],
+   "icon_x": 0.987,
+   "row_height": 0.079,
+   "price_white": "can pay",
+   "price_red": "not enough",
+   "icon_yellow": "gold",
+   "icon_pink": "elixir",
+   "icon_black": "dark elixir",
+   "New": "new building to place (skipped)"
+  },
+  "buttons": {
+   "close": [
+    0.982,
+    0.03
+   ],
+   "tab_builders": [
+    0.766,
+    0.94
+   ],
+   "tab_goblin": [
+    0.83,
+    0.94
+   ],
+   "tab_blacksmith": [
+    0.898,
+    0.94
+   ],
+   "tab_pets": [
+    0.966,
+    0.94
+   ]
+  }
+ },
+ "army_screen": {
+  "title_ar": "شاشة الجيش",
+  "how_to_open": [
+   "village_home.battle"
+  ],
+  "source": "captures/20261116_051848_main/017.jpg",
+  "tabs": {
+   "my army": [
+    0.2,
+    0.1
+   ],
+   "saved recipes": [
+    0.5,
+    0.1
+   ],
+   "cookbook": [
+    0.78,
+    0.1
+   ]
+  },
+  "buttons": {
+   "attack!": [
+    0.88,
+    0.89
+   ],
+   "boost army": [
+    0.73,
+    0.19
+   ],
+   "boost heroes": [
+    0.86,
+    0.19
+   ],
+   "close": [
+    0.965,
+    0.09
+   ]
+  }
+ },
+ "saved_recipes": {
+  "title_ar": "الجيوش المحفوظة",
+  "how_to_open": [
+   "village_home.battle",
+   "army_screen.saved recipes"
+  ],
+  "source": "captures/20261116_051848_main/018.jpg",
+  "rows": "recipe name on the left; on the right of the same row: Use (top), Edit, Share",
+  "use_x": 0.96
+ },
+ "battle_result": {
+  "title_ar": "نتيجة الهجمة",
+  "source": "captures/20261116_051848_main/001.jpg",
+  "buttons": {
+   "claim reward": [
+    0.5,
+    0.857
+   ]
+  }
+ },
+ "reward_chest": {
+  "title_ar": "صندوق المكافأة",
+  "source": "captures/20261116_051848_main/002.jpg",
+  "buttons": {
+   "chest (tap until open)": [
+    0.5,
+    0.55
+   ]
+  }
+ },
+ "reward_item": {
+  "title_ar": "الجايزة",
+  "source": "captures/20261116_051848_main/007.jpg",
+  "buttons": {
+   "continue": [
+    0.5,
+    0.875
+   ]
+  }
+ },
+ "season_pass": {
+  "title_ar": "باس الموسم",
+  "source": "captures/20261116_051848_main/020.jpg",
+  "buttons": {
+   "close": [
+    0.982,
+    0.06
+   ]
+  },
+  "never_tap": "the paid offer on the left (€ price)"
+ },
+ "builder_base_village": {
+  "title_ar": "القرية الليلية",
+  "source": "captures/20261116_051848_main/022.jpg",
+  "buttons": {
+   "battle": [
+    0.06,
+    0.94
+   ],
+   "build": [
+    0.93,
+    0.94
+   ],
+   "shop": [
+    0.94,
+    0.52
+   ],
+   "free builders": [
+    0.91,
+    0.76
+   ]
+  }
+ },
+ "building_selected": {
+  "title_ar": "مبنى متعلّم عليه (البار اللي تحت)",
+  "how_to_open": [
+   [
+    "tap a builder-menu row"
+   ]
+  ],
+  "buttons": {
+   "info": [
+    0.228,
+    0.79
+   ],
+   "upgrade_grey": [
+    0.337,
+    0.79
+   ],
+   "upgrade_blue_MAGIC_HAMMER_NEVER": [
+    0.445,
+    0.79
+   ],
+   "inventory": [
+    0.554,
+    0.79
+   ],
+   "change_scenery": [
+    0.664,
+    0.79
+   ]
+  },
+  "note": "the grey Upgrade (hammer, price above it) is the normal upgrade; the blue one with a number uses a magic Hammer item: never",
+  "source": "inbox/20261116/main_20261116_043118.jpg"
+ },
+ "wall_selected": {
+  "title_ar": "سور متعلّم عليه",
+  "how_to_open": [
+   [
+    "Build",
+    0.93,
+    0.94
+   ],
+   [
+    "a Wall row in the builder menu"
+   ]
+  ],
+  "buttons": {
+   "info": [
+    0.257,
+    0.74
+   ],
+   "select_row": [
+    0.366,
+    0.74
+   ],
+   "upgrade_more_NEVER": [
+    0.474,
+    0.74
+   ],
+   "upgrade_gold": [
+    0.257,
+    0.875
+   ],
+   "upgrade_elixir": [
+    0.366,
+    0.875
+   ],
+   "wall_rings_BLUE_NEVER": [
+    0.474,
+    0.875
+   ]
+  },
+  "note": "each Upgrade shows its price on the button (above the word); the blue one uses Wall Rings (magic item)",
+  "source": "captures/20261116_053431_main/007.jpg"
+ },
+ "shop_offers": {
+  "title_ar": "المحل — العروض",
+  "buttons": {
+   "close_x": [
+    0.961,
+    0.075
+   ]
+  },
+  "never_tap": "any price (€) / Gold Pass / bundles",
+  "source": "inbox/stuck/main_20261116_122014.jpg"
+ },
+ "unable_to_attack": {
+  "title_ar": "مش قادر يهاجم",
+  "buttons": {
+   "return_home": [
+    0.065,
+    0.885
+   ]
+  },
+  "source": "inbox/stuck/main_20261116_100928.jpg"
+ }
+}

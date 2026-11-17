@@ -277,6 +277,8 @@ def fetch_knowledge():
     if isinstance(k, dict): _save(KNOW, k)
     s = _get_json("knowledge/status.json")
     if isinstance(s, dict): _save(STATUS, s)
+    mp = _get_json("knowledge/map.json")                  # the screen map (navigator: every screen and its buttons)
+    if isinstance(mp, dict) and mp: _save(BASE / "map.json", mp)
     c = _get_json("knowledge/model_cnn.json")             # the deep brain's examples (same pictures)
     if isinstance(c, dict) and c.get("items"):
         _save(BASE / "model_cnn.json", c)

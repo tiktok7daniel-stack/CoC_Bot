@@ -709,7 +709,13 @@ def to_home_base(ref_cache=False):
             Input_Handler.click(x, y)
             time.sleep(2)
             return
-    # couldn't find the way home: something unknown is on the screen
+    # couldn't find the way home: the screen map knows the way from most screens (close / return / continue)
+    try:
+        import navigator
+        if navigator.go("village_home", max_steps=4): return
+    except Exception:
+        logger.debug("map navigation failed", exc_info=True)
+    # something unknown is on the screen
     Auto_Learn.handle_unknown_screen("to_home")
 
 # Storage counters in the top-right corner (fractions of a 1920x1080 frame).
