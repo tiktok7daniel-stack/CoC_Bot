@@ -354,10 +354,20 @@ class Attacker:
         import time
         start_time = time.time()
         while time.time() - start_time < timeout:
-            if find_taught("end_battle"): return True
+            try:                                     # the red End Battle button by its colour: instant
+                if red_battle_button():
+                    self.base_at = time.monotonic()
+                    return True
+            except Exception:
+                pass
+            if find_taught("end_battle"):
+                self.base_at = time.monotonic()
+                return True
             x, y = Frame_Handler.locate(self.assets["end_battle"], thresh=0.9)
-            if x is not None and y is not None: return True
-            time.sleep(0.15)
+            if x is not None and y is not None:
+                self.base_at = time.monotonic()
+                return True
+            time.sleep(0.1)
         return False
 
     def record_search(self, loot=None, accepted=True):
@@ -1033,12 +1043,12 @@ class Attacker:
             cur = Frame_Handler.get_frame_section(0.0, 0.1, 1.0, 0.8, grayscale=True)[::8, ::8].astype(int)
             if prev is not None and cur.shape == prev.shape and float(np.abs(cur - prev).mean()) < 4: break
             prev = cur
-            time.sleep(0.2)
+            time.sleep(0.1)
         for _ in range(2):
             Input_Handler.zoom(dir="out")
-            time.sleep(0.25)
-        Input_Handler.swipe_up(y1=0.5)
-        time.sleep(0.2)
+            time.sleep(0.08)
+        Input_Handler.swipe_up(y1=0.5, duration=80, inter_points=3, fast=True)
+        time.sleep(0.12)
         # one look with the YOLO model: what the base has, where its outline is (deploy spots outside it)
         self.base_seen = None
         try:
@@ -1113,21 +1123,32 @@ class Attacker:
             data = recorder.load(self.plan["recording"])
             if data and data.get("events"):
                 logger.info(f"Replaying recording '{data.get('name')}'")
-                play = data
+                play, shift = data, 0.0
+                try:                                     # the quiet time before your first tap is not replayed
+                    evs = data.get("events", [])
+                    t0 = next((e["t"] for e in evs if e.get("type") == "down"), 0.0)
+                    if t0 > 0.15:
+                        shift = t0 - 0.05
+                        play = dict(data, events=[dict(e, t=max(0.0, e["t"] - shift)) for e in evs])
+                except Exception:
+                    play = data
+                trimmed = play
                 if self.plan.get("adapt", True):        # your attack re-shaped for this base (the model saw it)
                     try:
-                        play, moved = recorder.adapt(data, getattr(self, "base_seen", None))
+                        play, moved = recorder.adapt(play, getattr(self, "base_seen", None))
                         if getattr(self, "zone", None):    # whatever still falls inside the red line: just outside it
                             play, fixed = recorder.apply_zone(play, self.zone)
                             if fixed: logger.info(f"Red line: {fixed} drop(s) of the recording moved out of it")
                         if moved: logger.info(f"Recording adapted to this base: {moved} drop(s) moved"
                                               + ("" if data.get("base") else " (old recording: only out of the base)"))
                     except Exception:
-                        play = data
+                        play = trimmed
                         logger.debug("adapting the recording failed", exc_info=True)
                 watch = self._watch_touches()            # your own taps during the battle are added to the recording
-                time.sleep(0.3)
+                time.sleep(0.1)
                 replay_start = time.monotonic()
+                if getattr(self, "base_at", None):
+                    logger.info(f"Battle: first tap of the recording {replay_start + 0.05 - self.base_at:.1f}s after the base appeared")
                 self.ended_at = None
                 replay_end = None
                 try:
@@ -1139,7 +1160,7 @@ class Attacker:
                 try: self.deploy_leftovers(play)     # new heroes / troops the recording didn't know about
                 except Exception: logger.exception("Deploying the remaining cards failed")
                 self.finish_battle(restart)
-                self._merge_touches(watch, data, replay_start, replay_end)
+                self._merge_touches(watch, data, replay_start - shift, replay_end)   # your taps: on the recording's own clock
                 return
             logger.warning(f"Recording '{self.plan['recording']}' not found, using the loadout")
         

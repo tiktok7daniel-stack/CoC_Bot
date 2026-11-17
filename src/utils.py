@@ -2469,8 +2469,10 @@ class Input_Handler:
         cls._publish(builder)
 
     @classmethod
-    def _publish(cls, builder):
-        """Send touch commands; if the minitouch socket died, restart minitouch once and resend."""
+    def _publish(cls, builder, fast=False):
+        """Send touch commands; if the minitouch socket died, restart minitouch once and resend.
+        fast: no pause after sending (pyminitouch waits 50 ms after every command; a pinch / swipe is many
+        commands in a row and paces itself)."""
         content = builder._content
         try:
             import recorder
@@ -2478,6 +2480,12 @@ class Input_Handler:
         except Exception:
             pass
         try:
+            if fast:
+                builder.commit()
+                content = builder._content
+                ADB_Manager.minitouch_device.connection.send(content)
+                builder.reset()
+                return
             builder.publish(ADB_Manager.minitouch_device.connection)
         except (OSError, ConnectionError, BrokenPipeError) as e:
             builder.reset()
@@ -2533,7 +2541,7 @@ class Input_Handler:
         ADB_Manager.minitouch_device.tap([cls._to_raw(x1, y1), cls._to_raw(x2, y2)], duration=duration)
 
     @classmethod
-    def swipe(cls, x1, y1, x2, y2, duration=100, hold_end_time=0, inter_points=0, pointer=0):
+    def swipe(cls, x1, y1, x2, y2, duration=100, hold_end_time=0, inter_points=0, pointer=0, fast=False):
         import time, numpy as np
         from pyminitouch import CommandBuilder
 
@@ -2552,14 +2560,14 @@ class Input_Handler:
         dt = duration / (inter_points + 1)
         
         builder.down(pointer, x1, y1, pressure=100)
-        cls._publish(builder)
+        cls._publish(builder, fast=fast)
         for x, y in zip(x_points, y_points):
             builder.move(pointer, x, y, pressure=100)
-            cls._publish(builder)
+            cls._publish(builder, fast=fast)
             if dt > 0: time.sleep(dt / 1000)
         if hold_end_time > 0: time.sleep(hold_end_time / 1000)
         builder.up(pointer)
-        cls._publish(builder)
+        cls._publish(builder, fast=fast)
 
     @classmethod
     def swipe_up(cls, y1=1.0, y2=0.0, x=1.0, **kwargs):
@@ -2594,8 +2602,8 @@ class Input_Handler:
         import time
         builder.down(0, *start[0], pressure=100)
         builder.down(1, *start[1], pressure=100)
-        cls._publish(builder)
-        time.sleep(0.03)
+        cls._publish(builder, fast=True)
+        time.sleep(0.02)
         # a real pinch: the two fingers slide in steps (one jump is sometimes ignored by the game)
         steps = 10
         for i in range(1, steps + 1):
@@ -2604,12 +2612,12 @@ class Input_Handler:
             p1 = (int(start[1][0] + (end[1][0] - start[1][0]) * f), int(start[1][1] + (end[1][1] - start[1][1]) * f))
             builder.move(0, *p0, pressure=100)
             builder.move(1, *p1, pressure=100)
-            cls._publish(builder)
-            time.sleep(0.02)
+            cls._publish(builder, fast=True)
+            time.sleep(0.016)
         time.sleep(0.05)
         builder.up(0)
         builder.up(1)
-        cls._publish(builder)
+        cls._publish(builder, fast=True)
 
 class Frame_Handler:
     pool = None

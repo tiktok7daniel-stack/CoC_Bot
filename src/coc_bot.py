@@ -633,6 +633,8 @@ class CoC_Bot:
         try:                                       # the deep brain (DINOv2): download once, load in the background
             import screen_cnn, threading as _th
             _th.Thread(target=screen_cnn.ready, daemon=True, name="cnn-load").start()
+            import vision                          # the battle eyes load now, not in the first battle
+            _th.Thread(target=vision._load, daemon=True, name="vision-load").start()
         except Exception:
             pass
         while True:

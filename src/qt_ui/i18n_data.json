@@ -3137,6 +3137,10 @@
 "🟥 الخط الأحمر: نقل \\1 إنزال من التسجيل لبرّه الخط"
 ],
 [
+"^Battle: first tap of the recording ([\\d.]+)s after the base appeared",
+"⚡ الهجمة: أول دوسة من تسجيلك نزلت بعد \\1 ثانية من ظهور القرية"
+],
+[
 "^PaddleOCR failed, reading with easyocr",
 "⚠️ PaddleOCR وقع — بيقرا بـ easyocr"
 ],

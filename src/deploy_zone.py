@@ -119,16 +119,18 @@ def reveal(attacker, probe=None, logger=None):
         card = next((c for c, t, n in zip(centers, types, counts) if t == "troop" and (n or 0) >= 2), None)
         if card is None: return Zone()
         Input_Handler.click(card, 0.9)
-        time.sleep(0.25)
+        time.sleep(0.12)
         before = Frame_Handler.get_frame(grayscale=False)
         Input_Handler.click(*probe)
         best = None
         last = before
-        for _ in range(6):                              # the red shows for a moment: catch it
-            time.sleep(0.08)
+        for _ in range(6):                              # the red shows for a moment: catch it (and stop then)
+            time.sleep(0.06)
             last = Frame_Handler.get_frame(grayscale=False)
             m = red_area(before, last)
-            if m is not None and (best is None or m.mean() > best.mean()): best = m
+            if m is not None:
+                if best is not None and m.mean() <= best.mean() * 1.03: break      # fully shown: done
+                best = m
         z = Zone(best)
         if logger is not None:
             logger.info("Red line found: drops go right outside it" if best is not None
