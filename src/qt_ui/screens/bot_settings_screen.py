@@ -133,6 +133,9 @@ class BotSettingsScreen(Screen):
         tp.setMinimumWidth(300)
         bind_line(st, tp, "tesseract_path", "app")
         ocr.add(form_row("tess_path", "tess_path_sub", tp))
+        om = Combo([("auto", "ocr_m_auto"), ("medium", "ocr_m_medium"), ("small", "ocr_m_small")], 260)
+        bind_combo(st, om, "ocr_model", "app")
+        ocr.add(form_row("ocr_model", "ocr_model_sub", om))
         ocr.add(note("easyocr_fallback", "info"))
         ocr.add(form_row("groq_key", None, secret_field(st, "groq_api_key", "gsk_…")))
         g.addWidget(ocr, 1, 1)
@@ -143,7 +146,9 @@ class BotSettingsScreen(Screen):
         self.pw_gpu = StatusPill("warn", "—")
         self.pw_brain = StatusPill("warn", "—")
         self.pw_eyes = StatusPill("warn", "—")
-        for key, pill in (("pw_live", self.pw_live), ("pw_gpu", self.pw_gpu), ("pw_brain", self.pw_brain), ("pw_eyes", self.pw_eyes)):
+        self.pw_ocr = StatusPill("warn", "—")
+        for key, pill in (("pw_live", self.pw_live), ("pw_ocr", self.pw_ocr), ("pw_gpu", self.pw_gpu), ("pw_brain", self.pw_brain),
+                          ("pw_eyes", self.pw_eyes)):
             pw.add(form_row(key, None, pill))
         pb = QHBoxLayout()
         self.gpu_btn = IconButton("bolt", "pw_gpu_install", kind="primary", size=14)
@@ -382,6 +387,14 @@ class BotSettingsScreen(Screen):
                 if v.get("last"): self.pw_eyes.setToolTip(tr("pw_eyes_last").format(t=v["last"]))
             else:
                 self.pw_eyes.set("warn", tr("pw_eyes_off"))
+            o = b.get("ocr") or {}
+            if o.get("model"):
+                dev = tr("pw_ocr_gpu") if o.get("device") in ("cuda", "dml") else tr("pw_ocr_cpu")
+                txt = tr("pw_ocr_on").format(m=tr("pw_ocr_" + o["model"]), dev=dev, ms=o.get("ms") or "—")
+                if o.get("downloading"): txt += " · " + tr("pw_ocr_dl")
+                self.pw_ocr.set("ok", txt)
+            else:
+                self.pw_ocr.set("warn", tr("pw_ocr_off"))
             log = [l for l in (r.get("log") or "").strip().splitlines() if l.strip()]
             self.gpu_log.setText("\n".join(log[-14:]) or "—")
             for b in (self.links_btn, self.files_btn, self.log_btn): b.setVisible(bool(card))

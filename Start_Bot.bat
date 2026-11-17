@@ -7,5 +7,9 @@ if exist ".venv\Scripts\python.exe" set PY=.venv\Scripts\python.exe
   echo Installing the new interface (PySide6) - first time only...
   %PY% -m pip install -q "PySide6>=6.6"
 )
+%PY% -c "import rapidocr, onnxruntime" 2>nul || (
+  echo Installing the new text reader (PaddleOCR PP-OCRv6) - first time only...
+  %PY% -m pip install -q "rapidocr>=3.10" onnxruntime-directml pyyaml
+)
 %PY% src\main.py --gui
 if errorlevel 1 pause

@@ -26,3 +26,7 @@ scipy
 uiautomator2
 PySide6>=6.6
 av
+rapidocr>=3.10
+onnxruntime-directml; sys_platform == 'win32'
+onnxruntime; sys_platform != 'win32'
+pyyaml

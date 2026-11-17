@@ -368,6 +368,19 @@
 "rec_started": "البوت بيدخل معركة لوحده — أول ما يقولك \"سجّل دلوقتي\" نزّل الجيش",
 "rec_note": "لازم الجيش يكون نفسه وبنفس ترتيب الكروت تحت. نزّل الوحوش على أطراف الخريطة البعيدة عشان كل قرية شكلها مختلف. البوت بيبعّد الكاميرا لوحده أول ما المعركة تبدأ — ما تحركش الكاميرا وانت بتهاجم.",
 "pl_mode": "نظام الهجوم",
+"pw_ocr": "قارئ الكلام",
+"pw_ocr_on": "PaddleOCR {m} على {dev} — {ms} ملّي ثانية",
+"pw_ocr_off": "بيحمّل… (easyocr مؤقتًا)",
+"pw_ocr_gpu": "كارت الشاشة",
+"pw_ocr_cpu": "المعالج",
+"pw_ocr_medium": "الأقوى (medium)",
+"pw_ocr_small": "السريع (small)",
+"pw_ocr_dl": "بينزّل الموديل الأقوى",
+"ocr_model": "موديل قراءة الكلام",
+"ocr_model_sub": "PaddleOCR PP-OCRv6 — أحدث موديلات Paddle. التلقائي = الأقوى لو في كارت شاشة",
+"ocr_m_auto": "تلقائي (الأفضل لجهازك)",
+"ocr_m_medium": "الأقوى (medium)",
+"ocr_m_small": "الأسرع (small)",
 "hr_smart_sub": "بيشوف كل قرية بالموديل ويختار أضعف جهة — من غير تسجيل",
 "hr_smart_on": "🧠 الهجوم الذكي اشتغل",
 "pl_mode_sub": "التسجيل = يعيد هجومك المتسجّل • الذكي = الموديل يشوف القرية ويختار أضعف جهة وينزّل عليها • العادي = الإنزال اللي تحت",
@@ -1390,6 +1403,19 @@
 "rs_banner": "Record now — deploy by hand",
 "rec_note": "Use the same army in the same card order. Deploy on the far edges. Don't move the camera while attacking.",
 "pl_mode": "Attack system",
+"pw_ocr": "Text reader",
+"pw_ocr_on": "PaddleOCR {m} on {dev} — {ms} ms",
+"pw_ocr_off": "Loading… (easyocr meanwhile)",
+"pw_ocr_gpu": "the graphics card",
+"pw_ocr_cpu": "the processor",
+"pw_ocr_medium": "strongest (medium)",
+"pw_ocr_small": "fast (small)",
+"pw_ocr_dl": "downloading the strongest model",
+"ocr_model": "Text reading model",
+"ocr_model_sub": "PaddleOCR PP-OCRv6 — the newest Paddle models. Auto = strongest when there is a graphics card",
+"ocr_m_auto": "Auto (best for this PC)",
+"ocr_m_medium": "Strongest (medium)",
+"ocr_m_small": "Fastest (small)",
 "hr_smart_sub": "Looks at every base with the model and picks its weakest side — no recording needed",
 "hr_smart_on": "🧠 Smart attack is on",
 "pl_mode_sub": "Recording = replays your recorded attack • Smart = the model looks at the base, picks its weakest side and drops there • Classic = the deployment below",
@@ -2991,6 +3017,22 @@
 [
 "^Smart attack: the base wasn't recognised, attacking from the sides",
 "🧠 هجوم ذكي: ماعرفش القرية كويس — بيهاجم من الجنبين وبعت صورتها لـ Claude"
+],
+[
+"^Text reader ready: PaddleOCR PP-OCRv6 (\\w+) on (.*) \\(([\\d.]+)s\\)",
+"🔤 قارئ الكلام جاهز: PaddleOCR PP-OCRv6 (\\1) — \\3 ثانية"
+],
+[
+"^Strongest text reader \\(PP-OCRv6 medium\\) downloaded",
+"🔤 نزل أقوى موديل لقراءة الكلام (PP-OCRv6 medium) — البوت هيستخدمه من دلوقتي"
+],
+[
+"^PaddleOCR installed — the strongest text reader is used from now on",
+"🔤 PaddleOCR اتسطّب — البوت بيقرا بأقوى قارئ من دلوقتي"
+],
+[
+"^PaddleOCR failed, reading with easyocr",
+"⚠️ PaddleOCR وقع — بيقرا بـ easyocr"
 ],
 [
 "^Base seen \\((\\d+) ms\\): (.*)",

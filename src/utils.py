@@ -1988,6 +1988,14 @@ class OCR_Handler:
 
         # a plain picture (no text at all) can crash easyocr's model ("min should be less than or equal to max")
         if frame is None or frame.size == 0 or float(frame.std()) < 2: return []
+        try:                                       # PaddleOCR PP-OCRv6 first (the strongest reader)
+            import paddle_ocr
+            if paddle_ocr.available() and not getattr(OCR_Handler, "paddle_broken", False):
+                return [b[0] for b in sorted(paddle_ocr.read(frame), key=lambda b: (round(b[2], 2), b[1]))]
+        except (KeyboardInterrupt, SystemExit): raise
+        except Exception:
+            OCR_Handler.paddle_broken = True
+            logger.warning("PaddleOCR failed, reading with easyocr", exc_info=True)
         try: result = easyocr_reader().readtext(frame, detail=0)
         except (KeyboardInterrupt, SystemExit): raise
         except RuntimeError:                       # reader still loading / a plain picture: Tesseract
@@ -2676,6 +2684,11 @@ class Frame_Handler:
             except Exception:
                 pass
             try:
+                import paddle_ocr
+                info["ocr"] = paddle_ocr.info()
+            except Exception:
+                pass
+            try:
                 import screen_model
                 info["model"] = screen_model.info()
             except Exception:
@@ -3321,6 +3334,11 @@ def easyocr_reader(wait=False):
 
 def warm_up_ocr():
     """Load the text reader in the background now, so the first look at the game screen is instant."""
+    try:                                   # PaddleOCR (the main reader): easyocr only loads if it is missing
+        import paddle_ocr
+        if paddle_ocr.warm_up(): return       # not there yet: it installs itself, easyocr reads meanwhile
+    except Exception:
+        pass
     def work():
         import time
         t = time.time()
@@ -3349,6 +3367,14 @@ def ocr_boxes(frame):
         h, w = frame.shape[:2]
     out = []
     if frame.size == 0 or float(frame.std()) < 2: return out      # nothing written on a plain picture
+    try:                                                            # PaddleOCR PP-OCRv6 first (the strongest reader)
+        import paddle_ocr
+        if paddle_ocr.available() and not getattr(OCR_Handler, "paddle_broken", False):
+            return paddle_ocr.read(frame)
+    except (KeyboardInterrupt, SystemExit): raise
+    except Exception:
+        OCR_Handler.paddle_broken = True
+        logger.warning("PaddleOCR failed, reading with easyocr", exc_info=True)
     try:
         for pts, text, conf in easyocr_reader().readtext(frame, detail=1):
             xs, ys = [p[0] for p in pts], [p[1] for p in pts]

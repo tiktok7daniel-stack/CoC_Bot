@@ -193,6 +193,7 @@ def default_app_settings():
         "sync_settings": False,      # one set of settings for every account (saving one saves all)
         "display_w": 1920, "display_h": 1080, "display_dpi": 240, # emulator display the bot checks / sets
         "display_reset_1920": False, # one-time move back to 1920x1080 (3.8.0)
+        "ocr_model": "auto",         # PaddleOCR PP-OCRv6: auto (medium on a graphics card) / medium (strongest) / small (fastest)
     }
 
 def _merge(base, override):
