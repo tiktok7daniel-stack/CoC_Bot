@@ -24,6 +24,7 @@ def _cfg(name, default):
 def default_settings():
     return {
         "preset": "balanced",        # "safe" | "balanced" | "fast" | "custom"
+        "clash_tag": "",             # the player tag (#ABC123) for the official Clash of Clans API
         "tasks": {
             "home_base": _cfg("UPGRADE_HOME_BASE", True),
             "heroes": _cfg("UPGRADE_HEROES", True),
@@ -164,6 +165,7 @@ def default_app_settings():
         "start_with_windows": False,
         "telegram_bot_token": _cfg("TELEGRAM_BOT_TOKEN", ""),
         "groq_api_key": _cfg("GROQ_API_KEY", ""),
+        "clash_api_key": "",         # developer.clashofclans.com key (allowed IP = this PC's public IP)
         "tesseract_path": _cfg("TESSERACT_PATH", ""),  # empty = find automatically
         "ldplayer_path": _cfg("LDPLAYER_BIN_PATH", ""), # ldconsole.exe; empty = find automatically
         "github_token": "",          # fine-grained token with Issues: read & write on the bot repo

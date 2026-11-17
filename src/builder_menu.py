@@ -319,6 +319,21 @@ def upgrade(row, upgrader=None, tries=12, res=None):
 
 
 # ---------------------------------------------------------------- choosing
+_HERO_ORDER = {"t": 0.0, "v": []}
+
+
+def _hero_order():
+    """Heroes furthest from max first (Clash of Clans API, when set up) — cached 10 minutes, [] without it."""
+    if time.time() - _HERO_ORDER["t"] < 600: return _HERO_ORDER["v"]
+    _HERO_ORDER["t"] = time.time()
+    try:
+        import clash_api, utils
+        _HERO_ORDER["v"] = clash_api.hero_priority(utils.INSTANCE_ID)
+    except Exception:
+        _HERO_ORDER["v"] = []
+    return _HERO_ORDER["v"]
+
+
 def choose(rows, walls=False, heroes=True, keep=None, res=None):
     """The best row to upgrade now: can pay, not new; walls or buildings; the most expensive one first."""
     keep = keep or {}
@@ -334,7 +349,9 @@ def choose(rows, walls=False, heroes=True, keep=None, res=None):
         if keep.get(r["resource"]) and r["cost"] > keep[r["resource"]]: continue
         cands.append(r)
     if walls: cands.sort(key=lambda r: r["cost"])                    # walls: the cheapest first (more walls)
-    else: cands.sort(key=lambda r: -r["cost"])                       # buildings: spend where it counts
+    else:                                                            # buildings: spend where it counts
+        pr = _hero_order()                                           # the official API: a hero behind goes first
+        cands.sort(key=lambda r: (pr.index(r["name"]) if r["name"] in pr else len(pr), -r["cost"]))
     return cands[0] if cands else None
 
 

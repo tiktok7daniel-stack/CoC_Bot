@@ -90,6 +90,14 @@ def _handle(app, token, chat, cmd, arg):
             if ev:
                 r = ev[-1]
                 line += f"\n   دهب {r.get('gold') or 0:,} — إكسير {r.get('elixir') or 0:,} — دارك {r.get('dark') or 0:,}"
+            try:                                   # the official API (when set up): levels exactly
+                import clash_api
+                p = clash_api.summary(clash_api.profile(a["id"]))
+                if p and not p.get("error"):
+                    line += (f"\n   تاون {p.get('th')} — 🏆 {p.get('trophies')} — الأبطال {p.get('heroes_pct')}%: " +
+                             "، ".join(f"{h['name'].split()[-1]} {h['level']}/{h['max']}" for h in p.get("heroes", [])))
+            except Exception:
+                pass
             lines.append(line)
         return _send(token, chat, "📊 الحالة\n" + ("\n".join(lines) or "مفيش حسابات"))
     if cmd in ("pause", "resume", "start", "stop"):

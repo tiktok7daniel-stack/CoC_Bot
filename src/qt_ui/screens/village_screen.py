@@ -5,7 +5,11 @@ Screens 11-14 - Main village upgrades, four sub-tabs:
  lab       : laboratory + lab assistant, priority levels
  pets      : pet house, priority levels
 """
-from ..widgets.controls import GlassCard, note, num_row, toggle_row
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit
+from PySide6.QtCore import Qt
+
+from ..i18n import tr
+from ..widgets.controls import GlassCard, IconButton, bind_line, form_row, label, note, num_row, toggle_row
 from ..widgets.tier_editor import TierEditor
 from .base import Screen, grid
 
@@ -17,7 +21,7 @@ class VillageScreen(Screen):
         super().__init__(ctx)
         st = self.store
         L = self.make_tabs([("walls", "walls", "brick"), ("buildings", "buildings", "castle"),
-                            ("lab", "lab", "flask"), ("pets", "pets", "paw")])
+                            ("lab", "lab", "flask"), ("pets", "pets", "paw"), ("official", "ca_tab", "id")])
 
         # ---------------- walls
         w, g = grid(2)
@@ -79,3 +83,68 @@ class VillageScreen(Screen):
         g.addWidget(pp, 0, 1)
         L["pets"].addWidget(w)
         L["pets"].addStretch(1)
+
+        # ---------------- the official Clash of Clans API: the account exactly as Supercell knows it
+        w, g = grid(2)
+        ca = GlassCard("ca_title", "id", "ca_sub")
+        from .bot_settings_screen import secret_field
+        ca.add(form_row("ca_key", "ca_key_sub", secret_field(st, "clash_api_key", "eyJ0eXAiOiJKV1Qi…")))
+        tag = QLineEdit()
+        tag.setPlaceholderText("#2PP0JCLQ8")
+        tag.setLayoutDirection(Qt.LeftToRight)
+        tag.setFixedWidth(200)
+        bind_line(st, tag, "clash_tag")
+        ca.add(form_row("ca_tag", "ca_tag_sub", tag))
+        row = QHBoxLayout()
+        ipb = IconButton("globe", "ca_myip", size=13)
+        ipb.clicked.connect(self.my_ip)
+        row.addWidget(ipb)
+        ref = IconButton("refresh", "ca_refresh", kind="primary", size=13)
+        ref.clicked.connect(lambda: self.load_clash(True))
+        row.addWidget(ref)
+        row.addStretch(1)
+        ca.add(row)
+        self.ca_ip = label("", "dim")
+        self.ca_ip.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        ca.add(self.ca_ip)
+        for k in ("ca_h1", "ca_h2", "ca_h3"): ca.add(note(k, "check"))
+        g.addWidget(ca, 0, 0)
+        res = GlassCard("ca_res", "trophy", "ca_res_sub")
+        self.ca_out = QLabel("—")
+        self.ca_out.setWordWrap(True)
+        self.ca_out.setTextFormat(Qt.RichText)
+        res.add(self.ca_out)
+        g.addWidget(res, 0, 1)
+        L["official"].addWidget(w)
+        L["official"].addStretch(1)
+        self.tabs.changed.connect(lambda k: self.load_clash() if k == "official" else None)
+
+    def my_ip(self):
+        self.ca_ip.setText(tr("ca_ip_wait"))
+        self.api.get("/api/clash_ip", lambda r: self.ca_ip.setText(tr("ca_ip").format(ip=(r or {}).get("ip") or "?")))
+
+    def load_clash(self, refresh=False):
+        acc = self.store.account or "main"
+        self.ca_out.setText(tr("ca_loading"))
+        self.api.get(f"/api/clash/{acc}" + ("?refresh=1" if refresh else ""), self.show_clash, timeout=30)
+
+    def show_clash(self, r):
+        r = r or {}
+        if r.get("error"):
+            msg = tr("ca_err_" + r["error"]) if tr("ca_err_" + r["error"]) != "ca_err_" + r["error"] else r.get("message", "")
+            if r.get("ip"): msg += "<br>" + tr("ca_ip").format(ip=r["ip"])
+            self.ca_out.setText(msg)
+            return
+        bar = lambda lv, mx: f"{lv}/{mx}" + (" ✅" if lv >= mx else "")
+        lines = [f"<b>{r.get('name', '')}</b> {r.get('tag', '')} — {tr('ca_th')} {r.get('th')} · 🏆 {r.get('trophies')} "
+                 f"({r.get('league') or ''}) · ⭐ {r.get('war_stars')}" + (f" · {r['clan']}" if r.get("clan") else "")]
+        lines.append(f"<b>{tr('ca_heroes')}</b> ({r.get('heroes_pct')}%): " +
+                     " · ".join(f"{h['name']} {bar(h['level'], h['max'])}" for h in r.get("heroes", [])))
+        if r.get("hero_behind"): lines.append("➡️ " + tr("ca_next_hero").format(n=r["hero_behind"]))
+        if r.get("pets"):
+            lines.append(f"<b>{tr('ca_pets')}</b>: " + " · ".join(f"{p['name']} {bar(p['level'], p['max'])}" for p in r["pets"]))
+        if r.get("equipment"):
+            eq = sorted(r["equipment"], key=lambda e: -e["level"])[:8]
+            lines.append(f"<b>{tr('ca_equip')}</b>: " + " · ".join(f"{e['name']} {e['level']}" for e in eq))
+        lines.append(tr("ca_pct").format(t=r.get("troops_pct"), s=r.get("spells_pct")))
+        self.ca_out.setText("<br><br>".join(lines))

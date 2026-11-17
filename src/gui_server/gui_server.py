@@ -167,6 +167,18 @@ def api_app_settings():
     data["platform"] = sys.platform
     return jsonify(data)
 
+@app.route("/api/clash/<id>", methods=["GET"])
+def api_clash(id):
+    """The official Clash of Clans API: this account's levels (cached; ?refresh=1 asks the API now)."""
+    import clash_api
+    p = clash_api.profile(id, force=request.args.get("refresh") == "1")
+    return jsonify(clash_api.summary(p) if not p.get("error") else p)
+
+@app.route("/api/clash_ip", methods=["GET"])
+def api_clash_ip():
+    import clash_api
+    return jsonify({"ip": clash_api.public_ip()})
+
 @app.route("/api/defaults", methods=["GET"])
 def api_defaults():
     return jsonify(bot_settings.default_settings())
