@@ -1997,7 +1997,8 @@ class OCR_Handler:
         try:                                       # PaddleOCR PP-OCRv6 first (the strongest reader)
             import paddle_ocr
             if paddle_ocr.available() and not getattr(OCR_Handler, "paddle_broken", False):
-                return [b[0] for b in sorted(paddle_ocr.read(frame), key=lambda b: (round(b[2], 2), b[1]))]
+                got = [b[0] for b in sorted(paddle_ocr.read(frame), key=lambda b: (round(b[2], 2), b[1]))]
+                if got or getattr(OCR_Handler, "reader", None) is None: return got   # nothing read: easyocr if loaded
         except (KeyboardInterrupt, SystemExit): raise
         except Exception:
             OCR_Handler.paddle_broken = True
@@ -2195,9 +2196,9 @@ def current_emulator():
     """The emulator chosen in the app settings (read fresh: a child process may not have it in configs yet)."""
     try:
         import settings
-        return settings.load_app().get("emulator") or getattr(configs, "EMULATOR_TYPE", "ldplayer")
+        return settings.load_app().get("emulator") or "ldplayer"
     except Exception:
-        return getattr(configs, "EMULATOR_TYPE", "ldplayer")
+        return "ldplayer"
 
 
 def emulator_adb():
@@ -3389,7 +3390,8 @@ def ocr_boxes(frame):
     try:                                                            # PaddleOCR PP-OCRv6 first (the strongest reader)
         import paddle_ocr
         if paddle_ocr.available() and not getattr(OCR_Handler, "paddle_broken", False):
-            return paddle_ocr.read(frame)
+            got = paddle_ocr.read(frame)
+            if got or getattr(OCR_Handler, "reader", None) is None: return got     # nothing read: easyocr if loaded
     except (KeyboardInterrupt, SystemExit): raise
     except Exception:
         OCR_Handler.paddle_broken = True
@@ -3578,8 +3580,16 @@ class Auto_Learn:
 def read_fraction(section):
     """Read a counter like "1/2" with Tesseract (fallback when the template digits don't match). -> (a, b) or None"""
     import re
-    for img in (section,):
-        text = Tesseract.read(img, digits=False, psm=7) or ""
+    readers = []
+    try:
+        import paddle_ocr
+        if paddle_ocr.available(): readers.append(lambda im: " ".join(b[0] for b in paddle_ocr.read(im)))
+    except Exception:
+        pass
+    readers.append(lambda im: Tesseract.read(im, digits=False, psm=7) or "")
+    for rd in readers:
+        try: text = rd(section)
+        except Exception: continue
         m = re.search(r"(\d+)\s*/\s*(\d+)", text.replace("O", "0").replace("o", "0"))
         if m: return int(m.group(1)), int(m.group(2))
     return None

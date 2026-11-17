@@ -240,6 +240,9 @@ def save(id, data):
 
 def load_app():
     data = _merge(default_app_settings(), _read(GLOBAL_PATH))
+    # only LDPlayer is used: another emulator's adb (BlueStacks HD-Adb) fights LDPlayer's for the same server and
+    # drops the connection every few minutes (device offline / connection aborted)
+    data["emulator"] = "ldplayer"
     if not data.get("display_reset_1920"): # the bot's images and positions are made for 1920x1080
         data.update(display_w=1920, display_h=1080, display_dpi=240, display_reset_1920=True)
         try: _write(GLOBAL_PATH, data)

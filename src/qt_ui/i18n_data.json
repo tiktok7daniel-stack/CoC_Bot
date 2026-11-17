@@ -3153,6 +3153,10 @@
 "⚠️ ماقدرش يسطّب \\1 — الخطأ اتبعت لـ Claude"
 ],
 [
+"^Lab: its counter isn't on the village screen — lab upgrades skipped for now",
+"🧪 المعمل: عدّاده مش ظاهر في القرية في الشكل الجديد للعبة — ترقيات المعمل متوقفة لحد ما نعلّمه"
+],
+[
 "^PaddleOCR failed, reading with easyocr",
 "⚠️ PaddleOCR وقع — بيقرا بـ easyocr"
 ],

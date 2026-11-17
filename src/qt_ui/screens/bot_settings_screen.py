@@ -65,7 +65,7 @@ class BotSettingsScreen(Screen):
         bind_combo(st, self.lang, "language", "app")
         self.lang.currentIndexChanged.connect(lambda _i: ctx.window.apply_language(self.lang.value()))
         gen.add(form_row("language", None, self.lang, icon_name="lang"))
-        gen.add(combo_row(st, "emulator", "emulator", [("ldplayer", "emu_ld"), ("bluestacks", "emu_bs"), ("mumu", "emu_mumu")],
+        gen.add(combo_row(st, "emulator", "emulator", [("ldplayer", "emu_ld")],
                           "emulator_sub", 220, "app"))
         ld = QLineEdit()
         ld.setPlaceholderText("D:\\LDPlayer\\LDPlayer9")

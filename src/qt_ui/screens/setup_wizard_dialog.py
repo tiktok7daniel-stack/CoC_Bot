@@ -13,7 +13,7 @@ from ..i18n import on_lang, tr
 from ..theme import TOKENS
 from ..widgets.controls import Box, Combo, IconButton, NumField, StatusPill, label, retext
 
-EMULATORS = [("ldplayer", "LDPlayer"), ("bluestacks", "BlueStacks"), ("mumu", "MuMu Player")]
+EMULATORS = [("ldplayer", "LDPlayer")]
 
 
 class StepBadge(Box):

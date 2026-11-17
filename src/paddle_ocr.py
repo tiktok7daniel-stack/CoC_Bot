@@ -125,20 +125,38 @@ def engine():
         return e
 
 
-def read(frame):
-    """RGB frame -> [(text, x1, y1, x2, y2, conf)] (fractions)."""
+def _prep(frame):
+    """Small crops (a counter, one number): bigger + a margin around them, else the text detector misses them
+    (tested: "2/5", the storage numbers came back empty without it). -> (picture, scale, pad)."""
+    import cv2
+    if frame.ndim == 2: frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
+    elif frame.shape[2] == 4: frame = frame[..., :3]
     h, w = frame.shape[:2]
+    if h >= 160 and w >= 240: return frame, 1.0, 0
+    k = max(1.0, 96.0 / h)
+    if k > 1: frame = cv2.resize(frame, (int(round(w * k)), int(round(h * k))), interpolation=cv2.INTER_CUBIC)
+    pad = int(0.25 * frame.shape[0])
+    return cv2.copyMakeBorder(frame, pad, pad, pad, pad, cv2.BORDER_REPLICATE), k, pad
+
+
+def read(frame):
+    """RGB (or grey) picture -> [(text, x1, y1, x2, y2, conf)] (fractions of the picture given)."""
+    import re
+    h, w = frame.shape[:2]
+    img, k, pad = _prep(frame)
     t = time.time()
-    r = engine()(frame)
+    r = engine()(img)
     _S["ms"] = round((time.time() - t) * 1000)
     out = []
     boxes, txts, scores = getattr(r, "boxes", None), getattr(r, "txts", None) or (), getattr(r, "scores", None) or ()
     if boxes is None: return out
     for pts, text, conf in zip(boxes, txts, scores):
         text = str(text).strip()
-        if not text: continue
-        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
-        out.append((text, min(xs) / w, min(ys) / h, max(xs) / w, max(ys) / h, float(conf)))
+        if not text or not re.search(r"[A-Za-z0-9]", text): continue        # the game's text is latin / digits
+        xs = [(p[0] - pad) / k for p in pts]
+        ys = [(p[1] - pad) / k for p in pts]
+        out.append((text, max(0.0, min(xs) / w), max(0.0, min(ys) / h), min(1.0, max(xs) / w), min(1.0, max(ys) / h),
+                    float(conf)))
     return out
 
 

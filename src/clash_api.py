@@ -60,7 +60,7 @@ def _get(path, key):
     import re, requests
     from urllib.parse import quote
     r = requests.get(API + quote(path, safe="/"), headers={"Authorization": f"Bearer {key}", "Accept": "application/json"},
-                     timeout=15)
+                     timeout=8)
     if r.status_code == 200: return r.json()
     try: body = r.json() or {}
     except ValueError: body = {}

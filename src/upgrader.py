@@ -251,7 +251,7 @@ class Upgrader:
                 return available > 0
             except (KeyboardInterrupt, SystemExit): raise
             except Exception as e:
-                logger.error(f"Upgrader.home_lab_available: {e}")
+                logger.debug(f"Upgrader.home_lab_available: {e}")
             time.sleep(0.5)
         # fallback: read the "x/y" counter as text
         try:
@@ -261,8 +261,11 @@ class Upgrader:
                 return frac[0] > 0
         except (KeyboardInterrupt, SystemExit): raise
         except Exception: pass
-        logger.error("Upgrader.home_lab_available: Failed to get home lab availability")
-        raise Exception("Failed to get home lab availability")
+        # the lab counter isn't on the village screen in the new layout: the lab is skipped (not an error)
+        if not getattr(self, "_lab_told", False):
+            self._lab_told = True
+            logger.info("Lab: its counter isn't on the village screen — lab upgrades skipped for now")
+        return False
 
     def builder_lab_available(self, timeout=60, use_cached_frame=False):
         import time, numpy as np

@@ -127,8 +127,20 @@ def where(frame=None):
     return None
 
 
+_BUSY = {"on": False}
+
+
 def go(target, max_steps=8, logger=None):
     """Go to `target` by the map -> True when there. Unknown screens on the way: sent to Claude, then home first."""
+    if _BUSY["on"]: return False                 # never inside itself (a handler on the way calling go home again)
+    _BUSY["on"] = True
+    try:
+        return _go(target, max_steps, logger)
+    finally:
+        _BUSY["on"] = False
+
+
+def _go(target, max_steps=8, logger=None):
     import utils
     log = logger or utils.logger
     for _ in range(max_steps):
