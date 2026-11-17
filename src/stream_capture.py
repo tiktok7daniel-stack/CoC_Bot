@@ -183,25 +183,45 @@ def frame(dims, adb_grab, device):
         img = c.latest()
         if img is None: return None
         if now > _S["ok_until"]:              # check the stream shows the same as a real screenshot
+            # the screenshot takes a moment: compare it with the stream pictures from just before and just after it.
+            # While the screen moves (end of battle, loading) the two moments differ anyway: then nothing is decided
+            # and the check is done again a few seconds later (a moving screen made it switch the stream off wrongly)
+            before = c.latest()
             ref = adb_grab()
-            ok = False
+            sref = _small(ref)
+            near = lambda im: float(np.abs(_small(cv2.resize(im, (ref.shape[1], ref.shape[0]))) - sref).mean())
+            ok, moving = False, False
             for _ in range(3):
                 img = c.latest()
-                if img is not None and float(np.abs(_small(cv2.resize(img, (ref.shape[1], ref.shape[0]))) - _small(ref)).mean()) < 18:
+                if img is None: break
+                d = min(near(img), near(before) if before is not None else 999)
+                if d < 18:
                     ok = True
                     break
+                if before is not None and float(np.abs(_small(cv2.resize(img, (ref.shape[1], ref.shape[0]))) -
+                                                       _small(cv2.resize(before, (ref.shape[1], ref.shape[0])))).mean()) > 8:
+                    moving = True
                 time.sleep(0.15)
-            if not ok:
-                _S["off_until"] = now + REST
-                _S["why"] = "the stream shows something else than the game"
-                if _S["logged"] is not False:
-                    _log("Live screen not matching the game right now, using screenshots")
-                    _S["logged"] = False
-                return None
-            _S["ok_until"] = now + RECHECK
+            if not ok and moving:
+                _S["ok_until"] = now + 5                 # the screen is moving: look again in a moment, keep streaming
+            elif not ok:
+                _S["mismatch"] = _S.get("mismatch", 0) + 1
+                if _S["mismatch"] < 2:                   # once can be a moment of bad luck: check again soon
+                    _S["ok_until"] = now + 3
+                else:
+                    _S["mismatch"] = 0
+                    _S["off_until"] = now + REST
+                    _S["why"] = "the stream shows something else than the game"
+                    if _S["logged"] is not False:
+                        _log("Live screen not matching the game right now, using screenshots")
+                        _S["logged"] = False
+                    return None
+            else:
+                _S["mismatch"] = 0
+            if ok: _S["ok_until"] = now + RECHECK
             _S["why"] = ""
             _S["fails_n"] = 0
-            if _S["logged"] is not True:
+            if ok and _S["logged"] is not True:
                 _log(f"Live screen on: the emulator streams its screen ({c.size[0]}x{c.size[1]}), every look is instant")
                 _S["logged"] = True
         if (img.shape[1], img.shape[0]) != tuple(dims):

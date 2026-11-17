@@ -230,8 +230,9 @@ def adapt(data, base, min_objs=8):
     from vision import ray_radius
     import army_learn
     if base is None or getattr(base, "hull", None) is None or len(getattr(base, "objs", [])) < min_objs: return data, 0
-    new = base.outline()
     ref = (data.get("base") or {}).get("hull")
+    if not ref: return data, 0                      # old recording (no outline saved): played exactly as recorded
+    new = base.outline()
     nc = [sum(p[0] for p in new) / len(new), sum(p[1] for p in new) / len(new)]
     rc = [sum(p[0] for p in ref) / len(ref), sum(p[1] for p in ref) / len(ref)] if ref else nc
     mx, my = (data.get("max") or [1, 1])[:2]

@@ -261,6 +261,11 @@ def _agrees(adb_frame):
                 _S["method"], _S["why"] = method, ""
                 _S["hwnd"], _S["hwnd_t"] = hwnd, time.time()      # pinned: this window shows the game
                 return True
+            time.sleep(0.12)                     # the screen moving (animation)? then this check can't decide
+            win2 = _trim(grab(hwnd, method))
+            if win2 is not None and win2.shape == win.shape and float(np.abs(_small(win2) - _small(win)).mean()) > 8:
+                _S["why"] = "the screen was moving"
+                return None
             reasons.append(f"{method}: different ({d:.0f})")
     _S["why"] = ("LDPlayer window is minimized" if reasons and all(r == "minimized" for r in reasons)
                  else f"{len(cands)} window(s): " + "; ".join(reasons[:4]))
@@ -280,7 +285,12 @@ def frame(dims, adb_grab):
         if now > _S["ok_until"]:
             ref = adb_grab()
             ref = cv2.resize(ref, tuple(dims), interpolation=cv2.INTER_AREA) if (ref.shape[1], ref.shape[0]) != tuple(dims) else ref
-            if not _agrees(ref):
+            verdict = _agrees(ref)
+            if verdict is None:                  # the screen was moving: no decision, ADB this time, check again soon
+                _S["ok_until"] = 0
+                _S["off_until"] = now + 3
+                return None
+            if not verdict:
                 _S["fails_n"] = _S.get("fails_n", 0) + 1
                 _S["off_until"] = now + min(1800, REST * 2 ** (_S["fails_n"] - 1))
                 _S["hwnd"] = None
