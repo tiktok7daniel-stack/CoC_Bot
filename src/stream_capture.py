@@ -62,7 +62,12 @@ class Stream:
         self._arr, self._arr_of = None, None
 
     def start(self, timeout=6.0):
-        import av  # noqa: F401  (the video decoder: fail here, clearly, when it isn't installed)
+        try:
+            import av  # noqa: F401  (the video decoder: fail here, clearly, when it isn't installed)
+        except ImportError:
+            import deps                          # not installed (an update can't bring it): installs itself now
+            deps.ensure("av", ["av"], on_done=lambda: _S.update(off_until=0.0, fails_n=0))
+            raise
         from adbutils import Network
         jar = _jar_path()
         if jar is None: raise FileNotFoundError("scrcpy-server jar missing")

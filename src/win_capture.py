@@ -45,6 +45,9 @@ def _api():
     for f, a, r in ((u.GetDC, [H], H), (u.ReleaseDC, [H, H], ctypes.c_int), (u.GetClientRect, [H, ctypes.POINTER(wintypes.RECT)], wintypes.BOOL),
                     (u.PrintWindow, [H, H, wintypes.UINT], wintypes.BOOL), (u.IsIconic, [H], wintypes.BOOL), (u.IsWindow, [H], wintypes.BOOL),
                     (u.GetParent, [H], H), (u.FindWindowExW, [H, H, wintypes.LPCWSTR, wintypes.LPCWSTR], H),
+                    (u.GetClassNameW, [H, wintypes.LPWSTR, ctypes.c_int], ctypes.c_int),
+                    (u.GetWindowTextW, [H, wintypes.LPWSTR, ctypes.c_int], ctypes.c_int),
+                    (u.IsWindowVisible, [H], wintypes.BOOL),
                     (g.CreateCompatibleDC, [H], H), (g.CreateCompatibleBitmap, [H, ctypes.c_int, ctypes.c_int], H),
                     (g.SelectObject, [H, H], H), (g.DeleteObject, [H], wintypes.BOOL), (g.DeleteDC, [H], wintypes.BOOL),
                     (g.BitBlt, [H, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, H, ctypes.c_int, ctypes.c_int, wintypes.DWORD], wintypes.BOOL),
@@ -53,29 +56,91 @@ def _api():
     return u, g
 
 
-def _find_hwnd():
-    """LDPlayer's render window ("bind window" in 'ldconsole list2'), else the child of its main window."""
-    if _S["hwnd"] and time.time() - _S["hwnd_t"] < 60: return _S["hwnd"]
-    hwnd = None
+def _from_ldconsole():
+    """LDPlayer's render window from 'ldconsole list2' (bind window / child of the main window), or None."""
     try:
         import utils
         idx = utils.LDPlayer.index
         for line in utils.LDPlayer._run("list2").splitlines():
             c = line.strip().split(",")
-            if len(c) < 4 or not c[0].strip().isdigit() or int(c[0]) != int(idx): continue
+            if len(c) < 4 or not c[0].strip().isdigit() or idx is None or int(c[0]) != int(idx): continue
             top, bind = int(c[2] or 0), int(c[3] or 0)
-            hwnd = bind or None
-            if not hwnd and top:
-                u, _g = _api()
-                for name in ("TheRender", "RenderWindow", None):
-                    h = u.FindWindowExW(top, None, None, name) if name else u.FindWindowExW(top, None, "RenderWindow", None)
-                    if h: hwnd = h; break
-                hwnd = hwnd or top
-            break
+            if bind: return bind
+            if top: return _render_child(top) or top
     except Exception:
-        hwnd = None
-    _S["hwnd"], _S["hwnd_t"] = hwnd, time.time()
-    return hwnd
+        pass
+    return None
+
+
+def _render_child(top):
+    """The game's render window inside an LDPlayer main window (class RenderWindow / title TheRender), the biggest."""
+    import ctypes
+    from ctypes import wintypes
+    u, _g = _api()
+    found = []
+    buf = ctypes.create_unicode_buffer(256)
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, ctypes.c_void_p, ctypes.c_void_p)
+    def each(h, _l):
+        u.GetClassNameW(h, buf, 256)
+        cls = buf.value
+        u.GetWindowTextW(h, buf, 256)
+        if cls == "RenderWindow" or buf.value in ("TheRender", "RenderWindow"):
+            r = wintypes.RECT()
+            u.GetClientRect(h, ctypes.byref(r))
+            found.append(((r.right - r.left) * (r.bottom - r.top), h))
+        return True
+    u.EnumChildWindows(ctypes.c_void_p(top), each, 0)
+    return max(found)[1] if found else None
+
+
+def _scan():
+    """Every LDPlayer window open on the PC -> [render window or main window], the bot's own instance first.
+    Works whatever ldconsole says (another LDPlayer version installed, renamed instance…)."""
+    import ctypes
+    from ctypes import wintypes
+    u, _g = _api()
+    tops = []
+    buf = ctypes.create_unicode_buffer(256)
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, ctypes.c_void_p, ctypes.c_void_p)
+    def each(h, _l):
+        if not u.IsWindowVisible(h): return True
+        u.GetClassNameW(h, buf, 256)
+        cls = buf.value
+        u.GetWindowTextW(h, buf, 256)
+        title = buf.value
+        if cls in ("LDPlayerMainFrame", "LDMultiPlayerMainFrame") or title.lower().startswith(("ldplayer", "雷电")):
+            if "multi" not in cls.lower(): tops.append((title, h))
+        return True
+    u.EnumWindows(each, 0)
+    try:
+        import utils
+        want = str(getattr(utils, "INSTANCE_ID", "") or "").lower()
+    except Exception:
+        want = ""
+    tops.sort(key=lambda t: 0 if want and want in t[0].lower() else 1)
+    return [(_render_child(h) or h) for _t, h in tops]
+
+
+def _candidates():
+    out = []
+    for h in [_from_ldconsole()] + (_scan() if sys.platform == "win32" else []):
+        if h and h not in out: out.append(h)
+    return out
+
+
+def _find_hwnd():
+    """The window that was checked to show the game (pinned), else the best guess."""
+    if _S["hwnd"] and time.time() - _S["hwnd_t"] < 600:
+        try:
+            u, _g = _api()
+            if u.IsWindow(_S["hwnd"]): return _S["hwnd"]
+        except Exception:
+            pass
+    c = _candidates()
+    _S["hwnd"], _S["hwnd_t"] = (c[0] if c else None), time.time()
+    return _S["hwnd"]
 
 
 def grab(hwnd, method=None):
@@ -170,34 +235,35 @@ def _small(img):
 def _agrees(adb_frame):
     """Try every way of copying the window; keep the first that shows what ADB shows. Sets _S["why"] otherwise."""
     import numpy as np
-    hwnd = _find_hwnd()
-    if not hwnd:
+    cands = _candidates()
+    if not cands:
         _S["why"] = "LDPlayer window not found"
         return False
-    try:
-        u, _g = _api()
-        if u.IsIconic(hwnd) or u.IsIconic(u.GetParent(hwnd) or hwnd):
-            _S["why"] = "LDPlayer window is minimized"
-            return False
-    except Exception:
-        pass
     reasons = []
-    for method in ("pw3", "pw2", "screen"):
-        for _ in range(2):
+    u, _g = _api()
+    for hwnd in cands[:6]:                       # every LDPlayer window: the one showing the game wins
+        try:
+            if u.IsIconic(hwnd) or u.IsIconic(u.GetParent(hwnd) or hwnd):
+                reasons.append("minimized")
+                continue
+        except Exception:
+            pass
+        for method in ("pw3", "pw2", "screen"):
             win = _trim(grab(hwnd, method))
             if win is None:
                 reasons.append(f"{method}: nothing")
-                break
+                continue
             if float(win[::8, ::8].std()) < 3:
                 reasons.append(f"{method}: black")
-                break
+                continue
             d = float(np.abs(_small(win) - _small(adb_frame)).mean())
             if d < 18:
                 _S["method"], _S["why"] = method, ""
+                _S["hwnd"], _S["hwnd_t"] = hwnd, time.time()      # pinned: this window shows the game
                 return True
             reasons.append(f"{method}: different ({d:.0f})")
-            time.sleep(0.15)
-    _S["why"] = "; ".join(reasons[:4])
+    _S["why"] = ("LDPlayer window is minimized" if reasons and all(r == "minimized" for r in reasons)
+                 else f"{len(cands)} window(s): " + "; ".join(reasons[:4]))
     return False
 
 

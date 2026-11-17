@@ -3145,6 +3145,14 @@
 "fn:btiming"
 ],
 [
+"^Installed (.*)",
+"📦 اتسطّب: \\1 — البوت هيستخدمه على طول"
+],
+[
+"^Could not install (.*?):.*",
+"⚠️ ماقدرش يسطّب \\1 — الخطأ اتبعت لـ Claude"
+],
+[
 "^PaddleOCR failed, reading with easyocr",
 "⚠️ PaddleOCR وقع — بيقرا بـ easyocr"
 ],
