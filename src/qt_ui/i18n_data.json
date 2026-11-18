@@ -3193,6 +3193,14 @@
 "✅ النت رجع — بيفتح اللعبة ويكمّل"
 ],
 [
+"^The attack could not start — trying again",
+"🔁 الهجمة مابدأتش — بيرجع للقرية ويجرّب تاني"
+],
+[
+"^Battle over before the recording's end: replay stopped",
+"⏹️ المعركة خلصت قبل آخر التسجيل — وقف الإعادة وكمّل على طول"
+],
+[
 "^PaddleOCR failed, reading with easyocr",
 "⚠️ PaddleOCR وقع — بيقرا بـ easyocr"
 ],

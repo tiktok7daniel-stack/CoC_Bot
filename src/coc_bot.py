@@ -62,7 +62,9 @@ class CoC_Bot:
         import time
         before = self.read_and_record_resources(builder_base=builder, max_age=20) # just read after the last attack
         t0 = time.monotonic()
-        attack_fn()
+        if attack_fn() is False:                  # the attack didn't start: not an attack, nothing to count
+            logger.info("The attack could not start — trying again")
+            return
         try:
             (to_builder_base if builder else to_home_base)()
         except Exception:

@@ -59,6 +59,27 @@ def load(name):
                 except OSError: pass
         except Exception:
             pass
+    # your added taps long after the end of your own recording (the battle was over: results, chest, village)
+    # made every replay wait for nothing: taps added more than 20 s after the last tap you recorded are dropped
+    if d.get("merged"):
+        own = [e["t"] for e in d.get("events", []) if int(e.get("id", 0)) < 5]
+        if own:
+            end = max(own) + 20
+            late = {e["id"] for e in d["events"] if int(e.get("id", 0)) >= 5 and e.get("type") == "down" and e["t"] > end}
+            if late:
+                keep, cur = [], set()
+                for e in d["events"]:
+                    i = e.get("id")
+                    if int(i or 0) >= 5 and e.get("type") == "down": (cur.add(i) if e["t"] > end else cur.discard(i))
+                    if int(i or 0) >= 5 and i in cur:
+                        if e.get("type") == "up": cur.discard(i)
+                        continue
+                    keep.append(e)
+                removed = len(d["events"]) - len(keep)
+                d["events"], d["duration"] = keep, (keep[-1]["t"] if keep else 0)
+                d["late_taps_removed"] = d.get("late_taps_removed", 0) + removed
+                try: p.write_text(json.dumps(d), encoding="utf-8")
+                except OSError: pass
     if any(m.get("v") != 2 for m in d.get("merged", [])):
         ev = [e for e in d.get("events", []) if int(e.get("id", 0)) < 5]
         d["events"] = ev

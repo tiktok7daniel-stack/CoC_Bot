@@ -272,7 +272,20 @@ class Attacker:
         # "Attack!" button at the bottom right, then sometimes a confirm) until the search for a base starts.
         army_done, started, next_read = False, False, time.monotonic() + 1.0
         deadline = time.monotonic() + 20
+        next_battle_tap = time.monotonic() + 2.0
         while time.monotonic() < deadline and running():
+            # the Battle tap can be lost (the village still coming back from the last battle, a popup closing):
+            # still in the village after 2 s -> tap it again (every 2.5 s), instead of waiting 20 s for nothing
+            if not army_done and time.monotonic() >= next_battle_tap:
+                next_battle_tap = time.monotonic() + 2.5
+                try:
+                    if in_home_base(fast=True):
+                        logger.debug("Still in the village: tapping Battle again")
+                        Input_Handler.click(0.07, 0.9)
+                        time.sleep(0.3)
+                        continue
+                except Exception:
+                    pass
             if find_taught("end_battle") or Frame_Handler.locate(self.assets["end_battle"], thresh=0.9) != (None, None):
                 started = True
                 break
@@ -1210,7 +1223,18 @@ class Attacker:
                 self.ended_at = None
                 replay_end = None
                 try:
-                    taps = recorder.replay(play, ADB_Manager.minitouch_device.connection, lambda: not running())
+                    gone = {"n": 0}
+                    def stop_replay():                   # the battle is over (no red End Battle twice): stop replaying
+                        if not running(): return True
+                        try:
+                            gone["n"] = 0 if red_battle_button() else gone["n"] + 1
+                        except Exception:
+                            gone["n"] = 0
+                        if gone["n"] >= 2:
+                            logger.info("Battle over before the recording's end: replay stopped")
+                            return True
+                        return False
+                    taps = recorder.replay(play, ADB_Manager.minitouch_device.connection, stop_replay)
                     replay_end = time.monotonic()
                     logger.debug(f"Recording replayed: {taps} taps")
                 except Exception:
@@ -1340,6 +1364,7 @@ class Attacker:
             if self.start_normal_attack(timeout):
                 self.open_fails = 0
                 self.complete_normal_attack(restart=restart, exclude_clan_troops=EXCLUDE_CLAN_TROOPS)
+                return True
             else:
                 # couldn't open the attack: clear what is on the screen; twice in a row -> reopen the game
                 self.open_fails = getattr(self, "open_fails", 0) + 1
@@ -1349,6 +1374,9 @@ class Attacker:
                     start_coc(force_restart="the attack could not be opened twice")
                 else:
                     Auto_Learn.handle_unknown_screen("home_attack")
+                    try: to_home_base()                  # whatever was open: back to the village for the next try
+                    except Exception: pass
+                return False
         
         except Exception:
             logger.exception("Error in run_home_base():")
