@@ -304,6 +304,16 @@ def api_setup_status():
     from gui_server import emu_setup
     return jsonify(emu_setup.status(bot_settings.load_app(), list(instances.keys())))
 
+@app.route("/api/net_check", methods=["GET"])
+def api_net_check():
+    """Is the internet working (this PC + the Clash of Clans game server)? (LDPlayer's own: the bot checks it)"""
+    import net_check
+    pc, game = net_check._pc(), net_check._game()
+    if not pc: ar = "النت مقطوع على الجهاز — اتأكد من الواي فاي / الراوتر"
+    elif not game: ar = "النت شغال، بس سيرفر Clash of Clans مش بيرد دلوقتي (صيانة أو مشكلة عندهم)"
+    else: ar = "النت شغال وسيرفر اللعبة بيرد ✓ — لو اللعبة واقفة على التحميل اقفل LDPlayer وافتحه تاني"
+    return jsonify({"pc": pc, "game": game, "ar": ar})
+
 @app.route("/api/setup/<action>", methods=["POST"])
 def api_setup_action(action):
     from gui_server import emu_setup

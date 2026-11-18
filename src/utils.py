@@ -1010,7 +1010,7 @@ def start_coc(timeout=120, detailed=False, force_restart=False):
 
         i = 0
         start = time.time()
-        restarted_once = update_checked = False
+        restarted_once = update_checked = net_checked = False
         last_unknown = 0
         while time.time() - start < timeout:
             if not running():
@@ -1052,6 +1052,22 @@ def start_coc(timeout=120, detailed=False, force_restart=False):
             if elapsed > 25 and time.time() - last_unknown > 15:
                 last_unknown = time.time()
                 Auto_Learn.handle_unknown_screen("start_game")
+            # still loading after 40 s: is it the internet? (no internet = wait for it, don't reopen the game in a loop)
+            if elapsed > 40 and not net_checked:
+                net_checked = True
+                try:
+                    import net_check
+                    r = net_check.check()
+                    TEMP_CACHE["net"] = r
+                    logger.info(f"Internet check: PC {'ok' if r['pc'] else 'OFFLINE'}, LDPlayer "
+                                f"{'ok' if r['emulator'] else ('OFFLINE' if r['emulator'] is False else '?')}, game server "
+                                f"{'ok' if r['game'] else 'not answering'} ({r['verdict']})")
+                    if r["verdict"] in ("pc_offline", "emulator_offline"):
+                        if net_check.wait_until_online(running, logger, notify=send_notification):
+                            start, i, restarted_once = time.time(), 0, False      # internet back: a fresh start
+                            continue
+                except Exception:
+                    logger.debug("internet check failed", exc_info=True)
             # game update popup: checked once, late (the uiautomator helper can push the game
             # to the background, which makes it drop its connection)
             if elapsed > 45 and not update_checked:
@@ -1061,7 +1077,9 @@ def start_coc(timeout=120, detailed=False, force_restart=False):
             
             i += 1
         if time.time() - start > timeout:
-            stop_coc(sleep=configs.SUSPEND_EMULATOR_ON_IDLE and not never_close(), reason="game did not open in 2 minutes")
+            why = (TEMP_CACHE.get("net") or {}).get("verdict", "")
+            stop_coc(sleep=configs.SUSPEND_EMULATOR_ON_IDLE and not never_close(),
+                     reason="game did not open in 2 minutes" + (f" (internet: {why})" if why else ""))
             raise Exception("Failed to start CoC")
         logger.info("CoC started")
         if not detailed: return True

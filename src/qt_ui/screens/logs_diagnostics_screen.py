@@ -150,6 +150,11 @@ class LogsScreen(Screen):
         self.run_btn = IconButton("play", "check_now", kind="go", size=14)
         self.run_btn.clicked.connect(self.run_check)
         sc.add_tool(self.run_btn)
+        self.net_btn = IconButton("globe", "net_check", size=14)
+        self.net_btn.clicked.connect(self.run_net_check)
+        sc.add_tool(self.net_btn)
+        self.net_result = label("", "h3", wrap=True)
+        sc.add(self.net_result)
         self.sc_summary = label("", "h3")
         sc.add(self.sc_summary)
         self.sc_box = QVBoxLayout()
@@ -201,6 +206,11 @@ class LogsScreen(Screen):
         self.ctx.toast(tr("copied"), "ok")
 
     # ---------------------------------------------------------------- system check
+    def run_net_check(self):
+        self.net_result.setText(tr("net_checking"))
+        self.api.get("/api/net_check", lambda r: self.net_result.setText(("📡 " + (r or {}).get("ar", "")) if r else tr("dk_failed")),
+                     timeout=30)
+
     def run_check(self):
         self.run_btn.setEnabled(False)
         self.run_btn.setText(tr("checking"))

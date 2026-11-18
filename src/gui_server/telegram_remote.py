@@ -52,7 +52,7 @@ COMMANDS = {
     "status": ("status", "الحالة", "حالة", "حاله"), "screen": ("screen", "صورة", "صوره", "شاشة", "شاشه"),
     "pause": ("pause", "وقف", "استنى"), "resume": ("resume", "كمل", "كمّل", "اكمل"),
     "start": ("start", "شغل", "شغّل", "ابدأ"), "stop": ("stop", "اقفل", "قفل"),
-    "stats": ("stats", "احصائيات", "إحصائيات", "غنايم"), "help": ("help", "مساعدة", "مساعده", "اوامر", "أوامر"),
+    "stats": ("stats", "احصائيات", "إحصائيات", "غنايم"), "net": ("net", "نت", "النت", "انترنت"), "help": ("help", "مساعدة", "مساعده", "اوامر", "أوامر"),
 }
 
 
@@ -74,7 +74,7 @@ def _handle(app, token, chat, cmd, arg):
     if cmd == "help":
         return _send(token, chat, "أوامر Clash Farmer:\n"
                      "• الحالة — كل حساب بيعمل إيه\n• صورة — صورة الشاشة دلوقتي\n• وقف / كمل — إيقاف مؤقت وكمّل (وقف 30 = نص ساعة)\n"
-                     "• شغل / اقفل — تشغيل وقفل البوت\n• احصائيات — غنايم النهارده\n(ممكن تكتب اسم الحساب بعد الأمر)")
+                     "• شغل / اقفل — تشغيل وقفل البوت\n• احصائيات — غنايم النهارده\n• نت — النت وسيرفر اللعبة شغالين؟\n(ممكن تكتب اسم الحساب بعد الأمر)")
     if cmd == "status":
         import stats
         from pathlib import Path
@@ -121,6 +121,11 @@ def _handle(app, token, chat, cmd, arg):
                 sent += 1
         if not sent: _send(token, chat, "ما قدرتش أصوّر — المحاكي مقفول؟")
         return
+    if cmd == "net":
+        import net_check
+        pc, game = net_check._pc(), net_check._game()
+        return _send(token, chat, "📡 " + ("النت شغال على الجهاز" if pc else "النت مقطوع على الجهاز") + " — " +
+                     ("سيرفر اللعبة بيرد ✓" if game else "سيرفر Clash of Clans مش بيرد"))
     if cmd == "stats":
         import stats
         start = time.mktime(time.localtime()[:3] + (0, 0, 0, 0, 0, -1))

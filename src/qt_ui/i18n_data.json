@@ -404,6 +404,8 @@
 "ca_err_limit": "طلبات كتير — جرّب بعد دقيقة",
 "ca_err_net": "مفيش اتصال بـ Supercell دلوقتي",
 "pl_mode": "نظام الهجوم",
+"net_check": "فحص النت",
+"net_checking": "بيفحص النت وسيرفر اللعبة…",
 "farm_only": "فارم بس (هجوم وجمع فلوس)",
 "farm_only_sub": "البوت يهاجم ويجمع بس — من غير ترقيات ولا أسوار ولا القرية الليلية ولا أي حاجة تانية. لما الدهب والإكسير يتملوا يوقف الهجوم ويقولك",
 "farm_when_full": "لما المخازن تتملي",
@@ -1486,6 +1488,8 @@
 "ca_err_limit": "Too many requests — try again in a minute",
 "ca_err_net": "Can't reach Supercell right now",
 "pl_mode": "Attack system",
+"net_check": "Check internet",
+"net_checking": "Checking the internet and the game server…",
 "farm_only": "Farm only (attack and collect)",
 "farm_only_sub": "Only attacks and collects — no upgrades, walls, builder base or extras. When gold and elixir are full it stops attacking and tells you",
 "farm_when_full": "When the storages are full",
@@ -3175,6 +3179,18 @@
 [
 "^Farm only: the money was spent — attacking again",
 "▶️ الفلوس اتصرفت — رجع يهاجم ويجمع"
+],
+[
+"^Internet check: (.*)",
+"fn:netcheck"
+],
+[
+"^No internet \\((\\w+)\\): waiting for it instead of reopening the game",
+"📡 مفيش نت — البوت مستني النت يرجع بدل ما يفضل يقفل ويفتح اللعبة"
+],
+[
+"^Internet is back — opening the game again",
+"✅ النت رجع — بيفتح اللعبة ويكمّل"
 ],
 [
 "^PaddleOCR failed, reading with easyocr",

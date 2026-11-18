@@ -192,6 +192,14 @@ def translate_log(msg):
         if rep == "fn:troopbar":
             names = [n.strip() for n in m.group(1).split(",")]
             return "شريط الجيش: " + "، ".join("؟" if n == "?" else "بطل" if n == "hero" else unit_name(n) for n in names)
+        if rep == "fn:netcheck":
+            t = m.group(1)
+            v = {"pc_offline": "النت مقطوع على الجهاز", "emulator_offline": "LDPlayer مش واصل للنت",
+                 "game_server": "سيرفر اللعبة مش بيرد", "ok": "النت شغال — المشكلة من اللعبة نفسها"}
+            verdict = next((ar for k, ar in v.items() if f"({k})" in t), "")
+            return ("📡 فحص النت: الجهاز " + ("✓" if "PC ok" in t else "✗") + "، LDPlayer " +
+                    ("✓" if "LDPlayer ok" in t else ("✗" if "LDPlayer OFFLINE" in t else "؟")) + "، سيرفر اللعبة " +
+                    ("✓" if "server ok" in t else "✗") + (f" — {verdict}" if verdict else ""))
         if rep == "fn:missed":
             kinds = m.group(2).strip(" ()")
             for en, ar in (("troop", "وحش"), ("hero", "بطل"), ("clan", "كلان كاسل"), ("None", "مش معروف")): kinds = kinds.replace(en, ar)
