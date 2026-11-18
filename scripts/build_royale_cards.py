@@ -42,9 +42,28 @@ def main(data_dir):
             "count": s.get("count") or (1 if units else 0), "deploy_ms": s.get("deploy_time_ms"),
             "units": [u.name for u in units], "rarity": cat.get("rarity"),
         }
+    # spells: their projectile (speed = how long it flies, damage, radius) from projectiles.json.gz
+    proj = {p["projectile_name"]: p.get("resolved_record") or {} for p in
+            json.load(gzip.open(os.path.join(data_dir, "projectiles.json.gz")))["projectiles"]}
+    SPELL_PROJ = {"fireball": "FireballSpell", "rocket": "RocketSpell", "arrows": "ArrowsSpell", "the_log": "LogProjectileRolling",
+                  "barbarian_barrel": "BarbLogProjectileRolling", "giant_snowball": "SnowballSpell",
+                  "goblin_barrel": "GoblinBarrelSpell"}
+    LAUNCH = {"the_log": "LogProjectile", "barbarian_barrel": "BarbLogProjectile"}
+    for name, pn in SPELL_PROJ.items():
+        r = proj.get(pn) or {}
+        if name not in out or not r: continue
+        launch = proj.get(LAUNCH.get(name, pn)) or r
+        out[name]["projectile_speed"] = launch.get("Speed")
+        if r.get("Damage"): out[name]["damage"] = r["Damage"] * (3 if name == "arrows" else 1)    # arrows: 3 waves
+        if launch.get("Radius") and name != "arrows": out[name]["splash"] = launch["Radius"] / 1000.0   # arrows: many arrows, 4 tiles
+        if r.get("CrownTowerDamagePercent") is not None: out[name]["tower_pct"] = 100 + r["CrownTowerDamagePercent"]
+    # the battle's elixir: starting elixir and the regeneration steps (normal / double / triple)
+    rt = json.load(open(os.path.join(data_dir, "runtime.json"), encoding="utf-8"))["timelines"]["Default"]
+    elixir = {"start": rt["starting_elixir"],
+              "steps": [{"seconds": e["length_seconds"], "ms_per_elixir": e["full_bar_ms"] / 10.0} for e in rt["elixir_rates"]]}
     dst = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "royale", "cards.json")
     with open(dst, "w", encoding="utf-8") as f:
-        json.dump({"version": "16.635", "cards": out}, f, indent=0, ensure_ascii=False)
+        json.dump({"version": "16.635", "elixir": elixir, "cards": out}, f, indent=0, ensure_ascii=False)
     print(f"{len(out)} cards -> {dst}; with numbers: {sum(1 for v in out.values() if v['hp'] or v['damage'])}")
 
 

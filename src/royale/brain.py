@@ -49,7 +49,11 @@ SPAWNED = {"golemite", "lava_pup", "elixir_golem_medium", "elixir_golem_small", 
 def cards_db():
     if _DB["cards"] is None:
         with open(os.path.join(_ROOT, "assets", "royale", "cards.json"), encoding="utf-8") as f:
-            _DB["cards"] = json.load(f)["cards"]
+            d = json.load(f)
+        _DB["cards"] = d["cards"]
+        _DB["elixir"] = d.get("elixir") or {"start": 6.0, "steps": [{"seconds": 120, "ms_per_elixir": 2800},
+                                                                   {"seconds": 120, "ms_per_elixir": 1400},
+                                                                   {"seconds": 60, "ms_per_elixir": 930}]}
         _DB["unit_to_card"] = {}
         # a unit some cards share (skeleton: Skeletons / Skeleton Army / Graveyard / Tombstone): the card that is
         # mostly that unit and cheapest (its own card), the group size picks Skeleton Army (see observe)
@@ -140,7 +144,8 @@ class Brain:
         self.seen = deque(maxlen=3)            # last looks: sets of (unit, tile_x//2, tile_y//2)
         self.known_enemy = {}                  # track id -> {"unit", "x", "y", "first", "last"}
         self._next_id = 0
-        self.enemy_elixir = 5.0
+        cards_db()
+        self.enemy_elixir = float(_DB["elixir"]["start"])     # the game's own timeline: 6 at the start
         self.enemy_t = time.monotonic()
         self.enemy_cycle = deque(maxlen=8)     # cards the opponent played, newest last
         self.last_play = 0.0
@@ -154,10 +159,31 @@ class Brain:
     def double_elixir(self):
         return self.elapsed() >= 120           # the last minute of 3 + overtime
 
+    def seconds_per_elixir(self, at=None):
+        """The game's timeline (game data 16.635): 2.8 s for 2 minutes, 1.4 s (double), then 0.93 s (triple)."""
+        t = self.elapsed() if at is None else at
+        for st in _DB["elixir"]["steps"]:
+            if t < st["seconds"]: return st["ms_per_elixir"] / 1000.0
+            t -= st["seconds"]
+        return _DB["elixir"]["steps"][-1]["ms_per_elixir"] / 1000.0
+
     def _regen_enemy(self, now):
-        rate = REGEN_S / (2 if self.double_elixir() else 1)
-        self.enemy_elixir = min(10.0, self.enemy_elixir + (now - self.enemy_t) / rate)
+        self.enemy_elixir = min(10.0, self.enemy_elixir + (now - self.enemy_t) / self.seconds_per_elixir())
         self.enemy_t = now
+
+    def lead(self, name, x, y, unit=None):
+        """Where an enemy unit at (x, y) will be when spell `name` lands: its flight from our king tower (speed from
+        the game data) + cast delay, times how fast the unit walks toward us."""
+        c = card(name)
+        ps = c.get("projectile_speed")
+        if not ps: return (x, y)
+        fly = dist(OUR_TOWERS["king"], (x, y)) / (ps / 60.0) + 0.25
+        vy = None
+        for t in self.known_enemy.values():
+            if t["unit"] == unit and abs(t["x"] - x) <= 2 and abs(t["y"] - y) <= 2: vy = t.get("vy"); break
+        if vy is None or vy > 0.5:                                    # no track yet: its walking speed, toward us
+            vy = -((card(unit_card(unit) or "").get("speed") or 60) / 60.0)
+        return (x, max(0.0, y + vy * fly))
 
     # -------------------------------------------------------------- tracking
     def observe(self, enemies, now=None):
@@ -248,7 +274,9 @@ class Brain:
         r = roles(name)
         cx, cy = threat["center"] or OUR_TOWERS[side]
         if "spell" in r:                                                         # where the group will be
-            return (int(round(cx)), int(max(0, cy - 1)))
+            u0 = threat["units"][0][0] if threat["units"] else None
+            lx, ly = self.lead(name, cx, cy, u0)
+            return (int(round(lx)), int(round(ly)))
         if "building" in r:
             return pull_spot(side)
         c = card(name)
@@ -318,7 +346,9 @@ class Brain:
                     hp = c.get("hp") or 300
                     per = c.get("cost", 3) / max(1, c.get("count") or 1)
                     val += per * (1.0 if hp <= dmg else 0.4)                     # killed = full value
-            if best is None or val > best[0]: best = (val, (int(x), int(max(0, y - 1))))
+            if best is None or val > best[0]:
+                lx, ly = self.lead(name, x, y, u)
+                best = (val, (int(round(lx)), int(round(ly))))
         return best
 
     def _attack(self, playable, elixir, stable, allies, towers, now):

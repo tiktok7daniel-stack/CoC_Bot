@@ -1,5 +1,22 @@
 {
 "version": "16.635",
+"elixir": {
+"start": 6.0,
+"steps": [
+{
+"seconds": 120,
+"ms_per_elixir": 2800.0
+},
+{
+"seconds": 120,
+"ms_per_elixir": 1400.0
+},
+{
+"seconds": 60,
+"ms_per_elixir": 930.0
+}
+]
+},
 "cards": {
 "archer_queen": {
 "id": 26000072,
@@ -55,7 +72,7 @@
 "hits_ground": true,
 "buildings_only": false,
 "hp": null,
-"damage": 48.0,
+"damage": 144,
 "hit_ms": null,
 "range": null,
 "splash": 3.5,
@@ -63,7 +80,9 @@
 "count": 0,
 "deploy_ms": null,
 "units": [],
-"rarity": "Common"
+"rarity": "Common",
+"projectile_speed": 1100,
+"tower_pct": 20
 },
 "baby_dragon": {
 "id": 26000015,
@@ -141,7 +160,7 @@
 "hits_ground": true,
 "buildings_only": false,
 "hp": null,
-"damage": null,
+"damage": 84,
 "hit_ms": null,
 "range": null,
 "splash": 1.3,
@@ -151,7 +170,8 @@
 "units": [
 "barbarian"
 ],
-"rarity": "Epic"
+"rarity": "Epic",
+"projectile_speed": 360
 },
 "barbarian_hut": {
 "id": 27000005,
@@ -668,7 +688,7 @@
 "hits_ground": true,
 "buildings_only": false,
 "hp": null,
-"damage": 269.0,
+"damage": 269,
 "hit_ms": null,
 "range": null,
 "splash": 2.5,
@@ -676,7 +696,9 @@
 "count": 0,
 "deploy_ms": null,
 "units": [],
-"rarity": "Rare"
+"rarity": "Rare",
+"projectile_speed": 600,
+"tower_pct": 23
 },
 "firecracker": {
 "id": 26000064,
@@ -840,7 +862,7 @@
 "hits_ground": true,
 "buildings_only": false,
 "hp": null,
-"damage": 70.0,
+"damage": 70,
 "hit_ms": null,
 "range": null,
 "splash": 2.5,
@@ -848,7 +870,9 @@
 "count": 0,
 "deploy_ms": null,
 "units": [],
-"rarity": "Common"
+"rarity": "Common",
+"projectile_speed": 800,
+"tower_pct": 25
 },
 "goblins": {
 "id": 26000002,
@@ -892,7 +916,8 @@
 "units": [
 "goblin"
 ],
-"rarity": "Epic"
+"rarity": "Epic",
+"projectile_speed": 400
 },
 "goblin_cage": {
 "id": 27000012,
@@ -1876,7 +1901,7 @@
 "hits_ground": true,
 "buildings_only": false,
 "hp": null,
-"damage": 580.0,
+"damage": 580,
 "hit_ms": null,
 "range": null,
 "splash": 2.0,
@@ -1884,7 +1909,9 @@
 "count": 0,
 "deploy_ms": null,
 "units": [],
-"rarity": "Rare"
+"rarity": "Rare",
+"projectile_speed": 350,
+"tower_pct": 23
 },
 "royal_delivery": {
 "id": 28000018,
@@ -2183,7 +2210,7 @@
 "hits_ground": true,
 "buildings_only": false,
 "hp": null,
-"damage": null,
+"damage": 105,
 "hit_ms": null,
 "range": null,
 "splash": 1.95,
@@ -2191,7 +2218,9 @@
 "count": 0,
 "deploy_ms": null,
 "units": [],
-"rarity": "Legendary"
+"rarity": "Legendary",
+"projectile_speed": 360,
+"tower_pct": 13
 },
 "three_musketeers": {
 "id": 26000028,
