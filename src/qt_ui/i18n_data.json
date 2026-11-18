@@ -405,6 +405,8 @@
 "ca_err_net": "مفيش اتصال بـ Supercell دلوقتي",
 "pl_mode": "نظام الهجوم",
 "acc_follow": "بيلعب:",
+"pl_useall": "يستخدم كل حاجة",
+"pl_useall_sub": "بعد التسجيل: أي وحش أو بطل أو سبيل فاضل بينزل على طول — السبيلات على الدفاعات المتجمعة، وقدرات الأبطال بتتفعّل",
 "follow_note": "الحساب ده بيلعب زي حساب تاني — غيّر الإعدادات من الحساب الأصلي، أو خلّيه \"بإعداداته هو\" من صفحة الحسابات",
 "acc_follow_own": "بإعداداته هو",
 "acc_follow_like": "زي {a} بالظبط",
@@ -1495,6 +1497,8 @@
 "ca_err_net": "Can't reach Supercell right now",
 "pl_mode": "Attack system",
 "acc_follow": "Plays:",
+"pl_useall": "Use everything",
+"pl_useall_sub": "After the recording: every troop, hero or spell still left goes in at once — spells on the defenses packed together, hero abilities on",
 "follow_note": "This account plays like another one — change the settings on that account, or set it to \"its own settings\" on the Accounts page",
 "acc_follow_own": "with its own settings",
 "acc_follow_like": "exactly like {a}",
@@ -3219,6 +3223,34 @@
 [
 "^A battle is still going: letting it finish, then going on",
 "⚔️ في معركة لسه شغالة — البوت سايبها تخلص من غير ما يلمس حاجة وبعدين يكمّل"
+],
+[
+"^Memory almost full: ([\\d.]+) GB free \\(this bot uses ([\\d.]+) GB\\)",
+"⚠️ الرام قربت تخلص: فاضل \\1 جيجا (البوت ده واخد \\2 جيجا) — اقفل برامج تانية أو قلّل رام LDPlayer"
+],
+[
+"^Attack system: recording (.*)",
+"🎬 نظام الهجوم: التسجيل \\1"
+],
+[
+"^Attack system: smart",
+"🧠 نظام الهجوم: الهجوم الذكي"
+],
+[
+"^Attack system: loadout (.*)",
+"⚠️ نظام الهجوم: إنزال عادي (\\1) — مش تسجيل! اختار تسجيلك من الرئيسية لو عايزه"
+],
+[
+"^Attack system: classic.*",
+"⚠️ نظام الهجوم: نقطة واحدة (مفيش تشكيلة متختارة) — اختار تسجيلك من الرئيسية"
+],
+[
+"^PaddleOCR read failed \\(this picture is read another way\\)",
+"⚠️ قارئ الكلام وقع مرة — الصورة دي اتقرت بطريقة تانية"
+],
+[
+"^Recording: cast (\\d+) spell card\\(s\\) that were still left",
+"🪄 بعد التسجيل: رمى \\1 كارت سبيل كانوا فاضلين على الدفاعات"
 ],
 [
 "^PaddleOCR failed, reading with easyocr",

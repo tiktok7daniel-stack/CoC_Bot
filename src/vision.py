@@ -46,7 +46,10 @@ def _load():
             import onnxruntime as ort
             av = ort.get_available_providers()
             prov = [p for p in ("CUDAExecutionProvider", "DmlExecutionProvider") if p in av] + ["CPUExecutionProvider"]
-            sess = ort.InferenceSession(str(d / "coc_vision.onnx"), providers=prov)
+            so = ort.SessionOptions()
+            so.enable_cpu_mem_arena = False
+            so.intra_op_num_threads = 4
+            sess = ort.InferenceSession(str(d / "coc_vision.onnx"), sess_options=so, providers=prov)
             _NET.update(net=sess, kind="ort", device=sess.get_providers()[0])
             return sess
         except Exception as e:

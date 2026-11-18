@@ -144,6 +144,26 @@ class CoC_Bot:
             elif limit <= 0 and caps.get(k) and v >= caps[k] * 0.98: full.append(k)
         return full
 
+    def check_memory(self):
+        """Memory almost full (two accounts + two LDPlayers + the models): say it once, free what can be freed."""
+        import gc
+        free = _utils.memory_free_gb()
+        if free is None: return
+        try:
+            import psutil, os
+            mine = psutil.Process(os.getpid()).memory_info().rss / 2 ** 30
+        except Exception:
+            mine = 0
+        if free < 1.5:
+            gc.collect()
+            if not getattr(self, "_mem_told", False):
+                self._mem_told = True
+                logger.warning(f"Memory almost full: {free:.1f} GB free (this bot uses {mine:.1f} GB)")
+                try: send_notification(f"⚠️ الرام قربت تخلص: فاضل {free:.1f} جيجا — اقفل برامج تانية، أو خلّي LDPlayer يستخدم رام أقل")
+                except Exception: pass
+        elif free > 3:
+            self._mem_told = False
+
     def farm_full(self, action="wait"):
         """
         Farm only: gold and elixir are full. Tell the user once, then:
@@ -578,6 +598,7 @@ class CoC_Bot:
         if t.get("heroes") or t.get("pet_house"): jobs.append("heroes & pets")
         if t.get("builder_attacks") or t.get("builder_base") or t.get("builder_lab"): jobs.append("builder base")
         logger.info(f"Round {self.cycle_count + 1}: " + (", ".join(jobs) if jobs else "nothing to do"))
+        self.check_memory()
 
     def ask_today_plan(self):
         """Ask in the app what to do today; wait for the answer (the usual after ASK_TIMEOUT)."""

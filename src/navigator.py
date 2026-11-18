@@ -133,6 +133,11 @@ _BUSY = {"on": False}
 def go(target, max_steps=8, logger=None):
     """Go to `target` by the map -> True when there. Unknown screens on the way: sent to Claude, then home first."""
     if _BUSY["on"]: return False                 # never inside itself (a handler on the way calling go home again)
+    try:
+        import utils
+        if utils.red_battle_button(): return False   # a battle is going: nothing to navigate (no taps, no reports)
+    except Exception:
+        pass
     _BUSY["on"] = True
     try:
         return _go(target, max_steps, logger)

@@ -18,6 +18,7 @@ from pathlib import Path
 DIR = Path.home() / ".CoC_Bot" / "ocr_models" / "PP-OCRv6_medium"
 HF = "https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_{}_onnx/resolve/main/{}"
 FILES = (("det", "inference.onnx"), ("rec", "inference.onnx"), ("rec", "inference.yml"))
+_READ_LOCK = threading.Lock()
 _S = {"engine": None, "kind": None, "device": "cpu", "error": "", "download": None, "lock": threading.Lock(),
       "ms": None, "tried": False}
 
@@ -50,7 +51,14 @@ def _want():
     except Exception:
         m = "auto"
     if m in ("small", "medium"): return m
-    return "medium" if _device() != "cpu" else "small"
+    # auto: the strongest one only with a graphics card AND memory to spare (two accounts = two bots, each loads
+    # its own reader: the medium model takes ~1 GB more each)
+    try:
+        import psutil
+        free = psutil.virtual_memory().available / 2 ** 30
+    except Exception:
+        free = 99
+    return "medium" if _device() != "cpu" and free >= 6 else "small"
 
 
 def medium_ready():
@@ -120,6 +128,7 @@ def engine():
             download_medium()
             want = "small"
         p = {"Global.log_level": "error", "Global.text_score": 0.2, "Global.use_cls": False,
+             "EngineConfig.onnxruntime.intra_op_num_threads": 4,       # leave processor for LDPlayer / a 2nd bot
              "EngineConfig.onnxruntime.use_cuda": dev == "cuda", "EngineConfig.onnxruntime.use_dml": dev == "dml"}
         if want == "medium":
             p.update({"Det.model_path": str(DIR / "det" / "inference.onnx"), "Rec.model_path": str(DIR / "rec" / "inference.onnx"),
@@ -155,7 +164,13 @@ def read(frame):
     h, w = frame.shape[:2]
     img, k, pad = _prep(frame)
     t = time.time()
-    r = engine()(img)
+    with _READ_LOCK:                                 # one picture at a time (the bot reads from several threads)
+        r = engine()(img)
+    try:
+        from utils import OCR_Handler
+        OCR_Handler.paddle_fails = 0
+    except Exception:
+        pass
     _S["ms"] = round((time.time() - t) * 1000)
     out = []
     boxes, txts, scores = getattr(r, "boxes", None), getattr(r, "txts", None) or (), getattr(r, "scores", None) or ()

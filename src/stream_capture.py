@@ -86,7 +86,7 @@ def _enabled():
 class Stream:
     """One running scrcpy video stream; .latest() -> newest RGB picture."""
 
-    def __init__(self, device, bitrate=12_000_000, max_fps=60):
+    def __init__(self, device, bitrate=8_000_000, max_fps=30):   # 30 pictures a second is plenty; half the processor
         self.device, self.bitrate, self.max_fps = device, bitrate, max_fps
         self.sock, self.shell = None, None
         self.alive = False

@@ -761,6 +761,7 @@ def to_home_base(ref_cache=False):
     TEMP_CACHE["location"] = "home_base"
     
     if in_home_base(): return
+    if red_battle_button(): return              # a battle is going: it ends by itself (the battle code handles it)
     
     Input_Handler.zoom(dir="out")
     for _ in range(3):
@@ -2102,9 +2103,11 @@ class OCR_Handler:
                 if got or getattr(OCR_Handler, "reader", None) is None: return got   # nothing read: easyocr if loaded
         except (KeyboardInterrupt, SystemExit): raise
         except Exception:
-            OCR_Handler.paddle_broken = True
-            logger.warning("PaddleOCR failed, reading with easyocr", exc_info=True)
-        try: result = easyocr_reader().readtext(frame, detail=0)
+            _paddle_failed()
+        try:
+            if getattr(OCR_Handler, "reader", None) is None and _paddle_installed():
+                raise RuntimeError("easyocr not loaded (memory)")
+            result = easyocr_reader().readtext(frame, detail=0)
         except (KeyboardInterrupt, SystemExit): raise
         except RuntimeError:                       # reader still loading / a plain picture: Tesseract
             try:
@@ -3489,6 +3492,38 @@ def warm_up_ocr():
     _ocr_threading.Thread(target=work, daemon=True, name="ocr-warmup").start()
 
 
+def _paddle_installed():
+    try:
+        import paddle_ocr
+        return paddle_ocr.available()
+    except Exception:
+        return False
+
+
+def memory_free_gb():
+    """Memory the PC still has free (GB), or None."""
+    try:
+        import psutil
+        return psutil.virtual_memory().available / 2 ** 30
+    except Exception:
+        return None
+
+
+def _paddle_failed():
+    """One PaddleOCR error: read this picture another way. Only 5 in a row turn it off (for 10 minutes), and the
+    first error is logged with its details (it reaches Claude), not a warning nobody sees."""
+    import time
+    n = getattr(OCR_Handler, "paddle_fails", 0) + 1
+    OCR_Handler.paddle_fails = n
+    if n == 1: logger.error("PaddleOCR read failed (this picture is read another way)", exc_info=True)
+    if n >= 5:
+        OCR_Handler.paddle_broken = True
+        OCR_Handler.paddle_fails = 0
+        logger.warning("PaddleOCR failed, reading with easyocr")
+        import threading
+        threading.Timer(600, lambda: setattr(OCR_Handler, "paddle_broken", False)).start()
+
+
 def ocr_boxes(frame):
     """[(text, x1, y1, x2, y2, conf)] with fractions of the frame. easyocr first, Tesseract TSV fallback."""
     import numpy as np, cv2
@@ -3505,9 +3540,10 @@ def ocr_boxes(frame):
             if got or getattr(OCR_Handler, "reader", None) is None: return got     # nothing read: easyocr if loaded
     except (KeyboardInterrupt, SystemExit): raise
     except Exception:
-        OCR_Handler.paddle_broken = True
-        logger.warning("PaddleOCR failed, reading with easyocr", exc_info=True)
+        _paddle_failed()
     try:
+        if getattr(OCR_Handler, "reader", None) is None and _paddle_installed():
+            raise RuntimeError("easyocr not loaded (PaddleOCR is the reader; easyocr would take 1-2 GB of memory)")
         for pts, text, conf in easyocr_reader().readtext(frame, detail=1):
             xs, ys = [p[0] for p in pts], [p[1] for p in pts]
             if text.strip(): out.append((text.strip(), min(xs) / w, min(ys) / h, max(xs) / w, max(ys) / h, float(conf)))

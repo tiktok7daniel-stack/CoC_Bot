@@ -843,6 +843,25 @@ class Attacker:
         self.fight_seen = True
         return time.monotonic() - t0
 
+    def spell_target(self):
+        """Where leftover spells do the most: the strongest defenses packed together (else the Town Hall / the
+        middle of the base), as the eyes saw it. None when the base wasn't seen."""
+        b = getattr(self, "base_seen", None)
+        if b is None or not getattr(b, "objs", None): return None
+        strong = [o.center for o in b.objs if b.DANGER.get(o.name, 0) >= 2.0]
+        if len(strong) >= 2:
+            # the densest group: the strong defense with the most others within 0.15
+            best = max(strong, key=lambda c: sum(((c[0] - d[0]) ** 2 + (c[1] - d[1]) ** 2) ** 0.5 < 0.15 for d in strong))
+            near = [d for d in strong if ((best[0] - d[0]) ** 2 + (best[1] - d[1]) ** 2) ** 0.5 < 0.15]
+            x, y = sum(d[0] for d in near) / len(near), sum(d[1] for d in near) / len(near)
+        elif b.th is not None:
+            x, y = b.th.center
+        elif b.hull is not None:
+            x, y = (float(v) for v in b.hull.reshape(-1, 2).mean(axis=0))
+        else:
+            return None
+        return min(0.95, max(0.05, x)), min(0.78, max(0.12, y))
+
     def smart_bad(self, pt):
         """A smart spot the game refused (the red line is further out there): push it outward, drop it if it can't."""
         sp = getattr(self, "smart_points", None) or []
@@ -931,8 +950,13 @@ class Attacker:
             self.army_out = True
             return 0
         done, missed = [], []
+        spells_left = []
+        counts = dict(zip(centers, _c)) if _c else {}
         for x, t in zip(centers, types):
-            if t == "spell" or self.card_gray(x): continue
+            if t == "spell":
+                if not self.card_gray(x): spells_left.append(x)
+                continue
+            if self.card_gray(x): continue
             a, b = self.card_crop(x), self.card_crop(x)
             noise = float(np.abs(a - b).mean())
             Input_Handler.click(x, 0.9)
@@ -956,6 +980,23 @@ class Attacker:
                 if t == "hero": self.deployed_heroes.append(x)
             else:
                 missed.append(t)
+        # use everything: spells still on the bar are cast on the defenses packed together (the eyes see them),
+        # not kept for nothing (the battle ends with them otherwise)
+        cast = 0
+        if spells_left and (getattr(self, "plan", None) or {}).get("use_all", True):
+            target = self.spell_target()
+            if target is not None:
+                import random
+                time.sleep(0.6)                          # the troops just dropped walk in first
+                for x in spells_left:
+                    n = max(1, min(12, int(counts.get(x) or 1)))
+                    Input_Handler.click(x, 0.9)
+                    time.sleep(0.12)
+                    for _ in range(n):
+                        Input_Handler.click(target[0] + random.uniform(-0.03, 0.03), target[1] + random.uniform(-0.03, 0.03))
+                        time.sleep(0.05)
+                    cast += 1
+                logger.info(f"Recording: cast {cast} spell card(s) that were still left")
         heroes = done.count("hero")
         if done: logger.info(f"Recording: also deployed {len(done)} card(s) that were still left ({heroes} hero(es))")
         if missed: logger.info(f"Could not drop {len(missed)} card(s) on any spot ({', '.join(missed)})")
@@ -1179,7 +1220,11 @@ class Attacker:
         self.troops_done_at = self.heroes_done_at = None
         self.fight_seen = False
         self._later = []
-        if getattr(self, "plan", None): logger.debug(f"Attack plan: {self.plan.get('name', '')}")
+        plan = getattr(self, "plan", None) or {}
+        system = ("smart" if plan.get("mode") == "smart" else
+                  f"recording {plan.get('recording')}" if plan.get("recording") and plan.get("mode", "recording") == "recording"
+                  else f"loadout {plan.get('name')}" if plan else "classic (no loadout chosen)")
+        logger.info(f"Attack system: {system}")
         if getattr(self, "plan", None) and self.plan.get("recording") and self.plan.get("mode", "recording") == "recording":
             import recorder
             data = recorder.load(self.plan["recording"])

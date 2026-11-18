@@ -243,9 +243,11 @@ def upload_errors(id, st=None):
     own = st is None
     if own: st = _load(STATE, {})
     if settings.load_app().get("send_errors", True) is False or not configured(): return 0
-    since = st.get("errors_sent_t") or time.time() - 7 * 86400
+    K = f"errors_{teach._safe(id)}"                  # per account: two bots share this state file
+    mine = st.get(K) or {}
+    since = mine.get("sent_t") or (st.get("errors_sent_t") if id == "main" else None) or time.time() - 7 * 86400
     day = time.strftime("%Y%m%d")
-    seen = st.get("errors_seen", {}) if st.get("errors_day") == day else {}
+    seen = mine.get("seen", {}) if mine.get("day") == day else {}
     ne, newest = 0, since
     shots = Path.home() / ".CoC_Bot" / "errors" / str(id)
     for e in stats.read(id, since=since + 0.001):
@@ -261,8 +263,11 @@ def upload_errors(id, st=None):
         shot = shots / str(e.get("shot", ""))
         if e.get("shot") and shot.exists(): _put(stem + ".jpg", shot.read_bytes(), "error screenshot")
         ne += 1
-    st.update(errors_sent_t=newest, errors_day=day, errors_seen=seen)
-    if own: _save(STATE, st)
+    st[K] = {"sent_t": newest, "day": day, "seen": seen}
+    if own:
+        fresh = _load(STATE, {})                      # the other bot may have saved meanwhile: keep its part
+        fresh[K] = st[K]
+        _save(STATE, fresh)
     return ne
 
 

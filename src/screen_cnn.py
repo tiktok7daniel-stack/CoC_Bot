@@ -57,11 +57,21 @@ def _session():
         if not MODEL.exists():
             download()
             return None
+        try:                                         # the deep brain is a helper: not when memory is short
+            import psutil
+            if psutil.virtual_memory().available < 3 * 2 ** 30:
+                _S["error"] = "not loaded: less than 3 GB of memory free"
+                return None
+        except Exception:
+            pass
         try:
             import onnxruntime as ort
             av = ort.get_available_providers()
             prov = [p for p in ("CUDAExecutionProvider", "DmlExecutionProvider") if p in av] + ["CPUExecutionProvider"]
-            _S["sess"] = ort.InferenceSession(str(MODEL), providers=prov)
+            so = ort.SessionOptions()
+            so.enable_cpu_mem_arena = False          # less memory kept for nothing
+            so.intra_op_num_threads = 2              # two bots side by side share the processor
+            _S["sess"] = ort.InferenceSession(str(MODEL), sess_options=so, providers=prov)
             _S["device"] = {"CUDAExecutionProvider": "cuda", "DmlExecutionProvider": "dml"}.get(_S["sess"].get_providers()[0], "cpu")
         except Exception as e:
             _S["error"] = str(e)[:200]
