@@ -78,6 +78,13 @@ class RoyaleBot:
             strong_eyes.ensure(logger)
         except Exception:
             pass
+        try:                                         # and trained on this PC's graphics card, by themselves
+            from royale import trainer
+            if self.s.get("auto_train", True) and trainer.due():
+                logger.info("Clash Royale: training the eyes on this PC in the background (data + graphics card)")
+                trainer.start(_u().INSTANCE_ID)
+        except Exception:
+            logger.debug("Clash Royale: training not started", exc_info=True)
         self.unknown_since = None
 
     # -------------------------------------------------------------- one battle

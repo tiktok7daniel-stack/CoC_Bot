@@ -105,6 +105,22 @@ class RoyaleScreen(Screen):
         g2.addWidget(setup, 0, 1)
         v.addWidget(w2)
 
+        # ---------- training the eyes on this PC
+        train = GlassCard("royale_train", "school", "royale_train_sub")
+        self.train_state = label("", "sub", wrap=True)
+        train.add(self.train_state)
+        train.add(toggle_row(self.store, "royale_auto_train", "royale.auto_train", "royale_auto_train_sub"))
+        from ..widgets.controls import IconButton
+        b = IconButton("play", "royale_train_now", size=14)
+        b.clicked.connect(self.train_now)
+        train.add(b)
+        v.addWidget(train)
+        from PySide6.QtCore import QTimer
+        self._tt = QTimer(self)
+        self._tt.timeout.connect(self.show_training)
+        self._tt.start(8000)
+        self.show_training()
+
         # ---------- live: the brain's decisions
         live = GlassCard("royale_live", "terminal", "royale_live_sub")
         self.log = LogView(mini=True)
@@ -117,6 +133,34 @@ class RoyaleScreen(Screen):
         self.poller.log.connect(self.on_log)
         self.show_deck(self.store.get("royale.deck", []))
         on_lang(lambda: self.show_deck(self.store.get("royale.deck", [])))
+
+    # -------------------------------------------------------------- training
+    def show_training(self):
+        try:
+            import sys as _s
+            _s.path.insert(0, _ROOT + "/src") if (_ROOT + "/src") not in _s.path else None
+            from royale import trainer
+            st = trainer.read_status()
+        except Exception:
+            st = {}
+        stage = st.get("stage")
+        if not stage:
+            self.train_state.setText(tr("rt_none")); return
+        txt = tr("rt_" + stage) if tr("rt_" + stage) != "rt_" + stage else stage
+        if st.get("note"): txt += " — " + str(st["note"])
+        if st.get("base_map50") is not None and st.get("new_map50") is not None:
+            txt += f"\n{tr('rt_score')}: {st['base_map50']:.2f} → {st['new_map50']:.2f}" + (f" ✅ {tr('rt_used')}" if st.get("used") else "")
+        if st.get("error"): txt += "\n⚠ " + str(st["error"])
+        self.train_state.setText(txt)
+
+    def train_now(self):
+        try:
+            from royale import trainer
+            trainer.start(self.store.account or "main")
+            self.ctx.banner(tr("rt_started"), "ok", "school")
+        except Exception as e:
+            self.ctx.banner(str(e), "bad", "x")
+        self.show_training()
 
     # -------------------------------------------------------------- deck
     def show_deck(self, deck):

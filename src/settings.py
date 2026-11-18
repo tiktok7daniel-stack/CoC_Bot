@@ -31,6 +31,10 @@ def default_settings():
             "deck": [],              # the 8 cards (found by itself in the first battle; can be set)
             "max_battles": 0,        # stop after this many battles (0 = keep playing)
             "notify": True,          # every result to the phone
+            "auto_train": True,      # train the eyes on this PC's NVIDIA card by themselves (once a week at most)
+            "roboflow_datasets": [   # Roboflow datasets added to the training (needs the Roboflow key in Bot settings)
+                "yolotrain-c7s7v/clash-royale-ut3g8/4", "clashroyale/clash-royale-of3d3/3",
+                "angelfire/clash-royale-cylln/5", "clash-pxdrz/clash_grid/1", "dampiix/clash-royale-units/1"],
         },
         "tasks": {
             "home_base": _cfg("UPGRADE_HOME_BASE", True),
@@ -171,6 +175,7 @@ def default_settings():
 def default_app_settings():
     return {
         "language": "ar",
+        "roboflow_api_key": "",      # the user's own free Roboflow key (Clash Royale training data); stays on this PC
         "ui_game": "",               # the program's face: "coc" | "royale" ("" = ask when it opens)
         "ui_game_remember": False,   # open straight into the last game, without asking
         "emulator": _cfg("EMULATOR_TYPE", "ldplayer"),

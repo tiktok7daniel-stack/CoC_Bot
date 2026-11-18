@@ -102,6 +102,7 @@ class BotSettingsScreen(Screen):
         tg = GlassCard("notifications", "bell", "notifications_sub")
         self.tg_token = secret_field(st, "telegram_bot_token", "123456:ABC-DEF…")
         tg.add(form_row("telegram_token", None, self.tg_token))
+        tg.add(form_row("roboflow_key", "roboflow_key_sub", secret_field(st, "roboflow_api_key", "rf_…")))
         tb = IconButton("send", "test_ping", size=14)
         tb.clicked.connect(self.test_telegram)
         tg.add(form_row(None, None, tb, text=""))

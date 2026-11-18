@@ -95,6 +95,7 @@ def _load():
         so = ort.SessionOptions()
         so.intra_op_num_threads = 2
         _S["sess"] = ort.InferenceSession(str(ONNX), sess_options=so, providers=prov)
+        _S["mtime"] = ONNX.stat().st_mtime
         _S["names"] = {int(k): v for k, v in json.loads(NAMES.read_text(encoding="utf-8")).items()}
         return True
     except Exception as e:
@@ -103,6 +104,9 @@ def _load():
 
 
 def ready():
+    """Loaded (and reloaded when the trainer put better eyes in place)."""
+    if _S["sess"] is not None and ONNX.exists() and ONNX.stat().st_mtime > _S.get("mtime", 0) + 1:
+        _load()
     return _S["sess"] is not None
 
 
