@@ -201,3 +201,16 @@ def build_seed(examples, path=None):
     path = Path(path or ROOT / "assets" / "card_bank.json")
     path.write_text(json.dumps({"version": 1, "built": time.strftime("%Y-%m-%d"), "items": items}), encoding="utf-8")
     return len(items)
+
+
+def continues(bar, last_x2):
+    """Is there more of the army to the right of the last whole card (a card cut by the screen's edge)?
+    No when the last card ends early (room for one more whole card) or the next slot is an empty dashed one.
+    The cut card still shows its left part: its level square (bottom-left) is there. -> bool"""
+    if last_x2 < 0.86: return False                  # room for one more whole card: the army ends here
+    H, W = bar.shape[:2]
+    a = last_x2 + 0.0075
+    e = min(1.0, a + CARD_W)
+    if (1.0 - a) < CARD_W * 0.4: return True         # only a sliver shows: assume more (a scroll costs little)
+    if dashed(bar, a, e): return False
+    return has_badge(bar, int(a * W), int(e * W))

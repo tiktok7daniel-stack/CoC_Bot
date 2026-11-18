@@ -1,4 +1,5 @@
 from utils import *
+import card_bar
 try:
     import configs
     from configs import *
@@ -1109,7 +1110,7 @@ class Attacker:
         done, missed, spells_left, counts = [], [], [], {}
         seen_heroes = set(round(x, 3) for x in (self.deployed_heroes or []))
         scrolled = False
-        back = getattr(self, "_bar_scrolls", 0)
+        back = getattr(self, "_bar_scrolls", 0) if getattr(self, "_left_behind", False) else 0
         if back:                                     # the bar was scrolled: back to its start, so no card is missed
             prev = None
             for _ in range(back + 1):
@@ -1166,9 +1167,9 @@ class Attacker:
                         seen_heroes.add(round(x, 3))
                 else:
                     missed.append(t)
-            # more cards to the right of the bar (big armies): scroll and look again. A card is 0.068 wide and the
-            # next one starts 0.0075 after the last whole one: past 0.86 there is room for a cut card on the edge
-            if not bounds or bounds[-1] < 0.86: break
+            # more cards to the right of the bar (big armies): scroll and look again — only when a card is cut
+            # by the screen's edge (an army that fits is never scrolled)
+            if not bounds or not card_bar.continues(frame, bounds[-1]): break
             Input_Handler.scroll_bar(0.9, 0.15)          # smooth: the cards stop where the finger stops
             scrolled = True
             self._bar_scrolls = getattr(self, "_bar_scrolls", 0) + 1
@@ -1401,8 +1402,10 @@ class Attacker:
         for _ in range(2):
             Input_Handler.zoom(dir="out")
             time.sleep(0.08)
-        Input_Handler.swipe_up(y1=0.5, duration=80, inter_points=3, fast=True)
-        time.sleep(0.12)
+        # the map up to its end, smoothly (no fling): a drag longer than the zoomed-out map can move, so it always
+        # stops at the same place (the recordings' spots), held still before lifting
+        Input_Handler.drag(0.985, 0.62, 0.985, 0.02, duration=0.28, settle=0.06, steps=16)
+        time.sleep(0.08)
         T["zoom"] = time.monotonic()
         # one look with the YOLO model: what the base has, where its outline is (deploy spots outside it)
         self.base_seen = None
@@ -1489,6 +1492,7 @@ class Attacker:
         self._ok_spots = {}
         self.bank_names = {}
         self._bar_scrolls = 0
+        self._left_behind = False
         self._later = []
         plan = getattr(self, "plan", None) or {}
         system = ("smart" if plan.get("mode") == "smart" else
@@ -1592,11 +1596,26 @@ class Attacker:
             try: self.name_cards(frame, card_boundaries, card_types)
             except Exception: logger.debug("Card naming failed", exc_info=True)
 
+            # the whole army is on the screen (nothing cut at the right edge): all of it now, no scrolling
+            try: more = card_bar.continues(frame, card_boundaries[-1])
+            except Exception: more = True
+            if not more:
+                self.deploy_troops(card_centers, available_slots, card_types, card_counts)
+                break
             # Deploy troops up until the last one visible
             total_slots_seen += len(card_centers) - 1
             self.deploy_troops(card_centers[:-1], available_slots[:-1], card_types[:-1], card_counts[:-1])
             # Scroll over and look for the new position of the last card
             last_card_frame = frame[:, int(card_boundaries[-2] * frame.shape[1]):int(card_boundaries[-1] * frame.shape[1])]
+            try:                                     # a card left behind on this page (refused, not taken)?
+                held = set(round(h[0], 3) for h in (getattr(self, "held_spells", None) or []))
+                fr = Frame_Handler.get_frame(grayscale=False)
+                for x, t in zip(card_centers[:-1], card_types[:-1]):
+                    if self.card_gray(x) or round(x, 3) in held: continue
+                    if t == "hero" and self.hero_health(x, fr) != 0: continue
+                    self._left_behind = True
+            except Exception:
+                self._left_behind = True
             Input_Handler.scroll_bar(card_centers[-1], 0.038)   # the last card seen goes to the left end, smoothly
             self._bar_scrolls = getattr(self, "_bar_scrolls", 0) + 1
             frame = Frame_Handler.get_frame_section(0.0, 0.82, 1.0, 1.0, grayscale=False)

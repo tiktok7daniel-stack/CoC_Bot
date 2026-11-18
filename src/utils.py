@@ -2800,9 +2800,10 @@ class Input_Handler:
         cls._publish(builder, fast=True)
         time.sleep(0.02)
         # a real pinch: the two fingers slide in steps (one jump is sometimes ignored by the game)
-        steps = 10
+        steps = 14                                   # eased (slow-fast-slow): a calm pinch, not a jerk
         for i in range(1, steps + 1):
-            f = i / steps
+            k = i / steps
+            f = k * k * (3 - 2 * k)
             p0 = (int(start[0][0] + (end[0][0] - start[0][0]) * f), int(start[0][1] + (end[0][1] - start[0][1]) * f))
             p1 = (int(start[1][0] + (end[1][0] - start[1][0]) * f), int(start[1][1] + (end[1][1] - start[1][1]) * f))
             builder.move(0, *p0, pressure=100)
