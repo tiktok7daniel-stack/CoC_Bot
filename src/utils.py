@@ -3492,6 +3492,8 @@ def preflight():
 
         if not problems:
             logger.info("Pre-flight check passed: everything is ready ✓")
+            try: logger.info("Memory: " + memory_report())
+            except Exception: pass
             return True
         if time.monotonic() - warned > 60:
             for p in problems: logger.error(f"Pre-flight problem: {p}")
@@ -3624,13 +3626,53 @@ def _paddle_installed():
         return False
 
 
+def _commit_free_gb():
+    """Windows: memory programs can still be GIVEN (RAM + page file) — when this runs out, every allocation fails
+    ("Insufficient memory") even though Task Manager shows RAM free. None elsewhere."""
+    if sys.platform != "win32": return None
+    try:
+        import ctypes
+        class MS(ctypes.Structure):
+            _fields_ = [("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong),
+                        ("ullTotalPhys", ctypes.c_ulonglong), ("ullAvailPhys", ctypes.c_ulonglong),
+                        ("ullTotalPageFile", ctypes.c_ulonglong), ("ullAvailPageFile", ctypes.c_ulonglong),
+                        ("ullTotalVirtual", ctypes.c_ulonglong), ("ullAvailVirtual", ctypes.c_ulonglong),
+                        ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+        m = MS()
+        m.dwLength = ctypes.sizeof(MS)
+        if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(m)):
+            return m.ullAvailPageFile / 2 ** 30
+    except Exception:
+        pass
+    return None
+
+
 def memory_free_gb():
-    """Memory the PC still has free (GB), or None."""
+    """Memory the PC still has free (GB), or None: the smaller of free RAM and what Windows can still give out."""
+    out = None
     try:
         import psutil
-        return psutil.virtual_memory().available / 2 ** 30
+        out = psutil.virtual_memory().available / 2 ** 30
     except Exception:
-        return None
+        pass
+    c = _commit_free_gb()
+    if c is not None: out = c if out is None else min(out, c)
+    return out
+
+
+def memory_report():
+    """One line for the log: RAM free, what Windows can still give, this bot's size."""
+    parts = []
+    try:
+        import psutil, os
+        vm = psutil.virtual_memory()
+        parts.append(f"RAM free {vm.available / 2 ** 30:.1f}/{vm.total / 2 ** 30:.0f} GB")
+        parts.append(f"this bot {psutil.Process(os.getpid()).memory_info().rss / 2 ** 30:.1f} GB")
+    except Exception:
+        pass
+    c = _commit_free_gb()
+    if c is not None: parts.append(f"commit free {c:.1f} GB")
+    return ", ".join(parts)
 
 
 def _paddle_failed():

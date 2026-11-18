@@ -204,7 +204,9 @@ class CoC_Bot:
             if not getattr(self, "_mem_told", False):
                 self._mem_told = True
                 logger.warning(f"Memory almost full: {free:.1f} GB free (this bot uses {mine:.1f} GB)")
-                try: send_notification(f"⚠️ الرام قربت تخلص: فاضل {free:.1f} جيجا — اقفل برامج تانية، أو خلّي LDPlayer يستخدم رام أقل")
+                logger.warning("Memory: " + _utils.memory_report())
+                try: send_notification(f"⚠️ {_utils.INSTANCE_ID}: الذاكرة قربت تخلص (فاضل {free:.1f} جيجا) — "
+                                       "خلّي كل LDPlayer على 3 جيجا رام، وكبّر الذاكرة الافتراضية (Page file) في ويندوز")
                 except Exception: pass
         elif free > 3:
             self._mem_told = False

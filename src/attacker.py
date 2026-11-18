@@ -1686,11 +1686,47 @@ class Attacker:
                 return False
         
         except Exception as e:
-            if __import__("utils").is_memory_error(e):     # the PC's memory was full: free some, try again next time
-                logger.warning(f"Out of memory during the attack ({type(e).__name__}) — freeing memory and going on")
-                __import__("utils").shed_memory("attack")
-                return False
+            if __import__("utils").is_memory_error(e):
+                return self._attack_after_memory_error(e, restart)
             logger.exception("Error in run_home_base():")
+
+    def _attack_after_memory_error(self, e, restart=True):
+        """
+        The PC ran out of memory in the middle of an attack. Never leave the battle standing there: free memory,
+        and when the enemy village (or the fight) is on the screen, carry the attack on from where it is
+        (the troops still go in); a second failure ends the battle properly so the bot is back home.
+        """
+        import gc, time, utils as _u
+        logger.warning(f"Out of memory during the attack ({type(e).__name__}: {str(e)[:80]}) — {_u.memory_report()}")
+        _u.shed_memory("attack")
+        gc.collect()
+        try:
+            if not red_battle_button(): return False         # not in a battle: the next attack starts over
+        except Exception:
+            return False
+        for attempt in range(2):
+            try:
+                logger.info("Still in the battle — carrying the attack on")
+                self.complete_normal_attack(restart=restart, exclude_clan_troops=EXCLUDE_CLAN_TROOPS)
+                return True
+            except Exception as e2:
+                if not _u.is_memory_error(e2):
+                    logger.exception("Error carrying the attack on:")
+                    break
+                logger.warning(f"Out of memory again ({_u.memory_report()})")
+                _u.shed_memory("attack")
+                gc.collect()
+                time.sleep(1)
+        try:                                                  # give up this one cleanly: end the battle, go home
+            logger.warning("Could not carry the attack on — ending this battle and going home")
+            if self._click_end_battle(timeout=2):
+                time.sleep(0.5)
+                self._click_okay(timeout=3)
+        except Exception:
+            pass
+        try: to_home_base()
+        except Exception: pass
+        return False
 
     @require_exit()
     def run_builder_base(self, timeout=10, restart=True):
