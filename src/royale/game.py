@@ -73,6 +73,11 @@ class RoyaleBot:
         self.eyes = Eyes(deck)
         self.brain = Brain(deck)
         self.wins = self.losses = self.battles = 0
+        try:                                         # the stronger eyes: fetched / converted once in the background
+            from royale import strong_eyes
+            strong_eyes.ensure(logger)
+        except Exception:
+            pass
         self.unknown_since = None
 
     # -------------------------------------------------------------- one battle

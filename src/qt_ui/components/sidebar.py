@@ -176,6 +176,10 @@ class Sidebar(QFrame):
             self.soon.append(b)
             v.addWidget(b)
         v.addStretch(1)
+        self.switch_game = NavButton("switch_game", "nv_switch_game", "refresh")    # back to the game chooser
+        self.switch_game.setCheckable(False)
+        self.switch_game.clicked.connect(lambda: self.navigate.emit("switch_game"))
+        v.addWidget(self.switch_game)
         self.capsule = FooterCapsule()
         v.addWidget(self.capsule)
         self._anim = QPropertyAnimation(self, b"minimumWidth", self)
@@ -212,7 +216,7 @@ class Sidebar(QFrame):
             a.setStartValue(self.width())
             a.setEndValue(w)
             a.start()
-        for b in list(self.buttons.values()) + self.soon:
+        for b in list(self.buttons.values()) + self.soon + [self.switch_game]:
             b.collapsed = self.collapsed
             b.setToolTip(tr(b.text_key) if self.collapsed else "")
             b.update()

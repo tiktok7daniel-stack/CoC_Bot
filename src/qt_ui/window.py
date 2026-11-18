@@ -153,8 +153,8 @@ class MainWindow(QMainWindow):
         from .components.update_center import UpdateCenter
         self.update_center = UpdateCenter(self, self.top.update_pill)
         self.poller.errors.connect(lambda items: self.sidebar.set_badge("log", sum(1 for e in items if e.get("type") == "error")))
-        self.store.accounts_changed.connect(lambda accs: self.top.set_accounts(accs, self.store.account))
-        self.store.account_changed.connect(lambda a: (self.top.set_accounts(self.store.APP.get("accounts", []), a), self.poller.refresh_all()))
+        self.store.accounts_changed.connect(lambda accs: self.top.set_accounts(self.accounts_for_ui(), self.store.account))
+        self.store.account_changed.connect(lambda a: (self.top.set_accounts(self.accounts_for_ui(), a), self.poller.refresh_all()))
         self.store.dirty_changed.connect(self.top.dirty.set)
         self.store.saved.connect(self.on_saved)
         self.store.loaded.connect(self.on_loaded)
@@ -176,8 +176,11 @@ class MainWindow(QMainWindow):
             if self.store.APP.get("show_hud", False):
                 self.hud.place()
                 self.hud.show()
-            if self.store.APP.get("show_setup", True) is not False:
-                QTimer.singleShot(400, self.setup.open_wizard)
+            def after_choice():
+                self.choose_game(force=False)              # which game? (unless it was remembered)
+                if self.store.APP.get("show_setup", True) is not False:
+                    QTimer.singleShot(300, self.setup.open_wizard)
+            QTimer.singleShot(200, after_choice)
         self.store.load_all(loaded)
 
     def _resume(self, r):
@@ -217,16 +220,55 @@ class MainWindow(QMainWindow):
         QApplication.instance().setLayoutDirection(Qt.RightToLeft if i18n.is_rtl() else Qt.LeftToRight)
         self.retitle()
 
+    def ui_game(self):
+        """The program's face: the game chosen when it opened (else the selected account's game)."""
+        g = self.store.APP.get("ui_game") or ""
+        return g if g in ("coc", "royale") else (self.store.get("game_mode", "coc") or "coc")
+
+    def accounts_for_ui(self):
+        """Only the accounts of the game on screen (all of them when none plays it yet)."""
+        accs = list(self.store.APP.get("accounts", []) or [])
+        games = self.store.APP.get("account_games") or {}
+        g = self.ui_game()
+        mine = [a for a in accs if (games.get(a, "coc") or "coc") == g]
+        return mine or accs
+
     def apply_game_mode(self):
-        """The account plays Clash Royale: its own screen only; Clash of Clans: the usual screens."""
-        royale = (self.store.get("game_mode", "coc") or "coc") == "royale"
+        """Clash Royale face: its own screens only; Clash of Clans face: the usual screens. Accounts follow."""
+        royale = self.ui_game() == "royale"
         if royale != self._royale:
             self._royale = royale
             self.sidebar.set_mode(royale)
+            accs = self.accounts_for_ui()
+            if accs and self.store.account not in accs:
+                self.store.switch_account(accs[0])
+            self.top.set_accounts(accs, self.store.account)
         cur = getattr(self, "current", None)
         if cur is None: return
         if royale and cur not in ("royale", "acc", "set"): self.show_screen("royale")
         elif not royale and cur == "royale": self.show_screen("dash")
+
+    def choose_game(self, force=True):
+        """The game chooser (when the program opens, and from the sidebar's 'change game')."""
+        if not force and self.store.APP.get("ui_game") in ("coc", "royale") and self.store.APP.get("ui_game_remember"):
+            return False
+        from .components.game_chooser import GameChooser
+        dlg = GameChooser(self, self.store.APP.get("ui_game_remember", False))
+
+        def picked(k):
+            self.store.set("ui_game", k, "app")
+            self.store.set("ui_game_remember", bool(dlg.remember.isChecked()), "app")
+            self._royale = None
+            self.apply_game_mode()
+            self.show_screen("royale" if k == "royale" else "dash")
+            try: self.store.save(silent=True)
+            except Exception: pass
+        dlg.chosen.connect(picked)
+        dlg.adjustSize()
+        g = self.geometry()
+        dlg.move(g.center().x() - dlg.width() // 2, g.center().y() - dlg.height() // 2)
+        dlg.exec()
+        return True
 
     def retitle(self):
         s = self.screens.get(self.current)
@@ -234,6 +276,9 @@ class MainWindow(QMainWindow):
 
     # ---------------------------------------------------------------- navigation
     def show_screen(self, key, sub=None):
+        if key == "switch_game":
+            self.choose_game(force=True)
+            return
         if key == "setup":
             self.setup.open_wizard()
             return

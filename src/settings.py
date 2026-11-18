@@ -171,6 +171,8 @@ def default_settings():
 def default_app_settings():
     return {
         "language": "ar",
+        "ui_game": "",               # the program's face: "coc" | "royale" ("" = ask when it opens)
+        "ui_game_remember": False,   # open straight into the last game, without asking
         "emulator": _cfg("EMULATOR_TYPE", "ldplayer"),
         "start_with_windows": False,
         "telegram_bot_token": _cfg("TELEGRAM_BOT_TOKEN", ""),
@@ -280,6 +282,8 @@ def load_app():
     return data
 
 def save_app(data):
+    data = dict(data or {})
+    data.pop("account_games", None)          # computed for the app, not stored
     merged = _merge(default_app_settings(), data)
     merged["accounts"] = [a for a in dict.fromkeys(_safe_id(a) for a in merged["accounts"]) if a]
     _write(GLOBAL_PATH, merged)

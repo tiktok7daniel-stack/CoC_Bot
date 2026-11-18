@@ -190,6 +190,10 @@ def api_app_settings():
         if sys.platform == "win32": data["start_with_windows"] = updater.autostart_enabled()
     except Exception: pass
     data["platform"] = sys.platform
+    try:                                     # which game each account plays (the app shows each game's accounts)
+        data["account_games"] = {a: (bot_settings.load(a) or {}).get("game_mode", "coc") for a in data.get("accounts", [])}
+    except Exception:
+        pass
     return jsonify(data)
 
 @app.route("/api/clash/<id>", methods=["GET"])

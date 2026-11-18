@@ -67,15 +67,47 @@ class Eyes:
             allies, enemies = self.units.run(img)
             nums = self.numbers.run(img)
         hand = [c.name for c in cards[1:5]]
+        en = [(d.unit.name, d.position.tile_x, d.position.tile_y, float(d.position.conf)) for d in enemies]
+        al = [(d.unit.name, d.position.tile_x, d.position.tile_y, float(d.position.conf)) for d in allies]
+        try:                                         # the stronger eyes (174 kinds), when they are there
+            from royale import strong_eyes
+            if strong_eyes.ready():
+                self._merge(strong_eyes.detect(frame_rgb), frame_rgb.shape, img, en, al)
+        except Exception:
+            pass
         return {
             "next": cards[0].name, "hand": hand, "ready": list(ready),
             "elixir": float(nums.elixir.number),
-            "enemies": [(d.unit.name, d.position.tile_x, d.position.tile_y, float(d.position.conf)) for d in enemies],
-            "allies": [(d.unit.name, d.position.tile_x, d.position.tile_y, float(d.position.conf)) for d in allies],
+            "enemies": en,
+            "allies": al,
             "towers": {"their_left": nums.left_enemy_princess_hp.number, "their_right": nums.right_enemy_princess_hp.number,
                        "our_left": nums.left_ally_princess_hp.number, "our_right": nums.right_ally_princess_hp.number},
             "t": time.monotonic(),
         }
+
+
+    def _merge(self, dets, shape, small, en, al):
+        """The stronger eyes' units added to the lists (same unit on the same tile: kept once, best confidence).
+        Ours or theirs: our deck's units asked to the ally / enemy model, every other unit is theirs."""
+        from royale import strong_eyes
+        h, w = shape[:2]
+        sw, sh = small.width / w, small.height / h
+        for name, cf, x0, y0, x1, y1 in dets:
+            u = strong_eyes.unit_name(name)
+            if not u: continue
+            dx, dy = (x0 + x1) / 2 * 720.0 / w, y1 * 1280.0 / h               # the 720x1280 game, bottom-centre
+            tx = int(round((dx - C.TILE_INIT_X) / C.TILE_WIDTH - 0.5))
+            ty = int(round((C.DISPLAY_HEIGHT - C.TILE_INIT_Y - dy) / C.TILE_HEIGHT - 0.5))
+            side = "enemy"
+            if u in self.units.possible_ally_names:
+                try:
+                    side = self.units.side_detector.run(small.crop((int(x0 * sw), int(y0 * sh), int(x1 * sw) + 1, int(y1 * sh) + 1)))
+                except Exception:
+                    pass
+            lst = al if side == "ally" else en
+            same = next((k for k, d in enumerate(lst) if d[0] == u and abs(d[1] - tx) <= 1 and abs(d[2] - ty) <= 1), None)
+            if same is None: lst.append((u, tx, ty, cf))
+            elif cf > lst[same][3]: lst[same] = (u, tx, ty, cf)
 
 
 # ------------------------------------------------------------------ where to tap (fractions of the screen)
