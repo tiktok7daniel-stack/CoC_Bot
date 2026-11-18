@@ -30,10 +30,44 @@ def _log(msg, level="info"):
         pass
 
 
+JAR_SHA256 = "ae74a81ea79c0dc7250e586627c278c0a9a8c5de46c9fb5c38c167fb1a36f056"
+JAR_URLS = ("https://github.com/Genymobile/scrcpy/releases/download/v1.24/scrcpy-server-v1.24",
+            "https://raw.githubusercontent.com/tiktok7daniel-stack/CoC_Bot/ccr-d344ab20-onpy71/assets/scrcpy/" + JAR)
+OWN_JAR = Path.home() / ".CoC_Bot" / "scrcpy" / JAR
+
+
+def _good(p):
+    import hashlib
+    try: return p.exists() and hashlib.sha256(p.read_bytes()).hexdigest() == JAR_SHA256
+    except OSError: return False
+
+
 def _jar_path():
+    """The stream server file: shipped with the program, else the bot's own copy (downloaded once when missing:
+    an antivirus can remove a .jar file, an update can miss it). Checked by its fingerprint."""
     for base in ([Path(sys._MEIPASS)] if hasattr(sys, "_MEIPASS") else []) + [Path(__file__).resolve().parent.parent]:
         p = base / "assets" / "scrcpy" / JAR
-        if p.exists(): return p
+        if _good(p): return p
+    if _good(OWN_JAR): return OWN_JAR
+    try:
+        import requests
+        OWN_JAR.parent.mkdir(parents=True, exist_ok=True)
+        for url in JAR_URLS:
+            try:
+                r = requests.get(url, timeout=30)
+                if r.status_code != 200: continue
+                tmp = OWN_JAR.with_suffix(".part")
+                tmp.write_bytes(r.content)
+                import os
+                os.replace(tmp, OWN_JAR)
+                if _good(OWN_JAR):
+                    _S.update(fails_n=0, off_until=0.0)      # don't keep waiting from the earlier failures
+                    _log("Live screen: its server file was missing — downloaded it again")
+                    return OWN_JAR
+            except Exception:
+                continue
+    except Exception:
+        pass
     return None
 
 

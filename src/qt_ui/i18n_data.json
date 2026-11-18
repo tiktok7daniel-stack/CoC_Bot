@@ -3201,6 +3201,14 @@
 "⏹️ المعركة خلصت قبل آخر التسجيل — وقف الإعادة وكمّل على طول"
 ],
 [
+"^Live screen: its server file was missing — downloaded it again",
+"🔴 ملف الشاشة اللايف كان ناقص (غالبًا الأنتي فيرس شاله) — البوت نزّله تاني لوحده"
+],
+[
+"^A battle is still going: letting it finish, then going on",
+"⚔️ في معركة لسه شغالة — البوت سايبها تخلص من غير ما يلمس حاجة وبعدين يكمّل"
+],
+[
 "^PaddleOCR failed, reading with easyocr",
 "⚠️ PaddleOCR وقع — بيقرا بـ easyocr"
 ],

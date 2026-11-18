@@ -1099,8 +1099,21 @@ def start_coc(timeout=120, detailed=False, force_restart=False):
                 ADB_Manager.adbutils_device.shell(f"am start {'-S' if force else ''} -W -n com.supercell.clashofclans/com.supercell.titan.GameApp")
             if i % 4 == 0: tap_red_x()        # a window over the game (offer, news): its red X, never a blind tap
             
-            Frame_Handler.get_frame()
-            
+            frame_now = Frame_Handler.get_frame(grayscale=False)
+            # a battle still going (the bot was restarted in the middle of one): let it finish, tap nothing,
+            # then take the reward and go on (it was treated as an unknown screen before)
+            if red_battle_button(frame_now):
+                if not TEMP_CACHE.get("battle_running_told"):
+                    TEMP_CACHE["battle_running_told"] = True
+                    logger.info("A battle is still going: letting it finish, then going on")
+                waited = time.time()
+                while running() and red_battle_button() and time.time() - waited < 200:
+                    time.sleep(1)
+                TEMP_CACHE.pop("battle_running_told", None)
+                collect_rewards(timeout=20)
+                start = time.time()                    # the game is open: a fresh wait for the village
+                continue
+
             if in_home_base():
                 TEMP_CACHE["location"] = "home_base"
                 break
@@ -3593,6 +3606,11 @@ class Auto_Learn:
         """
         import time, teach
         if not cls.enabled: return False
+        # a battle is going: nothing to press here (a tap would drop troops / press End Battle)
+        try:
+            if red_battle_button(): return False
+        except Exception:
+            pass
         # a screen it already got out of before: press the same place at once (no reading, no waiting)
         try:
             import screen_memory

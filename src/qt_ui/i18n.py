@@ -157,9 +157,9 @@ _WHY = [("the video library (av) is not installed", "مكتبة الفيديو (
         ("the emulator did not start the stream", "المحاكي ما شغّلش البث"),
         ("the emulator sent no picture", "المحاكي ما بعتش صورة"),
         ("the stream shows something else than the game", "البث بيوري حاجة غير اللعبة"),
-        ("the stream server file is missing", "ملف سيرفر البث ناقص"),
+        ("the stream server file is missing", "ملف سيرفر البث ناقص — البوت بينزّله لوحده"),
         ("LDPlayer window not found", "مش لاقي نافذة LDPlayer"),
-        ("LDPlayer window is minimized", "نافذة LDPlayer متصغّرة — كبّرها"),
+        ("LDPlayer window is minimized", "نافذة LDPlayer متصغّرة — مش مشكلة، الشاشة اللايف بتشتغل وهي متصغّرة"),
         ("pw3", "النافذة"), ("pw2", "النافذة كاملة"), ("screen", "الشاشة"),
         (": nothing", ": مفيش صورة"), (": black", ": صورة سودة"), ("different", "مختلفة عن اللعبة")]
 
