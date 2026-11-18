@@ -20,6 +20,7 @@ from .screens.base import Ctx
 from .screens.bot_settings_screen import BotSettingsScreen
 from .screens.builder_base_screen import BuilderBaseScreen
 from .screens.dashboard_screen import DashboardScreen
+from .screens.royale_screen import RoyaleScreen
 from .screens.logs_diagnostics_screen import LogsScreen
 from .screens.setup_wizard_dialog import SetupWizard
 from .screens.statistics_screen import StatisticsScreen
@@ -126,11 +127,15 @@ class MainWindow(QMainWindow):
         self.banner = Banner(canvas)
         self.screens = {}
         for cls in (DashboardScreen, UpgradeDeckScreen, AccountsScreen, AttackScreen, BuilderBaseScreen, StatisticsScreen, VillageScreen,
-                    VillageManagerScreen, LearnScreen, LogsScreen, BotSettingsScreen):
+                    VillageManagerScreen, LearnScreen, LogsScreen, BotSettingsScreen, RoyaleScreen):
             s = cls(self.ctx)
             self.screens[s.key] = s
             self.stack.addWidget(s)
         self.setup = SetupWizard(self.ctx, self)
+        self._royale = None
+        self.store.loaded.connect(self.apply_game_mode)
+        self.store.on_change(self.apply_game_mode)
+        self.apply_game_mode()
         self.palette = CommandPalette(self, self.search_entries)
         self.palette.chosen.connect(self.jump_to)
 
@@ -212,6 +217,17 @@ class MainWindow(QMainWindow):
         QApplication.instance().setLayoutDirection(Qt.RightToLeft if i18n.is_rtl() else Qt.LeftToRight)
         self.retitle()
 
+    def apply_game_mode(self):
+        """The account plays Clash Royale: its own screen only; Clash of Clans: the usual screens."""
+        royale = (self.store.get("game_mode", "coc") or "coc") == "royale"
+        if royale != self._royale:
+            self._royale = royale
+            self.sidebar.set_mode(royale)
+        cur = getattr(self, "current", None)
+        if cur is None: return
+        if royale and cur not in ("royale", "acc", "set"): self.show_screen("royale")
+        elif not royale and cur == "royale": self.show_screen("dash")
+
     def retitle(self):
         s = self.screens.get(self.current)
         if s: self.top.title.setText(tr(s.title_key))
@@ -221,6 +237,8 @@ class MainWindow(QMainWindow):
         if key == "setup":
             self.setup.open_wizard()
             return
+        if getattr(self, "_royale", None) and key not in ("royale", "acc", "set"): key = "royale"
+        elif getattr(self, "_royale", None) is False and key == "royale": key = "dash"
         s = self.screens.get(key)
         if not s: return
         self.current = key

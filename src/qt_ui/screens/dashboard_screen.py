@@ -105,15 +105,6 @@ class ResourceStat(QFrame):
 class DashboardScreen(Screen):
     key, title_key, icon_name = "dash", "sub_dash", "trophy"
 
-    def _game_mode(self, m):
-        royale = (m or "coc") == "royale"
-        try:
-            self.royale_card.setVisible(royale)
-            for w in getattr(self, "_coc_only", []):
-                if w is not None: w.setVisible(not royale)
-        except RuntimeError:
-            pass
-
     def __init__(self, ctx):
         super().__init__(ctx)
         sa, v = page()
@@ -124,17 +115,7 @@ class DashboardScreen(Screen):
         game = GlassCard("game_title", "layers", "game_sub")
         game.add(combo_row(self.store, "game_mode", "game_mode", [("coc", "gm_coc"), ("royale", "gm_royale")], width=320))
         gg.addWidget(game, 0, 0)
-        self.royale_card = GlassCard("royale_title", "bolt", "royale_sub")
-        self.royale_deck = label("", "sub", wrap=True)
-        self.royale_card.add(form_row("royale_deck", "royale_deck_sub", self.royale_deck))
-        self.royale_card.add(num_row(self.store, "royale_max", "royale.max_battles", "royale_max_sub", lo=0, hi=10000, width=120))
-        self.royale_card.add(toggle_row(self.store, "royale_notify", "royale.notify", "royale_notify_sub"))
-        gg.addWidget(self.royale_card, 0, 1)
         v.addWidget(wg)
-        def show_deck(d):
-            self.royale_deck.setText(" · ".join(str(x).replace("_", " ").title() for x in (d or [])) or tr("royale_deck_auto"))
-        self.store.bind("s", "royale.deck", show_deck)
-        show_deck(self.store.get("royale.deck", []))
 
         # ---------- today's plan bar
         self.plan_bar = Box(radius=18, border="rgba(245,183,64,0.35)")
@@ -269,10 +250,6 @@ class DashboardScreen(Screen):
         farm.add(form_row("farm_gold", "farm_auto_sub", bind_num(self.store, NumField(0, 10**9, 100000, 150), "attack.farm.gold_full"), icon_name=None))
         farm.add(form_row("farm_elixir", "farm_auto_sub", bind_num(self.store, NumField(0, 10**9, 100000, 150), "attack.farm.elixir_full")))
         g3.addWidget(farm, 0, 0)
-        self._coc_only = [self.plan_bar, farm, getattr(self, "rec_card", None)]
-        self.store.bind("s", "game_mode", self._game_mode)
-        self.store.on_change(lambda: self._game_mode(self.store.get("game_mode", "coc")))   # changed in the app
-        self._game_mode(self.store.get("game_mode", "coc"))
 
         live = GlassCard("live_state", "pulse", "bot_status_sub")
         self.live_rows = {}
