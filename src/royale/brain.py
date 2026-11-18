@@ -43,6 +43,8 @@ SPELL_DAMAGE_DEFAULT = {"zap": 75, "the_log": 96, "arrows": 122, "fireball": 269
                         "royal_delivery": 171}
 WIN_SPELLS = {"goblin_barrel", "graveyard", "miner"}           # win conditions you can send anywhere
 # units that come out of another one (death / spawner): not a card the opponent played
+KAMIKAZE = {"ice_spirit", "fire_spirit", "electro_spirit", "heal_spirit", "wall_breakers", "skeleton_barrel"}
+TOWER_DPS = 62.0           # a princess tower helps every defense near it (numbers on the same level as cards.json)
 SPAWNED = {"golemite", "lava_pup", "elixir_golem_medium", "elixir_golem_small", "phoenix_egg", "phoenix_small"}
 
 
@@ -135,8 +137,10 @@ def bridge(side, y=14):
 
 # ------------------------------------------------------------------ the brain
 class Brain:
-    def __init__(self, deck=None):
+    def __init__(self, deck=None, params=None):
         self.deck = list(deck or [])
+        from royale import learn
+        self.p = dict(learn.DEFAULT, **(params or {}))     # this battle's settings (royale.learn picks them)
         self.reset()
 
     def reset(self):
@@ -151,6 +155,8 @@ class Brain:
         self.last_play = 0.0
         self.last_tiles = deque(maxlen=6)
         self.plays = []
+        self.heavy_at = None                   # the opponent just dropped a heavy card (side, time)
+        self.tower_seen = {}                   # their / our princess towers: highest health seen (crowns)
 
     # -------------------------------------------------------------- time / elixir
     def elapsed(self):
@@ -214,6 +220,8 @@ class Brain:
                 if cn and not group_recent and u not in SPAWNED:   # one card, even when it makes 3 skeletons
                     self.enemy_elixir = max(0.0, self.enemy_elixir - card(cn).get("cost", 3))
                     self.enemy_cycle.append(cn)
+                    if card(cn).get("cost", 0) >= 6 and y >= RIVER_Y + 6:     # heavy card at their back: punish
+                        self.heavy_at = (lane(x), now)
             t = self.known_enemy[tid]
             t.update(vy=(y - t["y"]) / max(0.05, now - t["last"]), x=x, y=y, last=now)
         for k in [k for k, t in self.known_enemy.items() if now - t["last"] > 4]:
@@ -246,6 +254,51 @@ class Brain:
         return out
 
     # -------------------------------------------------------------- choosing
+    def duel(self, name, threat):
+        """The defender `name` against this lane's threat, with the cards' real numbers: how much faster it kills
+        the threat than the threat kills it (or reaches the tower). > 1 = it wins."""
+        d = card(name)
+        if not d or d.get("kind") == "spell": return None
+        units = threat["units"]
+        if not units: return None
+        t_hp = t_dps = 0.0
+        air = bonly = False
+        for u, _x, _y in units:
+            c = card(unit_card(u) or "")
+            n = max(1, c.get("count") or 1)
+            t_hp += c.get("hp") or 300                           # one detection = one unit (hp is per unit)
+            t_dps += dps(c) / n                                  # dps() counts every unit of the card
+            air = air or bool(c.get("air"))
+            bonly = bonly or bool(c.get("buildings_only"))
+        if air and not d.get("hits_air"): return 0.0
+        if name in KAMIKAZE:                                     # one hit and gone: what that hit takes off
+            return min(2.0, (d.get("damage") or 0) * max(1, d.get("count") or 1) / max(1.0, t_hp) * 2)
+        my_dps = dps(d) + TOWER_DPS                              # the tower shoots too
+        if (d.get("splash") or 0) > 0 and len(units) >= 3: my_dps *= min(len(units), 4) * 0.8
+        if my_dps <= 0: return 0.0
+        t_kill = t_hp / my_dps
+        my_hp = (d.get("hp") or 0) * max(1, d.get("count") or 1)
+        if bonly and d.get("kind") != "building":
+            # it walks past troops to the tower: the defender has until it gets there (~ its distance / speed)
+            far = min(dist(u2[1:], OUR_TOWERS[lane(u2[1])]) for u2 in units)
+            spd = max(0.5, (card(unit_card(units[0][0]) or "").get("speed") or 60) / 60.0)
+            t_die = far / spd + 2.0                              # + the tower shooting it too
+        else:
+            t_die = my_hp / max(1.0, t_dps)
+        return t_die / max(0.1, t_kill)
+
+    def crowns(self, towers):
+        """(ours, theirs): princess towers that were up and are now down."""
+        ours = theirs = 0
+        for k, v in (towers or {}).items():
+            if v is None: continue
+            hi = max(self.tower_seen.get(k, 0.0), float(v))
+            self.tower_seen[k] = hi
+            if hi > 0.3 and float(v) <= 0.0:
+                if k.startswith("their"): ours += 1
+                else: theirs += 1
+        return ours, theirs
+
     def _counter_score(self, name, threat):
         """How well card `name` answers this lane's threat (0 = useless)."""
         c, r = card(name), roles(name)
@@ -265,6 +318,11 @@ class Brain:
             if "small_spell" in r: score -= 1.0
         if "spell" in r and not (threat["swarm"] or len(threat["units"]) >= 3): score -= 1.5   # not on one unit
         if "win" in r and "building" not in r: score -= 1.5                     # keep the win condition for attack
+        if self.p.get("duel_defense", True) and "spell" not in r:
+            m = self.duel(name, threat)
+            if m is not None:
+                if m == 0.0: return 0.0                                          # it cannot even hit it
+                score += 1.5 if m >= 1.5 else 0.8 if m >= 1.0 else -1.0          # wins the duel / loses it
         cost = c.get("cost", 4)
         trade = threat["value"] - cost
         score += 0.25 * max(-4.0, min(3.0, trade))                              # positive elixir trade
@@ -305,19 +363,23 @@ class Brain:
         # 1. defend the lane in more danger
         side = max(th, key=lambda s: th[s]["value"])
         t = th[side]
-        if t["value"] >= 1.5:
+        if t["value"] >= self.p.get("defend_min", 1.5):
             best = max(playable, key=lambda p: self._counter_score(p[1], t))
             sc = self._counter_score(best[1], t)
             if sc > 0.8:
                 return self._play(best, self._defense_tile(best[1], side, t), f"defend {side} vs "
                                   f"{', '.join(sorted({u for u, _, _ in t['units']}))}", now)
 
+        # 2a. they just dropped a heavy card at their back: punish the other lane first
+        if self.p.get("punish_heavy", True) and self.heavy_at and now - self.heavy_at[1] < 4:
+            att = self._attack(playable, elixir, stable, allies, towers, now)
+            if att: return att
         # 2. spells worth it: a group of theirs on their side, or a tower to finish
         for i, n in playable:
             r = roles(n)
             if "big_spell" in r or "small_spell" in r:
                 hit = self._spell_value(n, stable)
-                if hit and hit[0] >= card(n).get("cost", 4) + 1.5:
+                if hit and hit[0] >= card(n).get("cost", 4) * self.p.get("spell_value", 1.0) + 0.5:
                     return self._play((i, n), hit[1], f"spell on a group worth {hit[0]:.0f} elixir", now)
 
         # 3. attack
@@ -325,7 +387,7 @@ class Brain:
         if att: return att
 
         # 4. never leak elixir
-        if elixir >= 9.5:
+        if elixir >= self.p.get("cycle_at", 9.5):
             cheap = min(playable, key=lambda p: (("win" in roles(p[1])), card(p[1]).get("cost", 9)))
             r = roles(cheap[1])
             tile = (8, 1) if "spell" not in r else None
@@ -345,7 +407,7 @@ class Brain:
                     c = card(unit_card(u2) or "")
                     hp = c.get("hp") or 300
                     per = c.get("cost", 3) / max(1, c.get("count") or 1)
-                    val += per * (1.0 if hp <= dmg else 0.4)                     # killed = full value
+                    val += per * (1.0 if hp <= dmg else 0.15)                    # killed = full value; chip = little
             if best is None or val > best[0]:
                 lx, ly = self.lead(name, x, y, u)
                 best = (val, (int(round(lx)), int(round(ly))))
@@ -363,8 +425,17 @@ class Brain:
                         x, y = THEIR_TOWERS[s]
                         return self._play((i, n), (int(x), int(y)), f"finishing their {s} tower", now)
         advantage = elixir - self.enemy_elixir
-        counter = [a for a in (allies or []) if a[2] >= RIVER_Y - 2]             # our units already going in
-        push_ok = advantage >= 2 or (double and elixir >= 6) or counter or elixir >= 9
+        counter = [a for a in (allies or []) if a[2] >= RIVER_Y - 2] if self.p.get("counter_push", True) else []
+        push_ok = advantage >= self.p.get("push_adv", 2.0) or (double and elixir >= 6) or counter or elixir >= 9
+        # they just dropped a heavy card at their back: the other lane, now (they cannot answer both)
+        if self.p.get("punish_heavy", True) and self.heavy_at and now - self.heavy_at[1] < 4:
+            push_ok = True
+            weak = "right" if self.heavy_at[0] == "left" else "left"
+        # the last 30 s of the normal time: behind -> everything goes in; ahead -> only defend
+        if self.p.get("endgame", True) and 150 <= self.elapsed() < 180:
+            ours, theirs = self.crowns(towers)
+            if ours < theirs: push_ok = True
+            elif ours > theirs and elixir < 9.5: return None
         if not push_ok: return None
         wins = [(i, n) for i, n in playable if "win" in roles(n)]
         if counter:

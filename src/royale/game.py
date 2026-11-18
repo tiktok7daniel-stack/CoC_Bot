@@ -79,8 +79,12 @@ class RoyaleBot:
     def battle(self):
         from royale.eyes import in_battle, tile_xy, card_xy
         log = self.log
+        from royale import learn
+        self.params = learn.choose(_u().INSTANCE_ID)              # this battle's way of playing (learned)
+        self.brain.p = dict(learn.DEFAULT, **self.params)
         self.brain.reset()
         self.battles += 1
+        log.info("Clash Royale: this battle's settings " + ", ".join(f"{k}={v}" for k, v in self.params.items()))
         log.info(f"Clash Royale: battle #{self.battles}")
         out_since, last = None, None
         plays = 0
@@ -134,6 +138,11 @@ class RoyaleBot:
                     won = win[1] > 0.45
                     self.wins += won
                     self.losses += not won
+                    try:
+                        from royale import learn
+                        learn.record(_u().INSTANCE_ID, getattr(self, "params", {}) or {}, won)
+                    except Exception:
+                        log.debug("Clash Royale: learning failed", exc_info=True)
                     log.info(f"Clash Royale: {'WIN' if won else 'loss'} — {self.wins} won / {self.losses} lost")
                     if self.s.get("notify", True):
                         try: self.notify(f"{'🏆 كسبت' if won else '❌ خسرت'} ماتش كلاش رويال — "
