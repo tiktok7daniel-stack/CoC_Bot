@@ -26,6 +26,12 @@ def default_settings():
         "preset": "balanced",        # "safe" | "balanced" | "fast" | "custom"
         "clash_tag": "",             # the player tag (#ABC123) for the official Clash of Clans API
         "follow": "",                # plays like this account (its loadouts, recording, army, farm…), "" = own settings
+        "game_mode": "coc",          # "coc" = Clash of Clans | "royale" = Clash Royale (LDPlayer 720x1280 portrait)
+        "royale": {                  # Clash Royale mode
+            "deck": [],              # the 8 cards (found by itself in the first battle; can be set)
+            "max_battles": 0,        # stop after this many battles (0 = keep playing)
+            "notify": True,          # every result to the phone
+        },
         "tasks": {
             "home_base": _cfg("UPGRADE_HOME_BASE", True),
             "heroes": _cfg("UPGRADE_HEROES", True),
@@ -228,7 +234,7 @@ def _write(path, data):
 def _safe_id(id):
     return "".join(c for c in str(id) if c.isalnum() or c in "-_") or "main"
 
-OWN_KEYS = ("follow", "clash_tag")   # an account that follows another keeps only these of its own
+OWN_KEYS = ("follow", "clash_tag", "game_mode", "royale")   # an account that follows another keeps only these of its own
 
 
 def load(id):

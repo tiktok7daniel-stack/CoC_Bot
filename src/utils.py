@@ -3348,6 +3348,7 @@ def start_capture_service():
 # ======================================================================
 TARGET_SIZE = (1920, 1080)
 TARGET_DPI = 240 # BlueStacks' default for 1920x1080 (the device profile the templates come from)
+GAME_PKG = "com.supercell.clashofclans"   # Clash Royale mode: com.supercell.clashroyale (720x1280 portrait)
 
 def _target():
     w, h, d = getattr(configs, "DISPLAY_TARGET", None) or (*TARGET_SIZE, TARGET_DPI)
@@ -3473,16 +3474,17 @@ def preflight():
             if display_ok(w, h, d): logger.info(f"Pre-flight: display {tw}x{th} {td} DPI ✓")
             else: problems.append(f"display is {w}x{h} {d} DPI, needs {tw}x{th} {td} DPI")
 
-            if "com.supercell.clashofclans" in ADB_Manager.adbutils_device.shell("pm list packages com.supercell.clashofclans"):
-                logger.info("Pre-flight: Clash of Clans installed ✓")
+            game_name = "Clash Royale" if "royale" in GAME_PKG else "Clash of Clans"
+            if GAME_PKG in ADB_Manager.adbutils_device.shell(f"pm list packages {GAME_PKG}"):
+                logger.info(f"Pre-flight: {game_name} installed ✓")
             else:
-                problems.append("Clash of Clans is not installed")
+                problems.append(f"{game_name} is not installed")
 
             frame = Frame_Handler.get_frame(grayscale=False)
             fh, fw = frame.shape[:2]
             if (fw, fh) == (tw, th): logger.info(f"Pre-flight: screenshots {fw}x{fh} ✓")
-            else: problems.append(f"screenshots are {fw}x{fh} (landscape {tw}x{th} needed)")
-            if (fw, fh) == (tw, th) and (tw, th) != TARGET_SIZE:
+            else: problems.append(f"screenshots are {fw}x{fh} ({tw}x{th} needed)")
+            if (fw, fh) == (tw, th) and (tw, th) != TARGET_SIZE and "clashofclans" in GAME_PKG:
                 try: start_coc()
                 except Exception: pass
                 setup_ui_scale((fw, fh))

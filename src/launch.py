@@ -37,6 +37,20 @@ def launch_proc(args):
             update_status("error")
             time.sleep(min(60, 10 * attempt))
     install_error_reporter()
+    try:                     # Clash Royale mode (Settings -> the game): its own loop, portrait 720x1280
+        import settings as _set
+        mode = (_set.load(args.id) or {}).get("game_mode", "coc")
+    except Exception:
+        mode = "coc"
+    if mode == "royale":
+        import utils as _u, configs as _cfg
+        _u.GAME_PKG = "com.supercell.clashroyale"
+        _cfg.DISPLAY_TARGET = (720, 1280, 240)
+        logger.info("Clash Royale mode: the bot plays Clash Royale battles")
+        preflight()
+        from royale import game as _royale
+        _royale.run()
+        return
     try:   # a new version starts with a clean problem list (reports then show only what still happens)
         import stats, version
         from pathlib import Path

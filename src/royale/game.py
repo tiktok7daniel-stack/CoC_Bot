@@ -1,0 +1,213 @@
+"""
+Clash Royale mode: the bot plays battles by itself on LDPlayer (720x1280 portrait).
+
+  lobby        the yellow Battle button -> a battle (trophy road / Path of Legends: what the Battle button starts)
+  battle       ~5 looks a second: eyes (royale.eyes) -> brain (royale.brain) -> two taps (the card, then the tile)
+  end          the OK button; the result (win / loss) counted and sent to the phone
+  else         popups: close (the red X / OK), once in a while the picture goes to Claude (learning repo)
+
+Nothing here spends gems or buys: only Battle, OK and close buttons are pressed.
+"""
+import time
+
+PKG = "com.supercell.clashroyale"
+ACT = "com.supercell.clashroyale/com.supercell.titan.GameApp"
+LOOK_EVERY = 0.2           # seconds between looks in a battle
+
+
+def _u():
+    import utils
+    return utils
+
+
+def frame():
+    return _u().Frame_Handler.get_frame(grayscale=False)
+
+
+def tap(x, y):
+    _u().Input_Handler.click(x, y)
+
+
+def words(fr):
+    try:
+        return [(b[0].strip().lower(), b) for b in _u().ocr_boxes(fr) if b[5] > 0.4]
+    except Exception:
+        return []
+
+
+def find_word(ws, *names, y_min=0.0, y_max=1.0):
+    for t, b in ws:
+        cy = (b[2] + b[4]) / 2
+        if any(t == n or t.startswith(n) for n in names) and y_min <= cy <= y_max:
+            return ((b[1] + b[3]) / 2, cy)
+    return None
+
+
+def start_game(logger):
+    """Clash Royale open in front (started when it isn't)."""
+    dev = _u().ADB_Manager.adbutils_device
+    if not dev.shell(f"pidof {PKG}").strip():
+        logger.info("Clash Royale: starting the game")
+        dev.shell(f"am start -W -n {ACT}")
+        time.sleep(12)
+    else:
+        dev.shell(f"am start -n {ACT}")
+        time.sleep(1)
+
+
+def installed():
+    try:
+        return PKG in _u().ADB_Manager.adbutils_device.shell(f"pm list packages {PKG}")
+    except Exception:
+        return False
+
+
+class RoyaleBot:
+    def __init__(self, settings, logger, notify=None):
+        from royale.eyes import Eyes
+        from royale.brain import Brain
+        self.s = settings or {}
+        self.log = logger
+        self.notify = notify or (lambda t: None)
+        deck = list(self.s.get("deck") or [])
+        self.eyes = Eyes(deck)
+        self.brain = Brain(deck)
+        self.wins = self.losses = self.battles = 0
+        self.unknown_since = None
+
+    # -------------------------------------------------------------- one battle
+    def battle(self):
+        from royale.eyes import in_battle, tile_xy, card_xy
+        log = self.log
+        self.brain.reset()
+        self.battles += 1
+        log.info(f"Clash Royale: battle #{self.battles}")
+        out_since, last = None, None
+        plays = 0
+        while _u().running():
+            t0 = time.monotonic()
+            fr = frame()
+            if not in_battle(fr):
+                out_since = out_since or time.monotonic()
+                if time.monotonic() - out_since > 2.5: break           # the battle is over
+                time.sleep(0.2)
+                continue
+            out_since = None
+            try:
+                st = self.eyes.look(fr)
+            except Exception:
+                log.debug("Clash Royale: look failed", exc_info=True)
+                time.sleep(0.2)
+                continue
+            if self.eyes.learn_deck(st["hand"]):
+                log.info("Clash Royale: my deck = " + ", ".join(self.eyes.deck))
+                self.brain.deck = list(self.eyes.deck)
+                try: _save_deck(self.eyes.deck)
+                except Exception: pass
+            d = self.brain.decide(st["hand"], st["ready"], st["elixir"], st["enemies"], st["allies"], st["towers"])
+            if d:
+                cx, cy = card_xy(d["slot"])
+                tx, ty = tile_xy(*d["tile"])
+                tap(cx, cy)
+                time.sleep(0.04)
+                tap(tx, ty)
+                plays += 1
+                log.info(f"Clash Royale: {d['card']} -> tile {d['tile']} ({d['why']}) — elixir {st['elixir']:.0f}, "
+                         f"theirs ~{self.brain.enemy_elixir:.0f}")
+            last = st
+            time.sleep(max(0.0, LOOK_EVERY - (time.monotonic() - t0)))
+        log.info(f"Clash Royale: battle over — {plays} cards played")
+        return last
+
+    # -------------------------------------------------------------- after the battle
+    def results(self, last):
+        """The results screen: who won (the WINNER banner over our name = bottom half), then OK."""
+        log = self.log
+        for _ in range(20):
+            if not _u().running(): return
+            fr = frame()
+            ws = words(fr)
+            win = find_word(ws, "winner")
+            ok = find_word(ws, "ok", y_min=0.75)
+            if win or ok:
+                if win:
+                    won = win[1] > 0.45
+                    self.wins += won
+                    self.losses += not won
+                    log.info(f"Clash Royale: {'WIN' if won else 'loss'} — {self.wins} won / {self.losses} lost")
+                    if self.s.get("notify", True):
+                        try: self.notify(f"{'🏆 كسبت' if won else '❌ خسرت'} ماتش كلاش رويال — "
+                                         f"{self.wins} فوز / {self.losses} خسارة النهارده")
+                        except Exception: pass
+                if ok:
+                    tap(*ok)
+                    time.sleep(2.5)
+                    return
+            time.sleep(0.8)
+
+    # -------------------------------------------------------------- the loop
+    def run(self):
+        from royale.eyes import in_battle
+        log = self.log
+        start_game(log)
+        max_b = int(self.s.get("max_battles", 0) or 0)
+        while _u().running():
+            if max_b and self.battles >= max_b:
+                log.info(f"Clash Royale: {max_b} battles played — done")
+                try: self.notify(f"✅ كلاش رويال: خلصت {self.battles} ماتش — {self.wins} فوز / {self.losses} خسارة")
+                except Exception: pass
+                return
+            fr = frame()
+            if in_battle(fr):
+                self.unknown_since = None
+                last = self.battle()
+                self.results(last)
+                continue
+            ws = words(fr)
+            b = find_word(ws, "battle", y_min=0.55, y_max=0.9)
+            if b:
+                self.unknown_since = None
+                log.info("Clash Royale: Battle")
+                tap(*b)
+                for _ in range(60):                          # matchmaking: up to ~1 minute
+                    time.sleep(1)
+                    if in_battle(frame()) or not _u().running(): break
+                continue
+            ok = find_word(ws, "ok", "continue", "tap to continue", "close", y_min=0.5)
+            if ok:
+                tap(*ok)
+                time.sleep(1.5)
+                continue
+            try:                                            # a popup with the red X
+                if _u().tap_red_x():
+                    time.sleep(1.0)
+                    continue
+            except Exception:
+                pass
+            self.unknown_since = self.unknown_since or time.monotonic()
+            if time.monotonic() - self.unknown_since > 20:
+                try:
+                    import learn_sync
+                    learn_sync.report_stuck(_u().INSTANCE_ID, fr, [w for w, _ in ws], "royale")
+                except Exception:
+                    pass
+                self.unknown_since = time.monotonic() + 600     # once in 10 minutes
+                start_game(log)
+            time.sleep(1.0)
+
+
+def _save_deck(deck):
+    import settings
+    s = settings.load(_u().INSTANCE_ID)
+    r = s.setdefault("royale", {})
+    if r.get("deck") != deck:
+        r["deck"] = list(deck)
+        settings.save(_u().INSTANCE_ID, s)
+
+
+def run():
+    """Entry from the launcher in Clash Royale mode."""
+    import settings
+    u = _u()
+    s = settings.load(u.INSTANCE_ID).get("royale", {}) or {}
+    RoyaleBot(s, u.logger, u.send_notification).run()
