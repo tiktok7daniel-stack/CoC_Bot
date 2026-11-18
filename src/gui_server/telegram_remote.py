@@ -34,14 +34,18 @@ def _api(token, method, http_timeout=35, **kw):
 
 
 def _owner(token):
-    """The chat the notifications go to (the first chat that wrote to the bot, as before)."""
-    if _STATE["chat"]: return _STATE["chat"]
+    """The chat the notifications go to (the first chat that wrote to this bot; a new bot token starts over)."""
     try:
         import utils
-        _STATE["chat"] = utils.Cache_Manager.get("telegram_chat_id", None)
+        return utils.telegram_owner(token)
     except Exception:
-        pass
-    return _STATE["chat"]
+        return None
+
+
+HELP = ("أوامر Clash Farmer:\n"
+        "• الحالة — كل حساب بيعمل إيه\n• صورة — صورة الشاشة دلوقتي\n• وقف / كمل — إيقاف مؤقت وكمّل (وقف 30 = نص ساعة)\n"
+        "• كمل main / كمل N2 — حساب واحد بس\n"
+        "• شغل / اقفل — تشغيل وقفل البوت\n• احصائيات — غنايم النهارده\n• نت — النت وسيرفر اللعبة شغالين؟\n(ممكن تكتب اسم الحساب بعد الأمر)")
 
 
 PHASES = {"home_attack": "بيهاجم", "start_game": "بيفتح اللعبة", "home_upgrades": "بيرقّي", "idle": "مستني",
@@ -74,9 +78,7 @@ def _handle(app, token, chat, cmd, arg):
         arg = next((a for a in accounts if a.lower() == arg.lower()), arg)
     targets = [arg] if arg and arg in accounts else accounts
     if cmd == "help":
-        return _send(token, chat, "أوامر Clash Farmer:\n"
-                     "• الحالة — كل حساب بيعمل إيه\n• صورة — صورة الشاشة دلوقتي\n• وقف / كمل — إيقاف مؤقت وكمّل (وقف 30 = نص ساعة)\n"
-                     "• شغل / اقفل — تشغيل وقفل البوت\n• احصائيات — غنايم النهارده\n• نت — النت وسيرفر اللعبة شغالين؟\n(ممكن تكتب اسم الحساب بعد الأمر)")
+        return _send(token, chat, HELP)
     if cmd == "status":
         import stats
         from pathlib import Path
@@ -160,15 +162,22 @@ def loop(app):
                 msg = upd.get("message") or {}
                 chat = (msg.get("chat") or {}).get("id")
                 owner = _owner(token)
-                if owner is None and chat:                      # first contact: this chat becomes the owner
-                    try:
-                        import utils
-                        utils.Cache_Manager["telegram_chat_id"] = chat
-                    except Exception:
-                        pass
-                    _STATE["chat"] = owner = chat
-                if chat != owner: continue                      # only the owner can control the bot
-                cmd, arg = _parse(msg.get("text") or "")
+                text = (msg.get("text") or "").strip()
+                first = owner is None and chat
+                if first:                                       # first contact: this chat becomes the owner
+                    import utils
+                    utils.set_telegram_owner(token, chat)
+                    owner = chat
+                if chat != owner:                               # only the owner can control the bot
+                    _send(token, chat, "البوت ده مربوط بشات تاني.")
+                    continue
+                if first or text.lower().split("@")[0] in ("/start", "start"):
+                    _send(token, chat, "✅ اتربطت بـ Clash Farmer — الإشعارات هتوصلك هنا.\n\n" + HELP)
+                    continue
+                cmd, arg = _parse(text)
+                if not cmd and text:
+                    _send(token, chat, "ما فهمتش 🤔\n\n" + HELP)
+                    continue
                 if cmd:
                     try: _handle(app, token, chat, cmd, arg)
                     except Exception as e: _send(token, chat, f"⚠️ حصلت مشكلة: {type(e).__name__}")

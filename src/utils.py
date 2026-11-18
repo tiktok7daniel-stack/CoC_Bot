@@ -445,24 +445,53 @@ def _render_text(text, font, font_size, color=(255, 255, 255)):
     render = np.array(render)
     return render
 
+TG_OWNER = Path.home() / ".CoC_Bot" / "telegram_chat.json"
+
+
+def telegram_token():
+    """The token from the app's settings (fresh: typed after the bot started works too), else configs."""
+    try:
+        import settings
+        t = (settings.load_app().get("telegram_bot_token") or "").strip()
+        if t: return t
+    except Exception:
+        pass
+    return (TELEGRAM_BOT_TOKEN or "").strip()
+
+
+def telegram_owner(token):
+    """The chat that owns this Telegram bot (file shared by the app and every account's bot). A new bot (other
+    token) forgets the old chat."""
+    import json
+    try: d = json.loads(TG_OWNER.read_text(encoding="utf-8"))
+    except (OSError, ValueError): return None
+    return d.get("chat") if token and d.get("bot") == token.split(":")[0] else None
+
+
+def set_telegram_owner(token, chat):
+    import json, os
+    try:
+        TG_OWNER.parent.mkdir(parents=True, exist_ok=True)
+        tmp = TG_OWNER.with_name(f"{TG_OWNER.name}.{os.getpid()}.tmp")
+        tmp.write_text(json.dumps({"bot": token.split(":")[0], "chat": chat}), encoding="utf-8")
+        os.replace(tmp, TG_OWNER)
+    except OSError:
+        pass
+
+
 def get_telegram_chat_id():
     import requests
-    
-    telegram_chat_id = Cache_Manager.get("telegram_chat_id", None)
-    if telegram_chat_id is not None:
-        return telegram_chat_id
-
-    res = requests.get(
-        f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates",
-        timeout=(10, 20)
-    )
+    token = telegram_token()
+    chat = telegram_owner(token)
+    if chat is not None: return chat
+    res = requests.get(f"https://api.telegram.org/bot{token}/getUpdates", timeout=(10, 20))
     if res.status_code == 200:
         res = res.json()
-        if res["ok"] and len(res["result"]) > 0:
-            chat_id = res["result"][-1]["message"]["chat"]["id"]
-            Cache_Manager["telegram_chat_id"] = chat_id
-            return chat_id
-
+        msgs = [u.get("message") for u in res.get("result", []) if u.get("message")]
+        if res.get("ok") and msgs:
+            chat = msgs[-1]["chat"]["id"]
+            set_telegram_owner(token, chat)
+            return chat
     raise Exception("Failed to get Telegram chat ID. Please send a message to your bot first.")
 
 def send_notification(text):
@@ -478,13 +507,14 @@ def send_notification(text):
         except (KeyboardInterrupt, SystemExit): raise
         except: pass
 
-    if TELEGRAM_BOT_TOKEN != "":
+    token = telegram_token()
+    if token != "":
         try:
             telegram_text = f"[{INSTANCE_ID}]\n{text}"
             requests.post(
-                f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+                f"https://api.telegram.org/bot{token}/sendMessage",
                 data={"chat_id": get_telegram_chat_id(),"text": telegram_text},
-                timeout=(1, 2)
+                timeout=(3, 8)
             )
         except (KeyboardInterrupt, SystemExit): raise
         except: pass

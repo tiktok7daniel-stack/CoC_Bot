@@ -471,7 +471,24 @@ class BotSettingsScreen(Screen):
             try:
                 with urllib.request.urlopen(f"https://api.telegram.org/bot{token}/getMe", timeout=15) as r:
                     data = json.loads(r.read().decode("utf-8"))
-                res = (True, (data.get("result") or {}).get("username", ""))
+                name = (data.get("result") or {}).get("username", "")
+                # a real message to the phone (the chat that sent /start to this bot)
+                from pathlib import Path
+                try: own = json.loads((Path.home() / ".CoC_Bot" / "telegram_chat.json").read_text(encoding="utf-8"))
+                except (OSError, ValueError): own = {}
+                chat = own.get("chat") if own.get("bot") == token.split(":")[0] else None
+                if chat is None:
+                    with urllib.request.urlopen(f"https://api.telegram.org/bot{token}/getUpdates", timeout=15) as r:
+                        ups = [u.get("message") for u in json.loads(r.read().decode("utf-8")).get("result", []) if u.get("message")]
+                    chat = ups[-1]["chat"]["id"] if ups else None
+                if chat is None:
+                    res = (False, f"@{name} ✓ — افتح البوت ده في تليجرام وابعتله /start، والبرنامج مفتوح، وبعدين دوس تجربة تاني")
+                else:
+                    import urllib.parse
+                    body = urllib.parse.urlencode({"chat_id": chat, "text": "✅ التليجرام شغال — الإشعارات هتوصلك هنا"}).encode()
+                    with urllib.request.urlopen(f"https://api.telegram.org/bot{token}/sendMessage", data=body, timeout=15) as r:
+                        ok = json.loads(r.read().decode("utf-8")).get("ok")
+                    res = (bool(ok), f"@{name} ✓ — بعتّلك رسالة على التليفون" if ok else "ما قدرتش أبعت الرسالة")
             except Exception as e:
                 res = (False, str(e))
             self._relay.done.emit(self._tg_result, res)
@@ -479,7 +496,7 @@ class BotSettingsScreen(Screen):
 
     def _tg_result(self, res):
         ok, info = res
-        self.tg_note.setText(f"@{info}" if ok else info)
+        self.tg_note.setText(info)
         self.tg_note.setProperty("role", "ok" if ok else "bad")
         self.tg_note.style().unpolish(self.tg_note)
         self.tg_note.style().polish(self.tg_note)
