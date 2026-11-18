@@ -21,7 +21,7 @@ rapid = [m for m in collect_submodules("rapidocr") if not any(k in m for k in _s
 hidden = collect_submodules("qt_ui") + collect_submodules("gui_server") + [
     "PySide6.QtSvg", "flask", "webview", "adbutils", "uiautomator2", "pyminitouch", "cv2", "numpy", "scipy.signal",
     "psutil", "requests", "loguru", "settings", "stats", "teach", "recorder", "unit_icons", "updater", "version",
-    "learn_sync", "capture_session", "today_plan", "army_learn", "village", "screen_memory", "win_capture", "nowindow", "stream_capture", "av", "gpu_setup", "screen_model", "game_digits", "builder_menu", "daily_rewards", "gui_server.telegram_remote", "vision", "paddle_ocr", "screen_cnn", "deploy_zone", "navigator", "clash_api", "deps", "net_check", "spell_brain",
+    "learn_sync", "capture_session", "today_plan", "army_learn", "village", "screen_memory", "win_capture", "nowindow", "stream_capture", "av", "gpu_setup", "screen_model", "game_digits", "builder_menu", "daily_rewards", "gui_server.telegram_remote", "vision", "paddle_ocr", "screen_cnn", "deploy_zone", "navigator", "clash_api", "deps", "net_check", "spell_brain", "card_bar",
     "onnxruntime", "yaml", "omegaconf", "pyclipper", "shapely",
 ] + rapid
 

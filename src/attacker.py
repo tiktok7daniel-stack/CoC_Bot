@@ -497,52 +497,22 @@ class Attacker:
     def detect_troop_positions(self, frame, clip_left=0.0, clip_right=1.0, type_gaps_seen=0, return_boundaries=False, return_types=False, return_counts=False):
         import cv2, scipy, numpy as np
         
-        # Look for vertical card edges
+        # Every whole card on the bar (card_bar: weak edges too, the game's fixed card width, no empty slots)
         assert len(frame.shape) == 3 and frame.shape[2] == 3
-        frame_color = frame.copy()
-        frame_gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+        import card_bar
+        frame_color = frame
+        frame_gray = cv2.equalizeHist(cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY))
         orig_h, orig_w = frame_gray.shape
-        frame_color = frame_color[:, max(0, int(orig_w*clip_left)-10):min(orig_w, int(orig_w*clip_right)+10)]
-        frame_gray = frame_gray[:, max(0, int(orig_w*clip_left)-10):min(orig_w, int(orig_w*clip_right)+10)]
-        frame_gray = cv2.equalizeHist(frame_gray)
-        edges = cv2.convertScaleAbs(np.abs(cv2.Sobel(frame_gray, cv2.CV_64F, 1, 0, ksize=3)))
-        profile = np.sum(edges, axis=0)
-        profile = (profile - profile.min()) / (profile.max() - profile.min())
-        peaks = scipy.signal.find_peaks(profile, height=0.8, distance=10)[0]
-        peaks_norm =  peaks / orig_w + clip_left
-        
-        # Compute distances between edges and discretize
-        dists = np.diff(peaks_norm)
+        found = card_bar.find(frame, min_x=clip_left)
+        found = [c for c in found if c[1] <= clip_right + 0.004]
+        if not found: raise ValueError("No troop cards found")
+        peaks_norm = np.array([x for c in found for x in c])
+        peaks = np.round(peaks_norm * orig_w).astype(int)
         dist_categories = np.array([0.007, 0.015, 0.068]) # normal gap, type change gap, card width
-        tol = 0.01
-        diffs = np.abs(dists[:, None] - dist_categories)
-        closest_idx = np.argmin(diffs, axis=1)
-        closest_dist = diffs[np.arange(len(dists)), closest_idx]
-        dists_discrete = dist_categories[closest_idx]
-        dists_discrete[closest_dist > tol] = np.nan
-        
-        # Remove partially visible card edges (no whole card at all, e.g. the bar after the army is out: no cards)
-        whole = np.where(dists_discrete == dist_categories[2])[0]
-        if len(whole) == 0: raise ValueError("No troop cards found")
-        remove_left, remove_right = int(whole[0]), int(whole[-1])
-        peaks = peaks[remove_left:remove_right+2]
-        peaks_norm = peaks_norm[remove_left:remove_right+2]
-        dists_discrete = dists_discrete[remove_left:remove_right+1]
-        
-        if len(peaks) % 2 == 1:
-            # an extra edge (a half-visible card at the side, a glow): drop the one edge whose
-            # removal leaves edge pairs that all look like whole cards
-            card_w = dist_categories[2]
-            def pair_err(pn):
-                return sum(abs((pn[k + 1] - pn[k]) - card_w) for k in range(0, len(pn) - 1, 2))
-            best = min(range(len(peaks)), key=lambda k: pair_err(np.delete(peaks_norm, k)))
-            peaks, peaks_norm = np.delete(peaks, best), np.delete(peaks_norm, best)
-            dists_discrete = np.delete(dists_discrete, min(best, len(dists_discrete) - 1)) if len(dists_discrete) else dists_discrete
-            dd = np.diff(peaks_norm)
-            dd_idx = np.argmin(np.abs(dd[:, None] - dist_categories), axis=1) if len(dd) else np.array([], dtype=int)
-            dists_discrete = dist_categories[dd_idx] if len(dd) else dd
-        if len(peaks) < 2: raise ValueError("No troop cards found")
-        
+        dists = np.diff(peaks_norm)
+        dists_discrete = dist_categories[np.argmin(np.abs(dists[:, None] - dist_categories), axis=1)] if len(dists) else dists
+        bank_seen = []
+
         # Convert edge distances to card locations
         card_types = []
         card_centers = []
@@ -601,8 +571,24 @@ class Attacker:
                 else:
                     card_type = "hero"
                     card_counts.append(1)
+            # the cards the bot knows (seed from the user's bars + learned): same card coloured or gray -> sure
+            try:
+                v = card_bar.thumb(frame, peaks_norm[i], peaks_norm[i + 1])
+                k = card_bar.known(v, __import__("utils").INSTANCE_ID)
+                if k:
+                    if k[0] != card_type:
+                        logger.debug(f"Card at {x:.3f}: {card_type} -> {k[0]} ({k[1] or '?'}, {k[2]:.2f})")
+                        card_type = k[0]
+                        if card_type in ("clan", "hero"): card_counts[-1] = 1
+                        elif card_type == "troop": card_counts[-1] = -1
+                    bank_seen.append((round(float(x), 3), k[1]))
+                elif not card_bar.is_gray(frame, peaks_norm[i], peaks_norm[i + 1]):
+                    card_bar.learn(v, card_type, "", __import__("utils").INSTANCE_ID)     # coloured: its type is sure
+            except Exception:
+                logger.debug("Card bank failed", exc_info=True)
             card_types.append(card_type)
 
+        self.bank_names = {c: n for c, n in bank_seen if n}      # this view of the bar (it moves when scrolled)
         card_centers = np.array(card_centers)
         
         if not return_boundaries and not return_types: return card_centers
@@ -830,6 +816,8 @@ class Attacker:
             x1, x2 = boundaries[2 * k], boundaries[2 * k + 1]
             cx = round((x1 + x2) / 2, 3)
             if cx in self.card_names: names.append(self.card_names[cx] or "?"); continue
+            bn = self.bank_name(cx)
+            if bn: self.card_names[cx] = bn; names.append(bn); continue
             if t == "hero": self.card_names[cx] = None; names.append("hero"); continue
             crop = bar_frame[:, max(0, int(x1 * w)):int(x2 * w)]
             groups = ("spells",) if t == "spell" else ("troops", "sieges")
@@ -837,6 +825,13 @@ class Attacker:
             self.card_names[cx] = name
             names.append(name or "?")
         if names: logger.info("Troop bar: " + ", ".join(names))
+
+    def bank_name(self, cx):
+        """The card's name from the card bank (seen on the bar in this battle) or None."""
+        bn = getattr(self, "bank_names", None) or {}
+        if not bn: return None
+        k = min(bn, key=lambda c: abs(c - cx))
+        return bn[k] if abs(k - cx) < 0.01 else None
 
     def card_name(self, cx):
         names = getattr(self, "card_names", {}) or {}
@@ -965,6 +960,11 @@ class Attacker:
         names = getattr(self, "_spell_names", None)
         if names is None: names = self._spell_names = {}
         k = round(cx, 3)
+        if k not in names and self.bank_name(cx):
+            import spell_brain
+            if self.bank_name(cx) in spell_brain.ROLE:
+                names[k] = self.bank_name(cx)
+                logger.info(f"Spell card: {names[k]}")
         if k not in names:
             try:
                 import spell_brain
@@ -1447,6 +1447,7 @@ class Attacker:
         self._hero_start, self._hero_used, self._hero_next = {}, set(), 0.0
         self._spell_names = {}
         self._ok_spots = {}
+        self.bank_names = {}
         self._later = []
         plan = getattr(self, "plan", None) or {}
         system = ("smart" if plan.get("mode") == "smart" else
