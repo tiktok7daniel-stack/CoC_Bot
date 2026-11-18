@@ -31,9 +31,13 @@ def _load(p, default):
 
 def _save(p, data):
     BASE.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix(".tmp")
+    import os
+    tmp = p.with_name(f"{p.name}.{os.getpid()}.tmp")       # two accounts' bots save at once: no shared temp file
     tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-    tmp.replace(p)
+    try: tmp.replace(p)
+    except OSError:
+        try: tmp.unlink()
+        except OSError: pass
 
 
 def normalize_repo(text):

@@ -177,6 +177,14 @@ class Store(QObject):
                 if done: done(False)
                 return
             self._saved_S = json.dumps(S, sort_keys=True)
+            lead = s.get("follow") or ""
+            if lead and json.dumps({k: v for k, v in S.items() if k not in ("follow", "clash_tag")}, sort_keys=True) != \
+                    json.dumps({k: v for k, v in s.items() if k not in ("follow", "clash_tag")}, sort_keys=True):
+                # this account plays like another: its settings are that account's (shown again, nothing lost there)
+                self.S = s
+                self._saved_S = json.dumps(s, sort_keys=True)
+                self.saved.emit(True, "follow_note")
+                self._load_settings()                       # the screens show what the account really plays
             self.api.post("/api/app_settings", APP, got_app)
         if not acc:
             self.api.post("/api/app_settings", APP, got_app)

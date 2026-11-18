@@ -25,6 +25,7 @@ def default_settings():
     return {
         "preset": "balanced",        # "safe" | "balanced" | "fast" | "custom"
         "clash_tag": "",             # the player tag (#ABC123) for the official Clash of Clans API
+        "follow": "",                # plays like this account (its loadouts, recording, army, farm…), "" = own settings
         "tasks": {
             "home_base": _cfg("UPGRADE_HOME_BASE", True),
             "heroes": _cfg("UPGRADE_HEROES", True),
@@ -226,8 +227,18 @@ def _write(path, data):
 def _safe_id(id):
     return "".join(c for c in str(id) if c.isalnum() or c in "-_") or "main"
 
+OWN_KEYS = ("follow", "clash_tag")   # an account that follows another keeps only these of its own
+
+
 def load(id):
     data = _merge(default_settings(), _read(SETTINGS_DIR / f"{_safe_id(id)}.json"))
+    # "plays like" another account: everything (loadouts, recording, army, farm…) comes from that account, read
+    # fresh every time, so a change there applies here at once. One level only (no chains / loops).
+    lead = str(data.get("follow") or "").strip()
+    if lead and _safe_id(lead) != _safe_id(id) and (SETTINGS_DIR / f"{_safe_id(lead)}.json").exists():
+        led = _merge(default_settings(), _read(SETTINGS_DIR / f"{_safe_id(lead)}.json"))
+        led.update({k: data.get(k, led.get(k)) for k in OWN_KEYS})
+        data = led
     # 5.17: the smart attack is a loadout of its own (saved plan lists are kept as they are: it is added once)
     plans = data.get("plans") or []
     if not any(p.get("mode") == "smart" for p in plans if isinstance(p, dict)):
@@ -236,6 +247,13 @@ def load(id):
     return data
 
 def save(id, data):
+    own = _read(SETTINGS_DIR / f"{_safe_id(id)}.json")
+    lead = str((data or {}).get("follow", own.get("follow")) or "").strip()
+    if lead and _safe_id(lead) != _safe_id(id):
+        # this account follows another one: only its own keys are stored (the rest is the leader's, read live)
+        own.update({k: (data or {}).get(k, own.get(k, "")) for k in OWN_KEYS})
+        _write(SETTINGS_DIR / f"{_safe_id(id)}.json", _merge(default_settings(), own))
+        return load(id)
     merged = _merge(default_settings(), data)
     _write(SETTINGS_DIR / f"{_safe_id(id)}.json", merged)
     return merged

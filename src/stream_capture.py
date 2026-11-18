@@ -56,7 +56,8 @@ def _jar_path():
             try:
                 r = requests.get(url, timeout=30)
                 if r.status_code != 200: continue
-                tmp = OWN_JAR.with_suffix(".part")
+                import os
+                tmp = OWN_JAR.with_name(f"{OWN_JAR.name}.{os.getpid()}.part")
                 tmp.write_bytes(r.content)
                 import os
                 os.replace(tmp, OWN_JAR)

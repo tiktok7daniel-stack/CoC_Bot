@@ -12,7 +12,7 @@ every picture it collects).
 
 classify(img) -> (kind, similarity) or (None, similarity)
 """
-import base64, json, sys, threading, time
+import base64, json, os, sys, threading, time
 from pathlib import Path
 
 MODEL = Path.home() / ".CoC_Bot" / "models" / "dinov2_small_int8.onnx"
@@ -33,9 +33,9 @@ def download():
     if MODEL.exists() or (_S["dl"] and _S["dl"].is_alive()): return
     def work():
         try:
-            import requests, os
+            import requests
             MODEL.parent.mkdir(parents=True, exist_ok=True)
-            tmp = MODEL.with_suffix(".part")
+            tmp = MODEL.with_name(f"{MODEL.name}.{os.getpid()}.part")
             with requests.get(URL, stream=True, timeout=60) as r:
                 r.raise_for_status()
                 with open(tmp, "wb") as f:

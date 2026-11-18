@@ -61,7 +61,14 @@ def download_medium(progress=None):
     """The strongest model, once, in the background (resumes; the bot reads with the small one meanwhile)."""
     if medium_ready() or (_S["download"] and _S["download"].is_alive()): return
     def work():
-        import requests
+        import requests, os
+        lock = DIR / ".downloading"
+        try:                                         # two accounts' bots: only one downloads (the other waits for it)
+            DIR.mkdir(parents=True, exist_ok=True)
+            if lock.exists() and time.time() - lock.stat().st_mtime < 900: return
+            lock.write_text(str(os.getpid()))
+        except OSError:
+            return
         try:
             for k, f in FILES:
                 dst = DIR / k / f
@@ -84,6 +91,9 @@ def download_medium(progress=None):
             _log("Strongest text reader (PP-OCRv6 medium) downloaded")
         except Exception as e:
             _S["error"] = f"download: {e}"[:200]
+        finally:
+            try: lock.unlink()
+            except OSError: pass
     t = threading.Thread(target=work, daemon=True, name="ppocr-download")
     _S["download"] = t
     t.start()

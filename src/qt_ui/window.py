@@ -273,7 +273,7 @@ class MainWindow(QMainWindow):
 
     def on_saved(self, ok, msg):
         if not ok: self.toast.show_msg(tr("save_err"), "bad")
-        elif msg: self.toast.show_msg(tr(msg) if msg in ("saved",) else msg, "ok" if msg == "saved" else "warn")
+        elif msg: self.toast.show_msg(tr(msg) if msg in ("saved", "follow_note") else msg, "ok" if msg == "saved" else "warn")
 
     # ---------------------------------------------------------------- live data
     def on_state(self, st):

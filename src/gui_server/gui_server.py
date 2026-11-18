@@ -129,6 +129,18 @@ def _keep_own(target, data):
         for k in PER_ACCOUNT: out[k] = mine.get(k, out.get(k))
     return out
 
+@app.route("/api/account/<id>/follow", methods=["POST"])
+def api_account_follow(id):
+    """This account plays like another one ({"follow": "main"}), or with its own settings again ({"follow": ""})."""
+    if not valid_id(id): abort(404)
+    lead = str((request.json or {}).get("follow", "") or "")
+    if lead and (not valid_id(lead) or lead == id): return jsonify({"ok": False, "error": "invalid"}), 400
+    data = bot_settings.load(id)                 # stopping: the leader's settings become this account's own copy
+    data["follow"] = lead
+    bot_settings.save(id, data)
+    if id in instances: bot_settings.request_wake(id)
+    return jsonify({"ok": True, "follow": lead})
+
 @app.route("/api/settings_copy", methods=["POST"])
 def api_settings_copy():
     """Copy one account's settings to other accounts ({"from": id, "to": [ids] | "all"})."""

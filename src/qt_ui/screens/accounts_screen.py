@@ -78,6 +78,7 @@ class AccountsScreen(Screen):
     def on_show(self):
         self.poller.refresh("state")
         self.render()
+        self.load_follow()
 
     def render(self):
         cur = self.copy_from.currentData()
@@ -130,6 +131,22 @@ class AccountsScreen(Screen):
             box.addLayout(pics)
             run = f"{tr('acc_runtime')} {fmt_dur(now - a['started_at'])}" if a.get("running") and a.get("started_at") else tr("not_running")
             box.addWidget(label(run, "dim"))
+            # plays like another account (same loadout / recording / army / farm, any change there applies here)
+            others = [x for x in self.store.APP.get("accounts", []) if x != acc]
+            if others:
+                fr = QHBoxLayout()
+                fr.setSpacing(6)
+                fr.addWidget(label(key="acc_follow", role="dim"))
+                fc = QComboBox()
+                fc.addItem(tr("acc_follow_own"), "")
+                for o in others: fc.addItem(tr("acc_follow_like").replace("{a}", display_name(self.store, o)), o)
+                fc.setMinimumWidth(200)
+                cur_lead = (self._follow.get(acc) if hasattr(self, "_follow") else None) or ""
+                fc.setCurrentIndex(max(0, fc.findData(cur_lead)))
+                fc.activated.connect(lambda _i, x=acc, w=fc: self.set_follow(x, w.currentData()))
+                fr.addWidget(fc)
+                fr.addStretch(1)
+                box.addLayout(fr)
             h.addLayout(box, 1)
             h.addWidget(StatusPill(k), 0, Qt.AlignVCenter)
             if a.get("running"):
@@ -146,6 +163,30 @@ class AccountsScreen(Screen):
             d.clicked.connect(lambda _=False, x=acc: self.remove(x))
             h.addWidget(d)
             self.list.addWidget(row)
+
+    def load_follow(self):
+        """Who follows whom (from each account's settings) -> self._follow, then the rows again."""
+        self._follow = getattr(self, "_follow", {})
+        for acc in self.store.APP.get("accounts", []):
+            self.api.get(f"/api/settings/{acc}", lambda r, x=acc: self._got_follow(x, r))
+
+    def _got_follow(self, acc, r):
+        lead = (r or {}).get("follow", "") or ""
+        if self._follow.get(acc) != lead:
+            self._follow[acc] = lead
+            self.render()
+
+    def set_follow(self, acc, lead):
+        def done(r):
+            ok = isinstance(r, dict) and r.get("ok")
+            if ok:
+                self._follow[acc] = lead or ""
+                self.ctx.toast(tr("acc_follow_on").replace("{a}", acc).replace("{b}", lead) if lead else
+                               tr("acc_follow_off").replace("{a}", acc), "ok")
+                if acc == self.store.account: self.store._load_settings()         # show what it plays now
+            else:
+                self.ctx.toast(tr("dk_failed"), "bad")
+        self.api.post(f"/api/account/{acc}/follow", {"follow": lead or ""}, done)
 
     def all_action(self, action):
         st = self.poller.last.get("state") or {}
@@ -165,9 +206,9 @@ class AccountsScreen(Screen):
         self.store.changed()
 
         def saved(ok):
-            if src and src != name:   # the new account plays exactly like the chosen one
+            if src and src != name:   # the new account plays exactly like the chosen one, and keeps following it
                 self.api.post("/api/settings_copy", {"from": src, "to": [name]},
-                              lambda r: self.ctx.toast(tr("copied_from").replace("{a}", src), "ok"))
+                              lambda r: self.set_follow(name, src))
             else:
                 self.ctx.toast(tr("added"), "ok")
             self.render()
