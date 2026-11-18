@@ -35,16 +35,21 @@ def _profile(bar):
 
 
 def has_badge(bar, x1, x2):
-    """Every real card has its level in a dark square bottom-left (light digits, gray ones too); an empty dashed
-    slot shows the map through it."""
+    """Every real card has its level in a square bottom-left with light digits: dark normally, BLUE when the army
+    is boosted (Boost Army / potions: troops and spells, the heroes stay dark). An empty dashed slot shows the map."""
     import cv2, numpy as np
     H = bar.shape[0]
     w = x2 - x1
     r = bar[int(H * 0.68):int(H * 0.88), x1 + int(w * 0.04):x1 + int(w * 0.36)]
     if r.size == 0: return False
-    r = cv2.cvtColor(r, cv2.COLOR_RGB2GRAY).astype(np.int16)
-    lo, hi = np.percentile(r, 25), np.percentile(r, 97)
-    return lo < 70 and hi - lo >= 60
+    rgb = r.astype(np.int16)
+    g = cv2.cvtColor(r, cv2.COLOR_RGB2GRAY).astype(np.int16)
+    dark = g < 70
+    blue = (rgb[..., 2] > 110) & (rgb[..., 2] - rgb[..., 0] > 45)
+    square = dark | blue
+    if square.mean() < 0.3: return False
+    base = float(np.percentile(g[square], 50))
+    return float(np.percentile(g, 97)) - base >= 60
 
 
 def _jumpy(g, W):
