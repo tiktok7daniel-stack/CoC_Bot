@@ -620,6 +620,76 @@ def bottom_green_button(frame=None):
     if frame is None: frame = Frame_Handler.get_frame(grayscale=False)
     return _green_share(frame, 0.44, 0.83, 0.56, 0.88) >= 0.30 and _green_share(frame, 0.44, 0.74, 0.56, 0.78) < 0.05
 
+def _yellow_share(frame, x1, y1, x2, y2):
+    import numpy as np
+    a = Frame_Handler.crop(frame, x1, y1, x2, y2)
+    if a.size == 0: return 0.0
+    r, g, b = (a[..., i].astype(int) for i in range(3))
+    return float(((r > 200) & (g > 150) & (b < 90)).mean())
+
+
+def village_buttons(frame=None):
+    """The village's big yellow Battle (bottom left) and Build (bottom right) buttons -> (battle, build) seen."""
+    if frame is None: frame = Frame_Handler.get_frame(grayscale=False)
+    return _yellow_share(frame, 0.02, 0.84, 0.11, 0.96) > 0.25, _yellow_share(frame, 0.89, 0.84, 0.98, 0.96) > 0.25
+
+
+def tap_red_x(area=(0.80, 0.0, 1.0, 0.18)):
+    """A window's red X (top right) found by its colour -> tapped. -> True when there was one (no blind taps)."""
+    import numpy as np, cv2
+    frame = Frame_Handler.get_frame(grayscale=False)
+    x1, y1, x2, y2 = area
+    a = Frame_Handler.crop(frame, x1, y1, x2, y2)
+    r, g, b = (a[..., i].astype(int) for i in range(3))
+    m = ((r > 190) & (g < 80) & (b < 80)).astype(np.uint8)
+    n, _l, st, cen = cv2.connectedComponentsWithStats(m, 8)
+    if n <= 1: return False
+    i = 1 + int(np.argmax(st[1:, 4]))
+    w, h = st[i, 2], st[i, 3]
+    if st[i, 4] < a.shape[0] * a.shape[1] * 0.01 or not (0.6 < w / max(1, h) < 1.6): return False   # a square button
+    Input_Handler.click(x1 + cen[i][0] / a.shape[1] * (x2 - x1), y1 + cen[i][1] / a.shape[0] * (y2 - y1))
+    return True
+
+
+def clear_village(max_tries=3):
+    """
+    The village with something open over it (the clan panel, a selected building / decoration, a storage popup,
+    a window): closed, so the Battle button can be pressed. -> True when the Battle button is visible.
+    """
+    import time
+    for _ in range(max_tries):
+        frame = Frame_Handler.get_frame(grayscale=False)
+        battle, build = village_buttons(frame)
+        if battle: return True
+        if tap_red_x():                                          # a window with a red X
+            time.sleep(0.5)
+            continue
+        # the clan / chat panel slid in from the left: its orange arrow closes it
+        arrow = Frame_Handler.crop(frame, 0.39, 0.40, 0.43, 0.50)
+        r, g, b = (arrow[..., i].astype(int).mean() for i in range(3))
+        left = Frame_Handler.crop(frame, 0.0, 0.30, 0.36, 0.95).astype(int).mean()
+        if r > 180 and 80 < g < 170 and b < 80 and left < 90:
+            logger.info("Village: closing the clan panel")
+            Input_Handler.click(0.41, 0.45)
+            time.sleep(0.6)
+            continue
+        if build:                                                # the village, but something selected over Battle
+            logger.info("Village: something is selected over the Battle button — letting go of it")
+            ADB_Manager.adbutils_device.shell("input keyevent KEYCODE_BACK")
+            time.sleep(0.6)
+            fr = Frame_Handler.get_frame(grayscale=False)
+            words = " ".join(b[0].lower() for b in ocr_boxes(fr) if b[5] > 0.3) if not any(village_buttons(fr)) else ""
+            if "exit" in words or "quit" in words or "leave" in words:          # never leave the game: cancel
+                for b in ocr_boxes(fr):
+                    if _word_hit(b[0], "cancel") or b[0].strip().lower() in ("no", "cancel"):
+                        Input_Handler.click((b[1] + b[3]) / 2, (b[2] + b[4]) / 2)
+                        break
+                time.sleep(0.5)
+            continue
+        return False
+    return village_buttons()[0]
+
+
 def red_battle_button(frame=None):
     """The red End Battle / Surrender button at the left during a battle -> its middle (x, y), or None."""
     import numpy as np, cv2
@@ -908,7 +978,7 @@ def collect_rewards(timeout=30):
             time.sleep(0.3)
             continue
         # not the button, not the village: the chest after Claim Reward (tap it till it opens), else read the screen
-        if greens == 1 and time.time() - last_ocr < 2.5:      # after Claim Reward, before Continue
+        if greens == 1 and time.time() - last_ocr < 2.5 and not any(village_buttons(frame)):   # chest, not the village
             for _ in range(3):
                 Input_Handler.click(0.5, 0.55)
                 time.sleep(0.1)
@@ -941,7 +1011,7 @@ def collect_rewards(timeout=30):
                 what = "continue"
         elif "return home" in text or ("return" in text and "home" in text):
             what = tap_box("return home", "return")
-        elif any(w in text for w in CHEST_WORDS) or (taps and len(boxes) <= 4):
+        elif (any(w in text for w in CHEST_WORDS) or (taps and len(boxes) <= 4)) and not any(village_buttons(frame)):
             Input_Handler.click(0.5, 0.55)
             what = "chest"
         if not what:
@@ -1027,7 +1097,7 @@ def start_coc(timeout=120, detailed=False, force_restart=False):
                 logger.info("Game stuck while starting, restarting it once")
             if force or i % 10 == 0:   # bring it to the front now and then, not every half second
                 ADB_Manager.adbutils_device.shell(f"am start {'-S' if force else ''} -W -n com.supercell.clashofclans/com.supercell.titan.GameApp")
-            if i % 4 == 0: Input_Handler.click_exit(x=0.99, y=0.01, n=2, delay=0.1)
+            if i % 4 == 0: tap_red_x()        # a window over the game (offer, news): its red X, never a blind tap
             
             Frame_Handler.get_frame()
             

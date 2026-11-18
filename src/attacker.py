@@ -249,6 +249,11 @@ class Attacker:
     def start_normal_attack(self, timeout=60):
         import time, numpy as np
 
+        # anything open over the village (clan panel, a selected building, a popup) is closed first
+        try:
+            if not clear_village(): logger.debug("Battle button not visible before the attack")
+        except Exception:
+            logger.debug("clear_village failed", exc_info=True)
         # Click attack
         Input_Handler.click(0.07, 0.9)
 
@@ -279,7 +284,8 @@ class Attacker:
             if not army_done and time.monotonic() >= next_battle_tap:
                 next_battle_tap = time.monotonic() + 2.5
                 try:
-                    if in_home_base(fast=True):
+                    if in_home_base(fast=True) or village_buttons()[1]:
+                        clear_village(max_tries=2)
                         logger.debug("Still in the village: tapping Battle again")
                         Input_Handler.click(0.07, 0.9)
                         time.sleep(0.3)

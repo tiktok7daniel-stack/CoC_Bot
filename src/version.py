@@ -1,4 +1,4 @@
-VERSION = "5.21.6"
+VERSION = "5.21.7"
 
 # Where "check for updates" / "update now" in the GUI pull new versions from
 UPDATE_REPO = "tiktok7daniel-stack/CoC_Bot"

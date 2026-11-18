@@ -223,7 +223,7 @@ def replay(data, connection, should_stop=lambda: False):
     start = time.monotonic()
     taps, checked = 0, 0.0
     for e in data.get("events", []):
-        if time.monotonic() - checked > 2: # should_stop may be slow (asks the GUI)
+        if time.monotonic() - checked > 0.5: # stop quickly once the battle is over (taps must never reach the village)
             checked = time.monotonic()
             if should_stop(): break
         wait = e["t"] - (time.monotonic() - start)
