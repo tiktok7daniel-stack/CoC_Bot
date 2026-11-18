@@ -46,6 +46,7 @@ def launch_proc(args):
         import utils as _u, configs as _cfg
         _u.GAME_PKG = "com.supercell.clashroyale"
         _cfg.DISPLAY_TARGET = (720, 1280, 240)
+        _cfg.WINDOW_DIMS = _u.WINDOW_DIMS = (720, 1280)          # pictures at the game's own size (portrait)
         logger.info("Clash Royale mode: the bot plays Clash Royale battles")
         preflight()
         from royale import game as _royale

@@ -27,6 +27,7 @@ def default_settings():
         "clash_tag": "",             # the player tag (#ABC123) for the official Clash of Clans API
         "follow": "",                # plays like this account (its loadouts, recording, army, farm…), "" = own settings
         "game_mode": "coc",          # "coc" = Clash of Clans | "royale" = Clash Royale (LDPlayer 720x1280 portrait)
+        "game_mode_set": "",         # "user" = the user picked this game (only that counts, never a guess)
         "royale": {                  # Clash Royale mode
             "deck": [],              # the 8 cards (found by itself in the first battle; can be set)
             "max_battles": 0,        # stop after this many battles (0 = keep playing)
@@ -241,11 +242,15 @@ def _write(path, data):
 def _safe_id(id):
     return "".join(c for c in str(id) if c.isalnum() or c in "-_") or "main"
 
-OWN_KEYS = ("follow", "clash_tag", "game_mode", "royale")   # an account that follows another keeps only these of its own
+OWN_KEYS = ("follow", "clash_tag", "game_mode", "game_mode_set", "royale")   # an account that follows another keeps only these of its own
 
 
 def load(id):
     data = _merge(default_settings(), _read(SETTINGS_DIR / f"{_safe_id(id)}.json"))
+    # 5.32.1: 5.29.2 guessed "Clash Royale" from a portrait screen and could switch a Clash of Clans account.
+    # Only a game the user picked counts: anything else is Clash of Clans again.
+    if data.get("game_mode") == "royale" and data.get("game_mode_set") != "user":
+        data["game_mode"] = "coc"
     # "plays like" another account: everything (loadouts, recording, army, farm…) comes from that account, read
     # fresh every time, so a change there applies here at once. One level only (no chains / loops).
     lead = str(data.get("follow") or "").strip()
@@ -262,6 +267,8 @@ def load(id):
 
 def save(id, data):
     own = _read(SETTINGS_DIR / f"{_safe_id(id)}.json")
+    if (data or {}).get("game_mode") and (data or {}).get("game_mode") != own.get("game_mode", "coc"):
+        data = dict(data, game_mode_set="user")           # the user changed the game (Home / setup screen)
     lead = str((data or {}).get("follow", own.get("follow")) or "").strip()
     if lead and _safe_id(lead) != _safe_id(id):
         # this account follows another one: only its own keys are stored (the rest is the leader's, read live)

@@ -137,6 +137,7 @@ def api_account_game(id):
     if mode not in ("coc", "royale"): return jsonify({"ok": False, "error": "invalid"}), 400
     data = bot_settings.load(id)
     data["game_mode"] = mode
+    data["game_mode_set"] = "user"
     bot_settings.save(id, data)
     if id in instances: bot_settings.request_wake(id)
     return jsonify({"ok": True, "mode": mode})
@@ -804,7 +805,6 @@ def api_syscheck(id):
             port = str(5555 + 2 * int(c["index"]))
             add("bs_instance", "ok", f"{id} → {c['title']}, ADB 127.0.0.1:{port}")
             if c.get("width"):
-                emu_setup.auto_mode(id, c.get("width"), c.get("height"))
                 tw, th, td = emu_setup.target(app_cfg, id)
                 ok = emu_setup.good_res(app_cfg, c["width"], c["height"], c.get("dpi"), id)
                 add("resolution", "ok" if ok else "bad", f"{c['width']}×{c['height']} · {c.get('dpi')} DPI")
