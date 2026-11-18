@@ -981,87 +981,122 @@ class Attacker:
         if self.deployed_troops: Input_Handler.click(0.01, 0.9)
         return used
 
-    def deploy_leftovers(self, data):
-        """
-        After a recording: every card still in colour on the army bar (heroes, troops that weren't in the army when
-        the recording was made) is dropped — and checked: the card must change (a hero's card gets its ability / health
-        bar, a troop's number goes down). If a spot doesn't take it (inside the red line on this base), the next spot
-        is tried: the recording's own spots first, then the sides. Spells left over are not thrown blindly.
-        """
-        import time, numpy as np, army_learn
+    def _sweep_spots(self, data=None):
+        """Where a leftover card can go, best first: the smart line, the recording's own drop spots, the outline's
+        sides on the grass, the old side spots — each moved just outside the red line when it is known."""
+        import army_learn
+        data = data or {}
         mx, my = (data.get("max") or [1, 1])[:2]
-        spots = []
+        spots = list(getattr(self, "smart_points", None) or [])
         for e in data.get("events", []):
             if e.get("type") != "down": continue
             x, y = army_learn.touch_to_screen(e["fx"], e["fy"], mx, my)
             if y < 0.80 and all(abs(x - a) + abs(y - b) > 0.05 for a, b in spots): spots.append((x, y))
-        spots = spots[:6] + [p for side in self.SIDE_CANDIDATES.values() for p in side[:2]]
+        spots = spots[:8]
         base = getattr(self, "base_seen", None)
         if base is not None and base.hull is not None:
-            spots = base.outside_spots(spots)              # spots outside the base first (the model saw its outline)
-        time.sleep(0.2)
-        frame = Frame_Handler.get_frame_section(0.0, 0.82, 1.0, 1.0, grayscale=False)
-        try:
-            centers, _b, types, _c, _g = self.detect_troop_positions(frame, return_boundaries=True, return_types=True, return_counts=True)
-        except ValueError:                           # no card left on the bar: the whole army is out
-            self.army_out = True
-            return 0
-        done, missed = [], []
-        spells_left = []
-        counts = dict(zip(centers, _c)) if _c else {}
-        for x, t in zip(centers, types):
-            if t == "spell":
-                if not self.card_gray(x): spells_left.append(x)
-                continue
-            if self.card_gray(x): continue
-            a, b = self.card_crop(x), self.card_crop(x)
-            noise = float(np.abs(a - b).mean())
-            Input_Handler.click(x, 0.9)
+            for side in ("bottom-left", "bottom-right", "left", "right", "bottom"):
+                try:
+                    p = base.attack_plan(side=side)
+                except Exception:
+                    p = None
+                for q in (p or {}).get("points", [])[:2]:
+                    if all(abs(q[0] - a) + abs(q[1] - b) > 0.05 for a, b in spots): spots.append(q)
+        spots += [p for side in self.SIDE_CANDIDATES.values() for p in side[:2]]
+        zone = getattr(self, "zone", None)
+        if zone: spots = [zone.fix(*p) for p in spots]
+        if base is not None and base.hull is not None:
+            spots = base.outside_spots(spots)              # outside the base first (the eyes saw its outline)
+        return spots
+
+    def deploy_leftovers(self, data=None):
+        """
+        The final sweep (every attack system): every card still on the army bar goes in, and each one is checked.
+          troop / siege / clan castle: dropped until the card is grey (its number goes down), next spot if refused
+          hero: a hero already in the battle has a health bar on its card -> left alone (tapping it would fire its
+                ability); one not in yet is dropped and counts as in only when its health bar shows
+          spell: cast by the spell brain where it does its job
+        Cards hidden on the right of the bar are scrolled into view.
+        """
+        import time, numpy as np, random
+        spots = self._sweep_spots(data)
+        done, missed, spells_left, counts = [], [], [], {}
+        seen_heroes = set(round(x, 3) for x in (self.deployed_heroes or []))
+        for page in range(3):
             time.sleep(0.15)
-            out = False
-            for sp in spots:
-                for _ in range(1 if t in ("hero", "clan") else 4):
-                    Input_Handler.click(*sp)
-                    time.sleep(0.06)
-                time.sleep(0.3)
-                if self.card_gray(x) or self.card_changed(x, a, noise):
-                    out = True
-                    if t not in ("hero", "clan"):            # the rest of this troop on the spot that works
-                        for _ in range(14):
-                            if self.card_gray(x): break
-                            Input_Handler.click(*sp)
-                            time.sleep(0.06)
-                    break
-            if out:
-                done.append(t)
-                if t == "hero": self.deployed_heroes.append(x)
-            else:
-                missed.append(t)
-        # use everything: spells still on the bar are cast on the defenses packed together (the eyes see them),
-        # not kept for nothing (the battle ends with them otherwise)
+            frame = Frame_Handler.get_frame_section(0.0, 0.82, 1.0, 1.0, grayscale=False)
+            try:
+                centers, bounds, types, cnts, _g = self.detect_troop_positions(frame, return_boundaries=True,
+                                                                               return_types=True, return_counts=True)
+            except ValueError:                       # no card left on the bar
+                break
+            counts.update(dict(zip(centers, cnts)) if cnts else {})
+            for x, t in zip(centers, types):
+                if t == "spell":
+                    if not self.card_gray(x) and all(abs(x - z) > 0.01 for z in spells_left): spells_left.append(x)
+                    continue
+                if self.card_gray(x): continue
+                full = Frame_Handler.get_frame(grayscale=False)
+                if t == "hero" and self.hero_health(x, full) != 0:
+                    if round(x, 3) not in seen_heroes:   # in the battle already (the recording dropped it)
+                        seen_heroes.add(round(x, 3))
+                        self.deployed_heroes.append(x)
+                    continue
+                a, b = self.card_crop(x), self.card_crop(x)
+                noise = float(np.abs(a - b).mean())
+                Input_Handler.click(x, 0.9)
+                time.sleep(0.12)
+                out = False
+                for sp in spots[:8]:
+                    for _ in range(1 if t in ("hero", "clan") else 3):
+                        Input_Handler.click(*sp)
+                        time.sleep(0.05)
+                    time.sleep(0.3)
+                    if t == "hero":
+                        out = self.hero_health(x) != 0 or self.card_gray(x)
+                    else:
+                        out = self.card_gray(x) or self.card_changed(x, a, noise)
+                    if out:
+                        if t not in ("hero", "clan"):        # the rest of this troop on the spot that works
+                            for _ in range(16):
+                                if self.card_gray(x): break
+                                Input_Handler.click(*sp)
+                                time.sleep(0.05)
+                        break
+                if out:
+                    done.append(t)
+                    if t == "hero":
+                        self.deployed_heroes.append(x)
+                        seen_heroes.add(round(x, 3))
+                else:
+                    missed.append(t)
+            # more cards to the right of the bar (big armies): scroll and look again
+            if not bounds or bounds[-1] < 0.93: break
+            Input_Handler.swipe_left(x1=0.9, x2=0.15, y=0.9, hold_end_time=300)
+            time.sleep(0.4)
+        # spells still on the bar: the spell brain casts each where it does its job
         cast = 0
         if spells_left and (getattr(self, "plan", None) or {}).get("use_all", True):
             target = self.spell_target()
-            if target is not None:
-                import random
-                time.sleep(0.6)                          # the troops just dropped walk in first
-                for x in spells_left:
-                    n = max(1, min(12, int(counts.get(x) or 1)))
-                    Input_Handler.click(x, 0.9)
-                    time.sleep(0.12)
-                    if self.spell_name(x):
-                        self.cast_spell(n, x)            # the spell brain knows where this one goes
-                    else:
-                        for _ in range(n):
-                            Input_Handler.click(target[0] + random.uniform(-0.03, 0.03), target[1] + random.uniform(-0.03, 0.03))
-                            time.sleep(0.05)
-                    cast += 1
-                logger.info(f"Recording: cast {cast} spell card(s) that were still left")
+            time.sleep(0.4)                              # the troops just dropped walk in first
+            for x in spells_left:
+                if self.card_gray(x): continue
+                n = max(1, min(12, int(counts.get(x) or 1)))
+                Input_Handler.click(x, 0.9)
+                time.sleep(0.12)
+                if self.spell_name(x) or target is None:
+                    self.cast_spell(n, x)
+                else:
+                    for _ in range(n):
+                        Input_Handler.click(target[0] + random.uniform(-0.03, 0.03), target[1] + random.uniform(-0.03, 0.03))
+                        time.sleep(0.05)
+                cast += 1
+            if cast: logger.info(f"Recording: cast {cast} spell card(s) that were still left")
         heroes = done.count("hero")
         if done: logger.info(f"Recording: also deployed {len(done)} card(s) that were still left ({heroes} hero(es))")
         if missed: logger.info(f"Could not drop {len(missed)} card(s) on any spot ({', '.join(missed)})")
         if self.deployed_heroes:
-            self.heroes_done_at = time.monotonic()
+            self.heroes_done_at = self.heroes_done_at or time.monotonic()
             self.activate_hero_abilities()
         self.army_out = not missed
         return len(done)
@@ -1455,6 +1490,10 @@ class Attacker:
             elif last_card_left is None:
                 break
         
+        # the final sweep: every card still on the bar goes in (heroes checked by their health bar, spells by the
+        # spell brain) — before, only the recording had it
+        try: self.deploy_leftovers(None)
+        except Exception: logger.exception("The final sweep failed")
         # make sure the army really went in
         try:
             used = self.redeploy_leftovers()
