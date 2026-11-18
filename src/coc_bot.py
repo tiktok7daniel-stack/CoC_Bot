@@ -132,6 +132,50 @@ class CoC_Bot:
                     logger.info(f"Learned the {k} storage size: {v}")
         self._save_caps()
 
+    def read_caps_from_game(self, force=False):
+        """
+        The storage sizes read from the game itself: a tap on the gold / elixir number (top right of the village)
+        shows "Max: 19 000 000". Read once, then again every 6 hours (the storages get upgraded) — the user never
+        has to type them. -> {"gold": n, "elixir": n} (what it could read).
+        """
+        import re, time
+        caps = self.caps()
+        if not force and time.time() - caps.get("read_at", 0) < 6 * 3600 and caps.get("gold") and caps.get("elixir"):
+            return {k: caps[k] for k in ("gold", "elixir")}
+        if not in_home_base(): return {}
+        got = {}
+        for k, (_x1, _y1, _x2, y2) in (("gold", RESOURCE_BANDS["gold"]), ("elixir", RESOURCE_BANDS["elixir"])):
+            yc = (_y1 + y2) / 2
+            try:
+                Input_Handler.click(0.86, yc)
+                time.sleep(0.8)
+                frame = Frame_Handler.get_frame(grayscale=False)
+                box = (0.62, y2, 0.97, min(0.5, y2 + 0.25))
+                words = ocr_boxes(Frame_Handler.crop(frame, *box))
+                mx = next((w for w in words if w[0].lower().replace(" ", "").startswith("max")), None)
+                if mx:
+                    yc_w = (mx[2] + mx[4]) / 2
+                    nums = [w for w in words if abs((w[2] + w[4]) / 2 - yc_w) < 0.12 and w[1] > mx[1]]
+                    text = (mx[0] + " " + " ".join(w[0] for w in sorted(nums, key=lambda w: w[1])))
+                    digits = re.sub(r"[^0-9]", "", text.split(":", 1)[-1] if ":" in text else text[3:])
+                    v = int(digits) if digits else 0
+                    cur = (getattr(self, "last_res", None) or {}).get(k) or 0
+                    if 100_000 <= v <= 100_000_000 and v >= cur * 0.99: got[k] = v
+                Input_Handler.click(0.86, yc)                  # the same tap closes the box again
+                time.sleep(0.5)
+                if any("max" in w[0].lower() for w in ocr_boxes(Frame_Handler.crop(Frame_Handler.get_frame(grayscale=False), *box))):
+                    clear_village(max_tries=2)
+            except (KeyboardInterrupt, SystemExit): raise
+            except Exception:
+                logger.debug(f"Reading the {k} storage size failed", exc_info=True)
+        if got:
+            changed = {k: v for k, v in got.items() if caps.get(k) != v}
+            caps.update(got)
+            caps["read_at"] = time.time()
+            self._save_caps()
+            if changed: logger.info("Storage size read from the game: " + ", ".join(f"{k} {v:,}" for k, v in got.items()))
+        return got
+
     def full_resources(self, s):
         """Which storages are full now (user amount, else the learned storage size)."""
         f = s["attack"].get("farm", {})
@@ -175,10 +219,13 @@ class CoC_Bot:
         res = getattr(self, "last_res", None) or {}
         g, e = res.get("gold") or 0, res.get("elixir") or 0
         logger.info(f"Farm only: storages full (gold {g:,}, elixir {e:,}) — attacks stopped ({action})")
+        me = _utils.INSTANCE_ID
         nxt = {"wait": "هستنى لحد ما تصرف الفلوس وأرجع أهاجم لوحدي",
-               "pause": "البوت اتوقف مؤقتًا — اكتب كمل أو دوس كمّل في البرنامج لما تخلص",
-               "stop": "البوت اتقفل"}.get(action, "")
-        try: send_notification(f"✅ خلّصت: المخازن اتملت — دهب {g:,} — إكسير {e:,}\n{nxt}")
+               "pause": f"البوت اتوقف — عشان يكمّل اكتب هنا:  كمل {me}",
+               "stop": f"البوت اتقفل — عشان يشتغل تاني اكتب هنا:  شغل {me}"}.get(action, "")
+        caps = self.caps()
+        mx = (f"\nالحد الأقصى: دهب {caps['gold']:,} — إكسير {caps['elixir']:,}" if caps.get("gold") and caps.get("elixir") else "")
+        try: send_notification(f"✅ خلّصت ({me}): المخازن اتملت — دهب {g:,} — إكسير {e:,}{mx}\n{nxt}")
         except Exception: pass
         set_phase("farm_full")
         if action in ("pause", "stop"):
@@ -863,6 +910,9 @@ class CoC_Bot:
                                 and self.excluded("home_base")
                             if f_now.get("only"):
                                 # farm only: gold + elixir full -> stop attacking, tell the user, then wait / pause / stop
+                                try: self.read_caps_from_game()
+                                except (KeyboardInterrupt, SystemExit): raise
+                                except Exception: logger.debug("Storage sizes not read", exc_info=True)
                                 if len(self.full_resources(self.settings)) >= 2:
                                     if not self.farm_full(f_now.get("when_full", "wait")): break
                                     continue

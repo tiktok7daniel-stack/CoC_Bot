@@ -70,6 +70,8 @@ def _handle(app, token, chat, cmd, arg):
     client = app.test_client()
     accounts = gs.accounts()
     minutes = float(arg) if arg and arg.replace(".", "", 1).isdigit() else None
+    if arg:                                    # "كمل n2" = N2 (any letter case)
+        arg = next((a for a in accounts if a.lower() == arg.lower()), arg)
     targets = [arg] if arg and arg in accounts else accounts
     if cmd == "help":
         return _send(token, chat, "أوامر Clash Farmer:\n"
