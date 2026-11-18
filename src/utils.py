@@ -2730,6 +2730,41 @@ class Input_Handler:
         cls._publish(builder, fast=fast)
 
     @classmethod
+    def drag(cls, x1, y1, x2, y2, duration=0.32, settle=0.12, steps=22, pointer=0):
+        """
+        A smooth, exact drag (like a careful finger): presses, moves with an ease-in-out curve (slow start, fast
+        middle, slow stop) in many small steps, then keeps still a moment before lifting so nothing keeps sliding
+        (a quick swipe "flings" the troop bar and it stops anywhere). What is under the finger ends where the
+        finger ends.
+        """
+        import time
+        from pyminitouch import CommandBuilder
+        b = CommandBuilder()
+        rx1, ry1 = cls._to_raw(x1, y1)
+        rx2, ry2 = cls._to_raw(x2, y2)
+        b.down(pointer, rx1, ry1, pressure=100)
+        cls._publish(b, fast=True)
+        time.sleep(0.04)
+        t0 = time.monotonic()
+        for i in range(1, steps + 1):
+            k = i / steps
+            e = k * k * (3 - 2 * k)                     # smoothstep: eases in and out
+            b.move(pointer, int(rx1 + (rx2 - rx1) * e), int(ry1 + (ry2 - ry1) * e), pressure=100)
+            cls._publish(b, fast=True)
+            wait = t0 + duration * k - time.monotonic()
+            if wait > 0: time.sleep(wait)
+        time.sleep(settle)
+        b.up(pointer)
+        cls._publish(b, fast=True)
+
+    @classmethod
+    def scroll_bar(cls, x_from, x_to, y=0.9):
+        """The army bar: what is at x_from moves to x_to (smooth and exact), then the bar is let settle."""
+        import time
+        cls.drag(x_from, y, x_to, y)
+        time.sleep(0.15)
+
+    @classmethod
     def swipe_up(cls, y1=1.0, y2=0.0, x=1.0, **kwargs):
         cls.swipe(x, y1, x, y2, **kwargs)
 

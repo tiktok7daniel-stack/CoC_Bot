@@ -233,8 +233,10 @@ class DashboardScreen(Screen):
         w3, g3 = grid(3)
         farm = GlassCard("farm_title", "layers", "farm_sub")
         farm.add(toggle_row(self.store, "farm_only", "attack.farm.only", "farm_only_sub"))
+        farm.add(combo_row(self.store, "farm_full_rule", "attack.farm.full_rule",
+                           [("any", "ffr_any"), ("both", "ffr_both")], width=320))
         farm.add(combo_row(self.store, "farm_when_full", "attack.farm.when_full",
-                           [("wait", "fwf_wait"), ("pause", "fwf_pause"), ("stop", "fwf_stop")], width=320))
+                           [("pause", "fwf_pause"), ("wait", "fwf_wait"), ("stop", "fwf_stop")], width=320))
         farm.add(toggle_row(self.store, "farm_on", "attack.farm.enabled", "farm_on_sub"))
         farm.add(toggle_row(self.store, "farm_max_walls", "attack.farm.max_walls", "farm_max_walls_sub"))
         farm.add(toggle_row(self.store, "farm_walls_first", "attack.farm.walls_first", "farm_walls_first_sub"))

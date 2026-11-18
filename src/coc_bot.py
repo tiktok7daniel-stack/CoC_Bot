@@ -209,24 +209,33 @@ class CoC_Bot:
         elif free > 3:
             self._mem_told = False
 
-    def farm_full(self, action="wait"):
+    def farm_full(self, action="pause", full=None):
         """
-        Farm only: gold and elixir are full. Tell the user once, then:
-          wait  -> look every 5 minutes; once the money was spent (not full any more) -> True (attack again)
-          pause -> the bot is paused until the user resumes it (app / Telegram "كمل") -> False
+        Farm only: a storage is full (gold or elixir reached its size). The bot stops attacking and tells the user
+        right away (Telegram + the app) that it is their turn: go in, upgrade / spend, then "كمل <account>". Then:
+          pause -> the bot waits, touching nothing, until the user resumes it (app / Telegram "كمل") -> False
+          wait  -> the bot waits touching nothing; once the money was spent it attacks again by itself -> True
           stop  -> the bot is stopped -> False
         """
         import time, requests
-        res = getattr(self, "last_res", None) or {}
-        g, e = res.get("gold") or 0, res.get("elixir") or 0
-        logger.info(f"Farm only: storages full (gold {g:,}, elixir {e:,}) — attacks stopped ({action})")
         me = _utils.INSTANCE_ID
-        nxt = {"wait": "هستنى لحد ما تصرف الفلوس وأرجع أهاجم لوحدي",
-               "pause": f"البوت اتوقف — عشان يكمّل اكتب هنا:  كمل {me}",
-               "stop": f"البوت اتقفل — عشان يشتغل تاني اكتب هنا:  شغل {me}"}.get(action, "")
+        res = getattr(self, "last_res", None) or {}
         caps = self.caps()
-        mx = (f"\nالحد الأقصى: دهب {caps['gold']:,} — إكسير {caps['elixir']:,}" if caps.get("gold") and caps.get("elixir") else "")
-        try: send_notification(f"✅ خلّصت ({me}): المخازن اتملت — دهب {g:,} — إكسير {e:,}{mx}\n{nxt}")
+        full = full or self.full_resources(self.settings)
+        ar = {"gold": "الدهب", "elixir": "الإكسير"}
+        what = " و".join(ar[k] for k in full) or "المخازن"
+        lines = [f"{'🟡' if 'gold' in full else '🟣'} {me}: {what} اتملى!"]
+        for k in ("gold", "elixir"):
+            v, c = res.get(k) or 0, caps.get(k)
+            lines.append(f"{ar[k]}: {v:,}" + (f" / {c:,}" if c else "") + (" ✅" if k in full else ""))
+        lines.append("")
+        lines.append("👉 ادخل اللعبة دلوقتي وطوّر أو اصرف الفلوس — البوت مش هيلمس الشاشة لحد ما تخلص.")
+        lines.append({"pause": f"لما تخلص اكتب هنا:  كمل {me}",
+                      "wait": "لما تصرف الفلوس هرجع أهاجم لوحدي",
+                      "stop": f"البوت اتقفل — لما تخلص اكتب هنا:  شغل {me}"}.get(action, ""))
+        logger.info(f"Farm only: {', '.join(full) or 'storages'} full (gold {res.get('gold') or 0:,}, elixir "
+                    f"{res.get('elixir') or 0:,}) — attacks stopped, the user's turn ({action})")
+        try: send_notification("\n".join(lines))
         except Exception: pass
         set_phase("farm_full")
         if action in ("pause", "stop"):
@@ -234,24 +243,24 @@ class CoC_Bot:
             try:
                 if port:
                     if action == "pause":
-                        requests.post(f"http://127.0.0.1:{port}/api/account/{_utils.INSTANCE_ID}/pause", json={"minutes": 7 * 24 * 60}, timeout=5)
+                        requests.post(f"http://127.0.0.1:{port}/api/account/{me}/pause", json={"minutes": 7 * 24 * 60}, timeout=5)
                     else:
-                        requests.post(f"http://127.0.0.1:{port}/api/account/{_utils.INSTANCE_ID}/stop", timeout=5)
+                        requests.post(f"http://127.0.0.1:{port}/api/account/{me}/stop", timeout=5)
             except Exception:
                 logger.warning("Could not pause / stop the bot by itself", exc_info=True)
             return False
-        while running():                            # wait: the user spends the money, then the bot goes on
+        while running():                            # wait: the user plays; the bot only LOOKS (no taps at all)
             self.idle(5)
             if not running(): return False
             try:
-                to_home_base()
+                if not in_home_base(): continue      # the user is in a menu / upgrading: look again later
                 self.read_and_record_resources()
             except (KeyboardInterrupt, SystemExit): raise
             except Exception:
                 continue
-            if len(self.full_resources(self.settings)) < 2:
+            if not self.full_resources(self.settings):
                 logger.info("Farm only: the money was spent — attacking again")
-                try: send_notification("▶️ الفلوس اتصرفت — رجعت أهاجم وأجمع")
+                try: send_notification(f"▶️ {me}: الفلوس اتصرفت — رجعت أهاجم وأجمع")
                 except Exception: pass
                 return True
         return False
@@ -914,8 +923,11 @@ class CoC_Bot:
                                 try: self.read_caps_from_game()
                                 except (KeyboardInterrupt, SystemExit): raise
                                 except Exception: logger.debug("Storage sizes not read", exc_info=True)
-                                if len(self.full_resources(self.settings)) >= 2:
-                                    if not self.farm_full(f_now.get("when_full", "wait")): break
+                                full_now = self.full_resources(self.settings)
+                                # "any" (the default): the first storage that is full ends the farming;
+                                # "both": only when gold AND elixir are full
+                                if full_now and (f_now.get("full_rule", "any") != "both" or len(full_now) >= 2):
+                                    if not self.farm_full(f_now.get("when_full", "pause"), full_now): break
                                     continue
                             elif self.full_resources(self.settings) and not plan_blocks_spending:
                                 # spent something: go round again (more walls to buy, or attack once not full);

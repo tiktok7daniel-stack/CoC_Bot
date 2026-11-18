@@ -1154,8 +1154,7 @@ class Attacker:
             # more cards to the right of the bar (big armies): scroll and look again. A card is 0.068 wide and the
             # next one starts 0.0075 after the last whole one: past 0.86 there is room for a cut card on the edge
             if not bounds or bounds[-1] < 0.86: break
-            Input_Handler.swipe_left(x1=0.9, x2=0.15, y=0.9, hold_end_time=300)
-            time.sleep(0.4)
+            Input_Handler.scroll_bar(0.9, 0.15)          # smooth: the cards stop where the finger stops
             scrolled = True
         # spells still on the bar: where they are NOW (the bar may have moved since they were seen)
         if spells_left and scrolled:
@@ -1171,8 +1170,7 @@ class Attacker:
             now = visible_spells()
             if len(now) < len(spells_left):              # some went off the left side: back to the start of the bar
                 for _ in range(3):
-                    Input_Handler.swipe_right(x1=0.15, x2=0.9, y=0.9, hold_end_time=300)
-                    time.sleep(0.4)
+                    Input_Handler.scroll_bar(0.15, 0.9)
                 now = visible_spells()                   # (the bar is at its start now: only these positions are right)
             spells_left = now
         # spells still on the bar: the spell brain casts each where it does its job
@@ -1582,8 +1580,7 @@ class Attacker:
             self.deploy_troops(card_centers[:-1], available_slots[:-1], card_types[:-1], card_counts[:-1])
             # Scroll over and look for the new position of the last card
             last_card_frame = frame[:, int(card_boundaries[-2] * frame.shape[1]):int(card_boundaries[-1] * frame.shape[1])]
-            Input_Handler.swipe_left(x1=card_centers[-1], x2=0.038, y=0.9, hold_end_time=500)
-            time.sleep(0.5)
+            Input_Handler.scroll_bar(card_centers[-1], 0.038)   # the last card seen goes to the left end, smoothly
             frame = Frame_Handler.get_frame_section(0.0, 0.82, 1.0, 1.0, grayscale=False)
             last_card_left = Frame_Handler.locate(last_card_frame, frame, thresh=0.9, grayscale=False, ref="lc")[0]
             # If the card didn't move then there are no more troops so it can be deployed

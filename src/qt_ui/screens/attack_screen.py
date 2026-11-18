@@ -214,8 +214,10 @@ class AttackScreen(Screen):
         g.addWidget(atk, 0, 0)
         farm = GlassCard("farm_title", "brick", "farm_sub")
         farm.add(toggle_row(st, "farm_only", "attack.farm.only", "farm_only_sub"))
+        farm.add(combo_row(st, "farm_full_rule", "attack.farm.full_rule",
+                           [("any", "ffr_any"), ("both", "ffr_both")], width=320))
         farm.add(combo_row(st, "farm_when_full", "attack.farm.when_full",
-                           [("wait", "fwf_wait"), ("pause", "fwf_pause"), ("stop", "fwf_stop")], width=320))
+                           [("pause", "fwf_pause"), ("wait", "fwf_wait"), ("stop", "fwf_stop")], width=320))
         farm.add(toggle_row(st, "farm_on", "attack.farm.enabled", "farm_on_sub"))
         farm.add(toggle_row(st, "farm_max_walls", "attack.farm.max_walls", "farm_max_walls_sub"))
         farm.add(toggle_row(st, "wall_farming", "walls.during_farming", "wall_farming_sub"))
