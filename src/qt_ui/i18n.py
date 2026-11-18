@@ -192,6 +192,15 @@ def translate_log(msg):
         if rep == "fn:troopbar":
             names = [n.strip() for n in m.group(1).split(",")]
             return "شريط الجيش: " + "، ".join("؟" if n == "?" else "بطل" if n == "hero" else unit_name(n) for n in names)
+        if rep in ("fn:spellcard", "fn:spellcast"):
+            ar = {"lightning": "البرق", "earthquake": "الزلزال", "freeze": "التجميد", "invisibility": "الإخفاء",
+                  "poison": "السم", "rage": "الغضب", "haste": "السرعة", "healing": "العلاج", "recall": "الاستدعاء",
+                  "totem": "التوتم", "overgrowth": "النمو", "jump": "القفز", "clone": "الاستنساخ", "skeleton": "الهياكل",
+                  "bat": "الخفافيش", "revive": "الإحياء", "ice_block": "الجليد", "fury": "الهياج"}
+            where = {"air_defense": "على دفاعات الجو اللي قريبة", "cluster": "على الدفاعات المتجمعة في الطريق",
+                     "strong": "على أقوى دفاع قدام الجيش", "clan": "على كلان كاسل العدو", "front": "قدام الجيش"}
+            if rep == "fn:spellcard": return f"🪄 عرف كارت السبيل: {ar.get(m.group(1), m.group(1))}"
+            return f"🪄 رمى {ar.get(m.group(1), m.group(1))} ×{m.group(2)} {where.get(m.group(3), '')}"
         if rep == "fn:netcheck":
             t = m.group(1)
             v = {"pc_offline": "النت مقطوع على الجهاز", "emulator_offline": "LDPlayer مش واصل للنت",
@@ -213,7 +222,7 @@ def translate_log(msg):
             return "⏱️ وقت بداية الهجمة: " + t.replace("s,", " ث،").replace("s ", " ث ")
         if rep == "fn:smart":
             sides = {"bottom-left": "اللي تحت شمال", "bottom-right": "اللي تحت يمين", "top-left": "اللي فوق شمال",
-                     "top-right": "اللي فوق يمين"}
+                     "top-right": "اللي فوق يمين", "left": "الشمال", "right": "اليمين", "bottom": "اللي تحت"}
             return (f"🧠 هجوم ذكي: اختار الجهة {sides.get(m.group(1), m.group(1))} (أضعف جهة — خطورتها {m.group(2)}) "
                     f"— {m.group(3)} أماكن إنزال على العشب")
         if rep.startswith("res:"):            # the resource names in Arabic too

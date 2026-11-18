@@ -57,6 +57,11 @@ class PlanCard(Box):
         mode.set_value(p.get("mode") or ("recording" if p.get("recording") else "classic"))
         mode.currentIndexChanged.connect(lambda _i: self._set("mode", mode.value()))
         v.addWidget(form_row("pl_mode", "pl_mode_sub", mode))
+        side = Combo([("auto", "side_auto"), ("left", "side_left"), ("right", "side_right"), ("bottom", "side_bottom"),
+                      ("bottom-left", "side_bl"), ("bottom-right", "side_br")], 260)
+        side.set_value(p.get("side", "auto") or "auto")
+        side.currentIndexChanged.connect(lambda _i: self._set("side", side.value()))
+        v.addWidget(form_row("pl_side", "pl_side_sub", side))
         rec = QComboBox()
         rec.addItem(tr("pl_rec_none"), "")
         for r in screen.recordings: rec.addItem(r["name"], r["name"])

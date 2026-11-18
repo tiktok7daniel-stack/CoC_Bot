@@ -74,6 +74,9 @@ class Attacker:
             if not running(): break
             if not surrendered and getattr(self, "_later", None) and self.in_battle():
                 self.run_due()                           # hero abilities / second spell wave when their time comes
+            if not surrendered and getattr(self, "deployed_heroes", None):
+                try: self.watch_heroes()                 # abilities by the heroes' health
+                except Exception: logger.debug("watch_heroes failed", exc_info=True)
             # the last minute: battle speed 4x (the game shows the button then)
             if not surrendered and not self._speed_done and time.monotonic() >= next_speed and self.battle_speed:
                 next_speed = time.monotonic() + 1.5
@@ -783,11 +786,17 @@ class Attacker:
                 delay = float(plan.get("spells_delay", 3))
                 waited = time.monotonic() - getattr(self, "troops_done_at", time.monotonic())
                 sm = getattr(self, "smart_plan", None)
-                if plan.get("mode") == "smart" and sm and sm.get("spell"):
-                    self.wait_for_fight(sm["spell"], max_wait=max(4.0, delay + 12 - waited))
+                sname = self.spell_name(cx)
+                import spell_brain
+                if sname in spell_brain.NOW:
+                    pass                                 # lightning / earthquake clear the way: cast right now
+                elif plan.get("mode") == "smart" and sm and sm.get("spell"):
+                    forced = plan.get("side", "auto") not in ("", "auto") and sm.get("spell_path")
+                    # the user's side: the first spell goes when the troops reach the spot in front of them
+                    self.wait_for_fight(sm["spell_path"][0] if forced else sm["spell"], max_wait=max(4.0, delay + 12 - waited))
                 elif delay > waited: time.sleep(delay - waited)
                 Input_Handler.click(cx, 0.9)
-                self.cast_spell(card_counts[i])
+                self.cast_spell(card_counts[i], cx)
         Input_Handler.click(0.01, 0.9)
 
     def name_cards(self, bar_frame, boundaries, types):
@@ -876,12 +885,60 @@ class Attacker:
         else: sp.pop(i)
         logger.debug(f"Smart spot {pt} refused -> {sp[i] if i < len(sp) and sp[i] != pt else 'dropped'}")
 
-    def cast_spell(self, n):
-        import random
+    def spell_name(self, cx):
+        """The spell on the card at cx (deep brain, once per card per battle) or None."""
+        names = getattr(self, "_spell_names", None)
+        if names is None: names = self._spell_names = {}
+        k = round(cx, 3)
+        if k not in names:
+            try:
+                import spell_brain
+                crop = Frame_Handler.get_frame_section(max(0, cx - 0.034), 0.82, min(1, cx + 0.034), 1.0, grayscale=False)
+                names[k] = spell_brain.identify(crop)
+                if names[k]: logger.info(f"Spell card: {names[k]}")
+            except Exception:
+                names[k] = None
+        return names[k]
+
+    def front_spots(self):
+        """In front of the troops, nearest first: the smart line's path, else from the drop spots toward the base."""
+        sm = getattr(self, "smart_plan", None) or {}
+        if sm.get("spell_path"): return list(sm["spell_path"])
+        b = getattr(self, "base_seen", None)
+        if b is not None and b.hull is not None:
+            import numpy as np
+            c = b.hull.reshape(-1, 2).mean(axis=0)
+            return [(float(c[0]), float(c[1]))]
+        return [self.SPELL_CENTER]
+
+    def cast_spell(self, n, cx=None):
+        import random, time
+        # the spell brain: what this spell does and where (air defenses, the strongest defense, the Clan Castle,
+        # in front of the troops…) — on the base the eyes saw
+        name = self.spell_name(cx) if cx is not None else None
+        b = getattr(self, "base_seen", None)
+        if name and b is not None and getattr(b, "objs", None):
+            try:
+                import spell_brain
+                k = getattr(self, "_spell_cards", 0)
+                self._spell_cards = k + 1
+                spots = spell_brain.targets(name, max(1, n), b, self.front_spots(), k)
+                for x, y in spots:
+                    Input_Handler.click(x + random.uniform(-0.012, 0.012), y + random.uniform(-0.012, 0.012))
+                    time.sleep(0.04)
+                logger.info(f"Spell {name} x{len(spots)} -> {spell_brain.ROLE.get(name, 'front')}")
+                return
+            except Exception:
+                logger.debug("spell brain failed", exc_info=True)
         x0, y0 = self.SPELL_CENTER
         sm = getattr(self, "smart_plan", None)
         if sm and (getattr(self, "plan", None) or {}).get("mode") == "smart" and sm.get("spell"):
             x0, y0 = sm["spell"]                 # the defenses packed together behind the side we attack
+            path = sm.get("spell_path") or []
+            if path and (getattr(self, "plan", None) or {}).get("side", "auto") not in ("", "auto"):
+                k = getattr(self, "_spell_cards", 0)  # the user's side: each spell card a bit further in front
+                self._spell_cards = k + 1
+                x0, y0 = path[min(k, len(path) - 1)]
         for _ in range(max(1, n)):
             Input_Handler.click(x0 + random.uniform(-0.04, 0.04), y0 + random.uniform(-0.04, 0.04))
 
@@ -897,7 +954,7 @@ class Attacker:
             return
         for cx, n in self.held_spells:
             Input_Handler.click(cx, 0.9)
-            self.cast_spell(n)
+            self.cast_spell(n, cx)
         Input_Handler.click(0.01, 0.9)
         logger.info(f"Second spell wave: {len(self.held_spells)} spell card(s)")
 
@@ -992,9 +1049,12 @@ class Attacker:
                     n = max(1, min(12, int(counts.get(x) or 1)))
                     Input_Handler.click(x, 0.9)
                     time.sleep(0.12)
-                    for _ in range(n):
-                        Input_Handler.click(target[0] + random.uniform(-0.03, 0.03), target[1] + random.uniform(-0.03, 0.03))
-                        time.sleep(0.05)
+                    if self.spell_name(x):
+                        self.cast_spell(n, x)            # the spell brain knows where this one goes
+                    else:
+                        for _ in range(n):
+                            Input_Handler.click(target[0] + random.uniform(-0.03, 0.03), target[1] + random.uniform(-0.03, 0.03))
+                            time.sleep(0.05)
                     cast += 1
                 logger.info(f"Recording: cast {cast} spell card(s) that were still left")
         heroes = done.count("hero")
@@ -1117,10 +1177,61 @@ class Attacker:
             self.later(time.monotonic() + delay - since, lambda: self.activate_hero_abilities(wait=True))
             return
         if delay > since: time.sleep(delay - since)
-        for x in self.deployed_heroes:
+        used = getattr(self, "_hero_used", set())
+        left = [x for x in self.deployed_heroes if round(x, 3) not in used]     # not the ones their health fired
+        for x in left:
+            if self.hero_health(x) == 0: continue                               # dead: nothing to fire
             Input_Handler.click(x, 0.9)
+            used.add(round(x, 3))
             time.sleep(0.15)
-        logger.debug(f"Activated {len(self.deployed_heroes)} hero abilities")
+        self._hero_used = used
+        logger.debug(f"Activated {len(left)} hero abilities (timed)")
+
+    def hero_health(self, cx, frame=None):
+        """
+        The health bar on a deployed hero's card (green, red when low) -> (share of the bar coloured, red) or 0 when
+        no bar (dead / not deployed). Read on the colour row with the most bar in it, just above the card.
+        """
+        import numpy as np
+        if frame is None: frame = Frame_Handler.get_frame(grayscale=False)
+        H, W = frame.shape[:2]
+        x1, x2 = int((cx - 0.033) * W), int((cx + 0.033) * W)
+        best, red = 0.0, False
+        for y in np.arange(0.788, 0.83, 0.003):
+            row = frame[int(y * H), max(0, x1):min(W, x2)].astype(int)
+            if row.size == 0: continue
+            r, g, b = row[:, 0], row[:, 1], row[:, 2]
+            green = (g > 150) & (r < 150) & (b < 120)
+            redm = (r > 170) & (g < 90) & (b < 90)
+            f = float((green | redm).mean())
+            if f > best: best, red = f, bool(redm.sum() > green.sum())
+        return 0 if best < 0.08 else (best, red)
+
+    def watch_heroes(self, frame=None):
+        """
+        Hero abilities when they are needed (as the strongest bots do), not after a fixed time: a hero whose health
+        bar fell under 60% of what it was at the start, or turned red, gets its card tapped (= its ability) once.
+        """
+        import time
+        heroes = getattr(self, "deployed_heroes", None) or []
+        if not heroes or time.monotonic() < getattr(self, "_hero_next", 0): return
+        self._hero_next = time.monotonic() + 0.6
+        if frame is None: frame = Frame_Handler.get_frame(grayscale=False)
+        start = getattr(self, "_hero_start", None)
+        if start is None: start = self._hero_start = {}
+        used = getattr(self, "_hero_used", None)
+        if used is None: used = self._hero_used = set()
+        for x in heroes:
+            k = round(x, 3)
+            if k in used: continue
+            h = self.hero_health(x, frame)
+            if h == 0: continue
+            share, red = h
+            first = start.setdefault(k, share)
+            if red or share < 0.6 * first:
+                Input_Handler.click(x, 0.9)
+                used.add(k)
+                logger.info(f"Hero ability fired: its health fell to {int(100 * share / max(first, 0.01))}%")
     
     def prepare_field(self):
         """
@@ -1178,7 +1289,10 @@ class Attacker:
             self._learn_unknown_base()           # the model hardly saw anything here: Claude labels it for training
         if smart:
             try:
-                sp = self.base_seen.attack_plan() if self.base_seen is not None else None
+                side = plan.get("side", "auto") or "auto"
+                sp = self.base_seen.attack_plan(side=None if side == "auto" else side) if self.base_seen is not None else None
+                if sp is None and side != "auto" and self.base_seen is not None:
+                    sp = self.base_seen.attack_plan()        # that side isn't on the screen: the weakest one
             except Exception:
                 sp = None
                 logger.debug("smart plan failed", exc_info=True)
@@ -1219,6 +1333,9 @@ class Attacker:
         self.card_names = {}
         self.troops_done_at = self.heroes_done_at = None
         self.fight_seen = False
+        self._spell_cards = 0
+        self._hero_start, self._hero_used, self._hero_next = {}, set(), 0.0
+        self._spell_names = {}
         self._later = []
         plan = getattr(self, "plan", None) or {}
         system = ("smart" if plan.get("mode") == "smart" else

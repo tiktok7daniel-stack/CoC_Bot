@@ -405,6 +405,14 @@
 "ca_err_net": "مفيش اتصال بـ Supercell دلوقتي",
 "pl_mode": "نظام الهجوم",
 "acc_follow": "بيلعب:",
+"pl_side": "الجهة (الهجوم الذكي)",
+"pl_side_sub": "كل الوحوش والأبطال ينزلوا على خط بطول الجهة دي، والسبيلات قدامهم، وقدرات الأبطال تتفعّل — من غير تسجيل",
+"side_auto": "تلقائي — أضعف جهة",
+"side_left": "الشمال (خط بالطول)",
+"side_right": "اليمين (خط بالطول)",
+"side_bottom": "تحت",
+"side_bl": "تحت شمال",
+"side_br": "تحت يمين",
 "pl_useall": "يستخدم كل حاجة",
 "pl_useall_sub": "بعد التسجيل: أي وحش أو بطل أو سبيل فاضل بينزل على طول — السبيلات على الدفاعات المتجمعة، وقدرات الأبطال بتتفعّل",
 "follow_note": "الحساب ده بيلعب زي حساب تاني — غيّر الإعدادات من الحساب الأصلي، أو خلّيه \"بإعداداته هو\" من صفحة الحسابات",
@@ -1497,6 +1505,14 @@
 "ca_err_net": "Can't reach Supercell right now",
 "pl_mode": "Attack system",
 "acc_follow": "Plays:",
+"pl_side": "Side (smart attack)",
+"pl_side_sub": "Every troop and hero goes in along this side, the spells in front of them, hero abilities on — no recording",
+"side_auto": "Auto — the weakest side",
+"side_left": "Left (a long line)",
+"side_right": "Right (a long line)",
+"side_bottom": "Bottom",
+"side_bl": "Bottom left",
+"side_br": "Bottom right",
 "pl_useall": "Use everything",
 "pl_useall_sub": "After the recording: every troop, hero or spell still left goes in at once — spells on the defenses packed together, hero abilities on",
 "follow_note": "This account plays like another one — change the settings on that account, or set it to \"its own settings\" on the Accounts page",
@@ -3251,6 +3267,18 @@
 [
 "^Recording: cast (\\d+) spell card\\(s\\) that were still left",
 "🪄 بعد التسجيل: رمى \\1 كارت سبيل كانوا فاضلين على الدفاعات"
+],
+[
+"^Hero ability fired: its health fell to (\\d+)%",
+"🦸 فعّل قدرة البطل — صحته نزلت لـ \\1%"
+],
+[
+"^Spell card: (.*)",
+"fn:spellcard"
+],
+[
+"^Spell (\\w+) x(\\d+) -> (\\w+)",
+"fn:spellcast"
 ],
 [
 "^PaddleOCR failed, reading with easyocr",

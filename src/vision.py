@@ -206,6 +206,8 @@ class Base:
     # equal (the view is scrolled up: the bottom of the map is on screen)
     SIDES = {"bottom-left": (-0.7071, 0.7071), "bottom-right": (0.7071, 0.7071),
              "top-left": (-0.7071, -0.7071), "top-right": (0.7071, -0.7071)}
+    # sides the user can pick (one-side attack): straight left / right / bottom, plus the four diagonal ones
+    PICK = dict(SIDES, left=(-1.0, 0.0), right=(1.0, 0.0), bottom=(0.0, 1.0))
     FIELD = (0.03, 0.10, 0.97, 0.78)
     # the game's buttons / counters over the battlefield: never a drop spot
     UI = ((0.74, 0.0, 1.0, 0.23),        # gold / elixir / dark elixir bars (top right)
@@ -248,25 +250,47 @@ class Base:
             d += 0.01
         return (start or 0.0), (max(0.0, d - start - 0.01) if start is not None else 0.0)
 
-    def attack_plan(self, n_points=5, out=0.05, spread=0.13):
+    def attack_plan(self, n_points=5, out=0.05, spread=0.13, side=None):
         """
         The weakest side of the base and where to drop on it -> {"side", "points", "spell", "danger"} or None.
         points: a line of deploy spots just outside the base on that side; spell: the defenses packed together a bit
         inside from that side (rage / heal / freeze go there).
+        side: "left" / "right" / "bottom" / "bottom-left"… = that side, whatever its danger (the user's choice);
+        None / "auto" = the weakest side.
         """
         if self.hull is None: return None
         hull = self.hull.reshape(-1, 2)
         cx, cy = hull.mean(axis=0)
         x1, y1, x2, y2 = self.FIELD
         best = None
-        for name, (dx, dy) in self.SIDES.items():
+        forced = side if side in self.PICK else None
+        sides = {forced: self.PICK[forced]} if forced else self.SIDES
+        if forced in ("left", "right"): spread = max(spread, 0.17)       # a long straight line along the side
+        for name, (dx, dy) in sides.items():
             proj = hull @ np.array([dx, dy])
             edge = hull[int(np.argmax(proj))]
             px, py = -dy, dx                                     # along the side
             # between the base and the end of the map: every spot on its own, from the base's side outward over the
             # open grass (the forest / sand / water is no-go), in the middle of it
             onscreen = []
-            for t in np.linspace(-1, 1, n_points):
+            if forced:
+                # the user's side: a line that follows the base's own edge on that side — from the base's middle,
+                # rays fanned ±40° around the side's direction, each to the outline, then out onto the grass
+                import math
+                poly = [[float(a), float(b)] for a, b in hull]
+                base_ang = math.atan2(dy, dx)
+                for a in np.linspace(-math.radians(40), math.radians(40), n_points + 2):
+                    ux, uy = math.cos(base_ang + a), math.sin(base_ang + a)
+                    r = ray_radius(poly, float(cx), float(cy), ux, uy)
+                    if r is None: continue
+                    ex, ey = float(cx + ux * r), float(cy + uy * r)
+                    st, room = self._room(ex, ey, ux, uy)
+                    if room < 0.02: continue
+                    d = st + min(room * 0.5, max(out * 0.6, 0.25 * room))
+                    qx, qy = ex + ux * d, ey + uy * d
+                    if x1 <= qx <= x2 and y1 <= qy <= y2 and self.on_grass(qx, qy):
+                        onscreen.append((qx, qy))
+            for t in (np.linspace(-1, 1, n_points) if not forced else []):
                 sx, sy = float(edge[0] + px * spread * t), float(edge[1] + py * spread * t)
                 for _ in range(40):                                # out of the base's outline first
                     if not self.inside(sx, sy, margin=0.01): break
@@ -277,7 +301,7 @@ class Base:
                 qx, qy = sx + dx * d, sy + dy * d
                 if x1 <= qx <= x2 and y1 <= qy <= y2 and self.on_grass(qx, qy):
                     onscreen.append((float(qx), float(qy)))
-            if len(onscreen) < max(2, n_points // 2): continue    # that side is off the screen
+            if len(onscreen) < (1 if forced else max(2, n_points // 2)): continue    # that side is off the screen
             # danger: the defenses near that side's edge (closer counts more)
             danger = 0.0
             for o in self.objs:
@@ -292,7 +316,16 @@ class Base:
                         ((o.center[0] - inner[0]) ** 2 + (o.center[1] - inner[1]) ** 2) ** 0.5 < 0.18]
                 spell = (float(np.mean([p[0] for p in near])), float(np.mean([p[1] for p in near]))) if near else \
                         (float(inner[0]), float(inner[1]))
-                best = (score, {"side": name, "points": onscreen, "spell": spell, "danger": round(danger, 1)})
+                # in front of the troops: from the middle of their line toward the middle of the base, a spot every
+                # 0.08 (the first spell card close to them, the next ones further in, where they will be fighting)
+                mx = sum(p[0] for p in onscreen) / len(onscreen)
+                my = sum(p[1] for p in onscreen) / len(onscreen)
+                vx, vy = cx - mx, cy - my
+                n = (vx * vx + vy * vy) ** 0.5 or 1.0
+                path = [(float(min(0.95, max(0.05, mx + vx / n * d))), float(min(0.78, max(0.12, my + vy / n * d))))
+                        for d in (0.12, 0.20, 0.28, 0.36)]
+                best = (score, {"side": name, "points": onscreen, "spell": spell, "spell_path": path,
+                                "danger": round(danger, 1)})
         return best[1] if best else None
 
     def outline(self):
