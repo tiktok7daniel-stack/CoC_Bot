@@ -35,21 +35,21 @@ def _profile(bar):
 
 
 def has_badge(bar, x1, x2):
-    """Every real card has its level in a square bottom-left with light digits: dark normally, BLUE when the army
-    is boosted (Boost Army / potions: troops and spells, the heroes stay dark). An empty dashed slot shows the map."""
+    """Every real card has its level in a flat-coloured square bottom-left with light digits — dark normally,
+    BLUE when the army is boosted, GOLD at max level (any colour: the square is one flat colour). An empty dashed
+    slot shows the map (no flat square, and its frame is dashed)."""
     import cv2, numpy as np
     H = bar.shape[0]
     w = x2 - x1
     r = bar[int(H * 0.68):int(H * 0.88), x1 + int(w * 0.04):x1 + int(w * 0.36)]
     if r.size == 0: return False
-    rgb = r.astype(np.int16)
     g = cv2.cvtColor(r, cv2.COLOR_RGB2GRAY).astype(np.int16)
-    dark = g < 70
-    blue = (rgb[..., 2] > 110) & (rgb[..., 2] - rgb[..., 0] > 45)
-    square = dark | blue
-    if square.mean() < 0.3: return False
-    base = float(np.percentile(g[square], 50))
-    return float(np.percentile(g, 97)) - base >= 60
+    hi = float(np.percentile(g, 97))
+    rest = r[g < hi - 50].astype(np.int16)                  # not the digits
+    if len(rest) < 0.3 * g.size: return False
+    med = np.median(rest, axis=0)
+    flat = float((np.abs(rest - med).max(axis=1) < 40).mean())   # one flat colour (the square)
+    return flat >= 0.45
 
 
 def _jumpy(g, W):

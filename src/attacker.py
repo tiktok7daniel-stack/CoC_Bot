@@ -767,9 +767,15 @@ class Attacker:
                 self.troops_done_at = time.monotonic()
             elif t in ("clan", None):
                 pts = self.points_for(plan.get("clan_where", "sides"))
-                if plan.get("clan_where") == "smart": pts = [pts[len(pts) // 2]]
+                if plan.get("clan_where") == "smart": pts = [pts[len(pts) // 2]] + [p for p in pts if p != pts[len(pts) // 2]]
                 Input_Handler.click(cx, 0.9)
-                Input_Handler.click(*pts[0], n=max(1, card_counts[i]) if t is None else 1)
+                if t is None:
+                    Input_Handler.click(*pts[0], n=max(1, card_counts[i]))
+                else:                                    # siege / clan castle: checked — the game must take it
+                    good = [v for v in (getattr(self, "_ok_spots", {}) or {}).values() if v]
+                    for sp in (good[:2] + list(pts[:3])):
+                        if self.card_gray(cx): break
+                        if self.place(cx, sp, max_steps=6) is not None: break
             elif t == "hero":
                 pts = self.points_for(plan.get("heroes_where", "sides"))
                 Input_Handler.click(cx, 0.9)
@@ -1103,6 +1109,15 @@ class Attacker:
         done, missed, spells_left, counts = [], [], [], {}
         seen_heroes = set(round(x, 3) for x in (self.deployed_heroes or []))
         scrolled = False
+        back = getattr(self, "_bar_scrolls", 0)
+        if back:                                     # the bar was scrolled: back to its start, so no card is missed
+            prev = None
+            for _ in range(back + 1):
+                Input_Handler.scroll_bar(0.15, 0.9)
+                cur = Frame_Handler.get_frame_section(0.0, 0.84, 1.0, 0.98, grayscale=True).astype(np.int16)
+                if prev is not None and prev.shape == cur.shape and float(np.abs(cur - prev).mean()) < 4: break
+                prev = cur                               # (the bar stopped moving: it is at its start)
+            self._bar_scrolls = 0
         for page in range(3):
             time.sleep(0.15)
             frame = Frame_Handler.get_frame_section(0.0, 0.82, 1.0, 1.0, grayscale=False)
@@ -1156,6 +1171,7 @@ class Attacker:
             if not bounds or bounds[-1] < 0.86: break
             Input_Handler.scroll_bar(0.9, 0.15)          # smooth: the cards stop where the finger stops
             scrolled = True
+            self._bar_scrolls = getattr(self, "_bar_scrolls", 0) + 1
         # spells still on the bar: where they are NOW (the bar may have moved since they were seen)
         if spells_left and scrolled:
             def visible_spells():
@@ -1362,7 +1378,7 @@ class Attacker:
             if h == 0: continue
             share, red = h
             first = start.setdefault(k, share)
-            if red or share < 0.6 * first:
+            if (red and share < 0.85 * first) or share < 0.6 * first:   # red alone can be a spell flash
                 Input_Handler.click(x, 0.9)
                 used.add(k)
                 logger.info(f"Hero ability fired: its health fell to {int(100 * share / max(first, 0.01))}%")
@@ -1472,6 +1488,7 @@ class Attacker:
         self._spell_names = {}
         self._ok_spots = {}
         self.bank_names = {}
+        self._bar_scrolls = 0
         self._later = []
         plan = getattr(self, "plan", None) or {}
         system = ("smart" if plan.get("mode") == "smart" else
@@ -1581,6 +1598,7 @@ class Attacker:
             # Scroll over and look for the new position of the last card
             last_card_frame = frame[:, int(card_boundaries[-2] * frame.shape[1]):int(card_boundaries[-1] * frame.shape[1])]
             Input_Handler.scroll_bar(card_centers[-1], 0.038)   # the last card seen goes to the left end, smoothly
+            self._bar_scrolls = getattr(self, "_bar_scrolls", 0) + 1
             frame = Frame_Handler.get_frame_section(0.0, 0.82, 1.0, 1.0, grayscale=False)
             last_card_left = Frame_Handler.locate(last_card_frame, frame, thresh=0.9, grayscale=False, ref="lc")[0]
             # If the card didn't move then there are no more troops so it can be deployed
