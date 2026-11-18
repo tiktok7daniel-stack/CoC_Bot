@@ -50,6 +50,7 @@ def _want():
         m = settings.load_app().get("ocr_model", "auto")
     except Exception:
         m = "auto"
+    if _S.get("low_mem"): return "small"          # the PC ran short of memory: the small one from now on
     if m in ("small", "medium"): return m
     # auto: the strongest one only with a graphics card AND memory to spare (two accounts = two bots, each loads
     # its own reader: the medium model takes ~1 GB more each)

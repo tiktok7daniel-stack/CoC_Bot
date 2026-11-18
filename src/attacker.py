@@ -534,7 +534,8 @@ class Attacker:
             x_asset = render_text("x", "SupercellMagic", 25)
             x_h, x_w = x_asset.shape[:2]
             x_sign_loc = Frame_Handler.locate(x_asset, card_section_gray, grayscale=True, thresh=0.75, ref="lc")
-            if x_sign_loc[0] is not None and x_sign_loc[1] is not None: # Only troops, clan troops, or spells have multiplicity
+            has_count = x_sign_loc[0] is not None and x_sign_loc[1] is not None
+            if has_count: # Only troops, clan troops, or spells have multiplicity
                 count_section = card_section_gray[:int(h*x_sign_loc[1]+0.5*x_h)+1, int(w*x_sign_loc[0]+x_w)-1:]
                 number_locs = Frame_Handler.batch_locate([render_text(str(n), "SupercellMagic", 25) for n in range(0, 12)], frame=count_section, grayscale=True, thresh=0.8, ref="cc")
                 
@@ -547,7 +548,10 @@ class Attacker:
                 
                 # Clan troops either have a clan badge rather than a smooth background
                 # or will have wider card edge gaps compared to typical troops
-                if max(card_texture[int(h*x_sign_loc[1])-10:int(h*x_sign_loc[1])+10, :int(w*x_sign_loc[0]-1)].mean(1)) > 0.1:
+                # (the badge alone is not enough: a troop's hat / hair next to the "x" looks the same — the clan card
+                # also stands apart from the troops, a wider gap on one side at least)
+                if max(card_texture[int(h*x_sign_loc[1])-10:int(h*x_sign_loc[1])+10, :int(w*x_sign_loc[0]-1)].mean(1)) > 0.1 \
+                        and (prev_gap == dist_categories[1] or next_gap == dist_categories[1] or len(peaks_norm) == 2):
                     card_type = "clan"
                     card_counts.append(1)
                 elif prev_gap == dist_categories[1] and next_gap == dist_categories[1]:
@@ -574,7 +578,8 @@ class Attacker:
             # the cards the bot knows (seed from the user's bars + learned): same card coloured or gray -> sure
             try:
                 v = card_bar.thumb(frame, peaks_norm[i], peaks_norm[i + 1])
-                k = card_bar.known(v, __import__("utils").INSTANCE_ID)
+                k = card_bar.known(v, __import__("utils").INSTANCE_ID,
+                                   allow=("troop", "spell") if has_count else ("hero", "clan"))
                 if k:
                     if k[0] != card_type:
                         logger.debug(f"Card at {x:.3f}: {card_type} -> {k[0]} ({k[1] or '?'}, {k[2]:.2f})")
@@ -1097,6 +1102,7 @@ class Attacker:
         spots = self._sweep_spots(data)
         done, missed, spells_left, counts = [], [], [], {}
         seen_heroes = set(round(x, 3) for x in (self.deployed_heroes or []))
+        scrolled = False
         for page in range(3):
             time.sleep(0.15)
             frame = Frame_Handler.get_frame_section(0.0, 0.82, 1.0, 1.0, grayscale=False)
@@ -1145,10 +1151,30 @@ class Attacker:
                         seen_heroes.add(round(x, 3))
                 else:
                     missed.append(t)
-            # more cards to the right of the bar (big armies): scroll and look again
-            if not bounds or bounds[-1] < 0.93: break
+            # more cards to the right of the bar (big armies): scroll and look again. A card is 0.068 wide and the
+            # next one starts 0.0075 after the last whole one: past 0.86 there is room for a cut card on the edge
+            if not bounds or bounds[-1] < 0.86: break
             Input_Handler.swipe_left(x1=0.9, x2=0.15, y=0.9, hold_end_time=300)
             time.sleep(0.4)
+            scrolled = True
+        # spells still on the bar: where they are NOW (the bar may have moved since they were seen)
+        if spells_left and scrolled:
+            def visible_spells():
+                try:
+                    fr = Frame_Handler.get_frame_section(0.0, 0.82, 1.0, 1.0, grayscale=False)
+                    c, _b, ty, cn, _g = self.detect_troop_positions(fr, return_boundaries=True, return_types=True,
+                                                                     return_counts=True)
+                except ValueError:
+                    return []
+                counts.update(dict(zip(c, cn)) if cn else {})
+                return [x for x, t in zip(c, ty) if t == "spell" and not self.card_gray(x)]
+            now = visible_spells()
+            if len(now) < len(spells_left):              # some went off the left side: back to the start of the bar
+                for _ in range(3):
+                    Input_Handler.swipe_right(x1=0.15, x2=0.9, y=0.9, hold_end_time=300)
+                    time.sleep(0.4)
+                now = visible_spells()                   # (the bar is at its start now: only these positions are right)
+            spells_left = now
         # spells still on the bar: the spell brain casts each where it does its job
         cast = 0
         if spells_left and (getattr(self, "plan", None) or {}).get("use_all", True):
@@ -1662,7 +1688,11 @@ class Attacker:
                     except Exception: pass
                 return False
         
-        except Exception:
+        except Exception as e:
+            if __import__("utils").is_memory_error(e):     # the PC's memory was full: free some, try again next time
+                logger.warning(f"Out of memory during the attack ({type(e).__name__}) — freeing memory and going on")
+                __import__("utils").shed_memory("attack")
+                return False
             logger.exception("Error in run_home_base():")
 
     @require_exit()

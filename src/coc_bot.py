@@ -60,6 +60,7 @@ class CoC_Bot:
         """Run one attack and record the loot as the storage difference before/after."""
         builder = base == "builder"
         import time
+        self.check_memory()                       # every attack (farm only runs one long round)
         before = self.read_and_record_resources(builder_base=builder, max_age=20) # just read after the last attack
         t0 = time.monotonic()
         if attack_fn() is False:                  # the attack didn't start: not an attack, nothing to count
@@ -199,7 +200,7 @@ class CoC_Bot:
         except Exception:
             mine = 0
         if free < 1.5:
-            gc.collect()
+            _utils.shed_memory(f"{free:.1f} GB free")
             if not getattr(self, "_mem_told", False):
                 self._mem_told = True
                 logger.warning(f"Memory almost full: {free:.1f} GB free (this bot uses {mine:.1f} GB)")

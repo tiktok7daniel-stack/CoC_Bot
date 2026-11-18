@@ -3137,6 +3137,40 @@ def start_watchdog(default_limit=420):
                 pass
     threading.Thread(target=loop, daemon=True, name="watchdog").start()
 
+def shed_memory(reason=""):
+    """
+    The PC's memory is (almost) full — two accounts' bots + two LDPlayers: give back what is not needed to play.
+      the deep screen brain (DINOv2): unloaded (the 1 ms brain and the colour checks still know the screens)
+      the text reader: the strongest model -> the small one (~1 GB less; same words on the game's screens)
+    -> what was given back (list of names).
+    """
+    import gc
+    done = []
+    try:
+        import screen_cnn, time as _t
+        if screen_cnn._S.get("sess") is not None:
+            screen_cnn._S.update(sess=None, tried=_t.time())     # not loaded again for 5 minutes at least
+            done.append("deep brain")
+    except Exception:
+        pass
+    try:
+        import paddle_ocr
+        if not paddle_ocr._S.get("low_mem"):
+            paddle_ocr._S["low_mem"] = True
+            if paddle_ocr._S.get("kind") == "medium":
+                with paddle_ocr._S["lock"]: paddle_ocr._S["engine"] = None
+                done.append("big text model")
+    except Exception:
+        pass
+    gc.collect()
+    if done: logger.warning(f"Memory low{' (' + reason + ')' if reason else ''}: freed {', '.join(done)}")
+    return done
+
+
+def is_memory_error(e):
+    return isinstance(e, MemoryError) or "Insufficient memory" in str(e) or "Unable to allocate" in str(e)
+
+
 def install_error_reporter():
     import threading, time, traceback
     import stats as _stats

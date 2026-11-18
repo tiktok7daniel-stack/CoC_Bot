@@ -47,18 +47,27 @@ def has_badge(bar, x1, x2):
     return lo < 70 and hi - lo >= 60
 
 
-def dashed(bar, x1, x2):
-    """An empty slot's frame is a dashed line: along its top border the brightness jumps every few pixels
-    (measured: empty slots 27-49, real cards 0.4-15, the heroes' crowns included)."""
+def _jumpy(g, W):
     import cv2, numpy as np
-    H, W = bar.shape[:2]
-    a, b = int(x1 * W), int(x2 * W)
-    g = cv2.cvtColor(bar[1:int(H * 0.2), a + int((b - a) * 0.15):b - int((b - a) * 0.15)], cv2.COLOR_RGB2GRAY)
-    if g.size == 0: return False
+    if g.size == 0: return 0.0
     g = g.astype(np.float32)
     row = g[int(np.argmax(g.mean(1)))]
     k = max(5, (W // 128) | 1)
-    return float(np.abs(row - cv2.blur(row.reshape(1, -1), (k, 1)).ravel()).mean()) > 22
+    return float(np.abs(row - cv2.blur(row.reshape(1, -1), (k, 1)).ravel()).mean())
+
+
+def dashed(bar, x1, x2):
+    """An empty slot's frame is a dashed line all round: along its top AND bottom border the brightness jumps every
+    few pixels (empty slots 27-49; real cards 0.4-15 — a hero's crown or pet icon can make the top jumpy, never the
+    bottom too)."""
+    import cv2
+    H, W = bar.shape[:2]
+    a, b = int(x1 * W), int(x2 * W)
+    m = (b - a) * 0.15
+    a, b = int(a + m), int(b - m)
+    top = cv2.cvtColor(bar[1:int(H * 0.2), a:b], cv2.COLOR_RGB2GRAY)
+    bottom = cv2.cvtColor(bar[int(H * 0.82):H - 1, a:b], cv2.COLOR_RGB2GRAY)
+    return _jumpy(top, W) > 22 and _jumpy(bottom, W) > 22
 
 
 def find(bar, min_x=0.0):
@@ -139,12 +148,13 @@ def _load(id="main"):
         return items
 
 
-def known(v, id="main"):
-    """A card's thumb -> (type, name, similarity) when the bot is sure which card it is, else None."""
+def known(v, id="main", allow=None):
+    """A card's thumb -> (type, name, similarity) when the bot is sure which card it is, else None.
+    allow: the types it can be (a card with a count "x5" is a troop / spell, one without a hero / siege)."""
     if v is None: return None
     best = {}
     for t, n, e, _mine in _load(id):
-        if e.shape != v.shape: continue
+        if e.shape != v.shape or (allow and t not in allow): continue
         s = float(e @ v)
         k = (t, n)
         if s > best.get(k, -1): best[k] = s
