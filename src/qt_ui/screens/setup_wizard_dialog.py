@@ -72,7 +72,7 @@ class AccountCard(Box):
         v.addLayout(head)
         steps = QGridLayout()
         steps.setSpacing(8)
-        tgt = su.get("target") or [1920, 1080, 240]
+        tgt = a.get("target") or su.get("target") or [1920, 1080, 240]   # this account's game: Royale 720x1280
         self.b_emu, self.b_adb, self.b_res, self.b_game = StepBadge(), StepBadge(), StepBadge(), StepBadge()
         mumu = su.get("emulator") == "mumu"
         self.b_emu.set((a.get("emu_running") or None) if mumu else (bool(a.get("copy")) and bool(a.get("emu_running"))),

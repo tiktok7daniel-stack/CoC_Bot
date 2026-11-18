@@ -110,20 +110,40 @@ def adb_state(adb, addr):
 def shell(adb, addr, cmd, timeout=10):
     return _run([adb, "-s", addr, "shell", cmd], timeout=timeout)
 
-def game_open(adb, addr):
-    return bool(shell(adb, addr, f"pidof {GAME}").strip().split()) if adb else False
+def game_open(adb, addr, pkg=None):
+    return bool(shell(adb, addr, f"pidof {pkg or GAME}").strip().split()) if adb else False
 
 def wm_size(adb, addr):
     out = shell(adb, addr, "wm size")
     sizes = re.findall(r"(\d+)x(\d+)", out)
     return tuple(map(int, sizes[-1])) if sizes else None # override size is listed last
 
-def target(app):
-    """The display size / DPI chosen on the setup screen (default 1920x1080 240 DPI)."""
+ROYALE_GAME = "com.supercell.clashroyale"
+ROYALE_SIZE = (720, 1280, 240)          # Clash Royale: portrait (the vision is made for it)
+
+
+def is_royale(acc):
+    """The account plays Clash Royale (its own settings: Home -> The game)."""
+    if not acc: return False
+    try:
+        import settings
+        return (settings.load(acc) or {}).get("game_mode", "coc") == "royale"
+    except Exception:
+        return False
+
+
+def game_pkg(acc=None):
+    return ROYALE_GAME if is_royale(acc) else GAME
+
+
+def target(app, acc=None):
+    """The display size / DPI for this account: Clash Royale 720x1280 portrait; Clash of Clans the size chosen on
+    the setup screen (default 1920x1080 240 DPI). Each account gets its own game's size — never the other's."""
+    if is_royale(acc): return ROYALE_SIZE
     return int(app.get("display_w", 1920)), int(app.get("display_h", 1080)), int(app.get("display_dpi", 240))
 
-def good_res(app, w, h, dpi):
-    tw, th, td = target(app)
+def good_res(app, w, h, dpi, acc=None):
+    tw, th, td = target(app, acc)
     return w is not None and h is not None and {w, h} == {tw, th} and dpi == td
 
 def wm_density(adb, addr):
@@ -168,13 +188,15 @@ def status(app, running_accounts=()):
             a["boot"] = shell(adb, addr, "getprop sys.boot_completed").strip() == "1"
             size, dpi = wm_size(adb, addr), wm_density(adb, addr)
             a["resolution"] = f"{size[0]}x{size[1]} · {dpi} DPI" if size else None
-            a["res_ok"] = bool(size and good_res(app, *size, dpi))
-            a["game"] = game_open(adb, addr)
+            a["res_ok"] = bool(size and good_res(app, *size, dpi, acc))
+            a["game"] = game_open(adb, addr, game_pkg(acc))
         else:
             a["boot"] = False
             a["resolution"] = f"{c['width']}x{c['height']} · {c.get('dpi')} DPI" if c and c.get("width") else None
-            a["res_ok"] = bool(good_res(app, c.get("width"), c.get("height"), c.get("dpi"))) if c and c.get("width") and c.get("dpi") else None
+            a["res_ok"] = bool(good_res(app, c.get("width"), c.get("height"), c.get("dpi"), acc)) if c and c.get("width") and c.get("dpi") else None
             a["game"] = False
+        a["target"] = list(target(app, acc))
+        a["game_mode"] = "royale" if is_royale(acc) else "coc"
         a["progress"] = PROGRESS.get(acc)
         res["accounts"].append(a)
     return res
@@ -202,7 +224,7 @@ def launch(app, acc):
 def fix_resolution(app, acc):
     """LDPlayer: change the copy's size + DPI (it is closed, changed and opened again).
     Other emulators: change them live with wm size / wm density."""
-    tw, th, td = target(app)
+    tw, th, td = target(app, acc)
     con, c = _account_copy(app, acc)
     if app.get("emulator") != "ldplayer":
         addr, adb = address(app, c) if c else None, adb_exe(app, con)
@@ -236,10 +258,10 @@ def auto_setup(app, acc):
             if app.get("emulator") in ("ldplayer", "bluestacks") and c is None:
                 PROGRESS[acc] = "failed_link"; return
             addr, adb = address(app, c) if c else "127.0.0.1:16384", adb_exe(app, con)
-            tw, th, td = target(app)
+            tw, th, td = target(app, acc)
             if app.get("emulator") == "ldplayer":
                 fresh = {x["index"]: x for x in ld_instances(con)}.get(c["index"], c)
-                if not good_res(app, fresh.get("width"), fresh.get("height"), fresh.get("dpi")):
+                if not good_res(app, fresh.get("width"), fresh.get("height"), fresh.get("dpi"), acc):
                     PROGRESS[acc] = "p_res"; fix_resolution(app, acc)
                 elif not fresh["running"]:
                     PROGRESS[acc] = "p_launch"; launch(app, acc)
@@ -252,13 +274,13 @@ def auto_setup(app, acc):
             else:
                 PROGRESS[acc] = "failed_adb"; return
             size, dpi = wm_size(adb, addr), wm_density(adb, addr)
-            if not (size and good_res(app, *size, dpi)):
+            if not (size and good_res(app, *size, dpi, acc)):
                 PROGRESS[acc] = "p_res"
                 shell(adb, addr, f"wm size {tw}x{th}"); shell(adb, addr, f"wm density {td}")
-            if not game_open(adb, addr):
+            if not game_open(adb, addr, game_pkg(acc)):
                 PROGRESS[acc] = "p_game"; open_game(app, acc)
                 for _ in range(30):
-                    if game_open(adb, addr): break
+                    if game_open(adb, addr, game_pkg(acc)): break
                     time.sleep(2)
             PROGRESS[acc] = "done"
         except Exception:
@@ -271,7 +293,7 @@ def open_game(app, acc):
     con, c = _account_copy(app, acc)
     addr, adb = address(app, c), adb_exe(app, con)
     if not addr or adb_state(adb, addr) != "device": return "no_adb"
-    shell(adb, addr, f"monkey -p {GAME} -c android.intent.category.LAUNCHER 1")
+    shell(adb, addr, f"monkey -p {game_pkg(acc)} -c android.intent.category.LAUNCHER 1")
     return "ok"
 
 
