@@ -50,6 +50,8 @@ class Attacker:
         import teach
         start = time.monotonic()
         surrendered = False
+        self.left_at = self.surrendered_at = None
+        self._fresh_forced = False
         self._next_words = 0
         self._left_battle = None
         self._speed_done, self._speed_taps, next_speed = False, 0, 0.0
@@ -94,6 +96,7 @@ class Attacker:
                     stalled = time.monotonic() - last_change > wait and time.monotonic() - start > 10
                     if stalled and self.in_battle():
                         logger.info(f"Nothing taken or destroyed for {wait:.0f}s, ending the battle")
+                        self.surrendered_at = time.monotonic()
                         if self._click_end_battle(timeout=0) or Auto_Learn.learn_button("end_battle", tap=True):
                             time.sleep(0.4)
                             if not self._click_okay(timeout=3): Auto_Learn.learn_button("okay_button", tap=True, min_interval=0)
@@ -118,10 +121,23 @@ class Attacker:
                 stalled = time.monotonic() - last_change > (self.smart_end_after if dropped else max(30, self.smart_end_after))
                 if last_loot is not None and stalled and self.in_battle():
                     logger.info(f"Loot stopped for {self.smart_end_after}s, ending the battle early")
+                    self.surrendered_at = time.monotonic()
                     if self._click_end_battle(timeout=0) or Auto_Learn.learn_button("end_battle", tap=True):
                         time.sleep(0.4)
                         if not self._click_okay(timeout=3): Auto_Learn.learn_button("okay_button", tap=True, min_interval=0)
                         surrendered = True
+            # the battle was ended a few seconds ago and the results still aren't seen: maybe the live picture is
+            # old -> real screenshots for a moment (a frozen live picture made it wait a whole minute)
+            sa = getattr(self, "surrendered_at", None)
+            if sa and time.monotonic() - sa > 5 and not getattr(self, "_fresh_forced", False):
+                self._fresh_forced = True
+                try:
+                    import stream_capture, win_capture
+                    stream_capture._S["off_until"] = time.time() + 10
+                    win_capture._S["off_until"] = time.time() + 10
+                    logger.debug("Results not seen 5 s after ending the battle: real screenshots for 10 s")
+                except Exception:
+                    pass
             # instant checks by colour (no reading): the results screen's green button, or already back home
             # (the battle ended by hand / by the game) -> go on at once
             frame = Frame_Handler.get_frame(grayscale=False)
@@ -144,6 +160,7 @@ class Attacker:
             # (only when the colours haven't told what the screen is for a few seconds after the battle ended)
             if time.monotonic() - start > 1.5 and not self.in_battle():
                 if self._left_battle is None: self._left_battle = time.monotonic()
+                if not getattr(self, "left_at", None): self.left_at = time.monotonic()
             else:
                 self._left_battle = None
             if self._left_battle is not None and time.monotonic() - self._left_battle > 4 \
@@ -952,7 +969,12 @@ class Attacker:
             import recorder, army_learn
             time.sleep(0.3)
             watch.stop()
-            until = getattr(self, "ended_at", None) or time.monotonic()
+            # only taps made while the battle was still going: the end the bot saw (or its own End Battle) at the
+            # latest; nothing at all when it never saw the battle end (your taps then may be on the results screen)
+            ends = [t for t in (getattr(self, "left_at", None), getattr(self, "surrendered_at", None),
+                                getattr(self, "ended_at", None)) if t]
+            if not ends: return
+            until = min(ends)
             # only taps after the replay finished (during it the bot taps all the time) and away from the bot's own
             if replay_end is None: return
             strokes = recorder.user_strokes(watch.events, since=replay_end + 0.5, until=until, tol=0.6)

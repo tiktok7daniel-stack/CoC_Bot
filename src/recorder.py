@@ -38,6 +38,27 @@ def load(name):
     try: d = json.loads(p.read_text(encoding="utf-8"))
     except (OSError, ValueError): return None
     # taps added by versions before 5.15.7 could be the bot's own: back to the user's recording (added taps have id >= 5)
+    # your added taps on the game's buttons (Return Home / Claim on the results screen, the troop bar after the
+    # battle) are not part of the attack: dropped (they were saved by 5.21.x when the battle end was seen late)
+    if d.get("merged"):
+        try:
+            import army_learn
+            mx, my = (d.get("max") or [1, 1])[:2]
+            drop, cur = set(), {}
+            for k, e in enumerate(d.get("events", [])):
+                if int(e.get("id", 0)) < 5: continue
+                if e.get("type") == "down":
+                    x, y = army_learn.touch_to_screen(e["fx"], e["fy"], mx, my)
+                    cur[e["id"]] = _is_ui(x, y) or 0.40 < x < 0.60 and y > 0.78
+                if cur.get(e.get("id")): drop.add(k)
+                if e.get("type") == "up": cur.pop(e.get("id"), None)
+            if drop:
+                ev = [e for k, e in enumerate(d["events"]) if k not in drop]
+                d["events"], d["duration"], d["ui_taps_removed"] = ev, (ev[-1]["t"] if ev else 0), len(drop)
+                try: p.write_text(json.dumps(d), encoding="utf-8")
+                except OSError: pass
+        except Exception:
+            pass
     if any(m.get("v") != 2 for m in d.get("merged", [])):
         ev = [e for e in d.get("events", []) if int(e.get("id", 0)) < 5]
         d["events"] = ev

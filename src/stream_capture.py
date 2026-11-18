@@ -16,6 +16,7 @@ JAR = "scrcpy-server-v1.24.jar"
 REMOTE = f"/data/local/tmp/{JAR}"
 RECHECK = 60              # seconds between checks against a real screenshot
 REST = 90
+STALE = 1.5               # seconds without a new stream picture -> use a real screenshot
 
 _S = {"client": None, "ok_until": 0.0, "off_until": 0.0, "logged": None, "setting_t": 0.0, "setting": True, "starts": 0}
 _LOCK = threading.Lock()
@@ -182,6 +183,11 @@ def frame(dims, adb_grab, device):
             c = _client(device)
         img = c.latest()
         if img is None: return None
+        # no new picture for a while: the stream may be holding back the last one (a still screen, like the battle
+        # results, sends nothing new) -> a real screenshot this time, so the bot never acts on an old picture
+        if c.frame_t and time.monotonic() - c.frame_t > STALE:
+            _S["stale"] = _S.get("stale", 0) + 1
+            return None
         if now > _S["ok_until"]:              # check the stream shows the same as a real screenshot
             # the screenshot takes a moment: compare it with the stream pictures from just before and just after it.
             # While the screen moves (end of battle, loading) the two moments differ anyway: then nothing is decided
