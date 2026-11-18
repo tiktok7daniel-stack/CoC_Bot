@@ -236,7 +236,7 @@ def upload_pending(id, limit=MAX_PER_ROUND):
 def upload_errors(id, st=None):
     """
     The program's errors (with the log lines before them and the screenshot taken then) -> inbox/errors/.
-    Claude reads and fixes them. The same error (message + place) is sent once a day; the last 7 days on the
+    Claude reads and fixes them. The same error (message + place) is sent once an hour; the last 7 days on the
     first run. Called right after an error happens (at most once a minute) and with every sync. -> number sent.
     """
     import stats, settings, teach, version
@@ -246,14 +246,14 @@ def upload_errors(id, st=None):
     K = f"errors_{teach._safe(id)}"                  # per account: two bots share this state file
     mine = st.get(K) or {}
     since = mine.get("sent_t") or (st.get("errors_sent_t") if id == "main" else None) or time.time() - 7 * 86400
-    day = time.strftime("%Y%m%d")
+    day = time.strftime("%Y%m%d%H")                  # the same error: once an hour (a new version: again)
     seen = mine.get("seen", {}) if mine.get("day") == day else {}
     ne, newest = 0, since
     shots = Path.home() / ".CoC_Bot" / "errors" / str(id)
     for e in stats.read(id, since=since + 0.001):
         if e.get("type") != "error": continue
         newest = max(newest, e.get("t", 0))
-        sig = f"{e.get('message', '')[:80]}|{e.get('where', '')}"
+        sig = f"{e.get('message', '')[:80]}|{e.get('where', '')}|{version.VERSION}"
         if sig in seen: continue
         if ne >= 10: break
         seen[sig] = 1
@@ -654,7 +654,7 @@ def _report(id, frame, words, phase, h=None, kind="stuck", why="screen"):
         rule, _d = match_picture(frame)
         if rule is not None: return False                                           # taught meanwhile
     if kind != "stuck":
-        day = time.strftime("%Y%m%d")
+        day = time.strftime("%Y%m%d%H")                  # the same error: once an hour (a new version: again)
         if st.get("unknown_day") != day: st.update(unknown_day=day, unknown_n=0)
         if st.get("unknown_n", 0) >= UNKNOWN_PER_DAY: return False
         st["unknown_n"] = st.get("unknown_n", 0) + 1

@@ -64,7 +64,7 @@ class CoC_Bot:
         before = self.read_and_record_resources(builder_base=builder, max_age=20) # just read after the last attack
         t0 = time.monotonic()
         if attack_fn() is False:                  # the attack didn't start: not an attack, nothing to count
-            logger.info("The attack could not start — trying again")
+            logger.error("The attack could not start — trying again")       # sent to Claude with the log
             return
         try:
             (to_builder_base if builder else to_home_base)()
@@ -82,6 +82,8 @@ class CoC_Bot:
         stats.record(_utils.INSTANCE_ID, "attack", base=base, **loot, **extra)
         self.session_attacks += 1
         logger.info(f"Attack ({base}) loot: gold={loot['gold']} elixir={loot['elixir']} dark={loot['dark']}")
+        if base == "home" and before and after and not (loot["gold"] or loot["elixir"] or loot["dark"]):
+            logger.error("Attack brought no loot")                  # the log of that attack goes to Claude
         logger.info(f"Attack took {time.monotonic() - t0:.0f}s")
         if (self.settings or {}).get("notify", {}).get("loot"):
             try: send_notification(f"غنيمة الهجوم: ذهب {loot['gold']:,} — إكسير {loot['elixir']:,} — دارك {loot['dark']:,}")

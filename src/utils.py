@@ -3213,10 +3213,13 @@ def install_error_reporter():
     state = {"last_shot": 0.0, "busy": False}
     shot_dir = ERRORS_DIR / str(INSTANCE_ID)
     import collections
-    tail = collections.deque(maxlen=80)             # the last log lines: sent with every error (what led to it)
-    logger.add(lambda m: tail.append(f"{m.record['time']:%H:%M:%S} {m.record['level'].name[:4]} "
-                                     f"{str(m.record['message']).splitlines()[0][:220] if m.record['message'] else ''}"),
-               level="DEBUG", catch=True)
+    tail = collections.deque(maxlen=200)            # the last log lines: sent with every error (what led to it)
+
+    def _keep(m):
+        msg = str(m.record["message"]) if m.record["message"] else ""
+        if msg.startswith("send operation"): return            # every touch: hides what matters
+        tail.append(f"{m.record['time']:%H:%M:%S} {m.record['level'].name[:4]} {msg.splitlines()[0][:220] if msg else ''}")
+    logger.add(_keep, level="DEBUG", catch=True)
 
     def save_screenshot(path):
         # raw device, no proxy / no logging: must never recurse into the logger

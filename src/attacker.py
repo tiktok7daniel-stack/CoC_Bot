@@ -1673,6 +1673,13 @@ class Attacker:
                 self.complete_normal_attack(restart=restart, exclude_clan_troops=EXCLUDE_CLAN_TROOPS)
                 return True
             else:
+                try:                                        # the enemy village IS there (the search said no): attack
+                    if red_battle_button():
+                        logger.warning("The attack looked not started, but a battle is on the screen — attacking")
+                        self.complete_normal_attack(restart=restart, exclude_clan_troops=EXCLUDE_CLAN_TROOPS)
+                        return True
+                except Exception as e:
+                    return self._attack_after_memory_error(e, restart)
                 # couldn't open the attack: clear what is on the screen; twice in a row -> reopen the game
                 self.open_fails = getattr(self, "open_fails", 0) + 1
                 self.clear_leftover_screens()
@@ -1686,19 +1693,20 @@ class Attacker:
                 return False
         
         except Exception as e:
-            if __import__("utils").is_memory_error(e):
-                return self._attack_after_memory_error(e, restart)
-            logger.exception("Error in run_home_base():")
+            if not __import__("utils").is_memory_error(e):
+                logger.exception("Error in run_home_base():")
+            return self._attack_after_memory_error(e, restart)     # never leave a battle standing
 
     def _attack_after_memory_error(self, e, restart=True):
         """
-        The PC ran out of memory in the middle of an attack. Never leave the battle standing there: free memory,
+        Something failed in the middle of an attack (out of memory, an error). Never leave the battle standing: free memory,
         and when the enemy village (or the fight) is on the screen, carry the attack on from where it is
         (the troops still go in); a second failure ends the battle properly so the bot is back home.
         """
         import gc, time, utils as _u
-        logger.warning(f"Out of memory during the attack ({type(e).__name__}: {str(e)[:80]}) — {_u.memory_report()}")
-        _u.shed_memory("attack")
+        if _u.is_memory_error(e):
+            logger.error(f"Out of memory during the attack ({type(e).__name__}) — {_u.memory_report()}")
+            _u.shed_memory("attack")
         gc.collect()
         try:
             if not red_battle_button(): return False         # not in a battle: the next attack starts over
@@ -1712,9 +1720,10 @@ class Attacker:
             except Exception as e2:
                 if not _u.is_memory_error(e2):
                     logger.exception("Error carrying the attack on:")
-                    break
-                logger.warning(f"Out of memory again ({_u.memory_report()})")
-                _u.shed_memory("attack")
+                    if attempt: break
+                else:
+                    logger.warning(f"Out of memory again ({_u.memory_report()})")
+                    _u.shed_memory("attack")
                 gc.collect()
                 time.sleep(1)
         try:                                                  # give up this one cleanly: end the battle, go home
