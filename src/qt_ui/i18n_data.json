@@ -3281,6 +3281,14 @@
 "fn:spellcast"
 ],
 [
+"^Red line read from the game's red flash: drops moved out of it",
+"🟥 اللعبة رفضت مكان — البوت قرا الخط الأحمر الحقيقي من الوميض ونقل كل الإنزال لبرّه"
+],
+[
+"^A drop spot was refused by the game at every step out",
+"⚠️ مكان إنزال اترفض حتى بعد ما طلع لبرّه — بيستخدم مكان تاني اتقبل"
+],
+[
 "^PaddleOCR failed, reading with easyocr",
 "⚠️ PaddleOCR وقع — بيقرا بـ easyocr"
 ],

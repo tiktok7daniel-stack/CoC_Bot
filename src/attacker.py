@@ -748,6 +748,12 @@ class Attacker:
                     pts = [pts[0], pts[-1]] + pts[1:-1]
                 Input_Handler.click(cx, 0.9)
                 share = TROOP_DEPLOY_TIME / len(pts)
+                checked = []
+                for pt in pts:                   # each spot: one unit first, the game must take it
+                    if self.card_gray(cx): break
+                    q = self.place(cx, pt)
+                    if q is not None and q not in checked: checked.append(q)
+                if checked: pts = checked
                 for k, pt in enumerate(pts):
                     before = self.card_crop(cx) if smart else None
                     Input_Handler.down(*pt, pointer=0)
@@ -773,7 +779,16 @@ class Attacker:
                 if plan.get("heroes_where") == "smart":   # heroes behind the troops: the middle spots
                     mid = len(pts) // 2
                     pts = [pts[mid]] + [p for p in pts[max(0, mid - 1):mid + 2] if p != pts[mid]]
-                Input_Handler.click(*pts[hero_n % len(pts)]) # heroes alternate between the sides
+                hp = pts[hero_n % len(pts)]              # heroes alternate between the spots
+                q = self._ok_spots.get((round(hp[0], 2), round(hp[1], 2))) if getattr(self, "_ok_spots", None) else None
+                Input_Handler.click(*(q or hp))
+                time.sleep(0.2)
+                if self.hero_health(cx) == 0 and not self.card_gray(cx):     # not taken: a spot the game accepts
+                    good = [v for v in (getattr(self, "_ok_spots", {}) or {}).values() if v]
+                    for sp in good[:4]:
+                        Input_Handler.click(*sp)
+                        time.sleep(0.2)
+                        if self.hero_health(cx) != 0 or self.card_gray(cx): break
                 hero_n += 1
                 self.deployed_heroes.append(cx)
                 self.heroes_done_at = time.monotonic()
@@ -870,6 +885,60 @@ class Attacker:
         else:
             return None
         return min(0.95, max(0.05, x)), min(0.78, max(0.12, y))
+
+    def place(self, cx, pt, max_steps=7):
+        """
+        Drop ONE unit of the selected card at pt and check the game took it (the card's number went down / it went
+        grey). Refused (the red area): the game lights the whole red area up at that moment -> the real red line is
+        read from that flash and the spot moved just outside it; still refused -> step outward from the base's
+        middle until it is taken. -> the spot that works (remembered for the rest of the battle) or None.
+        """
+        import time
+        ok = getattr(self, "_ok_spots", None)
+        if ok is None: ok = self._ok_spots = {}
+        key = (round(pt[0], 2), round(pt[1], 2))
+        if key in ok: return ok[key]
+        x, y = pt
+        b = getattr(self, "base_seen", None)
+        if b is not None and b.hull is not None:
+            c = b.hull.reshape(-1, 2).mean(axis=0)
+            cxm, cym = float(c[0]), float(c[1])
+        else:
+            cxm, cym = 0.5, 0.42
+        for step in range(max_steps):
+            before_card = self.card_crop(cx)
+            before = Frame_Handler.get_frame(grayscale=False)
+            Input_Handler.click(x, y)
+            time.sleep(0.2)
+            if self.card_gray(cx) or self.card_changed(cx, before_card, 2.0):
+                ok[key] = (x, y)
+                return (x, y)
+            after = Frame_Handler.get_frame(grayscale=False)
+            # refused: learn the red line from the game's own red flash (once per battle)
+            try:
+                import deploy_zone
+                if not getattr(self, "zone", None):
+                    m = deploy_zone.red_area(before, after)
+                    if m is not None:
+                        self.zone = deploy_zone.Zone(m)
+                        logger.info("Red line read from the game's red flash: drops moved out of it")
+                        if getattr(self, "smart_points", None):
+                            self.smart_points = [self.zone.fix(*p) for p in self.smart_points]
+                if getattr(self, "zone", None) and self.zone.inside(x, y):
+                    nx, ny = self.zone.fix(x, y)
+                    if (nx, ny) != (x, y):
+                        x, y = nx, ny
+                        continue
+            except Exception:
+                pass
+            dx, dy = x - cxm, y - cym                       # one step further out from the base's middle
+            n = (dx * dx + dy * dy) ** 0.5 or 1.0
+            x, y = x + dx / n * 0.03, y + dy / n * 0.03
+            if not (0.02 < x < 0.98 and 0.08 < y < 0.79): break
+            if b is not None and b.on_ui(x, y): break
+        logger.info("A drop spot was refused by the game at every step out")
+        ok[key] = None
+        return None
 
     def smart_bad(self, pt):
         """A smart spot the game refused (the red line is further out there): push it outward, drop it if it can't."""
@@ -1047,15 +1116,16 @@ class Attacker:
                 Input_Handler.click(x, 0.9)
                 time.sleep(0.12)
                 out = False
-                for sp in spots[:8]:
-                    for _ in range(1 if t in ("hero", "clan") else 3):
-                        Input_Handler.click(*sp)
-                        time.sleep(0.05)
-                    time.sleep(0.3)
+                good = [v for v in (getattr(self, "_ok_spots", {}) or {}).values() if v]
+                for sp in (good[:3] + spots[:8]):
                     if t == "hero":
+                        Input_Handler.click(*sp)
+                        time.sleep(0.25)
                         out = self.hero_health(x) != 0 or self.card_gray(x)
                     else:
-                        out = self.card_gray(x) or self.card_changed(x, a, noise)
+                        q = self.place(x, sp, max_steps=5)   # one unit, checked; walks out of the red area
+                        out = q is not None
+                        if out: sp = q
                     if out:
                         if t not in ("hero", "clan"):        # the rest of this troop on the spot that works
                             for _ in range(16):
@@ -1371,6 +1441,7 @@ class Attacker:
         self._spell_cards = 0
         self._hero_start, self._hero_used, self._hero_next = {}, set(), 0.0
         self._spell_names = {}
+        self._ok_spots = {}
         self._later = []
         plan = getattr(self, "plan", None) or {}
         system = ("smart" if plan.get("mode") == "smart" else
