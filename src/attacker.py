@@ -754,7 +754,13 @@ class Attacker:
                     q = self.place(cx, pt)
                     if q is not None and q not in checked: checked.append(q)
                 if checked: pts = checked
+                if checked and len(checked) >= 2 and not self.card_gray(cx):
+                    # four fingers: every spot the game took, all at once (several times faster, spread evenly)
+                    t0 = time.monotonic()
+                    Input_Handler.hold_many(checked[:4], until=lambda: self.card_gray(cx), max_time=TROOP_DEPLOY_TIME + 1)
+                    logger.debug(f"Four fingers: card in {time.monotonic() - t0:.1f}s on {min(4, len(checked))} spots")
                 for k, pt in enumerate(pts):
+                    if self.card_gray(cx): break
                     before = self.card_crop(cx) if smart else None
                     Input_Handler.down(*pt, pointer=0)
                     end_time = time.monotonic() + share
@@ -1127,11 +1133,10 @@ class Attacker:
                         out = q is not None
                         if out: sp = q
                     if out:
-                        if t not in ("hero", "clan"):        # the rest of this troop on the spot that works
-                            for _ in range(16):
-                                if self.card_gray(x): break
-                                Input_Handler.click(*sp)
-                                time.sleep(0.05)
+                        if t not in ("hero", "clan"):        # the rest of this troop: fingers on the spots that work
+                            good = [v for v in (getattr(self, "_ok_spots", {}) or {}).values() if v] or [sp]
+                            Input_Handler.hold_many(([sp] + [g for g in good if g != sp])[:4],
+                                                    until=lambda: self.card_gray(x), max_time=2.5)
                         break
                 if out:
                     done.append(t)

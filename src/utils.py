@@ -2610,6 +2610,31 @@ class Input_Handler:
         cls._publish(builder)
 
     @classmethod
+    def hold_many(cls, points, until=None, max_time=2.5, first_pointer=2):
+        """
+        Several fingers down at once, each on its own spot, held until until() is True or max_time ("four fingers":
+        the game drops the selected troop from every finger at the same time -> a card goes in several times
+        faster and spread along the whole line). Pointers from first_pointer on (0 / 1 stay free).
+        """
+        import time
+        from pyminitouch import CommandBuilder
+        pts = list(points)[:5]
+        if not pts: return
+        b = CommandBuilder()
+        for i, (x, y) in enumerate(pts):
+            b.down(first_pointer + i, *cls._to_raw(x, y), 100)
+        cls._publish(b, fast=True)
+        end = time.monotonic() + max_time
+        try:
+            while time.monotonic() < end:
+                if until is not None and until(): break
+                time.sleep(0.04)
+        finally:
+            b = CommandBuilder()
+            for i in range(len(pts)): b.up(first_pointer + i)
+            cls._publish(b, fast=True)
+
+    @classmethod
     def up(cls, pointer=0):
         from pyminitouch import CommandBuilder
         builder = CommandBuilder()
