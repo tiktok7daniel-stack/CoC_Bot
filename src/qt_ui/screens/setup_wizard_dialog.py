@@ -67,6 +67,11 @@ class AccountCard(Box):
             if i >= 0: self.link.setCurrentIndex(i)
             self.link.activated.connect(self._link)
             head.addWidget(self.link)
+        head.addWidget(label(key="game_mode", role="sub"))
+        self.game = Combo([("coc", "gm_coc"), ("royale", "gm_royale")], 170)   # this account's game
+        self.game.set_value(a.get("game_mode", "coc"))
+        self.game.activated.connect(self._game)
+        head.addWidget(self.game)
         head.addStretch(1)
         head.addWidget(StatusPill("running" if a.get("bot") else "stopped", tr("su_bot_on" if a.get("bot") else "su_bot_off")))
         v.addLayout(head)
@@ -113,6 +118,10 @@ class AccountCard(Box):
             hl.addWidget(label(tr(hint), "warn", wrap=True), 1)
             v.addLayout(hl)
         if ready: self.set_border("rgba(16,185,129,0.55)")
+
+    def _game(self, _i):
+        self.wizard.ctx.api.post(f"/api/account/{self.acc}/game", {"mode": self.game.value()},
+                                 lambda r: (self.wizard.ctx.store.load_all(), self.wizard.refresh()))
 
     def _link(self, _i):
         self.wizard.ctx.api.post("/api/setup/link", {"account": self.acc, "copy": self.link.currentData()},

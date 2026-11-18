@@ -132,6 +132,21 @@ def is_royale(acc):
         return False
 
 
+def auto_mode(acc, w, h):
+    """A copy whose screen is portrait (taller than wide) can only be Clash Royale (Clash of Clans is always
+    landscape): the account becomes a Clash Royale account by itself. -> True when it is one."""
+    if is_royale(acc): return True
+    try:
+        if not (acc and w and h and int(h) > int(w)): return False
+        import settings
+        d = settings.load(acc)
+        d["game_mode"] = "royale"
+        settings.save(acc, d)
+        return True
+    except Exception:
+        return False
+
+
 def game_pkg(acc=None):
     return ROYALE_GAME if is_royale(acc) else GAME
 
@@ -179,6 +194,7 @@ def status(app, running_accounts=()):
         c = link_for(acc, cps, links) if emu in ("ldplayer", "bluestacks") else None
         a = {"id": acc, "copy": c["title"] if c else None, "copy_index": c["index"] if c else None,
              "address": address(app, c), "bot": acc in running_accounts}
+        if c and c.get("width") and c.get("height"): auto_mode(acc, c.get("width"), c.get("height"))
         addr = a["address"]
         state = adb_state(adb, addr) if addr else None
         a["adb"] = state
@@ -187,6 +203,7 @@ def status(app, running_accounts=()):
         if state == "device":
             a["boot"] = shell(adb, addr, "getprop sys.boot_completed").strip() == "1"
             size, dpi = wm_size(adb, addr), wm_density(adb, addr)
+            if size: auto_mode(acc, *size)
             a["resolution"] = f"{size[0]}x{size[1]} · {dpi} DPI" if size else None
             a["res_ok"] = bool(size and good_res(app, *size, dpi, acc))
             a["game"] = game_open(adb, addr, game_pkg(acc))
