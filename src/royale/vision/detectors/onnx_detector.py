@@ -6,10 +6,9 @@ class OnnxDetector:
     def __init__(self, model_path):
         self.model_path = model_path
 
-        providers = list(
-            set(ort.get_available_providers())
-            & {"CUDAExecutionProvider", "CPUExecutionProvider"}
-        )
+        # the graphics card first (CUDA, or DirectML = any card on Windows), the processor last
+        av = ort.get_available_providers()
+        providers = [p for p in ("CUDAExecutionProvider", "DmlExecutionProvider") if p in av] + ["CPUExecutionProvider"]
         self.sess = ort.InferenceSession(
             self.model_path,
             providers=providers,

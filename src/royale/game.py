@@ -12,7 +12,7 @@ import time
 
 PKG = "com.supercell.clashroyale"
 ACT = "com.supercell.clashroyale/com.supercell.titan.GameApp"
-LOOK_EVERY = 0.2           # seconds between looks in a battle
+LOOK_EVERY = 0.08          # seconds between looks in a battle (~10 a second: a look takes ~70 ms)
 
 
 def _u():
@@ -123,6 +123,8 @@ class RoyaleBot:
         log.info(f"Clash Royale: battle #{self.battles}")
         out_since, last = None, None
         plays = 0
+        look_ms, looks, slow_told = 0.0, 0, False
+        self._slot_used = {}                                       # slot -> when it was played (picture lags)
         while _u().running():
             t0 = time.monotonic()
             fr = frame()
@@ -138,7 +140,13 @@ class RoyaleBot:
                 continue
             out_since = None
             try:
+                tl = time.monotonic()
                 st = self.eyes.look(fr)
+                look_ms += (time.monotonic() - tl) * 1000; looks += 1
+                if looks == 50 and look_ms / looks > 250 and not slow_told:
+                    slow_told = True
+                    log.warning(f"Clash Royale: one look takes {look_ms / looks:.0f} ms — the PC is busy (close other "
+                                f"programs / the 2nd bot) or the screen comes by ADB (slow)")
             except Exception:
                 log.debug("Clash Royale: look failed", exc_info=True)
                 time.sleep(0.2)
@@ -156,6 +164,7 @@ class RoyaleBot:
             if spent and time.monotonic() - spent[1] < 1.5:
                 el = min(el, max(0.0, spent[2] - spent[0] + (time.monotonic() - spent[1]) / self.brain.seconds_per_elixir()))
             ready = [i for i in st["ready"] if i < len(st["hand"]) and
+                     time.monotonic() - self._slot_used.get(i, 0) > 0.8 and
                      (__import__("royale.brain", fromlist=["card"]).card(st["hand"][i]).get("cost", 11) <= el)]
             d = self.brain.decide(st["hand"], ready, el, st["enemies"], st["allies"], st["towers"])
             if self.brain.arch and self.brain.arch != getattr(self, "_arch_logged", None):
@@ -165,6 +174,7 @@ class RoyaleBot:
             if d:
                 self._spent = (__import__("royale.brain", fromlist=["card"]).card(d["card"]).get("cost", 4),
                                time.monotonic(), el)
+                self._slot_used[d["slot"]] = time.monotonic()
                 cx, cy = card_xy(d["slot"])
                 tx, ty = tile_xy(*d["tile"])
                 tap(cx, cy)
@@ -175,7 +185,14 @@ class RoyaleBot:
                          f"theirs ~{self.brain.enemy_elixir:.0f}")
             last = st
             time.sleep(max(0.0, LOOK_EVERY - (time.monotonic() - t0)))
-        log.info(f"Clash Royale: battle over — {plays} cards played")
+        try:
+            from royale import strong_eyes
+            big = f", big model {strong_eyes.speed_ms():.0f} ms in the background" if strong_eyes.speed_ms() else ""
+        except Exception:
+            big = ""
+        src = (getattr(_u().Frame_Handler, "_power", {}) or {}).get("src") or {}
+        log.info(f"Clash Royale: battle over — {plays} cards played; one look {look_ms / max(1, looks):.0f} ms"
+                 f"{big}; screen by {max(src, key=src.get) if src else '?'}")
         return last
 
     # -------------------------------------------------------------- after the battle

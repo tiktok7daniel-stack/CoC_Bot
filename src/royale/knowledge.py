@@ -85,6 +85,13 @@ COUNTERS = {
     "sparky":        {"want": ["small_spell", "swarm", "dps"], "where": "front"},
     "inferno_dragon": {"want": ["anti_air", "small_spell"], "where": "behind"},
     "baby_dragon":   {"want": ["anti_air", "dps"], "where": "behind"},
+    "goblin_drill":  {"want": ["swarm", "splash", "small_spell"], "where": "tower", "urgent": True},
+    "royal_recruits": {"want": ["splash", "dps"], "where": "front"},
+    "bowler":        {"want": ["swarm", "dps"], "where": "front"},
+    "elite_barbarians": {"want": ["swarm", "splash", "defense_building"], "where": "front"},
+    "electro_dragon": {"want": ["anti_air", "dps"], "where": "behind"},
+    "royal_ghost":   {"want": ["splash", "small_spell", "dps"], "where": "front"},
+    "bandit":        {"want": ["swarm", "small_spell", "dps"], "where": "front"},
 }
 
 # counters the bot keeps for a threat it knows the opponent has (not spent on anything else)
@@ -141,3 +148,41 @@ def reserved(their_seen, my_card):
     for threat, keep in RESERVE.items():
         if threat in (their_seen or ()) and my_card in keep: return threat
     return None
+
+
+# ------------------------------------------------------------------ every other card of the game
+# COUNTERS above is written by hand for the cards that need special care. Every other card (all 110 of cards.json)
+# gets its answer worked out from what it is (flies, hits buildings only, a group, a tank, a building, a spell);
+# what real players actually answered it with comes on top of that from royale.pro (252k games).
+_DERIVED = {}
+
+
+def counter(name, c=None):
+    """-> {"want": [roles, best first], "where": ..., "urgent"?, "avoid"?} for any card."""
+    if not name: return {}
+    if name in COUNTERS: return COUNTERS[name]
+    if name in _DERIVED: return _DERIVED[name]
+    c = c or {}
+    kind, hp, n = c.get("kind"), (c.get("hp") or 0), max(1, c.get("count") or 1)
+    if kind == "spell" or not c:
+        out = {}
+    elif kind == "building":
+        # a building of theirs on our side (x-bow / mortar like): something sturdy on it at once
+        out = {"want": ["tank", "dps", "big_spell"], "where": "onit", "urgent": bool(c.get("damage"))}
+    elif c.get("buildings_only"):
+        out = ({"want": ["dps", "swarm", "defense_building"], "where": "late"} if hp * n >= 2500 else
+               {"want": ["defense_building", "dps", "swarm"], "where": "pull"})
+        if c.get("air"): out = {"want": ["anti_air", "ranged", "big_spell"], "where": "behind"}
+    elif c.get("air"):
+        out = ({"want": ["small_spell", "anti_air", "splash"], "where": "onit"} if n >= 3 else
+               {"want": ["anti_air", "ranged", "dps"], "where": "behind"})
+    elif n >= 3:
+        out = {"want": ["small_spell", "splash"], "where": "onit"}
+    elif hp * n >= 2500:
+        out = {"want": ["dps", "swarm"], "where": "late", "avoid": ["small_spell"]}
+    elif (c.get("range") or 0) >= 4:
+        out = {"want": ["big_spell", "dps", "swarm"], "where": "onit"}
+    else:
+        out = {"want": ["dps", "swarm", "splash"], "where": "front"}
+    _DERIVED[name] = out
+    return out

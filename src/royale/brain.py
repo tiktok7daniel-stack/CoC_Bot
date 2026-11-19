@@ -211,7 +211,8 @@ class Brain:
             hits = sum(1 for s in self.seen if any(su == u and abs(sx - x // 2) <= 1 and abs(sy - y // 2) <= 1
                                                    for su, sx, sy in s))
             conf = next((c for uu, xx, yy, c in enemies if uu == u and xx == x and yy == y), 0)
-            if hits >= 2 or conf >= 0.7: stable.append((u, x, y))
+            # sure at once (no waiting for a 2nd look): a confident unit, or anything already on our half
+            if hits >= 2 or conf >= 0.5 or (y <= RIVER_Y and conf >= 0.4): stable.append((u, x, y))
         # new units = cards the opponent just played (a unit appearing on THEIR half, or a fresh group anywhere)
         for u, x, y in stable:
             tid = next((k for k, t in self.known_enemy.items() if t["unit"] == u and dist((t["x"], t["y"]), (x, y)) <= 4
@@ -271,10 +272,10 @@ class Brain:
                     cards_here.append("goblin_barrel")
                 if any(u == "skeleton" for u in near_tower) and "graveyard" in self.enemy_seen:
                     cards_here.append("graveyard")
-                known = [c for c in cards_here if c in K.COUNTERS]
+                known = [c for c in cards_here if c in K.COUNTERS]               # hand-written first
                 pool = known or cards_here
                 s["main"] = max(pool, key=lambda c: card(c).get("cost", 0)) if pool else None
-                s["urgent"] = any(K.COUNTERS.get(c, {}).get("urgent") for c in cards_here)
+                s["urgent"] = any(K.counter(c, card(c)).get("urgent") for c in cards_here)
         return out
 
     # -------------------------------------------------------------- choosing
@@ -347,7 +348,7 @@ class Brain:
             if m is not None:
                 if m == 0.0: return 0.0                                          # it cannot even hit it
                 score += 1.5 if m >= 1.5 else 0.8 if m >= 1.0 else -1.0          # wins the duel / loses it
-        kn = K.COUNTERS.get(threat.get("main") or "", {})
+        kn = K.counter(threat.get("main"), card(threat.get("main") or ""))
         for rank, want in enumerate(kn.get("want", [])):            # what a good player answers it with
             if want in r or want == name:
                 score += 2.5 - 0.6 * rank
@@ -367,7 +368,7 @@ class Brain:
     def _defense_tile(self, name, side, threat):
         r = roles(name)
         cx, cy = threat["center"] or OUR_TOWERS[side]
-        where = K.COUNTERS.get(threat.get("main") or "", {}).get("where")
+        where = K.counter(threat.get("main"), card(threat.get("main") or "")).get("where")
         tx, ty = OUR_TOWERS[side]
         if self.p.get("pro_moves", True) and "spell" not in r and threat.get("main"):
             pt = pro.answer_tile(threat["main"], cy, side, name)                 # where real players put it
@@ -400,7 +401,7 @@ class Brain:
         """
         now = now or time.monotonic()
         stable = self.observe(enemies, now)
-        if now - self.last_play < 0.9: return None                               # one card at a time (the game
+        if now - self.last_play < 0.55: return None                              # one card at a time (the game
                                                                                  # shows it ~0.5 s later)
         towers = towers or {}
         playable = [(i, hand[i]) for i in ready if i < len(hand) and hand[i] and card(hand[i])
@@ -411,7 +412,7 @@ class Brain:
         # 1. defend the lane in more danger
         side = max(th, key=lambda s: th[s]["value"])
         t = th[side]
-        late = K.COUNTERS.get(t.get("main") or "", {}).get("where") == "late"
+        late = K.counter(t.get("main"), card(t.get("main") or "")).get("where") == "late"
         if late and t["center"] and t["center"][1] > 13 and elixir < 9.5:
             pass                                                                 # a tank: let it come (tower helps)
         elif t["value"] >= self.p.get("defend_min", 1.5) or (t.get("urgent") and t["units"]):

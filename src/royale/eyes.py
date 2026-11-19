@@ -69,10 +69,11 @@ class Eyes:
         hand = [c.name for c in cards[1:5]]
         en = [(d.unit.name, d.position.tile_x, d.position.tile_y, float(d.position.conf)) for d in enemies]
         al = [(d.unit.name, d.position.tile_x, d.position.tile_y, float(d.position.conf)) for d in allies]
-        try:                                         # the stronger eyes (174 kinds), when they are there
+        try:                                         # the stronger eyes (174 kinds), in the background: never waited for
             from royale import strong_eyes
             if strong_eyes.ready():
-                self._merge(strong_eyes.detect(frame_rgb), frame_rgb.shape, img, en, al)
+                strong_eyes.submit(frame_rgb)
+                self._merge(strong_eyes.latest(), frame_rgb.shape, img, en, al)
         except Exception:
             pass
         return {

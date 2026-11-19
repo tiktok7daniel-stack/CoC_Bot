@@ -144,6 +144,43 @@ def _calibrate(frame_shape, box, dets):
     return True
 
 
+# ------------------------------------------------------------------ in the background
+# The big model takes 50 ms on a graphics card but up to a second on the processor: it never holds the battle up.
+# The game loop hands it the newest picture (submit) and takes whatever it saw last (latest); the fast eyes
+# (royale.vision, ~70 ms) answer every look in the meantime.
+_A = {"frame": None, "dets": [], "t": 0.0, "ms": 0.0, "thread": None, "ev": threading.Event()}
+
+
+def submit(frame_rgb):
+    _A["frame"] = frame_rgb
+    _A["ev"].set()
+    if _A["thread"] is None or not _A["thread"].is_alive():
+        def work():
+            while True:
+                _A["ev"].wait(5.0)
+                _A["ev"].clear()
+                fr, _A["frame"] = _A["frame"], None
+                if fr is None: continue
+                t0 = time.monotonic()
+                try:
+                    d = detect(fr)
+                except Exception:
+                    d = []
+                _A["dets"], _A["t"] = d, t0                     # the time of the picture, not of the answer
+                _A["ms"] = (time.monotonic() - t0) * 1000
+        _A["thread"] = threading.Thread(target=work, daemon=True, name="cr-strong-eyes-run")
+        _A["thread"].start()
+
+
+def latest(max_age=0.6):
+    """What the big model saw in a picture at most max_age seconds old, else []."""
+    return _A["dets"] if time.monotonic() - _A["t"] <= max_age else []
+
+
+def speed_ms():
+    return _A["ms"]
+
+
 # ------------------------------------------------------------------ one look
 def detect(frame_rgb, conf=0.35):
     """-> [(model_name, conf, x0, y0, x1, y1)] in the game picture's pixels, or [] when not ready."""
