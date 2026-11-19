@@ -100,6 +100,36 @@ def tools():
     return True
 
 
+def fix_nms():
+    """A CPU-only torchvision next to the CUDA torch has no CUDA 'nms' (the box clean-up after every look):
+    it is run on the processor for those (tiny) inputs, the rest stays on the graphics card."""
+    try:
+        import torch, torchvision
+        from torchvision import ops
+        from torchvision.ops import boxes as _b
+        try:
+            ops.nms(torch.zeros((1, 4), device="cuda"), torch.zeros(1, device="cuda"), 0.5)
+            return False                                          # it works on the card
+        except Exception:
+            pass
+        orig = _b.nms
+
+        def nms(b, sc, thr):
+            if b.is_cuda:
+                return orig(b.cpu(), sc.cpu(), thr).to(b.device)
+            return orig(b, sc, thr)
+        ops.nms = _b.nms = torchvision.ops.nms = nms
+        try:
+            import ultralytics.utils.nms as un
+            if hasattr(un, "torchvision"): un.torchvision.ops.nms = nms
+        except Exception:
+            pass
+        log("torchvision has no CUDA nms here: it runs on the processor (the rest on the card)")
+        return True
+    except Exception:
+        return False
+
+
 def base_model():
     MODELS.mkdir(parents=True, exist_ok=True)
     pt = MODELS / "cr_detector_v8.pt"
@@ -228,6 +258,7 @@ def run(epochs=30, n_bulk=4):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     status(stage="start", started=time.time(), error="")
     if not tools(): return False
+    fix_nms()
     from ultralytics import YOLO
     import settings
     base = base_model()

@@ -43,6 +43,24 @@ def find_word(ws, *names, y_min=0.0, y_max=1.0):
     return None
 
 
+# the game's own tutorial (a new account): the trainer / the king talk in speech bubbles; a tap goes on
+TUTORIAL = ("play cards", "defend", "your tower", "towers", "under attack", "trainer", "tap to", "tap anywhere",
+            "well done", "great job", "good job", "nice", "awesome", "let's", "lets ", "elixir", "drag", "destroy",
+            "crown", "you win", "victory", "hello", "welcome", "chest", "unlock", "collect", "claim", "next")
+NAME_WORDS = ("choose a name", "enter name", "your name", "name your", "player name")
+
+
+def tutorial_point(ws):
+    """A tutorial bubble on the screen -> where to tap to go on (the bubble's text), else None."""
+    hits = []
+    for t, b in ws:
+        if any(k in t for k in TUTORIAL):
+            hits.append(b)
+    if not hits: return None
+    b = max(hits, key=lambda bb: (bb[3] - bb[1]) * (bb[4] - bb[2]))
+    return ((b[1] + b[3]) / 2, (b[2] + b[4]) / 2)
+
+
 def start_game(logger):
     """Clash Royale open in front (started when it isn't)."""
     dev = _u().ADB_Manager.adbutils_device
@@ -145,6 +163,12 @@ class RoyaleBot:
             ws = words(fr)
             win = find_word(ws, "winner")
             ok = find_word(ws, "ok", y_min=0.75)
+            if not win and not ok:
+                tp = tutorial_point(ws)
+                if tp:                                   # the tutorial talks in the middle of its battle: go on
+                    tap(*tp)
+                    time.sleep(1.0)
+                    return
             if win or ok:
                 if win:
                     won = win[1] > 0.45
@@ -198,6 +222,23 @@ class RoyaleBot:
             if ok:
                 tap(*ok)
                 time.sleep(1.5)
+                continue
+            if any(any(k in t for k in NAME_WORDS) for t, _ in ws):
+                if not getattr(self, "_name_told", False):     # typing a name is the user's (once per account)
+                    self._name_told = True
+                    log.warning("Clash Royale: the game asks for a player name — type it once by hand")
+                    try: self.notify("✍️ كلاش رويال بيطلب اسم للاعب — اكتبه مرة بإيدك في LDPlayer والبوت هيكمل")
+                    except Exception: pass
+                time.sleep(3)
+                continue
+            tp = tutorial_point(ws)
+            if tp:                                          # the tutorial: tap the bubble, the bot plays its battles
+                self.unknown_since = None
+                if not getattr(self, "_tut_told", False):
+                    self._tut_told = True
+                    log.info("Clash Royale: the game's tutorial — going through it (tapping on, playing its battles)")
+                tap(*tp)
+                time.sleep(1.2)
                 continue
             try:                                            # a popup with the red X
                 if _u().tap_red_x():
