@@ -186,6 +186,11 @@ class RoyaleScreen(Screen):
             if ti:
                 txt += f"\n🧠 {tr('rt_policy')}: {100 * ti.get('card_in_hand', 0):.0f}% / {100 * ti.get('play', 0):.0f}%"
             txt += f"\n📷 {tr('rt_frames')}: {frames.count()}"
+            from royale import selfplay
+            sp = selfplay.read_state(self.store.account or "main")
+            txt += (f"\n🔁 {tr('rt_self')}: v{sp.get('version', 0)} — {sp.get('battles', 0)} "
+                    f"({selfplay.EVERY - (sp.get('battles', 0) - sp.get('trained_at_battles', 0)) % selfplay.EVERY})"
+                    + (f" — {sp['note']}" if sp.get("note") else ""))
         except Exception:
             pass
         self.train_state.setText(txt)

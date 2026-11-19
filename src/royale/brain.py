@@ -169,6 +169,9 @@ class Brain:
         self.tower_seen = {}                   # their / our princess towers: highest health seen (crowns)
         self.enemy_plays = []                  # (second, card, lane): how they played (the match summary)
         self.enemy_hist = []                   # (second, card, tile x, tile y): what the learned brain sees
+        self.steps = []                        # what it saw + what it did, every moment (royale.selfplay learns)
+        self.tower_log = []                    # (second, towers) once a second: how each moment turned out
+        self._ctx, self._last_wait = None, -9.0
         self._pol = None
         self.predicted = set()                 # their whole deck guessed from the cards seen (252k decks)
         if getattr(self, "mem", None): self.mem.start()
@@ -420,6 +423,9 @@ class Brain:
         now = now or time.monotonic()
         stable = self.observe(enemies, now)
         if getattr(self, "mem", None): self.mem.tick(towers, now)
+        el_t = self.elapsed()
+        if towers and (not self.tower_log or el_t - self.tower_log[-1][0] >= 1.0):
+            self.tower_log.append((round(el_t, 1), dict(towers)))
         if now - self.last_play < 0.55: return None                              # one card at a time (the game
                                                                                  # shows it ~0.5 s later)
         towers = towers or {}
@@ -435,7 +441,15 @@ class Brain:
                                        [h for h in hand if h], [n for _, n in playable])
             except Exception:
                 self._pol = None
+        self._ctx = (round(el_t, 2), [round(float(v), 4) for v in self._pol["_x"][0]], list(self._pol["_ids"])) \
+            if self._pol else None
+        d = self._decide(hand, ready, elixir, stable, playable, th, towers, now, allies)
+        if d is None and self._ctx and el_t - self._last_wait >= 1.0:          # it chose to wait: a moment too
+            self._last_wait = el_t
+            self.steps.append({"t": self._ctx[0], "x": self._ctx[1], "ids": self._ctx[2], "card": 0, "tile": 0})
+        return d
 
+    def _decide(self, hand, ready, elixir, stable, playable, th, towers, now, allies=()):
         # 1. defend the lane in more danger
         side = max(th, key=lambda s: th[s]["value"])
         t = th[side]
@@ -613,5 +627,9 @@ class Brain:
         self.last_play = now
         self.last_tiles.append((x, y))
         d = {"slot": i, "card": n, "tile": (x, y), "why": why, "t": round(self.elapsed(), 1)}
+        if self._ctx:
+            self.steps.append({"t": self._ctx[0], "x": self._ctx[1], "ids": self._ctx[2],
+                               "card": policy.card_id(n), "tile": y * 18 + x})
+            self._ctx = None
         self.plays.append(d)
         return d

@@ -252,6 +252,19 @@ class RoyaleBot:
                     self.losses += not won
                     if self.account:
                         self.account.count("battles"); self.account.count("wins", int(won))
+                    try:                                    # the learned brain learns from this battle by itself
+                        from royale import selfplay
+                        if not getattr(self, "_tutorial_battle", False):
+                            selfplay.record(_u().INSTANCE_ID, self.brain.steps, self.brain.tower_log, won)
+                            if selfplay.due(_u().INSTANCE_ID):
+                                log.info("Clash Royale: the learned brain trains itself on its own battles (background)")
+                                selfplay.start(_u().INSTANCE_ID)
+                            st = selfplay.read_state(_u().INSTANCE_ID)
+                            if st.get("note") and st.get("note") != getattr(self, "_sp_note", None):
+                                self._sp_note = st["note"]
+                                log.info(f"Clash Royale: self-learning — {st['note']}")
+                    except Exception:
+                        log.debug("Clash Royale: self-learning record failed", exc_info=True)
                     try:
                         from royale import learn
                         self._was_tutorial = getattr(self, "_tutorial_battle", False)

@@ -130,25 +130,9 @@ def samples(cols, n, vocab, cost, rng):
 
 
 def model(V, n_float):
-    import torch, torch.nn as nn
-
-    class Policy(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.emb = nn.Embedding(V, 24)
-            n_in = n_float + (N_EN + N_OWN) * 24 + 24
-            self.trunk = nn.Sequential(nn.Linear(n_in, 512), nn.ReLU(), nn.Linear(512, 512), nn.ReLU(),
-                                       nn.Linear(512, 256), nn.ReLU())
-            self.play = nn.Linear(256, 1)
-            self.card = nn.Linear(256, V)
-            self.tile = nn.Sequential(nn.Linear(256 + 24, 512), nn.ReLU(), nn.Linear(512, N_TILE))
-
-        def forward(self, x, ids):
-            e = self.emb(ids)                     # (B, 15, 24): 10 history, 4 hand cards, the card to place
-            k = N_EN + N_OWN
-            h = self.trunk(torch.cat([x, e[:, :k].flatten(1), e[:, k:k + N_HAND].sum(1)], 1))
-            return self.play(h)[:, 0], self.card(h), self.tile(torch.cat([h, e[:, -1]], 1))
-    return Policy()
+    sys.path.insert(0, os.path.join(HERE, "..", "src"))
+    from royale import policy_net
+    return policy_net.build(V, n_float)
 
 
 def main(n_parts=52, epochs=3, cache=None):

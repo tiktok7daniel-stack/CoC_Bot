@@ -7,16 +7,31 @@ rules check the answer (never a card that is kept for a threat, never two heavie
 import json, math, os, sys
 
 _ROOT = getattr(sys, "_MEIPASS", None) or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-_S = {"sess": None, "meta": None, "tried": False}
+_S = {"sess": None, "meta": None, "tried": False, "path": None, "mtime": 0.0}
 
 
 def key(name):
     return str(name or "").lower().replace("-", "").replace("_", "").replace(" ", "").replace(".", "")
 
 
+def _path():
+    """This account's self-trained brain (royale.selfplay) when there is one, else the shipped one."""
+    try:
+        import utils
+        from royale import selfplay
+        p = selfplay.model_path(utils.INSTANCE_ID)
+        if p.exists(): return str(p)
+    except Exception:
+        pass
+    return os.path.join(_ROOT, "assets", "royale", "policy.onnx")
+
+
 def _load():
-    if _S["tried"]: return _S["sess"] is not None
-    _S["tried"] = True
+    p = _path()
+    try: mt = os.path.getmtime(p)
+    except OSError: mt = 0.0
+    if _S["tried"] and _S["path"] == p and _S["mtime"] == mt: return _S["sess"] is not None
+    _S["tried"], _S["path"], _S["mtime"] = True, p, mt
     try:
         import onnxruntime as ort
         d = os.path.join(_ROOT, "assets", "royale")
@@ -24,11 +39,18 @@ def _load():
             _S["meta"] = json.load(f)
         so = ort.SessionOptions()
         so.intra_op_num_threads = 1
-        _S["sess"] = ort.InferenceSession(os.path.join(d, "policy.onnx"), sess_options=so,
-                                          providers=["CPUExecutionProvider"])
+        _S["sess"] = ort.InferenceSession(p, sess_options=so, providers=["CPUExecutionProvider"])
     except Exception:
         _S["sess"] = None
     return _S["sess"] is not None
+
+
+def card_id(name):
+    return ((_S["meta"] or {}).get("vocab") or {}).get(key(name), 1)
+
+
+def self_trained():
+    return bool(_S["path"]) and "royale_policy_" in str(_S["path"])
 
 
 def ready():
