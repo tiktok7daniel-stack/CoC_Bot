@@ -188,7 +188,8 @@ class RoyaleBot:
                      time.monotonic() - self._slot_used.get(i, 0) > 0.8 and
                      (__import__("royale.brain", fromlist=["card"]).card(st["hand"][i]).get("cost", 11) <= el)]
             try:
-                d = self.brain.decide(st["hand"], ready, el, st["enemies"], st["allies"], st["towers"])
+                d = self.brain.decide(st["hand"], ready, el, st["enemies"], st["allies"], st["towers"],
+                                      hp=st.get("hp"), spells=st.get("spells"))
             except Exception:
                 log.warning("Clash Royale: a decision failed — next look", exc_info=True)
                 d = None

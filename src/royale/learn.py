@@ -14,6 +14,7 @@ it played, so every battle teaches every setting at once.
   pro_moves     what real players answered / where they played (252k games, royale.pro) counts in every choice
   learned       the neural network trained on 17 M plays (royale.policy) helps every choice
   learned_play  how sure that network must be before it starts a play by itself
+  think         a defense is simulated a few seconds ahead on candidate tiles before it is placed (royale.sim)
 Stored per account: ~/.CoC_Bot/learn/royale_strategy_<account>.json
 """
 import json, os, random, time
@@ -31,10 +32,11 @@ SPACE = {
     "pro_moves": [True, False],
     "learned": [True, False],
     "learned_play": [0.6, 0.7, 0.8],
+    "think": [True, False],
 }
 DEFAULT = {"push_adv": 2.0, "defend_min": 1.5, "spell_value": 1.0, "cycle_at": 9.5, "punish_heavy": True,
            "counter_push": True, "endgame": True, "duel_defense": True,
-           "pro_moves": True, "learned": True, "learned_play": 0.7}
+           "pro_moves": True, "learned": True, "learned_play": 0.7, "think": True}
 PRIOR = 2.0                # an untried value counts as 2 battles at the overall win rate
 DIR = Path.home() / ".CoC_Bot" / "learn"
 
@@ -63,7 +65,7 @@ def _save(acc, d):
     os.replace(tmp, p)
 
 
-PINNED = {"duel_defense": True, "endgame": True, "pro_moves": True, "learned": True}   # proven: never switched off to "see what happens"
+PINNED = {"duel_defense": True, "endgame": True, "pro_moves": True, "learned": True, "think": True}   # proven: never switched off to "see what happens"
 WARMUP = 15                                          # the first battles play the default (known good) way
 TRY_PER_BATTLE = 2                                   # after that, only 2 settings are tried at once
 

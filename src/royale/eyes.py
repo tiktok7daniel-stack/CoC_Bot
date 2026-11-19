@@ -69,11 +69,13 @@ class Eyes:
         hand = [c.name for c in cards[1:5]]
         en = [(d.unit.name, d.position.tile_x, d.position.tile_y, float(d.position.conf)) for d in enemies]
         al = [(d.unit.name, d.position.tile_x, d.position.tile_y, float(d.position.conf)) for d in allies]
+        hp, spells = {}, []
         try:                                         # the stronger eyes (174 kinds), in the background: never waited for
             from royale import strong_eyes
             if strong_eyes.ready():
                 strong_eyes.submit(frame_rgb)
                 self._merge(strong_eyes.latest(), frame_rgb.shape, img, en, al)
+                hp, spells = self._health()
         except Exception:
             pass
         return {
@@ -83,8 +85,23 @@ class Eyes:
             "allies": al,
             "towers": {"their_left": nums.left_enemy_princess_hp.number, "their_right": nums.right_enemy_princess_hp.number,
                        "our_left": nums.left_ally_princess_hp.number, "our_right": nums.right_ally_princess_hp.number},
+            "hp": hp, "spells": spells,
             "t": time.monotonic(),
         }
+
+    def _health(self):
+        """Health bars of their units + spells landing, from the big model's last picture (royale.health)."""
+        from royale import strong_eyes, health
+        seen = strong_eyes.last_seen()
+        if not seen or time.monotonic() - strong_eyes._A.get("t", 0) > 0.8: return {}, []
+        fr, dets = seen
+        h, w = fr.shape[:2]
+
+        def tile_of(px, py):
+            dx, dy = px * 720.0 / w, py * 1280.0 / h
+            return (int(round((dx - C.TILE_INIT_X) / C.TILE_WIDTH - 0.5)),
+                    int(round((C.DISPLAY_HEIGHT - C.TILE_INIT_Y - dy) / C.TILE_HEIGHT - 0.5)))
+        return health.read(fr, dets, tile_of, lambda u, box: True)
 
 
     def _merge(self, dets, shape, small, en, al):

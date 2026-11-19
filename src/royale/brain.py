@@ -30,6 +30,7 @@ from collections import deque
 from royale import knowledge as K
 from royale import pro
 from royale import policy
+from royale import sim
 
 _ROOT = getattr(sys, "_MEIPASS", None) or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _DB = {"cards": None}
@@ -150,6 +151,7 @@ class Brain:
 
     def reset(self):
         self.t0 = time.monotonic()
+        self.danger, self.hp_seen = [], {}       # their spells landing (keep troops out) / life read from bars
         self.seen = deque(maxlen=3)            # last looks: sets of (unit, tile_x//2, tile_y//2)
         self.known_enemy = {}                  # track id -> {"unit", "x", "y", "first", "last"}
         self._next_id = 0
@@ -270,6 +272,7 @@ class Brain:
             cn = unit_card(u)
             c = card(cn) if cn else {}
             per = (c.get("cost", 3) / max(1, c.get("count") or 1)) if c else 1.5
+            per *= self.life(u, x, y)                            # a unit about to die is worth less of a card
             near = 1.0 + max(0.0, (RIVER_Y + 4 - y) / 6.0)       # deeper in = more urgent
             if c.get("buildings_only"): per *= 1.6               # goes straight for the tower
             s = out[lane(x)]
@@ -421,13 +424,15 @@ class Brain:
         ty = int(min(13, max(2, cy - 2)))
         return (tx, ty)
 
-    def decide(self, hand, ready, elixir, enemies, allies=(), towers=None, now=None):
+    def decide(self, hand, ready, elixir, enemies, allies=(), towers=None, now=None, hp=None, spells=None):
         """
         hand: the 4 card names in hand (slot 0..3); ready: playable slots; elixir: ours (0..10);
         enemies / allies: [(unit, tile_x, tile_y, conf)]; towers: {"their_left": hp 0..1, ...}
         -> None or {"slot", "card", "tile": (x, y), "why"}
         """
         now = now or time.monotonic()
+        self.hp_seen = hp or {}
+        if spells: self._spells(spells, now)
         stable = self.observe(enemies, now)
         if getattr(self, "mem", None): self.mem.tick(towers, now)
         el_t = self.elapsed()
@@ -467,11 +472,22 @@ class Brain:
         elif t["value"] >= self.p.get("defend_min", 1.5) or (t.get("urgent") and t["units"]):
             self._pro_hand = (pro.answer(t["main"], (t["center"] or (0, 10))[1], side, [n for _, n in playable])
                               if t.get("main") else {})
-            best = max(playable, key=lambda p: self._counter_score(p[1], t))
-            sc = self._counter_score(best[1], t)
+            ranked = sorted(((self._counter_score(n, t), (i, n)) for i, n in playable), key=lambda r: -r[0])
+            best, sc = ranked[0][1], ranked[0][0]
+            tile, why = self._defense_tile(best[1], side, t), ""
+            if sc > 0.8 and self.p.get("think", True) and "spell" not in roles(best[1]):
+                # think it through: the good answers on their tiles, simulated a few seconds ahead
+                try:
+                    good = [(p, s) for s, p in ranked if s > 0.8 and "spell" not in roles(p[1])][:3]
+                    pl = sim.plan(self, side, t, [p for p, _ in good], stable, getattr(self, "hp_seen", None),
+                                  prior={p[1]: 0.15 * s for p, s in good})
+                    if pl:
+                        best, tile, why = (pl[0], pl[1]), pl[2], f" — {pl[4]}"
+                except Exception:
+                    pass
             if sc > 0.8:
-                d = self._play(best, self._defense_tile(best[1], side, t), f"defend {side} vs "
-                               f"{', '.join(sorted({u for u, _, _ in t['units']}))}", now)
+                d = self._play(best, tile, f"defend {side} vs "
+                               f"{', '.join(sorted({u for u, _, _ in t['units']}))}{why}", now)
                 if d and getattr(self, "mem", None): self.mem.defended(t.get("main"), best[1], side, towers, now)
                 return d
 
@@ -623,6 +639,33 @@ class Brain:
         self.support_due = None
         return self._play((i, n), (LEFT_BRIDGE_X if side == "left" else RIGHT_BRIDGE_X, y), f"{n} behind the {first}", now)
 
+    def life(self, u, x, y):
+        """Life left (0..1) read from its health bar, 1 when unhurt / not read."""
+        hs = getattr(self, "hp_seen", None) or {}
+        if (u, x, y) in hs: return hs[(u, x, y)]
+        for (uu, xx, yy), f in hs.items():
+            if uu == u and abs(xx - x) <= 1 and abs(yy - y) <= 1: return f
+        return 1.0
+
+    def _spells(self, spells, now):
+        """Spells the big model saw landing: theirs (on our half) are cards they played — their elixir, their deck —
+        and their area is kept free of our troops for a moment."""
+        self.danger = [d for d in getattr(self, "danger", []) if d[3] > now]
+        for name, tx, ty in spells:
+            if ty > RIVER_Y: continue                                  # on their half: ours
+            c = card(name)
+            if not c: continue
+            if any(p[1] == name and self.elapsed() - p[0] < 3.0 for p in self.enemy_hist[-4:]): continue
+            self._learn_opponent(name, tx, ty)
+            self.enemy_elixir = max(0.0, self.enemy_elixir - c.get("cost", 3))
+            self.enemy_cycle.append(name)
+            self.enemy_plays.append((round(self.elapsed()), name, lane(tx)))
+            self.enemy_hist.append((self.elapsed(), name, tx, ty))
+            self.enemy_seen.add(name)
+            self._predict()
+            rad = (c.get("splash") or SPELL_SPLASH_DEFAULT.get(name, 2.5))
+            self.danger.append((tx, ty, rad + 1.0, now + 2.5))
+
     def _learn_opponent(self, cn, x, y):
         """The opponent just played `cn` at (x, y): the moment as THEY saw it (board turned round: their king at
         y 0), what they did — kept to learn from. Their hand: their deck (seen + guessed) minus their last 4."""
@@ -663,6 +706,11 @@ class Brain:
             self.support_due_back = tile[1] <= 3
         if n in K.NOT_TOGETHER[0]: self.heavy_mine_at = now
         x, y = int(max(0, min(17, tile[0]))), int(tile[1])
+        if "spell" not in roles(n):                     # not into a spell of theirs that is landing right there
+            for dx_, dy_, rad, _until in getattr(self, "danger", []):
+                if dist((x, y), (dx_, dy_)) <= rad:
+                    y = int(max(1, dy_ - rad - 1)) if dy_ - rad - 1 >= 1 else int(min(14, dy_ + rad + 1))
+                    break
         if not card(n).get("anywhere"):
             y = max(0, min(14, y))                                               # our half only (towers up: more)
         self.last_play = now
