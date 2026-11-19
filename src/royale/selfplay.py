@@ -32,6 +32,10 @@ def model_path(acc):
     return HOME / "models" / f"royale_policy_{_safe(acc)}.onnx"
 
 
+def board_path(acc):
+    return HOME / "models" / f"royale_board_{_safe(acc)}.onnx"
+
+
 def state_path(acc):
     return bdir(acc) / "state.json"
 
@@ -206,9 +210,86 @@ def run(acc, epochs=4):
         st["note"] = f"v{st['version']}: learned from {len(rows)} of its own moments"
     else:
         st["note"] = f"not kept (pro check {base:.2f} -> {new:.2f})"
+    try:                                                               # the board brain learns the same way
+        bn = run_board(acc, rows, w, epochs)
+        if bn: st["note"] = st.get("note", "") + f" | board brain: {bn}"
+    except Exception as e:
+        st["note"] = st.get("note", "") + f" | board brain skipped ({type(e).__name__})"
     st["finished"] = time.time()
     _write_state(acc, st)
     return True
+
+
+def run_board(acc, rows, w, epochs=4):
+    """The Transformer (royale.board_net) trained on its own / its opponents' moments that carry the whole arena,
+    advantage-weighted, next to unseen pro moments (assets/royale/board_anchor.npz) so it never forgets them."""
+    import numpy as np, torch, torch.nn.functional as F
+    from royale import board_net as B
+    a = Path(_ROOT) / "assets" / "royale"
+    if not (a / "board_weights.npz").exists(): return None
+    meta = json.loads((a / "board.json").read_text(encoding="utf-8"))
+    V = len(meta["vocab"]) + 2
+    keep = [k for k, r in enumerate(rows) if isinstance(r.get("b"), dict)]
+    if len(keep) < 200: return f"{len(keep)} arena moments so far"
+    mine = board_path(acc).with_suffix(".npz")
+    m = B.load(mine if mine.exists() and board_path(acc).exists() else a / "board_weights.npz", V)
+    R = [rows[k] for k in keep]
+    G = torch.tensor([r["b"]["glob"] for r in R], dtype=torch.float32)
+    T = torch.tensor([r["b"]["tok"] for r in R], dtype=torch.float32)
+    I = torch.tensor([r["b"]["tokid"] for r in R], dtype=torch.int64)
+    H = torch.tensor([r["b"]["hand"] for r in R], dtype=torch.int64)
+    C = torch.tensor([int(r["card"]) for r in R]); P = (C > 0).float()
+    Ti = torch.tensor([int(r["tile"]) for r in R]); W = torch.from_numpy(np.asarray([w[k] for k in keep], np.float32))
+    anc = np.load(a / "board_anchor.npz") if (a / "board_anchor.npz").exists() else None
+
+    def anchor_acc(model):
+        if anc is None: return 0.0
+        model.eval()
+        with torch.no_grad():
+            ag, at, ai, ah = (torch.from_numpy(anc[k].astype(np.float32 if k in ("glob", "tok") else np.int64))
+                              for k in ("glob", "tok", "tokid", "hand"))
+            ac, ap = torch.from_numpy(anc["card"].astype(np.int64)), torch.from_numpy(anc["play"].astype(np.float32))
+            _p, cl, _t = model(ag, at, ai, ah, ac)
+            mk = ap > 0
+            hm = torch.full_like(cl[mk], -1e9).scatter(1, ah[mk], 0.0); hm[:, 0] = -1e9
+            return float(((cl[mk] + hm).argmax(1) == ac[mk]).float().mean())
+    base = anchor_acc(m)
+    opt = torch.optim.AdamW(m.parameters(), lr=1e-4, weight_decay=1e-4)
+    m.train()
+    Bs = 128
+    for _ in range(epochs):
+        perm = torch.randperm(len(R))
+        for b in range(0, len(R), Bs):
+            j = perm[b:b + Bs]
+            pl, cl, tl = m(G[j], T[j], I[j], H[j], C[j])
+            loss = (F.binary_cross_entropy_with_logits(pl, P[j], reduction="none") * W[j]).mean()
+            mk = P[j] > 0
+            if mk.any():
+                loss = loss + (F.cross_entropy(cl[mk], C[j][mk], reduction="none") * W[j][mk]).mean() \
+                    + (F.cross_entropy(tl[mk], Ti[j][mk], reduction="none") * W[j][mk]).mean()
+            if anc is not None:
+                k = torch.from_numpy(np.random.randint(0, len(anc["card"]), Bs))
+                ag = torch.from_numpy(anc["glob"][k.numpy()].astype(np.float32))
+                at = torch.from_numpy(anc["tok"][k.numpy()].astype(np.float32))
+                ai = torch.from_numpy(anc["tokid"][k.numpy()].astype(np.int64))
+                ah = torch.from_numpy(anc["hand"][k.numpy()].astype(np.int64))
+                ac = torch.from_numpy(anc["card"][k.numpy()].astype(np.int64))
+                ap = torch.from_numpy(anc["play"][k.numpy()].astype(np.float32))
+                at_ = torch.from_numpy(anc["tile"][k.numpy()].astype(np.int64))
+                apl, acl, atl = m(ag, at, ai, ah, ac)
+                am = ap > 0
+                loss = loss + F.binary_cross_entropy_with_logits(apl, ap) + F.cross_entropy(acl[am], ac[am]) \
+                    + F.cross_entropy(atl[am], at_[am])
+            opt.zero_grad(); loss.backward(); opt.step()
+    new = anchor_acc(m)
+    if anc is not None and new < base - 0.03: return f"not kept ({base:.2f} -> {new:.2f})"
+    p = board_path(acc)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_name(p.stem + ".tmp.onnx")
+    B.export(m, tmp)
+    B.save_weights(m, p.with_suffix(".npz"))
+    os.replace(tmp, p)
+    return f"learned from {len(R)} arena moments (pro check {base:.2f} -> {new:.2f})"
 
 
 if __name__ == "__main__":

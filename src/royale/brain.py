@@ -31,6 +31,7 @@ from royale import knowledge as K
 from royale import pro
 from royale import policy
 from royale import sim
+from royale import board as board_brain
 
 _ROOT = getattr(sys, "_MEIPASS", None) or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _DB = {"cards": None}
@@ -399,7 +400,7 @@ class Brain:
         where = K.counter(threat.get("main"), card(threat.get("main") or "")).get("where")
         tx, ty = OUR_TOWERS[side]
         if self.p.get("learned", True) and "spell" not in r and self._pol:
-            lt = policy.tile(self._pol, name)                                    # the learned brain, this moment
+            lt = self._ltile(name)                                               # the learned brains, this moment
             if lt and lt[1] >= 0.25 and lt[0][1] <= 14 and lane(lt[0][0]) == side: return lt[0]
         if self.p.get("pro_moves", True) and "spell" not in r and threat.get("main"):
             pt = pro.answer_tile(threat["main"], cy, side, name)                 # where real players put it
@@ -434,6 +435,7 @@ class Brain:
         self.hp_seen = hp or {}
         if spells: self._spells(spells, now)
         stable = self.observe(enemies, now)
+        self._stable, self._towers_now, self._allies = stable, dict(towers or {}), list(allies or [])
         if getattr(self, "mem", None): self.mem.tick(towers, now)
         el_t = self.elapsed()
         if towers and (not self.tower_log or el_t - self.tower_log[-1][0] >= 1.0):
@@ -454,12 +456,25 @@ class Brain:
                                        [h for h in hand if h], [n for _, n in playable])
             except Exception:
                 self._pol = None
-        self._ctx = (round(el_t, 2), [round(float(v), 4) for v in self._pol["_x"][0]], list(self._pol["_ids"])) \
-            if self._pol else None
+            # the board brain (Transformer, the whole arena): its view is mixed in, it knows where everything is
+            self._board = None
+            try:
+                if self.p.get("board", True) and board_brain.ready():
+                    self._board = board_brain.ask(self, [h for h in hand if h], [n for _, n in playable], elixir, allies)
+            except Exception:
+                self._board = None
+            if self._pol and self._board and self._board.get("cards"):
+                pc, bc = self._pol.get("cards") or {}, self._board["cards"]
+                # two brains that learned differently (play history / whole arena): together they choose better
+                self._pol["cards"] = {n: 0.5 * pc.get(n, 0.0) + 0.5 * bc.get(n, 0.0) for n in set(pc) | set(bc)}
+                self._pol["play"] = 0.5 * self._pol["play"] + 0.5 * self._board["play"]
+        self._ctx = (round(el_t, 2), [round(float(v), 4) for v in self._pol["_x"][0]], list(self._pol["_ids"]),
+                     (self._board or {}).get("_in")) if self._pol else None
         d = self._decide(hand, ready, elixir, stable, playable, th, towers, now, allies)
         if d is None and self._ctx and el_t - self._last_wait >= 1.0:          # it chose to wait: a moment too
             self._last_wait = el_t
-            self.steps.append({"t": self._ctx[0], "x": self._ctx[1], "ids": self._ctx[2], "card": 0, "tile": 0})
+            self.steps.append({"t": self._ctx[0], "x": self._ctx[1], "ids": self._ctx[2], "card": 0, "tile": 0,
+                               **({"b": self._ctx[3]} if self._ctx[3] else {})})
         return d
 
     def _decide(self, hand, ready, elixir, stable, playable, th, towers, now, allies=()):
@@ -533,7 +548,7 @@ class Brain:
         if K.reserved(self.enemy_seen | self.predicted, n): return None
         if n in K.NOT_TOGETHER[0] and now - self.heavy_mine_at < 6: return None
         if card(n).get("cost", 4) >= 6 and elixir < 9 and not self.double_elixir(): return None
-        lt = policy.tile(pol, n)
+        lt = self._ltile(n)
         if not lt or lt[1] < 0.2: return None
         i = next(i for i, m in playable if m == n)
         return self._play((i, n), lt[0], f"learned brain ({pol['play']:.0%} play, {pol['cards'][n]:.0%} {n})", now)
@@ -608,7 +623,7 @@ class Brain:
                 x, y = THEIR_TOWERS[side]
                 return self._play((i, n), (int(x), int(y) - 1), f"{n} on their {side} tower", now)
             pt = pro.place(n, side) if self.p.get("pro_moves", True) else None   # where real players start it
-            lt = policy.tile(self._pol, n) if self.p.get("learned", True) and self._pol else None
+            lt = self._ltile(n) if self.p.get("learned", True) and self._pol else None
             if lt and lt[1] >= 0.3 and lane(lt[0][0]) == side: pt = lt[0]        # this moment's learned spot
             if "tank" in r and c.get("speed", 60) <= 60 and not counter:
                 if elixir >= 8 or double:                                       # a big push from the back
@@ -639,6 +654,20 @@ class Brain:
         self.support_due = None
         return self._play((i, n), (LEFT_BRIDGE_X if side == "left" else RIGHT_BRIDGE_X, y), f"{n} behind the {first}", now)
 
+    def _ltile(self, name, anywhere=False):
+        """Where the learned brains would put `name` now: the surer of the two."""
+        bt = pt = None
+        try:
+            if getattr(self, "_board", None): bt = board_brain.tile(self._board, name, anywhere)
+        except Exception:
+            bt = None
+        try:
+            if self._pol: pt = policy.tile(self._pol, name, anywhere)
+        except Exception:
+            pt = None
+        cands = [t for t in (bt, pt) if t]
+        return max(cands, key=lambda t: t[1]) if cands else None
+
     def life(self, u, x, y):
         """Life left (0..1) read from its health bar, 1 when unhurt / not read."""
         hs = getattr(self, "hp_seen", None) or {}
@@ -664,7 +693,7 @@ class Brain:
             self.enemy_seen.add(name)
             self._predict()
             rad = (c.get("splash") or SPELL_SPLASH_DEFAULT.get(name, 2.5))
-            self.danger.append((tx, ty, rad + 1.0, now + 2.5))
+            self.danger.append((tx, ty, rad + 1.0, now + 2.5, name))
 
     def _learn_opponent(self, cn, x, y):
         """The opponent just played `cn` at (x, y): the moment as THEY saw it (board turned round: their king at
@@ -684,7 +713,15 @@ class Brain:
             if not mo: return
             fx, ids = mo
             tx, ty = 17 - int(x), 31 - int(y)
-            self.opp_steps.append({"t": round(t, 2), "x": [round(float(v), 4) for v in fx], "ids": list(ids),
+            bi = None
+            try:
+                if board_brain.ready():
+                    bi = board_brain.inputs(self, [], 0.0, getattr(self, "_allies", []), mirror=True,
+                                            my_el=self.enemy_elixir, their_el=self._my_el, hand_override=hand)
+            except Exception:
+                bi = None
+            self.opp_steps.append({**({"b": bi} if bi else {}),
+                                   "t": round(t, 2), "x": [round(float(v), 4) for v in fx], "ids": list(ids),
                                    "card": policy.card_id(cn), "tile": max(0, min(31, ty)) * 18 + max(0, min(17, tx))})
         except Exception:
             pass
@@ -707,7 +744,7 @@ class Brain:
         if n in K.NOT_TOGETHER[0]: self.heavy_mine_at = now
         x, y = int(max(0, min(17, tile[0]))), int(tile[1])
         if "spell" not in roles(n):                     # not into a spell of theirs that is landing right there
-            for dx_, dy_, rad, _until in getattr(self, "danger", []):
+            for dx_, dy_, rad, _until, *_n in getattr(self, "danger", []):
                 if dist((x, y), (dx_, dy_)) <= rad:
                     y = int(max(1, dy_ - rad - 1)) if dy_ - rad - 1 >= 1 else int(min(14, dy_ + rad + 1))
                     break
@@ -718,7 +755,8 @@ class Brain:
         d = {"slot": i, "card": n, "tile": (x, y), "why": why, "t": round(self.elapsed(), 1)}
         if self._ctx:
             self.steps.append({"t": self._ctx[0], "x": self._ctx[1], "ids": self._ctx[2],
-                               "card": policy.card_id(n), "tile": y * 18 + x})
+                               "card": policy.card_id(n), "tile": y * 18 + x,
+                               **({"b": self._ctx[3]} if self._ctx[3] else {})})
             self._ctx = None
         self.plays.append(d)
         return d

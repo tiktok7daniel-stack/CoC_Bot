@@ -120,6 +120,12 @@ class RoyaleBot:
                 ti = policy.info()
                 logger.info(f"Clash Royale: learned brain ready (17 M real plays; picks the pro's card "
                             f"{100 * ti.get('card_in_hand', 0):.0f}% of the time)")
+            from royale import board as _bb
+            if _bb.ready():
+                bi = _bb.info()
+                logger.info(f"Clash Royale: board brain ready (a Transformer that reads the whole arena; "
+                            f"pro's card {100 * bi.get('card_in_hand', 0):.0f}%, tile within 1 "
+                            f"{100 * bi.get('tile_within1', 0):.0f}%)")
         except Exception:
             pass
         self.account = None

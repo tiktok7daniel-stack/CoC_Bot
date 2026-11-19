@@ -185,6 +185,10 @@ class RoyaleScreen(Screen):
             ti = policy.info()
             if ti:
                 txt += f"\n🧠 {tr('rt_policy')}: {100 * ti.get('card_in_hand', 0):.0f}% / {100 * ti.get('play', 0):.0f}%"
+            from royale import board as _bb
+            bi = _bb.info()
+            if bi:
+                txt += f"\n🧩 {tr('rt_board')}: {100 * bi.get('card_in_hand', 0):.0f}% / {100 * bi.get('tile_within1', 0):.0f}%"
             txt += f"\n📷 {tr('rt_frames')}: {frames.count()}"
             from royale import selfplay
             sp = selfplay.read_state(self.store.account or "main")

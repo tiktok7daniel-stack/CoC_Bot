@@ -27,7 +27,7 @@ KING = {"hp": 2400.0, "dps": 50.0, "range": 7.0}
 
 class U:
     __slots__ = ("name", "team", "x", "y", "hp", "hp0", "dmg", "hit", "cd", "rng", "spd", "air", "hits_air",
-                 "bonly", "splash", "building", "value", "wait", "tower")
+                 "bonly", "splash", "building", "value", "wait", "tower", "born")
 
     def __init__(self, name, team, x, y, c, hp_frac=1.0, wait=0.0, per_value=1.0):
         self.name, self.team, self.x, self.y = name, team, float(x), float(y)
@@ -47,6 +47,7 @@ class U:
         self.value = per_value / n
         self.wait = wait                         # deploy time left
         self.tower = None
+        self.born = 0.0
 
     def can_hit(self, o):
         return (self.hits_air or not o.air) and o.hp > 0
@@ -79,38 +80,126 @@ def _step_to(u, tx, ty, dt):
     u.y += (ty - u.y) * k
 
 
+def step(units, dt=DT):
+    """One moment of the arena: every unit waits / targets / walks / hits."""
+    alive = [u for u in units if u.hp > 0]
+    for u in alive:
+        if u.wait > 0:
+            u.wait -= dt
+            continue
+        u.cd = max(0.0, u.cd - dt)
+        foes = [o for o in alive if o.team != u.team and o.hp > 0 and o.wait <= 0]
+        if u.bonly:
+            cands = [o for o in foes if o.building]
+        else:
+            cands = [o for o in foes if u.can_hit(o) and (_dist(u, o) <= max(SIGHT, u.rng) or o.building)]
+        if u.tower or u.building:
+            cands = [o for o in cands if _dist(u, o) <= u.rng + 0.5]
+        if not cands: continue
+        tgt = min(cands, key=lambda o: _dist(u, o))
+        if _dist(u, tgt) <= u.rng + 0.5:
+            if u.cd <= 0 and u.dmg > 0:
+                if u.splash > 0:
+                    for o in foes:
+                        if u.can_hit(o) and math.hypot(o.x - tgt.x, o.y - tgt.y) <= u.splash: o.hp -= u.dmg
+                else:
+                    tgt.hp -= u.dmg
+                u.cd = u.hit
+        elif u.spd > 0:
+            _step_to(u, tgt.x, tgt.y, dt)
+
+
 def simulate(units, horizon=HORIZON):
     """units: list of U (towers included). -> the units after `horizon` seconds."""
     t = 0.0
     while t < horizon:
-        alive = [u for u in units if u.hp > 0]
-        if not any(u.team == "them" and not u.tower for u in alive): break
-        for u in alive:
-            if u.wait > 0:
-                u.wait -= DT
-                continue
-            u.cd = max(0.0, u.cd - DT)
-            foes = [o for o in alive if o.team != u.team and o.hp > 0 and o.wait <= 0]
-            if u.bonly:
-                cands = [o for o in foes if o.building]
-            else:
-                cands = [o for o in foes if u.can_hit(o) and (_dist(u, o) <= max(SIGHT, u.rng) or o.building)]
-            if u.tower or u.building:
-                cands = [o for o in cands if _dist(u, o) <= u.rng + 0.5]
-            if not cands: continue
-            tgt = min(cands, key=lambda o: _dist(u, o))
-            if _dist(u, tgt) <= u.rng + 0.5:
-                if u.cd <= 0 and u.dmg > 0:
-                    if u.splash > 0:
-                        for o in foes:
-                            if u.can_hit(o) and math.hypot(o.x - tgt.x, o.y - tgt.y) <= u.splash: o.hp -= u.dmg
-                    else:
-                        tgt.hp -= u.dmg
-                    u.cd = u.hit
-            elif u.spd > 0:
-                _step_to(u, tgt.x, tgt.y, DT)
+        if not any(u.team == "them" and not u.tower and u.hp > 0 for u in units): break
+        step(units, DT)
         t += DT
     return units
+
+
+# ------------------------------------------------------------------ a whole battle (both sides)
+class Arena:
+    """Both sides with their towers; cards are played into it and time runs: used to replay real games and see
+    the whole board at every moment (training the board brain), and by the bot to look ahead."""
+    LIFETIME = 30.0                                # buildings disappear after ~30 s
+
+    def __init__(self):
+        from royale.brain import OUR_TOWERS, THEIR_TOWERS
+        self.units = [_tower("us", *OUR_TOWERS["left"], "princess"), _tower("us", *OUR_TOWERS["right"], "princess"),
+                      _tower("us", *OUR_TOWERS["king"], "king"), _tower("them", *THEIR_TOWERS["left"], "princess"),
+                      _tower("them", *THEIR_TOWERS["right"], "princess"), _tower("them", *THEIR_TOWERS["king"], "king")]
+        self.t = 0.0
+        self.born = {}
+        self.pending = []                          # spells: (land time, team, x, y, card)
+
+    def play(self, team, name, x, y):
+        from royale.brain import card
+        c = card(name)
+        if not c: return
+        if c.get("kind") == "spell":
+            fly = 1.0 if name not in ("the_log", "barbarian_barrel", "zap") else 0.3
+            self.pending.append((self.t + fly, team, x + 0.5, y + 0.5, name))
+            return
+        n = max(1, c.get("count") or 1)
+        for k in range(n):
+            ang = 2 * math.pi * k / n
+            ox, oy = (0.6 * math.cos(ang), 0.6 * math.sin(ang)) if n > 1 else (0.0, 0.0)
+            u = U(name, team, x + 0.5 + ox, y + 0.5 + oy, c, 1.0, (c.get("deploy_ms") or 1000) / 1000.0, c.get("cost", 3))
+            u.born = self.t
+            self.units.append(u)
+            if u.building: self.born[id(u)] = self.t
+
+    def _land(self, team, x, y, name):
+        from royale.brain import card, SPELL_SPLASH_DEFAULT, SPELL_DAMAGE_DEFAULT
+        c = card(name)
+        rad = c.get("splash") or SPELL_SPLASH_DEFAULT.get(name, 2.5)
+        dmg = c.get("damage") or SPELL_DAMAGE_DEFAULT.get(name, 100)
+        for o in self.units:
+            if o.team != team and o.hp > 0 and math.hypot(o.x - x, o.y - y) <= rad:
+                o.hp -= dmg * (0.3 if o.tower else 1.0)
+        for un in c.get("units") or []:            # Goblin Barrel, Graveyard...: what it brings lands there
+            from royale.brain import card as _c
+            uc = _c(un) or {"hp": 80, "damage": 50, "hit_ms": 1100, "range": 0.8, "speed": 90, "count": 1}
+            for k in range(3 if name == "goblin_barrel" else 1):
+                nu = U(un, team, x + 0.4 * (k - 1), y, uc, 1.0, 0.0, c.get("cost", 3) / 3)
+                nu.born = self.t
+                self.units.append(nu)
+
+    def run_to(self, t, dt=0.4):
+        while self.t < t:
+            for p in [p for p in self.pending if p[0] <= self.t]:
+                self.pending.remove(p)
+                self._land(p[1], p[2], p[3], p[4])
+            step(self.units, dt)
+            self.t += dt
+            for u in self.units:
+                if u.building and not u.tower and self.t - self.born.get(id(u), self.t) > self.LIFETIME: u.hp = 0
+            self.units = [u for u in self.units if u.hp > 0 or u.tower]
+
+    def board(self, me="us"):
+        """[(mine, card, x, y, life, air, building, fresh, age)] seen from `me` (its king at y 0); fresh = still
+        deploying / a spell in the air; age = seconds since it was played."""
+        out = []
+        for u in self.units:
+            if u.tower or u.hp <= 0: continue
+            x, y = (u.x, u.y) if me == "us" else (17.0 - u.x, 31.0 - u.y)
+            out.append((u.team == me, u.name, x, y, max(0.0, u.hp) / u.hp0, u.air, u.building, u.wait > 0,
+                        self.t - u.born))
+        for _t, team, x, y, name in self.pending:              # spells in the air
+            if me != "us": x, y = 17.0 - x, 31.0 - y
+            out.append((team == me, name, x, y, 1.0, False, False, True, 0.0))
+        return out
+
+    def towers(self, me="us"):
+        """Life of the 6 towers, ours first (left, right, king) then theirs, seen from `me`."""
+        def side(team):
+            ts = [u for u in self.units if u.tower and u.team == team]
+            ts.sort(key=lambda u: (u.tower == "king", u.x if me == "us" else -u.x))
+            return [max(0.0, u.hp) / u.hp0 for u in ts]
+        other = "them" if me == "us" else "us"
+        return side(me) + side(other)
 
 
 # ------------------------------------------------------------------ planning
