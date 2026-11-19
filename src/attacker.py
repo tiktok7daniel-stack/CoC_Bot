@@ -78,9 +78,9 @@ class Attacker:
             if not surrendered and getattr(self, "deployed_heroes", None):
                 try: self.watch_heroes()                 # abilities by the heroes' health
                 except Exception: logger.debug("watch_heroes failed", exc_info=True)
-            # the last minute: battle speed 4x (the game shows the button then)
+            # battle speed 4x: tapped as soon as the button shows up (after the army is down)
             if not surrendered and not self._speed_done and time.monotonic() >= next_speed and self.battle_speed:
-                next_speed = time.monotonic() + 1.5
+                next_speed = time.monotonic() + 0.7
                 try: self.speed_up()
                 except Exception: logger.debug("speed_up failed", exc_info=True)
             if smart_px and not surrendered and time.monotonic() >= next_read:
@@ -1265,42 +1265,63 @@ class Attacker:
 
     def speed_up(self, frame=None):
         """
-        The battle speed button (shown in the last minute): tap it until it says 4x, so the end of the battle
-        plays 4 times faster. At most 3 taps per battle; read every time (never taps blindly).
+        The battle speed button (green square, "1x" / "2x" / "4x"): as soon as it shows up after the army is down,
+        it is tapped until it says 4x — the rest of the battle plays 4 times faster. Searched over the whole battle
+        screen (a bright green square with white text and a black outline in it — grass has neither), read before
+        every tap (never blind), and where it was found is remembered so the next battles look there first.
         """
-        import re, numpy as np, cv2
-        if getattr(self, "_speed_done", False) or getattr(self, "_speed_taps", 0) >= 3: return
+        import re, json, numpy as np, cv2
+        if getattr(self, "_speed_done", False) or getattr(self, "_speed_taps", 0) >= 4: return
         frame = frame if frame is not None else Frame_Handler.get_frame(grayscale=False)
-        x1, y1, x2, y2 = self.SPEED_AREA
-        area = Frame_Handler.crop(frame, x1, y1, x2, y2)
-        r, g, b = (area[..., i].astype(int) for i in range(3))
-        m = ((g > 165) & (g - r > 25) & (g - b > 70) & (r > 70)).astype(np.uint8)
-        n, _lab, st, _c = cv2.connectedComponentsWithStats(m, 8)
-        boxes = [st[i] for i in range(1, n) if st[i][4] > area.shape[0] * area.shape[1] * 0.02]
-        if not boxes: return
-        bx, by, bw, bh, _a = max(boxes, key=lambda s: s[4])
-        if not (0.6 < bw / max(1, bh) < 1.7): return                      # a square button, not a bar
-        h, w = area.shape[:2]
-        cx, cy = x1 + (bx + bw / 2) / w * (x2 - x1), y1 + (by + bh / 2) / h * (y2 - y1)
-        btn = Frame_Handler.crop(frame, cx - 0.04, cy - 0.06, cx + 0.04, cy + 0.06)
-        speed = None
-        try:                                    # the game's own font first: "4x" -> 4 (the x is read as an extra digit)
-            import game_digits
-            v, c = game_digits.read(btn, want_conf=True)
-            if v is not None and c >= 0.3 and str(v)[0] in "124": speed = int(str(v)[0])
-        except Exception:
+        H, W = frame.shape[:2]
+        mem = APP_DATA_DIR / "learn" / "speed_button.json"
+        spots = []
+        try:
+            spots.append(tuple(json.loads(mem.read_text(encoding="utf-8"))["xy"]))
+        except (OSError, ValueError, KeyError):
             pass
-        if speed is None:
-            text = " ".join(t[0] for t in ocr_boxes(btn)).lower().replace(" ", "").replace("q", "4").replace("a", "4")
-            mm = re.search(r"([1248])[x×%]", text) or re.search(r"([1248])", text)
-            if not mm: return
-            speed = int(mm.group(1))
-        if speed >= 4:
-            if getattr(self, "_speed_taps", 0): logger.info("Battle speed 4x")
-            self._speed_done = True
+        y_a, y_b = 0.08, 0.86                                          # not the top bar / the card bar
+        area = frame[int(H * y_a):int(H * y_b)]
+        r, g, b = (area[..., i].astype(int) for i in range(3))
+        m = ((g > 150) & (g - r > 25) & (g - b > 60) & (r > 60)).astype(np.uint8)
+        m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+        n, _lab, st, _c = cv2.connectedComponentsWithStats(m, 8)
+        for i in range(1, n):
+            bx, by, bw, bh, a = st[i]
+            if not (W * 0.03 <= bw <= W * 0.11 and 0.7 < bw / max(1, bh) < 1.45): continue
+            box = area[by:by + bh, bx:bx + bw].astype(int)
+            white = ((box.min(axis=2) > 225)).mean()
+            black = ((box.max(axis=2) < 50)).mean()
+            if white < 0.02 or black < 0.02: continue                   # a button with its "4x": white + black outline
+            spots.append(((bx + bw / 2) / W, (y_a * H + by + bh / 2) / H))
+        for cx, cy in spots:
+            btn = Frame_Handler.crop(frame, cx - 0.035, cy - 0.06, cx + 0.035, cy + 0.06)
+            if btn.size == 0: continue
+            speed = None
+            try:                                # the game's own font first: "4x" -> 4 (the x is read as an extra digit)
+                import game_digits
+                v, c = game_digits.read(btn, want_conf=True)
+                if v is not None and c >= 0.3 and str(v)[0] in "124": speed = int(str(v)[0])
+            except Exception:
+                pass
+            if speed is None:
+                text = " ".join(t[0] for t in ocr_boxes(btn)).lower().replace(" ", "").replace("q", "4").replace("a", "4")
+                mm = re.search(r"^([124])[x×%*]?$", text) or re.search(r"([124])[x×]", text)
+                if not mm: continue
+                speed = int(mm.group(1))
+            try:
+                mem.parent.mkdir(parents=True, exist_ok=True)
+                mem.write_text(json.dumps({"xy": [round(cx, 4), round(cy, 4)]}), encoding="utf-8")
+            except OSError:
+                pass
+            if speed >= 4:
+                if getattr(self, "_speed_taps", 0): logger.info("Battle speed 4x")
+                self._speed_done = True
+                return
+            logger.info(f"Battle speed {speed}x -> tapping it (4x wanted)")
+            Input_Handler.click(cx, cy)
+            self._speed_taps = getattr(self, "_speed_taps", 0) + 1
             return
-        Input_Handler.click(cx, cy)
-        self._speed_taps = getattr(self, "_speed_taps", 0) + 1
 
     def later(self, at, fn):
         """Run fn at time `at` (monotonic) from the battle-end loop, so nothing waits for it."""
