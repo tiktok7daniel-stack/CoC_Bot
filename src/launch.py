@@ -50,8 +50,24 @@ def launch_proc(args):
         logger.info("Clash Royale mode: the bot plays Clash Royale battles")
         preflight()
         from royale import game as _royale
-        _royale.run()
-        return
+        try:                     # a crash inside the program itself (not Python) is written down too
+            import faulthandler, utils as _uu
+            _fh = open(_uu.APP_DATA_DIR / f"crash_{args.id}.log", "a", encoding="utf-8")
+            faulthandler.enable(_fh)
+        except Exception:
+            pass
+        fails = 0
+        while True:              # an error is logged (and sent) and the loop goes on, the bot is not restarted
+            try:
+                _royale.run()
+                return
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except Exception as e:
+                fails += 1
+                logger.exception(f"Clash Royale: error ({type(e).__name__}: {e}) — going on")
+                if fails >= 5: raise
+                time.sleep(5)
     try:   # a new version starts with a clean problem list (reports then show only what still happens)
         import stats, version
         from pathlib import Path

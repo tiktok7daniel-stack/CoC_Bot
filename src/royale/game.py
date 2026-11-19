@@ -171,7 +171,11 @@ class RoyaleBot:
             ready = [i for i in st["ready"] if i < len(st["hand"]) and
                      time.monotonic() - self._slot_used.get(i, 0) > 0.8 and
                      (__import__("royale.brain", fromlist=["card"]).card(st["hand"][i]).get("cost", 11) <= el)]
-            d = self.brain.decide(st["hand"], ready, el, st["enemies"], st["allies"], st["towers"])
+            try:
+                d = self.brain.decide(st["hand"], ready, el, st["enemies"], st["allies"], st["towers"])
+            except Exception:
+                log.warning("Clash Royale: a decision failed — next look", exc_info=True)
+                d = None
             if self.brain.arch and self.brain.arch != getattr(self, "_arch_logged", None):
                 self._arch_logged = self.brain.arch
                 log.info(f"Clash Royale: their deck looks like {self.brain.arch} "

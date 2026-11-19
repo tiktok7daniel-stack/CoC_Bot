@@ -278,9 +278,22 @@ def run(epochs=30, n_bulk=4):
     m0 = YOLO(str(base)).val(data=str(yaml_p), imgsz=800, batch=16, device=0, verbose=False, plots=False)
     base_map = float(m0.box.map50)
     status(stage="train", base_map50=round(base_map, 4), note=f"{epochs} rounds on the graphics card")
-    m = YOLO(str(base))
-    m.train(data=str(yaml_p), epochs=epochs, imgsz=800, batch=-1, device=0, patience=8, workers=4,
-            project=str(ROOT / "runs"), name="cr", exist_ok=True, plots=False, verbose=False)
+    # a fixed small batch: the card is shared with LDPlayer and the bot's eyes ("all it can take" ran out of
+    # memory -> cuDNN EXECUTION_FAILED); on a cuDNN error once more without cuDNN (slower, works)
+    import torch
+    torch.backends.cudnn.benchmark = False
+    for attempt in range(2):
+        try:
+            m = YOLO(str(base))
+            m.train(data=str(yaml_p), epochs=epochs, imgsz=800, batch=6 if attempt == 0 else 4, device=0, patience=8,
+                    workers=2, project=str(ROOT / "runs"), name="cr", exist_ok=True, plots=False, verbose=False,
+                    amp=attempt == 0)
+            break
+        except RuntimeError as e:
+            if attempt or "cudnn" not in str(e).lower(): raise
+            log(f"cuDNN problem ({e}) — training again without cuDNN")
+            torch.backends.cudnn.enabled = False
+            torch.cuda.empty_cache()
     best = ROOT / "runs" / "cr" / "weights" / "best.pt"
     m1 = YOLO(str(best)).val(data=str(yaml_p), imgsz=800, batch=16, device=0, verbose=False, plots=False)
     new_map = float(m1.box.map50)
@@ -308,6 +321,7 @@ def due(acc="main"):
         return False                                             # one is running
     if st.get("stage") == "no_gpu" and time.time() - st.get("t", 0) < 7 * 86400: return False
     if st.get("finished") and time.time() - st["finished"] < 7 * 86400: return False
+    if st.get("stage") == "error" and time.time() - st.get("t", 0) < 3 * 86400: return False   # not on every start
     return True
 
 

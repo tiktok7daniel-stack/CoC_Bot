@@ -6,11 +6,14 @@ class OnnxDetector:
     def __init__(self, model_path):
         self.model_path = model_path
 
-        # the graphics card first (CUDA, or DirectML = any card on Windows), the processor last
-        av = ort.get_available_providers()
-        providers = [p for p in ("CUDAExecutionProvider", "DmlExecutionProvider") if p in av] + ["CPUExecutionProvider"]
+        # the small fast models stay on the processor (~70 ms a look): the graphics card is the big model's
+        # (royale.strong_eyes, in its own thread) — two models on one DirectML card from two threads at once
+        # crashed the whole bot at the start of a battle (5.35/5.36)
+        providers = ["CPUExecutionProvider"]
+        so = ort.SessionOptions()
+        so.intra_op_num_threads = 2
         self.sess = ort.InferenceSession(
-            self.model_path,
+            self.model_path, sess_options=so,
             providers=providers,
         )
         self.output_name = self.sess.get_outputs()[0].name
