@@ -49,7 +49,7 @@ def _write_state(acc, st):
 
 
 # ------------------------------------------------------------------ during / after a battle
-def record(acc, steps, towers, won):
+def record(acc, steps, towers, won, opp_steps=()):
     """steps: [{"t", "x", "ids", "card", "tile"}] (card 0 = waited); towers: [(t, {name: hp})].
     -> the battle saved with a return for every moment."""
     if not steps or won is None: return
@@ -69,11 +69,14 @@ def record(acc, steps, towers, won):
         return cur
     final = 1.0 if won else -1.0
     rows = []
-    for s in steps:
-        a, b = hp(s["t"]), hp(s["t"] + HORIZON)
-        dealt = sum(max(0.0, a.get(k, 1) - b.get(k, a.get(k, 1))) for k in a if k.startswith("their"))
-        lost = sum(max(0.0, a.get(k, 1) - b.get(k, a.get(k, 1))) for k in a if k.startswith("our"))
-        rows.append({**s, "r": round(dealt - lost + 0.5 * final, 4)})
+    # our moments, and the opponent's (seen from their side: what they took is what we lost, their win our loss)
+    for lst, opp in ((steps, False), (opp_steps or (), True)):
+        for s in lst:
+            a, b = hp(s["t"]), hp(s["t"] + HORIZON)
+            dealt = sum(max(0.0, a.get(k, 1) - b.get(k, a.get(k, 1))) for k in a if k.startswith("their"))
+            lost = sum(max(0.0, a.get(k, 1) - b.get(k, a.get(k, 1))) for k in a if k.startswith("our"))
+            r = (lost - dealt - 0.5 * final) if opp else (dealt - lost + 0.5 * final)
+            rows.append({**s, "r": round(r, 4), **({"o": 1} if opp else {})})
     d = bdir(acc)
     d.mkdir(parents=True, exist_ok=True)
     st = read_state(acc)

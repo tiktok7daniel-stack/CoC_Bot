@@ -170,6 +170,8 @@ class Brain:
         self.enemy_plays = []                  # (second, card, lane): how they played (the match summary)
         self.enemy_hist = []                   # (second, card, tile x, tile y): what the learned brain sees
         self.steps = []                        # what it saw + what it did, every moment (royale.selfplay learns)
+        self.opp_steps = []                    # the same for every card the OPPONENT played (seen from their side)
+        self._my_el = 5.0
         self.tower_log = []                    # (second, towers) once a second: how each moment turned out
         self._ctx, self._last_wait = None, -9.0
         self._pol = None
@@ -241,6 +243,7 @@ class Brain:
                 # bot thought it was always ahead and spent everything (5.38)
                 again = cn and any(p[1] == cn and self.elapsed() - p[0] < 6.0 for p in self.enemy_hist[-4:])
                 if cn and not group_recent and not again and u not in SPAWNED:   # one card, even 3 skeletons
+                    self._learn_opponent(cn, x, y)                    # their move: a lesson too
                     self.enemy_elixir = max(0.0, self.enemy_elixir - card(cn).get("cost", 3))
                     self.enemy_cycle.append(cn)
                     self.enemy_plays.append((round(self.elapsed()), cn, lane(x)))
@@ -430,6 +433,7 @@ class Brain:
         el_t = self.elapsed()
         if towers and (not self.tower_log or el_t - self.tower_log[-1][0] >= 1.0):
             self.tower_log.append((round(el_t, 1), dict(towers)))
+        self._my_el = elixir
         if now - self.last_play < 0.55: return None                              # one card at a time (the game
                                                                                  # shows it ~0.5 s later)
         towers = towers or {}
@@ -618,6 +622,29 @@ class Brain:
         y = 1 if self.support_due_back else 11
         self.support_due = None
         return self._play((i, n), (LEFT_BRIDGE_X if side == "left" else RIGHT_BRIDGE_X, y), f"{n} behind the {first}", now)
+
+    def _learn_opponent(self, cn, x, y):
+        """The opponent just played `cn` at (x, y): the moment as THEY saw it (board turned round: their king at
+        y 0), what they did — kept to learn from. Their hand: their deck (seen + guessed) minus their last 4."""
+        try:
+            t = self.elapsed()
+            mine = [(d["t"], d["card"], 17 - d["tile"][0], 31 - d["tile"][1]) for d in self.plays]
+            theirs = [(et, c, 17 - ex, 31 - ey) for et, c, ex, ey in self.enemy_hist]
+            wait = []
+            for _t, c, _x, _y in reversed(self.enemy_hist):
+                if c not in wait: wait.append(c)
+                if len(wait) == 4: break
+            deck = list(dict.fromkeys(list(self.enemy_seen) + [cn] + sorted(self.predicted)))[:8]
+            hand = [c for c in deck if c not in wait][:4]
+            if cn not in hand: hand = ([cn] + hand)[:4]
+            mo = policy.moment(t, self.enemy_elixir, self._my_el, mine, theirs, hand)
+            if not mo: return
+            fx, ids = mo
+            tx, ty = 17 - int(x), 31 - int(y)
+            self.opp_steps.append({"t": round(t, 2), "x": [round(float(v), 4) for v in fx], "ids": list(ids),
+                                   "card": policy.card_id(cn), "tile": max(0, min(31, ty)) * 18 + max(0, min(17, tx))})
+        except Exception:
+            pass
 
     def _predict(self):
         """Their whole deck from the cards seen: cards played with them in 45%+ of 252k real decks."""

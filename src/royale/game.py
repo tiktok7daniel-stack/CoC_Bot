@@ -255,7 +255,8 @@ class RoyaleBot:
                     try:                                    # the learned brain learns from this battle by itself
                         from royale import selfplay
                         if not getattr(self, "_tutorial_battle", False):
-                            selfplay.record(_u().INSTANCE_ID, self.brain.steps, self.brain.tower_log, won)
+                            selfplay.record(_u().INSTANCE_ID, self.brain.steps, self.brain.tower_log, won,
+                                            self.brain.opp_steps)
                             if selfplay.due(_u().INSTANCE_ID):
                                 log.info("Clash Royale: the learned brain trains itself on its own battles (background)")
                                 selfplay.start(_u().INSTANCE_ID)

@@ -13,3 +13,8 @@ Not affiliated with, endorsed by, or representative of Supercell.
 Statistics (what answered what, where cards are played, what follows what) counted from the public
 IL_Replay dataset (https://huggingface.co/datasets/VanguardX101/IL_Replay, 252,197 games) by
 scripts/build_royale_pro.py. Only aggregated counts are shipped, no replay data.
+
+## KataCR dataset (training data, downloaded on the user's PC, not shipped)
+Clash-Royale-Detection-Dataset by wty-yy (https://github.com/wty-yy/Clash-Royale-Detection-Dataset), MIT License,
+Copyright (c) 2024 wty: real labelled arena pictures and cut-out units used by royale.trainer to train the eyes,
+including generated pictures (cut-outs pasted onto arenas, the KataCR "generative dataset" method).

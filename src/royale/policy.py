@@ -76,6 +76,12 @@ def features(t, my_el, their_el, en, own, hand, m):
     return f, ids + h + [0] * (m["n_hand"] - len(h))
 
 
+def moment(t, my_el, their_el, en, own, hand):
+    """(float features, card ids) of a moment, without asking the network (for moments to learn from)."""
+    if not _load(): return None
+    return features(t, my_el, their_el, en, own, hand, _S["meta"])
+
+
 def _softmax(v):
     mx = max(v)
     e = [math.exp(x - mx) for x in v]

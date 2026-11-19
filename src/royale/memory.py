@@ -59,10 +59,13 @@ class Memory:
         self.pending = keep
 
     def bonus(self, threat, mine):
-        """-1.5 .. +1.5: how our own battles rate `mine` against `threat` (nothing until tried twice)."""
+        """How our own battles rate `mine` against `threat` (nothing until tried twice): -1.5 .. +1.5, and a
+        mistake made 3+ times that almost never works (< 30%) is not made again (-4)."""
         st = self.d["answers"].get(f"{threat}|{mine}")
         if not st or st["ok"] + st["bad"] < 2: return 0.0
-        return 3.0 * ((st["ok"] + 1) / (st["ok"] + st["bad"] + 2) - 0.5)
+        rate = (st["ok"] + 1) / (st["ok"] + st["bad"] + 2)
+        if st["bad"] >= 3 and st["ok"] / (st["ok"] + st["bad"]) < 0.3: return -4.0
+        return 3.0 * (rate - 0.5)
 
     # -------------------------------------------------------------- after the battle
     def end(self, won, enemy_plays, arch):

@@ -38,7 +38,8 @@ def default_settings():
             "keep_frames": True,     # keep pictures of its battles: the eyes are trained on this PC's own screen
             "roboflow_datasets": [   # Roboflow datasets added to the training (needs the Roboflow key in Bot settings)
                 "yolotrain-c7s7v/clash-royale-ut3g8/4", "clashroyale/clash-royale-of3d3/3",
-                "angelfire/clash-royale-cylln/5", "clash-pxdrz/clash_grid/1", "dampiix/clash-royale-units/1"],
+                "angelfire/clash-royale-cylln/5", "clash-pxdrz/clash_grid/1", "dampiix/clash-royale-units/1",
+                "nathan-yan/clash-royale-detection-cysig/7"],
         },
         "tasks": {
             "home_base": _cfg("UPGRADE_HOME_BASE", True),

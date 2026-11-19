@@ -26,7 +26,8 @@ HF = "https://huggingface.co"
 REPO = "SudhishNeel/clash-royale-detection"
 BASE_PT_URL = "https://huggingface.co/SudhishNeel/clash-royale-detector/resolve/main/v8/best.pt"
 DEFAULT_ROBOFLOW = ["yolotrain-c7s7v/clash-royale-ut3g8/4", "clashroyale/clash-royale-of3d3/3",
-                    "angelfire/clash-royale-cylln/5", "clash-pxdrz/clash_grid/1", "dampiix/clash-royale-units/1"]
+                    "angelfire/clash-royale-cylln/5", "clash-pxdrz/clash_grid/1", "dampiix/clash-royale-units/1",
+                    "nathan-yan/clash-royale-detection-cysig/7"]
 
 
 def status(**kw):
@@ -253,6 +254,83 @@ def take_roboflow(names, key, datasets):
 
 
 # ------------------------------------------------------------------ 3-5. train, test, use
+KATACR_ZIP = "https://codeload.github.com/wty-yy/Clash-Royale-Detection-Dataset/zip/refs/heads/main"
+
+
+def take_katacr(names, n_real=3000, n_synth=3000):
+    """KataCR's open dataset (wty-yy, MIT): ~7.4k real labelled arena pictures + 4.6k cut-out units of 154 kinds.
+    The real ones are used as they are; the cut-outs are pasted onto real arenas in new places and mixes (the
+    KataCR 'generative dataset' idea): thousands of new pictures with exact labels, every unit and evolution."""
+    import io, re, zipfile
+    import cv2, numpy as np
+    z_p = ROOT / "katacr.zip"
+    if not z_p.exists() or z_p.stat().st_size < 10_000_000:
+        log("KataCR dataset: downloading (once, ~1-2 GB)")
+        _get(KATACR_ZIP, z_p)
+    z = zipfile.ZipFile(z_p)
+    allf = z.namelist()
+    yml = next((f for f in allf if f.endswith("images/part2/ClashRoyale_detection.yaml")), None)
+    if not yml: log("KataCR: no class list"); return 0
+    kc = {int(m.group(1)): m.group(2).strip() for m in re.finditer(r"^\s+(\d+):\s*(\S+)", z.read(yml).decode(), re.M)}
+    ids = {norm(v): k for k, v in names.items()}
+    remap = {k: ids.get(norm(v)) for k, v in kc.items()}
+    log(f"KataCR: classes matched {sum(v is not None for v in remap.values())}/{len(remap)}")
+    names_set = set(allf)
+    jpgs = [f for f in allf if "/images/part2/" in f and f.endswith(".jpg") and (f[:-4] + ".txt") in names_set]
+    random.shuffle(jpgs)
+
+    def load(f):
+        data = z.read(f)
+        img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+        if img is None: return None, None, []
+        h, w = img.shape[:2]
+        boxes = []
+        for line in z.read(f[:-4] + ".txt").decode().splitlines():
+            p = line.split()
+            if len(p) < 5: continue
+            c = remap.get(int(float(p[0])))
+            if c is None: continue
+            cx, cy, bw, bh = (float(x) for x in p[1:5])
+            boxes.append((c, (cx - bw / 2) * w, (cy - bh / 2) * h, (cx + bw / 2) * w, (cy + bh / 2) * h))
+        return data, img, boxes
+    n = 0
+    for f in jpgs[:n_real]:
+        data, img, boxes = load(f)
+        if img is None or not boxes: continue
+        _write(data, ".jpg", boxes, img.shape[1], img.shape[0], f"kcr_{n}")
+        n += 1
+    # the generator: cut-out units (PNG with transparency) pasted onto real arenas
+    sprites = {}
+    for f in allf:
+        m = re.search(r"/images/segment/([^/]+)/[^/]+\.png$", f)
+        if m and ids.get(norm(m.group(1))) is not None: sprites.setdefault(ids[norm(m.group(1))], []).append(f)
+    made = 0
+    pool = jpgs[n_real:] or jpgs
+    for i in range(n_synth if sprites else 0):
+        _d, img, boxes = load(random.choice(pool))
+        if img is None: continue
+        h, w = img.shape[:2]
+        boxes = list(boxes)
+        for _ in range(random.randint(4, 12)):
+            c = random.choice(list(sprites))
+            sp = cv2.imdecode(np.frombuffer(z.read(random.choice(sprites[c])), np.uint8), cv2.IMREAD_UNCHANGED)
+            if sp is None or sp.ndim != 3 or sp.shape[2] != 4: continue
+            if random.random() < 0.5: sp = sp[:, ::-1]
+            sh, sw = sp.shape[:2]
+            if sw >= w * 0.6 or sh >= h * 0.4: continue
+            x0 = random.randint(0, w - sw); y0 = random.randint(int(h * 0.05), max(int(h * 0.05) + 1, h - sh - int(h * 0.05)))
+            a = sp[:, :, 3:4].astype(np.float32) / 255.0
+            roi = img[y0:y0 + sh, x0:x0 + sw].astype(np.float32)
+            img[y0:y0 + sh, x0:x0 + sw] = (roi * (1 - a) + sp[:, :, :3].astype(np.float32) * a).astype(np.uint8)
+            boxes.append((c, x0, y0, x0 + sw, y0 + sh))
+        ok, enc = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 90])
+        if ok:
+            _write(enc.tobytes(), ".jpg", boxes, w, h, f"kcrsyn_{i}")
+            made += 1
+    log(f"KataCR: {n} real labelled pictures + {made} generated ones")
+    return n + made
+
+
 def take_own(names):
     """The bot's own battle pictures (royale.frames) with the sure detections of the big model as labels."""
     from royale import frames
@@ -290,10 +368,11 @@ def run(epochs=30, n_bulk=4):
     try: acc_cfg = (settings.load(sys.argv[2] if len(sys.argv) > 2 else "main") or {}).get("royale", {})
     except Exception: pass
     take_roboflow(names, (app.get("roboflow_api_key") or "").strip(), acc_cfg.get("roboflow_datasets") or DEFAULT_ROBOFLOW)
-    try:
-        take_own(names)
-    except Exception as e:
-        log(f"own pictures skipped: {e}")
+    for take in (take_katacr, take_own):
+        try:
+            take(names)
+        except Exception as e:
+            log(f"{take.__name__} skipped: {e}")
     yaml_p = ROOT / "data.yaml"
     yaml_p.write_text(json.dumps({"path": str(DATA), "train": "images/train", "val": "images/val",
                                   "names": {k: v for k, v in names.items()}}), encoding="utf-8")
