@@ -253,6 +253,27 @@ def take_roboflow(names, key, datasets):
 
 
 # ------------------------------------------------------------------ 3-5. train, test, use
+def take_own(names):
+    """The bot's own battle pictures (royale.frames) with the sure detections of the big model as labels."""
+    from royale import frames
+    if not frames.DIR.exists(): return 0
+    ids = {v: k for k, v in names.items()}
+    n = 0
+    for js in sorted(frames.DIR.glob("*.json")):
+        img = js.with_suffix(".jpg")
+        if not img.exists(): continue
+        try:
+            boxes = json.loads(js.read_text(encoding="utf-8")).get("boxes", [])
+        except (OSError, ValueError):
+            continue
+        rows = [(ids[b[0]], b[2], b[3], b[4], b[5]) for b in boxes if b[0] in ids]
+        if len(rows) < 3: continue
+        _write(img.read_bytes(), ".jpg", rows, 568, 896, f"own_{js.stem}")
+        n += 1
+    log(f"This PC's own battles: {n} pictures")
+    return n
+
+
 def run(epochs=30, n_bulk=4):
     random.seed(7)
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -269,6 +290,10 @@ def run(epochs=30, n_bulk=4):
     try: acc_cfg = (settings.load(sys.argv[2] if len(sys.argv) > 2 else "main") or {}).get("royale", {})
     except Exception: pass
     take_roboflow(names, (app.get("roboflow_api_key") or "").strip(), acc_cfg.get("roboflow_datasets") or DEFAULT_ROBOFLOW)
+    try:
+        take_own(names)
+    except Exception as e:
+        log(f"own pictures skipped: {e}")
     yaml_p = ROOT / "data.yaml"
     yaml_p.write_text(json.dumps({"path": str(DATA), "train": "images/train", "val": "images/val",
                                   "names": {k: v for k, v in names.items()}}), encoding="utf-8")

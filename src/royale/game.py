@@ -114,6 +114,21 @@ class RoyaleBot:
         except Exception:
             logger.debug("Clash Royale: training not started", exc_info=True)
         self.unknown_since = None
+        try:                                         # the learned brain loaded now, not in the first decision
+            from royale import policy
+            if policy.ready():
+                ti = policy.info()
+                logger.info(f"Clash Royale: learned brain ready (17 M real plays; picks the pro's card "
+                            f"{100 * ti.get('card_in_hand', 0):.0f}% of the time)")
+        except Exception:
+            pass
+        self.account = None
+        if self.s.get("manage_account", True):
+            try:
+                from royale.account import Account
+                self.account = Account(_u().INSTANCE_ID, logger, self.notify)
+            except Exception:
+                logger.debug("Clash Royale: account manager off", exc_info=True)
 
     # -------------------------------------------------------------- one battle
     def battle(self):
@@ -122,6 +137,7 @@ class RoyaleBot:
         from royale import learn
         self.params = learn.choose(_u().INSTANCE_ID)              # this battle's way of playing (learned)
         self.brain.p = dict(learn.DEFAULT, **self.params)
+        if not self.s.get("learned_brain", True): self.brain.p["learned"] = False
         self.brain.reset()
         self.battles += 1
         log.info("Clash Royale: this battle's settings " + ", ".join(f"{k}={v}" for k, v in self.params.items()))
@@ -196,6 +212,12 @@ class RoyaleBot:
                 log.info(f"Clash Royale: {d['card']} -> tile {d['tile']} ({d['why']}) — elixir {st['elixir']:.0f}, "
                          f"theirs ~{self.brain.enemy_elixir:.0f}")
             last = st
+            if self.s.get("keep_frames", True):
+                try:
+                    from royale import frames
+                    frames.keep()
+                except Exception:
+                    pass
             time.sleep(max(0.0, LOOK_EVERY - (time.monotonic() - t0)))
         try:
             from royale import strong_eyes
@@ -228,6 +250,8 @@ class RoyaleBot:
                     won = win[1] > 0.45
                     self.wins += won
                     self.losses += not won
+                    if self.account:
+                        self.account.count("battles"); self.account.count("wins", int(won))
                     try:
                         from royale import learn
                         self._was_tutorial = getattr(self, "_tutorial_battle", False)
@@ -274,6 +298,10 @@ class RoyaleBot:
                 continue
             ws = words(fr)
             b = find_word(ws, "battle", y_min=0.55, y_max=0.9)
+            if b and self.account and self.account.due(self.battles):
+                log.info("Clash Royale: looking after the account (cards, clan, rewards)")
+                self.account.run()
+                continue
             if b:
                 self.unknown_since = None
                 self._reward_taps = 0

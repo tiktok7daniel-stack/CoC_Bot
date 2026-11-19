@@ -29,6 +29,7 @@ from collections import deque
 
 from royale import knowledge as K
 from royale import pro
+from royale import policy
 
 _ROOT = getattr(sys, "_MEIPASS", None) or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _DB = {"cards": None}
@@ -167,6 +168,8 @@ class Brain:
         self.support_due_back = False
         self.tower_seen = {}                   # their / our princess towers: highest health seen (crowns)
         self.enemy_plays = []                  # (second, card, lane): how they played (the match summary)
+        self.enemy_hist = []                   # (second, card, tile x, tile y): what the learned brain sees
+        self._pol = None
         self.predicted = set()                 # their whole deck guessed from the cards seen (252k decks)
         if getattr(self, "mem", None): self.mem.start()
 
@@ -234,6 +237,7 @@ class Brain:
                     self.enemy_elixir = max(0.0, self.enemy_elixir - card(cn).get("cost", 3))
                     self.enemy_cycle.append(cn)
                     self.enemy_plays.append((round(self.elapsed()), cn, lane(x)))
+                    self.enemy_hist.append((self.elapsed(), cn, x, y))
                     self._predict()
                     self.enemy_seen.add(cn)
                     a, plan = K.archetype(self.enemy_seen | self.predicted)
@@ -366,6 +370,9 @@ class Brain:
             pro_hand = getattr(self, "_pro_hand", None) or {}
             if pro_hand.get(name):
                 score += 3.0 * pro_hand[name] / max(pro_hand.values())
+        pol = (self._pol or {}).get("cards") or {}
+        if pol.get(name) and self.p.get("learned", True):            # the learned brain's choice in this moment
+            score += 2.5 * pol[name] / max(pol.values())
         if getattr(self, "mem", None):                              # what worked in OUR battles against it
             score += self.mem.bonus(threat.get("main"), name)
         cost = c.get("cost", 4)
@@ -378,6 +385,9 @@ class Brain:
         cx, cy = threat["center"] or OUR_TOWERS[side]
         where = K.counter(threat.get("main"), card(threat.get("main") or "")).get("where")
         tx, ty = OUR_TOWERS[side]
+        if self.p.get("learned", True) and "spell" not in r and self._pol:
+            lt = policy.tile(self._pol, name)                                    # the learned brain, this moment
+            if lt and lt[1] >= 0.25 and lt[0][1] <= 14 and lane(lt[0][0]) == side: return lt[0]
         if self.p.get("pro_moves", True) and "spell" not in r and threat.get("main"):
             pt = pro.answer_tile(threat["main"], cy, side, name)                 # where real players put it
             if pt and pt[1] <= 14: return pt
@@ -417,6 +427,14 @@ class Brain:
                     and card(hand[i]).get("cost", 11) <= elixir]
         if not playable: return None
         th = self.threats(stable)
+        self._pol = None
+        if self.p.get("learned", True):
+            try:
+                own = [(d["t"], d["card"], d["tile"][0], d["tile"][1]) for d in self.plays]
+                self._pol = policy.ask(self.elapsed(), elixir, self.enemy_elixir, self.enemy_hist, own,
+                                       [h for h in hand if h], [n for _, n in playable])
+            except Exception:
+                self._pol = None
 
         # 1. defend the lane in more danger
         side = max(th, key=lambda s: th[s]["value"])
@@ -453,6 +471,10 @@ class Brain:
         att = self._attack(playable, elixir, stable, allies, towers, now)
         if att: return att
 
+        # 3b. the learned brain wants to play now (what real players did in moments like this one): checked by the rules
+        lp = self._learned_play(playable, elixir, now)
+        if lp: return lp
+
         # 4. never leak elixir
         if elixir >= self.p.get("cycle_at", 9.5):
             cheap = min(playable, key=lambda p: (("win" in roles(p[1])), card(p[1]).get("cost", 9)))
@@ -462,6 +484,21 @@ class Brain:
                 return None
             return self._play(cheap, tile, "full elixir: cycling at the back", now)
         return None
+
+    def _learned_play(self, playable, elixir, now):
+        pol = self._pol
+        if not pol or not pol.get("cards") or pol["play"] < self.p.get("learned_play", 0.7): return None
+        n = max(pol["cards"], key=pol["cards"].get)
+        if pol["cards"][n] < 0.4: return None
+        r = roles(n)
+        if "spell" in r: return None                                  # spells: only where the rules see a target
+        if K.reserved(self.enemy_seen | self.predicted, n): return None
+        if n in K.NOT_TOGETHER[0] and now - self.heavy_mine_at < 6: return None
+        if card(n).get("cost", 4) >= 6 and elixir < 9 and not self.double_elixir(): return None
+        lt = policy.tile(pol, n)
+        if not lt or lt[1] < 0.2: return None
+        i = next(i for i, m in playable if m == n)
+        return self._play((i, n), lt[0], f"learned brain ({pol['play']:.0%} play, {pol['cards'][n]:.0%} {n})", now)
 
     def _spell_value(self, name, stable):
         rad = (card(name).get("splash") or SPELL_SPLASH_DEFAULT.get(name, 2.5)) * 1.0
@@ -524,6 +561,8 @@ class Brain:
                 x, y = THEIR_TOWERS[side]
                 return self._play((i, n), (int(x), int(y) - 1), f"{n} on their {side} tower", now)
             pt = pro.place(n, side) if self.p.get("pro_moves", True) else None   # where real players start it
+            lt = policy.tile(self._pol, n) if self.p.get("learned", True) and self._pol else None
+            if lt and lt[1] >= 0.3 and lane(lt[0][0]) == side: pt = lt[0]        # this moment's learned spot
             if "tank" in r and c.get("speed", 60) <= 60 and not counter:
                 if elixir >= 8 or double:                                       # a big push from the back
                     back = pt if pt and pt[1] <= 3 else (LEFT_BRIDGE_X if side == "left" else RIGHT_BRIDGE_X, 1)

@@ -167,6 +167,7 @@ def submit(frame_rgb):
                 except Exception:
                     d = []
                 _A["dets"], _A["t"] = d, t0                     # the time of the picture, not of the answer
+                _A["seen"] = (fr, d)                            # the picture with what was found in it (royale.frames)
                 _A["ms"] = (time.monotonic() - t0) * 1000
         _A["thread"] = threading.Thread(target=work, daemon=True, name="cr-strong-eyes-run")
         _A["thread"].start()
@@ -175,6 +176,11 @@ def submit(frame_rgb):
 def latest(max_age=0.6):
     """What the big model saw in a picture at most max_age seconds old, else []."""
     return _A["dets"] if time.monotonic() - _A["t"] <= max_age else []
+
+
+def last_seen():
+    """(picture, detections) of the big model's last look, or None."""
+    return _A.get("seen")
 
 
 def speed_ms():

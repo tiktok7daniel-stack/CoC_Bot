@@ -173,12 +173,21 @@ class RoyaleScreen(Screen):
             st = {}
         stage = st.get("stage")
         if not stage:
-            self.train_state.setText(tr("rt_none")); return
+            st = {"stage": "none"}
+            stage = "none"
         txt = tr("rt_" + stage) if tr("rt_" + stage) != "rt_" + stage else stage
         if st.get("note"): txt += " — " + str(st["note"])
         if st.get("base_map50") is not None and st.get("new_map50") is not None:
             txt += f"\n{tr('rt_score')}: {st['base_map50']:.2f} → {st['new_map50']:.2f}" + (f" ✅ {tr('rt_used')}" if st.get("used") else "")
         if st.get("error"): txt += "\n⚠ " + str(st["error"])
+        try:                                   # the other two brains: the learned network and the own pictures
+            from royale import policy, frames
+            ti = policy.info()
+            if ti:
+                txt += f"\n🧠 {tr('rt_policy')}: {100 * ti.get('card_in_hand', 0):.0f}% / {100 * ti.get('play', 0):.0f}%"
+            txt += f"\n📷 {tr('rt_frames')}: {frames.count()}"
+        except Exception:
+            pass
         self.train_state.setText(txt)
 
     def train_now(self):

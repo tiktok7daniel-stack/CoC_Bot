@@ -33,6 +33,9 @@ def default_settings():
             "max_battles": 0,        # stop after this many battles (0 = keep playing)
             "notify": True,          # every result to the phone
             "auto_train": True,      # train the eyes on this PC's NVIDIA card by themselves (once a week at most)
+            "manage_account": True,  # between battles: upgrade cards with gold, clan donations / requests, daily report
+            "learned_brain": True,   # the neural network trained on 17 M real plays helps every decision
+            "keep_frames": True,     # keep pictures of its battles: the eyes are trained on this PC's own screen
             "roboflow_datasets": [   # Roboflow datasets added to the training (needs the Roboflow key in Bot settings)
                 "yolotrain-c7s7v/clash-royale-ut3g8/4", "clashroyale/clash-royale-of3d3/3",
                 "angelfire/clash-royale-cylln/5", "clash-pxdrz/clash_grid/1", "dampiix/clash-royale-units/1"],
