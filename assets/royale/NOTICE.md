@@ -8,3 +8,8 @@
   `scripts/build_royale_cards.py`.
 
 Not affiliated with, endorsed by, or representative of Supercell.
+
+## pro.json
+Statistics (what answered what, where cards are played, what follows what) counted from the public
+IL_Replay dataset (https://huggingface.co/datasets/VanguardX101/IL_Replay, 252,197 games) by
+scripts/build_royale_pro.py. Only aggregated counts are shipped, no replay data.

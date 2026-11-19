@@ -48,11 +48,15 @@ TUTORIAL = ("play cards", "defend", "your tower", "towers", "under attack", "tra
             "well done", "great job", "good job", "nice", "awesome", "let's", "lets ", "elixir", "drag", "destroy",
             "crown", "you win", "victory", "hello", "welcome", "chest", "unlock", "collect", "claim", "next",
             "resource card", "your gold", "new card", "card found", "common", "rare", "epic", "tap", "found")
+# never pressed, whatever the tutorial / a reward screen says: they spend gems or money
+NEVER = ("gem", "buy", "purchase", "speed up", "open now", "open for", "skip", "pass royale", "offer", "shop", "$", "€",
+         "subscribe", "upgrade now", "log out", "logout", "exit", "quit")
 NAME_WORDS = ("choose a name", "enter name", "your name", "name your", "player name")
 
 
 def tutorial_point(ws):
     """A tutorial bubble on the screen -> where to tap to go on (the bubble's text), else None."""
+    if any(any(n in t for n in NEVER) for t, _ in ws): return None
     hits = []
     for t, b in ws:
         if any(k in t for k in TUTORIAL):
@@ -235,6 +239,7 @@ class RoyaleBot:
             b = find_word(ws, "battle", y_min=0.55, y_max=0.9)
             if b:
                 self.unknown_since = None
+                self._reward_taps = 0
                 log.info("Clash Royale: Battle")
                 tap(*b)
                 for _ in range(60):                          # matchmaking: up to ~1 minute
@@ -264,6 +269,18 @@ class RoyaleBot:
                 tap(*tp)
                 time.sleep(1.2)
                 continue
+            # a chest opening / reward screen: hardly any words (the chest, "?" coins, numbers flying in) -> tapping
+            # the middle opens it and shows the next reward, until the game goes back to the lobby
+            if len([t for t, _ in ws if len(t) > 1]) <= 3 and not any(any(n in t for n in NEVER) for t, _ in ws):
+                self._reward_taps = getattr(self, "_reward_taps", 0) + 1
+                if self._reward_taps <= 25:
+                    if self._reward_taps == 1:
+                        log.info("Clash Royale: a chest / reward screen — tapping it open")
+                    tap(0.5, 0.55)
+                    time.sleep(0.9)
+                    continue
+            else:
+                self._reward_taps = 0
             try:                                            # a popup with the red X
                 if _u().tap_red_x():
                     time.sleep(1.0)

@@ -28,6 +28,7 @@ import json, os, sys, time
 from collections import deque
 
 from royale import knowledge as K
+from royale import pro
 
 _ROOT = getattr(sys, "_MEIPASS", None) or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _DB = {"cards": None}
@@ -354,6 +355,10 @@ class Brain:
         if any(a in r for a in kn.get("avoid", [])): score -= 2.0    # what it beats (Mega Knight on a swarm…)
         keep = K.reserved(self.enemy_seen, name)                    # kept for a threat they have (Log for the barrel)
         if keep and keep != threat.get("main") and not threat.get("urgent"): score -= 2.5
+        if self.p.get("pro_moves", True):                           # what real players answered it with
+            pro_hand = getattr(self, "_pro_hand", None) or {}
+            if pro_hand.get(name):
+                score += 3.0 * pro_hand[name] / max(pro_hand.values())
         cost = c.get("cost", 4)
         trade = threat["value"] - cost
         score += 0.25 * max(-4.0, min(3.0, trade))                              # positive elixir trade
@@ -364,6 +369,9 @@ class Brain:
         cx, cy = threat["center"] or OUR_TOWERS[side]
         where = K.COUNTERS.get(threat.get("main") or "", {}).get("where")
         tx, ty = OUR_TOWERS[side]
+        if self.p.get("pro_moves", True) and "spell" not in r and threat.get("main"):
+            pt = pro.answer_tile(threat["main"], cy, side, name)                 # where real players put it
+            if pt and pt[1] <= 14: return pt
         if where == "tower" and "spell" in r: return (int(tx), int(ty))                # on the tower it hits
         if where == "tower": return (int(tx) + (1 if side == "left" else -1), int(ty) + 1)
         if where == "pull" and "building" in r: return pull_spot(side)
@@ -407,6 +415,8 @@ class Brain:
         if late and t["center"] and t["center"][1] > 13 and elixir < 9.5:
             pass                                                                 # a tank: let it come (tower helps)
         elif t["value"] >= self.p.get("defend_min", 1.5) or (t.get("urgent") and t["units"]):
+            self._pro_hand = (pro.answer(t["main"], (t["center"] or (0, 10))[1], side, [n for _, n in playable])
+                              if t.get("main") else {})
             best = max(playable, key=lambda p: self._counter_score(p[1], t))
             sc = self._counter_score(best[1], t)
             if sc > 0.8:
@@ -501,12 +511,13 @@ class Brain:
             if n in WIN_SPELLS:
                 x, y = THEIR_TOWERS[side]
                 return self._play((i, n), (int(x), int(y) - 1), f"{n} on their {side} tower", now)
+            pt = pro.place(n, side) if self.p.get("pro_moves", True) else None   # where real players start it
             if "tank" in r and c.get("speed", 60) <= 60 and not counter:
                 if elixir >= 8 or double:                                       # a big push from the back
-                    return self._play((i, n), (LEFT_BRIDGE_X if side == "left" else RIGHT_BRIDGE_X, 1),
-                                      f"{n}: push from the back ({side})", now)
+                    back = pt if pt and pt[1] <= 3 else (LEFT_BRIDGE_X if side == "left" else RIGHT_BRIDGE_X, 1)
+                    return self._play((i, n), back, f"{n}: push from the back ({side})", now)
                 continue
-            return self._play((i, n), bridge(side), f"{n} at the {side} bridge", now)
+            return self._play((i, n), pt or bridge(side), f"{n} at the {side} {'(pro spot)' if pt else 'bridge'}", now)
         if counter:                                                              # support the counter-push
             sup = [(i, n) for i, n in playable if "spell" not in roles(n) and "building" not in roles(n)]
             if sup:
@@ -520,8 +531,11 @@ class Brain:
         if not self.support_due or now > self.support_due[1]: return None
         side, _until, first = self.support_due
         sup = [(i, n) for i, n in playable if n in K.SUPPORT.get(first, [])]
+        fol = pro.follows(first, [n for _, n in playable]) if self.p.get("pro_moves", True) else {}
+        if not sup:                                     # what real players played right after it, same lane
+            sup = [(i, n) for i, n in playable if fol.get(n, 0) >= 0.08 and "spell" not in roles(n)]
         if not sup: return None
-        i, n = min(sup, key=lambda p: card(p[1]).get("cost", 9))
+        i, n = max(sup, key=lambda p: (fol.get(p[1], 0), -card(p[1]).get("cost", 9)))
         y = 1 if self.support_due_back else 11
         self.support_due = None
         return self._play((i, n), (LEFT_BRIDGE_X if side == "left" else RIGHT_BRIDGE_X, y), f"{n} behind the {first}", now)
@@ -529,7 +543,7 @@ class Brain:
     def _play(self, pick, tile, why, now):
         i, n = pick
         if tile is None: return None
-        if n in K.SUPPORT:                                                       # its support comes next
+        if n in K.SUPPORT or (pro.data().get("follow", {}).get(pro.key(n)) and "win" in roles(n)):  # its support next
             self.support_due = (lane(tile[0]), now + 5.0, n)
             self.support_due_back = tile[1] <= 3
         if n in K.NOT_TOGETHER[0]: self.heavy_mine_at = now
