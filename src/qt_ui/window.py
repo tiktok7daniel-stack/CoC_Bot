@@ -153,7 +153,7 @@ class MainWindow(QMainWindow):
         from .components.update_center import UpdateCenter
         self.update_center = UpdateCenter(self, self.top.update_pill)
         self.poller.errors.connect(lambda items: self.sidebar.set_badge("log", sum(1 for e in items if e.get("type") == "error")))
-        self.store.accounts_changed.connect(lambda accs: self.top.set_accounts(self.accounts_for_ui(), self.store.account))
+        self.store.accounts_changed.connect(lambda accs: self.sync_accounts())
         self.store.account_changed.connect(lambda a: (self.top.set_accounts(self.accounts_for_ui(), a), self.poller.refresh_all()))
         self.store.dirty_changed.connect(self.top.dirty.set)
         self.store.saved.connect(self.on_saved)
@@ -233,16 +233,21 @@ class MainWindow(QMainWindow):
         mine = [a for a in accs if (games.get(a, "coc") or "coc") == g]
         return mine or accs
 
-    def apply_game_mode(self):
+    def sync_accounts(self):
+        """The top bar lists this face's accounts, and the selected account is one of them (never a hidden one:
+        the screens, the log and Start would be about another account than the one shown)."""
+        accs = self.accounts_for_ui()
+        if accs and self.store.account not in accs:
+            self.store.switch_account(accs[0])
+        self.top.set_accounts(accs, self.store.account)
+
+    def apply_game_mode(self, force=False):
         """Clash Royale face: its own screens only; Clash of Clans face: the usual screens. Accounts follow."""
         royale = self.ui_game() == "royale"
-        if royale != self._royale:
+        if royale != self._royale or force:
             self._royale = royale
             self.sidebar.set_mode(royale)
-            accs = self.accounts_for_ui()
-            if accs and self.store.account not in accs:
-                self.store.switch_account(accs[0])
-            self.top.set_accounts(accs, self.store.account)
+            self.sync_accounts()
         cur = getattr(self, "current", None)
         if cur is None: return
         if royale and cur not in ("royale", "acc", "set"): self.show_screen("royale")

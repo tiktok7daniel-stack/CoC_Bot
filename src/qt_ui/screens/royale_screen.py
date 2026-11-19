@@ -48,6 +48,16 @@ class RoyaleScreen(Screen):
         sa, v = page()
         self.root.addWidget(sa)
 
+        # ---------- this account is not a Clash Royale account (yet): say it, one tap fixes it
+        from ..widgets.controls import IconButton
+        self.not_royale = GlassCard("royale_not_title", "bolt", "royale_not_sub", glow=True)
+        fix = IconButton("check", "royale_make", kind="go", size=15)
+        fix.clicked.connect(self.make_royale)
+        self.not_royale.add(fix)
+        v.addWidget(self.not_royale)
+        self.store.loaded.connect(self.check_account)
+        self.store.account_changed.connect(lambda _a: self.check_account())
+
         # ---------- the game + today
         w1, g1 = grid(2)
         game = GlassCard("game_title", "layers", "game_sub")
@@ -133,6 +143,24 @@ class RoyaleScreen(Screen):
         self.poller.log.connect(self.on_log)
         self.show_deck(self.store.get("royale.deck", []))
         on_lang(lambda: self.show_deck(self.store.get("royale.deck", [])))
+
+    # -------------------------------------------------------------- the account's game
+    def check_account(self):
+        games = self.store.APP.get("account_games") or {}
+        acc = self.store.account
+        self.not_royale.setVisible(bool(acc) and games.get(acc, "coc") != "royale")
+
+    def make_royale(self):
+        acc = self.store.account
+        def done(r):
+            if isinstance(r, dict) and r.get("ok"):
+                self.store.APP.setdefault("account_games", {})[acc] = "royale"
+                self.ctx.toast(tr("acc_game_set").replace("{a}", acc).replace("{g}", tr("gm_royale")), "ok")
+                self.store.load_all(lambda ok: (self.ctx.window.apply_game_mode(force=True), self.check_account()))
+        self.api.post(f"/api/account/{acc}/game", {"mode": "royale"}, done)
+
+    def on_show(self):
+        self.check_account()
 
     # -------------------------------------------------------------- training
     def show_training(self):

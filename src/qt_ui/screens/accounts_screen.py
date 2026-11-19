@@ -131,6 +131,19 @@ class AccountsScreen(Screen):
             box.addLayout(pics)
             run = f"{tr('acc_runtime')} {fmt_dur(now - a['started_at'])}" if a.get("running") and a.get("started_at") else tr("not_running")
             box.addWidget(label(run, "dim"))
+            # the game this account plays (the user decides: its emulator size, the game opened, its screens)
+            gr = QHBoxLayout()
+            gr.setSpacing(6)
+            gr.addWidget(label(key="game_mode", role="dim"))
+            gc = QComboBox()
+            gc.addItem(tr("gm_coc"), "coc")
+            gc.addItem(tr("gm_royale"), "royale")
+            gc.setMinimumWidth(200)
+            gc.setCurrentIndex(max(0, gc.findData((self.store.APP.get("account_games") or {}).get(acc, "coc"))))
+            gc.activated.connect(lambda _i, x=acc, w=gc: self.set_game(x, w.currentData()))
+            gr.addWidget(gc)
+            gr.addStretch(1)
+            box.addLayout(gr)
             # plays like another account (same loadout / recording / army / farm, any change there applies here)
             others = [x for x in self.store.APP.get("accounts", []) if x != acc]
             if others:
@@ -163,6 +176,17 @@ class AccountsScreen(Screen):
             d.clicked.connect(lambda _=False, x=acc: self.remove(x))
             h.addWidget(d)
             self.list.addWidget(row)
+
+    def set_game(self, acc, mode):
+        """This account plays Clash of Clans or Clash Royale (the user's choice, saved at once)."""
+        def done(r):
+            if isinstance(r, dict) and r.get("ok"):
+                self.store.APP.setdefault("account_games", {})[acc] = mode
+                self.ctx.toast(tr("acc_game_set").replace("{a}", acc).replace("{g}", tr("gm_" + mode)), "ok")
+                self.store.load_all(lambda ok: (self.ctx.window.apply_game_mode(force=True), self.render()))
+            else:
+                self.ctx.toast(tr("dk_failed"), "bad")
+        self.api.post(f"/api/account/{acc}/game", {"mode": mode}, done)
 
     def load_follow(self):
         """Who follows whom (from each account's settings) -> self._follow, then the rows again."""
@@ -206,6 +230,10 @@ class AccountsScreen(Screen):
         self.store.changed()
 
         def saved(ok):
+            try:                      # made in the Clash Royale face: a Clash Royale account
+                if self.ctx.window.ui_game() == "royale": self.set_game(name, "royale")
+            except Exception:
+                pass
             if src and src != name:   # the new account plays exactly like the chosen one, and keeps following it
                 self.api.post("/api/settings_copy", {"from": src, "to": [name]},
                               lambda r: self.set_follow(name, src))
