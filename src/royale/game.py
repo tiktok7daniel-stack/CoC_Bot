@@ -247,7 +247,7 @@ class RoyaleBot:
                     return
             if win or ok:
                 if win:
-                    won = win[1] > 0.45
+                    won = bool(win[1] > 0.45)                 # a plain bool (numpy's broke the saving)
                     self.wins += won
                     self.losses += not won
                     if self.account:

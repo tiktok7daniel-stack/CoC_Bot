@@ -21,7 +21,7 @@ URL = "https://huggingface.co/SudhishNeel/clash-royale-detector/resolve/main/v8/
 W, H = 568, 896                       # the arena picture the model was trained on
 SPEC_QUEENS = [(116, 200), (461, 200), (116, 689), (461, 689)]
 _S = {"sess": None, "names": None, "busy": False, "error": "", "tried": 0.0}
-_LOCK = threading.Lock()
+from royale.vision.detectors.onnx_detector import GPU_LOCK as _LOCK      # one model at a time on the card
 
 # the model's names -> the bot's unit names (royale.vision Units / cards.json "units")
 RENAME = {"mini-pekka": "minipekka", "elixir-golem-big": "elixir_golem_large", "elixir-golem-mid": "elixir_golem_medium",

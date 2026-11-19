@@ -1,21 +1,30 @@
+import os, threading
+
 import numpy as np
 import onnxruntime as ort
+
+# One model at a time on the graphics card: two DirectML runs from two threads at once took the whole bot down
+# (5.35), the processor alone was too slow on a busy PC (925 ms a look, 5.38). Every model of the Clash Royale
+# eyes (these and royale.strong_eyes) runs under this lock: one after the other on the card, ~10-80 ms each.
+GPU_LOCK = threading.RLock()
+
+
+def providers():
+    av = ort.get_available_providers()
+    return [p for p in ("CUDAExecutionProvider", "DmlExecutionProvider") if p in av] + ["CPUExecutionProvider"]
 
 
 class OnnxDetector:
     def __init__(self, model_path):
         self.model_path = model_path
 
-        # the small fast models stay on the processor (~70 ms a look): the graphics card is the big model's
-        # (royale.strong_eyes, in its own thread) — two models on one DirectML card from two threads at once
-        # crashed the whole bot at the start of a battle (5.35/5.36)
-        providers = ["CPUExecutionProvider"]
         so = ort.SessionOptions()
-        so.intra_op_num_threads = 2
-        self.sess = ort.InferenceSession(
-            self.model_path, sess_options=so,
-            providers=providers,
-        )
+        so.intra_op_num_threads = max(2, (os.cpu_count() or 4) // 2)
+        try:
+            self.sess = ort.InferenceSession(self.model_path, sess_options=so, providers=providers())
+        except Exception:
+            self.sess = ort.InferenceSession(self.model_path, sess_options=so, providers=["CPUExecutionProvider"])
+        self.gpu = self.sess.get_providers()[0] != "CPUExecutionProvider"
         self.output_name = self.sess.get_outputs()[0].name
 
         input_ = self.sess.get_inputs()[0]
@@ -69,7 +78,17 @@ class OnnxDetector:
         return x
 
     def _infer(self, x):
-        return self.sess.run([self.output_name], {self.input_name: x})[0]
+        if not self.gpu:
+            return self.sess.run([self.output_name], {self.input_name: x})[0]
+        try:
+            with GPU_LOCK:
+                return self.sess.run([self.output_name], {self.input_name: x})[0]
+        except Exception:                        # the card said no: this model goes on on the processor
+            so = ort.SessionOptions()
+            so.intra_op_num_threads = max(2, (os.cpu_count() or 4) // 2)
+            self.sess = ort.InferenceSession(self.model_path, sess_options=so, providers=["CPUExecutionProvider"])
+            self.gpu = False
+            return self.sess.run([self.output_name], {self.input_name: x})[0]
 
     def run(self, image):
         raise NotImplementedError

@@ -236,7 +236,11 @@ class Brain:
                                    for t in self.known_enemy.values())
                 same_now = sum(1 for uu, xx, yy in stable if uu == u and dist((xx, yy), (x, y)) <= 4)
                 if cn == "skeletons" and same_now >= 6: cn = "skeleton_army"
-                if cn and not group_recent and u not in SPAWNED:   # one card, even when it makes 3 skeletons
+                # the same card again within 6 s is the same play seen twice (a flicker of the eyes, a unit that
+                # walked out of sight and back): counting it again put their elixir at 0 all battle long, so the
+                # bot thought it was always ahead and spent everything (5.38)
+                again = cn and any(p[1] == cn and self.elapsed() - p[0] < 6.0 for p in self.enemy_hist[-4:])
+                if cn and not group_recent and not again and u not in SPAWNED:   # one card, even 3 skeletons
                     self.enemy_elixir = max(0.0, self.enemy_elixir - card(cn).get("cost", 3))
                     self.enemy_cycle.append(cn)
                     self.enemy_plays.append((round(self.elapsed()), cn, lane(x)))
@@ -543,8 +547,17 @@ class Brain:
                         x, y = THEIR_TOWERS[s]
                         return self._play((i, n), (int(x), int(y)), f"finishing their {s} tower", now)
         advantage = elixir - self.enemy_elixir
+        # a counter-push = what survived our defense is crossing the river with real value (2+ units or a sturdy
+        # one), and only with elixir to spare; a lone archer at the bridge is not worth a card every second
         counter = [a for a in (allies or []) if a[2] >= RIVER_Y - 2] if self.p.get("counter_push", True) else []
-        push_ok = advantage >= self.p.get("push_adv", 2.0) or (double and elixir >= 6) or counter or elixir >= 9
+        if counter and not (len(counter) >= 2 or any((card(unit_card(a[0]) or "").get("hp") or 0) >= 1000
+                                                     for a in counter)):
+            counter = []
+        if counter and (elixir < 6 or now - getattr(self, "_counter_at", 0.0) < 8.0):
+            counter = []
+        # their elixir is a guess: an attack also needs elixir of our own to defend what comes back
+        push_ok = (advantage >= self.p.get("push_adv", 2.0) and elixir >= 5) or (double and elixir >= 6) or counter \
+            or elixir >= 9
         # they just dropped a heavy card at their back: the other lane, now (they cannot answer both)
         if self.p.get("punish_heavy", True) and self.heavy_at and now - self.heavy_at[1] < 4:
             push_ok = True
@@ -588,6 +601,7 @@ class Brain:
             if sup:
                 i, n = min(sup, key=lambda p: card(p[1]).get("cost", 9))
                 x = int(sum(a[1] for a in counter) / len(counter))
+                self._counter_at = now
                 return self._play((i, n), (x, 12), "supporting the counter-push", now)
         return None
 

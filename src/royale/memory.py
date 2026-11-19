@@ -82,7 +82,7 @@ class Memory:
             DIR.mkdir(parents=True, exist_ok=True)
             p = _path(self.acc)
             tmp = p.with_name(p.name + f".{os.getpid()}.tmp")
-            tmp.write_text(json.dumps(self.d, ensure_ascii=False), encoding="utf-8")
+            tmp.write_text(json.dumps(self.d, ensure_ascii=False, default=str), encoding="utf-8")
             os.replace(tmp, p)
         except OSError:
             pass
