@@ -4,7 +4,7 @@ to which copy, and for each account whether the emulator is running, ADB is conn
 resolution is 1920x1080 and the game is open. Also the actions behind the screen's buttons.
 Light-weight on purpose (runs in the GUI server process, no utils import).
 """
-import os, re, sys, time, shutil, subprocess
+import json, os, re, sys, time, shutil, subprocess
 from pathlib import Path
 
 GAME = "com.supercell.clashofclans"
@@ -50,6 +50,40 @@ def parse_list2(text):
 
 def ld_instances(console):
     return parse_list2(_run([console, "list2"])) if console else []
+
+def ld_config(console, index):
+    """LDPlayer keeps each copy's settings in vms/config/leidian<index>.config (JSON)."""
+    if not console: return None
+    for base in (Path(console).parent, Path(console).parent.parent):
+        p = base / "vms" / "config" / f"leidian{index}.config"
+        if p.exists(): return p
+    return None
+
+def ld_adb_debug(console, index):
+    """Is "ADB debugging: open local connection" on for this copy? (a new copy has it OFF: the bot cannot
+    connect to it at all) -> True / False / None (unknown)."""
+    p = ld_config(console, index)
+    if p is None: return None
+    try:
+        return int(json.loads(p.read_text(encoding="utf-8", errors="ignore")).get("basicSettings.adbDebug", 0)) == 1
+    except (OSError, ValueError, TypeError):
+        return None
+
+def ld_enable_adb_debug(console, copy):
+    """Switch ADB debugging on for the copy (closed, changed, opened again). -> True when it was changed."""
+    if ld_adb_debug(console, copy["index"]) is not False: return False
+    idx = str(copy["index"])
+    if copy.get("running"):
+        _run([console, "quit", "--index", idx], timeout=60)
+        for _ in range(30):
+            time.sleep(1)
+            if not any(x["index"] == copy["index"] and x["running"] for x in ld_instances(console)): break
+    p = ld_config(console, copy["index"])
+    d = json.loads(p.read_text(encoding="utf-8", errors="ignore"))
+    d["basicSettings.adbDebug"] = 1
+    p.write_text(json.dumps(d, indent=4), encoding="utf-8")
+    _run([console, "launch", "--index", idx], timeout=60)
+    return True
 
 def link_for(account, copies, links):
     """Which emulator copy an account uses: chosen link, else same name, else the only copy."""
@@ -187,7 +221,9 @@ def status(app, running_accounts=()):
         addr = a["address"]
         state = adb_state(adb, addr) if addr else None
         a["adb"] = state
-        if emu == "ldplayer": a["emu_running"] = bool(c and c["running"])
+        if emu == "ldplayer":
+            a["emu_running"] = bool(c and c["running"])
+            a["adb_debug"] = ld_adb_debug(con, c["index"]) if c else None
         else: a["emu_running"] = state == "device"
         if state == "device":
             a["boot"] = shell(adb, addr, "getprop sys.boot_completed").strip() == "1"
@@ -266,6 +302,12 @@ def auto_setup(app, acc):
             tw, th, td = target(app, acc)
             if app.get("emulator") == "ldplayer":
                 fresh = {x["index"]: x for x in ld_instances(con)}.get(c["index"], c)
+                try:                                   # ADB debugging off = the bot can never connect
+                    if ld_enable_adb_debug(con, fresh):
+                        PROGRESS[acc] = "p_launch"
+                        fresh = {x["index"]: x for x in ld_instances(con)}.get(c["index"], fresh)
+                except Exception:
+                    pass
                 if not good_res(app, fresh.get("width"), fresh.get("height"), fresh.get("dpi"), acc):
                     PROGRESS[acc] = "p_res"; fix_resolution(app, acc)
                 elif not fresh["running"]:

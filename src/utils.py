@@ -1915,6 +1915,14 @@ class LDPlayer_Manager(_Emulator_Manager):
     @classmethod
     def start(cls, timeout=120):
         import time
+        try:   # a new LDPlayer copy has "ADB debugging" OFF: the bot can never connect -> switched on (copy restarts)
+            from gui_server import emu_setup as _es
+            if _es.ld_adb_debug(cls.console, cls.index) is False:
+                logger.warning("LDPlayer: ADB debugging is off for this copy — switching it on (the copy restarts)")
+                _es.ld_enable_adb_debug(cls.console, {"index": cls.index, "running": cls.check()})
+                time.sleep(15)
+        except Exception:
+            logger.debug("LDPlayer: ADB debugging check failed", exc_info=True)
         if cls.pid is not None: cls.wake()
         if cls.check():
             logger.info("LDPlayer already running.")
