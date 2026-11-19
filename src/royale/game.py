@@ -139,13 +139,24 @@ class RoyaleBot:
                 log.debug("Clash Royale: look failed", exc_info=True)
                 time.sleep(0.2)
                 continue
-            if self.eyes.learn_deck(st["hand"]):
+            # the deck is learned from coloured (playable) cards only: grey ones get mixed up (Mini P.E.K.K.A
+            # was read as Little Prince on the user's screen)
+            if self.eyes.learn_deck([h for i, h in enumerate(st["hand"]) if i in st["ready"]]):
                 log.info("Clash Royale: my deck = " + ", ".join(self.eyes.deck))
                 self.brain.deck = list(self.eyes.deck)
                 try: _save_deck(self.eyes.deck)
                 except Exception: pass
-            d = self.brain.decide(st["hand"], st["ready"], st["elixir"], st["enemies"], st["allies"], st["towers"])
+            # what was just spent: the picture can lag a moment behind a play ("Not enough Elixir!")
+            el = st["elixir"]
+            spent = getattr(self, "_spent", None)
+            if spent and time.monotonic() - spent[1] < 1.5:
+                el = min(el, max(0.0, spent[2] - spent[0] + (time.monotonic() - spent[1]) / self.brain.seconds_per_elixir()))
+            ready = [i for i in st["ready"] if i < len(st["hand"]) and
+                     (__import__("royale.brain", fromlist=["card"]).card(st["hand"][i]).get("cost", 11) <= el)]
+            d = self.brain.decide(st["hand"], ready, el, st["enemies"], st["allies"], st["towers"])
             if d:
+                self._spent = (__import__("royale.brain", fromlist=["card"]).card(d["card"]).get("cost", 4),
+                               time.monotonic(), el)
                 cx, cy = card_xy(d["slot"])
                 tx, ty = tile_xy(*d["tile"])
                 tap(cx, cy)

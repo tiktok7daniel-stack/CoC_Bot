@@ -353,7 +353,8 @@ class Brain:
         """
         now = now or time.monotonic()
         stable = self.observe(enemies, now)
-        if now - self.last_play < 0.35: return None                              # one card at a time
+        if now - self.last_play < 0.9: return None                               # one card at a time (the game
+                                                                                 # shows it ~0.5 s later)
         towers = towers or {}
         playable = [(i, hand[i]) for i in ready if i < len(hand) and hand[i] and card(hand[i])
                     and card(hand[i]).get("cost", 11) <= elixir]
