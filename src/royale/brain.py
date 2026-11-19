@@ -27,6 +27,8 @@ How it plays, every look (~4 a second):
 import json, os, sys, time
 from collections import deque
 
+from royale import knowledge as K
+
 _ROOT = getattr(sys, "_MEIPASS", None) or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _DB = {"cards": None}
 
@@ -156,6 +158,11 @@ class Brain:
         self.last_tiles = deque(maxlen=6)
         self.plays = []
         self.heavy_at = None                   # the opponent just dropped a heavy card (side, time)
+        self.enemy_seen = set()                # every card the opponent played this battle (their deck)
+        self.arch, self.arch_plan = None, None # their deck's archetype (royale.knowledge)
+        self.support_due = None                # (lane, until, our first card): a support goes behind it
+        self.heavy_mine_at = 0.0               # our last heavy card (never two together)
+        self.support_due_back = False
         self.tower_seen = {}                   # their / our princess towers: highest health seen (crowns)
 
     # -------------------------------------------------------------- time / elixir
@@ -220,6 +227,9 @@ class Brain:
                 if cn and not group_recent and u not in SPAWNED:   # one card, even when it makes 3 skeletons
                     self.enemy_elixir = max(0.0, self.enemy_elixir - card(cn).get("cost", 3))
                     self.enemy_cycle.append(cn)
+                    self.enemy_seen.add(cn)
+                    a, plan = K.archetype(self.enemy_seen)
+                    if a and a != self.arch: self.arch, self.arch_plan = a, plan
                     if card(cn).get("cost", 0) >= 6 and y >= RIVER_Y + 6:     # heavy card at their back: punish
                         self.heavy_at = (lane(x), now)
             t = self.known_enemy[tid]
@@ -251,6 +261,19 @@ class Brain:
             if s["units"]:
                 xs = [x for _, x, _ in s["units"]]; ys = [y for _, _, y in s["units"]]
                 s["center"] = (sum(xs) / len(xs), sum(ys) / len(ys))
+                # the lane's main threat: the card the knowledge has most to say about, else the most costly
+                cards_here = [unit_card(u) for u, _, _ in s["units"] if unit_card(u)]
+                # units that appear at our tower without walking there: a Goblin Barrel / Graveyard landed
+                near_tower = [u for u, _, y in s["units"] if y <= 8]
+                if any(u in ("goblin",) for u in near_tower) and "goblin_barrel" in self.enemy_seen | {"goblin_barrel"} \
+                        and not any(u == "spear_goblin" for u, _, _ in s["units"]):
+                    cards_here.append("goblin_barrel")
+                if any(u == "skeleton" for u in near_tower) and "graveyard" in self.enemy_seen:
+                    cards_here.append("graveyard")
+                known = [c for c in cards_here if c in K.COUNTERS]
+                pool = known or cards_here
+                s["main"] = max(pool, key=lambda c: card(c).get("cost", 0)) if pool else None
+                s["urgent"] = any(K.COUNTERS.get(c, {}).get("urgent") for c in cards_here)
         return out
 
     # -------------------------------------------------------------- choosing
@@ -323,6 +346,14 @@ class Brain:
             if m is not None:
                 if m == 0.0: return 0.0                                          # it cannot even hit it
                 score += 1.5 if m >= 1.5 else 0.8 if m >= 1.0 else -1.0          # wins the duel / loses it
+        kn = K.COUNTERS.get(threat.get("main") or "", {})
+        for rank, want in enumerate(kn.get("want", [])):            # what a good player answers it with
+            if want in r or want == name:
+                score += 2.5 - 0.6 * rank
+                break
+        if any(a in r for a in kn.get("avoid", [])): score -= 2.0    # what it beats (Mega Knight on a swarm…)
+        keep = K.reserved(self.enemy_seen, name)                    # kept for a threat they have (Log for the barrel)
+        if keep and keep != threat.get("main") and not threat.get("urgent"): score -= 2.5
         cost = c.get("cost", 4)
         trade = threat["value"] - cost
         score += 0.25 * max(-4.0, min(3.0, trade))                              # positive elixir trade
@@ -331,6 +362,14 @@ class Brain:
     def _defense_tile(self, name, side, threat):
         r = roles(name)
         cx, cy = threat["center"] or OUR_TOWERS[side]
+        where = K.COUNTERS.get(threat.get("main") or "", {}).get("where")
+        tx, ty = OUR_TOWERS[side]
+        if where == "tower" and "spell" in r: return (int(tx), int(ty))                # on the tower it hits
+        if where == "tower": return (int(tx) + (1 if side == "left" else -1), int(ty) + 1)
+        if where == "pull" and "building" in r: return pull_spot(side)
+        if where == "late" and "spell" not in r and "building" not in r:            # at the tower: it helps
+            return (int(tx) + (2 if side == "left" else -2), int(ty) + 2)
+        if where == "behind" and "spell" not in r: return behind_tower(side)
         if "spell" in r:                                                         # where the group will be
             u0 = threat["units"][0][0] if threat["units"] else None
             lx, ly = self.lead(name, cx, cy, u0)
@@ -364,7 +403,10 @@ class Brain:
         # 1. defend the lane in more danger
         side = max(th, key=lambda s: th[s]["value"])
         t = th[side]
-        if t["value"] >= self.p.get("defend_min", 1.5):
+        late = K.COUNTERS.get(t.get("main") or "", {}).get("where") == "late"
+        if late and t["center"] and t["center"][1] > 13 and elixir < 9.5:
+            pass                                                                 # a tank: let it come (tower helps)
+        elif t["value"] >= self.p.get("defend_min", 1.5) or (t.get("urgent") and t["units"]):
             best = max(playable, key=lambda p: self._counter_score(p[1], t))
             sc = self._counter_score(best[1], t)
             if sc > 0.8:
@@ -383,7 +425,9 @@ class Brain:
                 if hit and hit[0] >= card(n).get("cost", 4) * self.p.get("spell_value", 1.0) + 0.5:
                     return self._play((i, n), hit[1], f"spell on a group worth {hit[0]:.0f} elixir", now)
 
-        # 3. attack
+        # 3. attack (first: the support behind the tank / win condition just played)
+        sp = self._support(playable, elixir, now)
+        if sp: return sp
         att = self._attack(playable, elixir, stable, allies, towers, now)
         if att: return att
 
@@ -437,8 +481,16 @@ class Brain:
             ours, theirs = self.crowns(towers)
             if ours < theirs: push_ok = True
             elif ours > theirs and elixir < 9.5: return None
+        # the card that answers our win condition was just played: it is out of their hand -> push now
+        recent = list(self.enemy_cycle)[-2:]
+        for i, n in playable:
+            if "win" in roles(n) and any(a in recent for a in K.ANSWERS_TO.get(n, [])):
+                push_ok = True
         if not push_ok: return None
         wins = [(i, n) for i, n in playable if "win" in roles(n)]
+        heavy = K.NOT_TOGETHER[0]
+        if now - self.heavy_mine_at < 6:                                         # never two heavies at once
+            wins = [(i, n) for i, n in wins if n not in heavy]
         if counter:
             side = lane(sum(a[1] for a in counter) / len(counter))
         else:
@@ -463,9 +515,24 @@ class Brain:
                 return self._play((i, n), (x, 12), "supporting the counter-push", now)
         return None
 
+    def _support(self, playable, elixir, now):
+        """Our tank / win condition just went in: its support goes behind it (royale.knowledge SUPPORT)."""
+        if not self.support_due or now > self.support_due[1]: return None
+        side, _until, first = self.support_due
+        sup = [(i, n) for i, n in playable if n in K.SUPPORT.get(first, [])]
+        if not sup: return None
+        i, n = min(sup, key=lambda p: card(p[1]).get("cost", 9))
+        y = 1 if self.support_due_back else 11
+        self.support_due = None
+        return self._play((i, n), (LEFT_BRIDGE_X if side == "left" else RIGHT_BRIDGE_X, y), f"{n} behind the {first}", now)
+
     def _play(self, pick, tile, why, now):
         i, n = pick
         if tile is None: return None
+        if n in K.SUPPORT:                                                       # its support comes next
+            self.support_due = (lane(tile[0]), now + 5.0, n)
+            self.support_due_back = tile[1] <= 3
+        if n in K.NOT_TOGETHER[0]: self.heavy_mine_at = now
         x, y = int(max(0, min(17, tile[0]))), int(tile[1])
         if not card(n).get("anywhere"):
             y = max(0, min(14, y))                                               # our half only (towers up: more)

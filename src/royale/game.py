@@ -154,6 +154,10 @@ class RoyaleBot:
             ready = [i for i in st["ready"] if i < len(st["hand"]) and
                      (__import__("royale.brain", fromlist=["card"]).card(st["hand"][i]).get("cost", 11) <= el)]
             d = self.brain.decide(st["hand"], ready, el, st["enemies"], st["allies"], st["towers"])
+            if self.brain.arch and self.brain.arch != getattr(self, "_arch_logged", None):
+                self._arch_logged = self.brain.arch
+                log.info(f"Clash Royale: their deck looks like {self.brain.arch} "
+                         f"({', '.join(sorted(self.brain.enemy_seen))}) — playing against it")
             if d:
                 self._spent = (__import__("royale.brain", fromlist=["card"]).card(d["card"]).get("cost", 4),
                                time.monotonic(), el)
