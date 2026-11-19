@@ -203,22 +203,40 @@ class Arena:
 
 
 # ------------------------------------------------------------------ planning
-def board(brain, stable, hp=None):
-    """Their units now (with the health seen) + our towers."""
-    from royale.brain import card, unit_card, OUR_TOWERS
+def _tower_life(brain, k):
+    """0..1 life of a tower from what the eyes read (1 when unknown)."""
+    hi = (getattr(brain, "tower_seen", None) or {}).get(k)
+    now = (getattr(brain, "_towers_now", None) or {}).get(k)
+    try:
+        return max(0.0, min(1.0, float(now) / max(1e-6, float(hi)))) if hi and now is not None else 1.0
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def board(brain, stable, hp=None, allies=None, their_towers=False):
+    """The arena now: their units (with the life seen), OUR units already there (so it never sends a second
+    defender for what the first one handles), our towers with their real life, and theirs when attacking."""
+    from royale.brain import card, unit_card, OUR_TOWERS, THEIR_TOWERS
     units = []
     for u, x, y in stable:
         cn = unit_card(u)
         c = card(cn) if cn else {}
         if not c or c.get("kind") == "spell": continue
         units.append(U(u, "them", x + 0.5, y + 0.5, c, brain.life(u, x, y), 0.0, c.get("cost", 3)))
-    towers = brain.tower_seen or {}
-    for side in ("left", "right"):
-        tx, ty = OUR_TOWERS[side]
-        if towers.get(f"our_{side}", 1.0) is not None and float(towers.get(f"our_{side}", 1.0) or 0) <= 0: continue
-        units.append(_tower("us", tx, ty, "princess"))
-    kx, ky = OUR_TOWERS["king"]
-    units.append(_tower("us", kx, ky, "king"))
+    for a in (allies if allies is not None else getattr(brain, "_allies", []) or []):
+        cn = unit_card(a[0])
+        c = card(cn) if cn else {}
+        if not c or c.get("kind") == "spell": continue
+        units.append(U(a[0], "us", a[1] + 0.5, a[2] + 0.5, c, 1.0, 0.0, c.get("cost", 3)))
+    for team, towers, pre in (("us", OUR_TOWERS, "our"), ("them", THEIR_TOWERS, "their")):
+        if team == "them" and not their_towers: continue
+        for side in ("left", "right"):
+            life = _tower_life(brain, f"{pre}_{side}")
+            if life <= 0: continue
+            t = _tower(team, *towers[side], "princess")
+            t.hp = t.hp0 * life
+            units.append(t)
+        units.append(_tower(team, *towers["king"], "king"))
     return units
 
 
@@ -232,6 +250,8 @@ def score(units, cost):
             if u.hp > 0 and u.y < 9: s -= 0.6 * u.value * (u.hp / u.hp0)
         elif u.team == "us" and u.tower:
             s -= (u.hp0 - max(0.0, u.hp)) / 180.0          # ~180 tower hp lost = one elixir lost
+        elif u.team == "them" and u.tower:
+            s += (u.hp0 - max(0.0, u.hp)) / 180.0          # their tower hp taken (attacks)
         elif u.team == "us" and any(u.can_hit(o) or o.hp <= 0 for o in units if o.team == "them" and not o.tower) \
                 and (u.bonly is False):
             # survivors that could fight what came: a counter-push for free (a building only stands there and decays: worth little)
@@ -240,25 +260,44 @@ def score(units, cost):
 
 
 def candidate_tiles(name, side, threat):
+    """Where a defender can go: around the threat's path, behind the tower, the pull spots for buildings and the
+    KITE spots in the middle (a unit there drags their troops between both towers, where both shoot them)."""
     from royale.brain import card, pull_spot, behind_tower
     c = card(name)
     cx, cy = threat.get("center") or (3.5 if side == "left" else 14.5, 14)
     tiles = set()
+    mid = 8 if side == "left" else 9
     if c.get("kind") == "building":
         px, py = pull_spot(side)
         for dx in (-2, -1, 0, 1, 2):
-            for dy in (-1, 0, 1, 2, 3):
+            for dy in (-1, 0, 1, 2, 3, 4):
                 tiles.add((px + dx, py + dy))
+        tiles.update({(mid, 9), (mid, 10)})
     else:
-        for dx in (-2, 0, 2):
-            for dy in (-6, -4, -2, 0):
+        for dx in (-3, -1, 1, 3):
+            for dy in (-7, -5, -3, -1):
                 tiles.add((int(round(cx)) + dx, int(round(cy)) + dy))
         tiles.add(behind_tower(side))
+        tiles.update({(mid, 8), (mid, 11), (mid, 5)})           # kite / pull to the middle
     return [(max(0, min(17, x)), max(1, min(14, y))) for x, y in tiles]
 
 
+def _with(base, name, c, tx, ty, delay=0.0):
+    import copy
+    units = copy.deepcopy(base)
+    n = max(1, c.get("count") or 1)
+    for k in range(n):                         # a group lands around the tile
+        ang = 2 * math.pi * k / n
+        ox, oy = (0.6 * math.cos(ang), 0.6 * math.sin(ang)) if n > 1 else (0.0, 0.0)
+        units.append(U(name, "us", tx + 0.5 + ox, ty + 0.5 + oy, c, 1.0,
+                       (c.get("deploy_ms") or 1000) / 1000.0 + delay, c.get("cost", 3)))
+    return units
+
+
 def plan(brain, side, threat, candidates, stable, hp=None, max_cards=3, prior=None):
-    """Every candidate card on its candidate tiles, simulated -> the best (slot, card, tile, score, why)."""
+    """Every candidate card on its candidate tiles — now, and 1.5 s later — simulated.
+    -> (slot, card, tile, score, why, gain over doing nothing, wait) or None. wait=True: placing it a bit later is
+    better (a building would decay waiting / the troop would meet them out of the tower's range) -> hold it."""
     from royale.brain import card
     import copy
     base = board(brain, stable, hp)
@@ -268,15 +307,45 @@ def plan(brain, side, threat, candidates, stable, hp=None, max_cards=3, prior=No
     for slot, name in candidates[:max_cards]:
         c = card(name)
         if not c or c.get("kind") == "spell": continue
-        n = max(1, c.get("count") or 1)
         for tx, ty in candidate_tiles(name, side, threat):
-            units = copy.deepcopy(base)
-            for k in range(n):                     # a group lands around the tile
-                ang = 2 * math.pi * k / n
-                ox, oy = (0.6 * math.cos(ang), 0.6 * math.sin(ang)) if n > 1 else (0.0, 0.0)
-                units.append(U(name, "us", tx + 0.5 + ox, ty + 0.5 + oy, c, 1.0,
-                               (c.get("deploy_ms") or 1000) / 1000.0, c.get("cost", 3)))
-            sc = score(simulate(units), c.get("cost", 3)) + (prior or {}).get(name, 0.0)
-            if best is None or sc > best[3]:
-                best = (slot, name, (tx, ty), sc, f"thought it through: {sc - nothing:+.1f} elixir vs doing nothing")
+            for delay in (0.0, 1.5):
+                sc = score(simulate(_with(base, name, c, tx, ty, delay)), c.get("cost", 3)) + (prior or {}).get(name, 0.0)
+                if delay: sc -= 0.15                    # a small price for waiting (the picture may change)
+                if best is None or sc > best[3]:
+                    best = (slot, name, (tx, ty), sc, f"thought it through: {sc - nothing:+.1f} elixir vs doing nothing",
+                            sc - nothing, delay > 0)
     return best
+
+
+def attack_plan(brain, candidates, stable, horizon=12.0):
+    """Our attack, simulated against their towers and the defenders already on the board: each win condition /
+    troop on the pro spots of both lanes. -> (slot, card, tile, score, gain) or None."""
+    from royale.brain import card, LEFT_BRIDGE_X, RIGHT_BRIDGE_X
+    from royale import pro
+    base = board(brain, stable, their_towers=True)
+    nothing = score(_run(base, horizon), 0.0)
+    best = None
+    for slot, name in candidates:
+        c = card(name)
+        if not c or c.get("kind") in ("spell", "building"): continue
+        for side in ("left", "right"):
+            bx = LEFT_BRIDGE_X if side == "left" else RIGHT_BRIDGE_X
+            tiles = {(bx, 14), (bx, 11), (bx, 1)}
+            pt = pro.place(name, side, min_share=0.1)
+            if pt: tiles.add(pt)
+            for tx, ty in tiles:
+                ty = max(0, min(14, ty))
+                sc = score(_run(_with(base, name, c, tx, ty), horizon), c.get("cost", 3))
+                if best is None or sc > best[3]:
+                    best = (slot, name, (tx, ty), sc, sc - nothing)
+    return best
+
+
+def _run(units, horizon):
+    import copy
+    units = copy.deepcopy(units)
+    t = 0.0
+    while t < horizon:
+        step(units, DT)
+        t += DT
+    return units

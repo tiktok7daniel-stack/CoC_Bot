@@ -498,6 +498,16 @@ class Brain:
                                   prior={p[1]: 0.15 * s for p, s in good})
                     if pl:
                         best, tile, why = (pl[0], pl[1]), pl[2], f" — {pl[4]}"
+                        deep = any(y <= 8 for _u, _x, y in t["units"])
+                        if pl[6] and not t.get("urgent") and not deep:
+                            # better a moment later (a building waiting decays, a troop would meet them away from
+                            # the tower): hold — and keep the elixir for it
+                            self._hold_until = now + 1.2
+                            return None
+                        if pl[5] < 0.25 and not t.get("urgent") and not deep:
+                            # the tower handles it alone: no card spent (elixir for the attack)
+                            self._saved_at = now
+                            sc = 0.0
                 except Exception:
                     pass
             if sc > 0.8:
@@ -505,6 +515,8 @@ class Brain:
                                f"{', '.join(sorted({u for u, _, _ in t['units']}))}{why}", now)
                 if d and getattr(self, "mem", None): self.mem.defended(t.get("main"), best[1], side, towers, now)
                 return d
+
+        if now < getattr(self, "_hold_until", 0.0): return None                 # a defense is coming in a moment
 
         # 2a. they just dropped a heavy card at their back: punish the other lane first
         if self.p.get("punish_heavy", True) and self.heavy_at and now - self.heavy_at[1] < 4:
@@ -616,6 +628,15 @@ class Brain:
             side = lane(sum(a[1] for a in counter) / len(counter))
         else:
             side = weak
+        if self.p.get("think", True):
+            # the attack thought through: each win condition on both lanes' spots against their towers and the
+            # defenders already there; the best one goes in if it really takes something
+            try:
+                ap = sim.attack_plan(self, [p for p in wins if p[1] not in WIN_SPELLS], stable)
+                if ap and ap[4] > 0.5:
+                    return self._play((ap[0], ap[1]), ap[2], f"{ap[1]} — attack thought through: {ap[4]:+.1f} elixir", now)
+            except Exception:
+                pass
         for i, n in sorted(wins, key=lambda p: -card(p[1]).get("cost", 0)):
             r = roles(n)
             c = card(n)
