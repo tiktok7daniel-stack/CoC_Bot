@@ -36,9 +36,16 @@ def _path(acc):
     return DIR / f"royale_strategy_{''.join(c for c in str(acc) if c.isalnum() or c in '-_') or 'main'}.json"
 
 
+V = 2                          # 5.32.4: older records held the tutorial's battles (vs the trainer): not learned from
+
+
 def load(acc):
-    try: return json.loads(_path(acc).read_text(encoding="utf-8"))
-    except (OSError, ValueError): return {"games": [], "per": {}}
+    try:
+        d = json.loads(_path(acc).read_text(encoding="utf-8"))
+        if d.get("v") == V: return d
+    except (OSError, ValueError):
+        pass
+    return {"v": V, "games": [], "per": {}}
 
 
 def _save(acc, d):
@@ -49,26 +56,33 @@ def _save(acc, d):
     os.replace(tmp, p)
 
 
+PINNED = {"duel_defense": True, "endgame": True}   # proven: never switched off to "see what happens"
+WARMUP = 15                                          # the first battles play the default (known good) way
+TRY_PER_BATTLE = 2                                   # after that, only 2 settings are tried at once
+
+
 def choose(acc, explore=True):
-    """The settings for the next battle: each one drawn from Beta(wins, losses) of its values (Thompson)."""
+    """The settings for the next battle. The default way first; then each battle tries at most 2 settings drawn
+    from Beta(wins, losses) of their values (Thompson), the rest stay on their best known value — precise play
+    with a little learning, never many experiments at once."""
     d = load(acc)
     per = d.get("per", {})
     games = d.get("games", [])
+    out = dict(DEFAULT)
+    known = best(acc)
+    out.update({k: v for k, v in known.items() if k not in PINNED})
+    out.update(PINNED)
+    if not explore or len(games) < WARMUP: return out
     w_all = sum(1 for g in games if g.get("won")) + 1
-    n_all = len(games) + 2
-    base = w_all / n_all
-    out = {}
-    for k, values in SPACE.items():
-        if not explore:
-            out[k] = DEFAULT[k]; continue
-        best, best_s = DEFAULT[k], -1.0
-        for v in values:
+    base = w_all / (len(games) + 2)
+    free = [k for k in SPACE if k not in PINNED]
+    for k in random.sample(free, min(TRY_PER_BATTLE, len(free))):
+        best_v, best_s = out[k], -1.0
+        for v in SPACE[k]:
             st = per.get(k, {}).get(json.dumps(v), {"w": 0, "l": 0})
-            a = st["w"] + PRIOR * base
-            b = st["l"] + PRIOR * (1 - base)
-            s = random.betavariate(max(0.01, a), max(0.01, b))
-            if s > best_s: best, best_s = v, s
-        out[k] = best
+            sc = random.betavariate(max(0.01, st["w"] + PRIOR * base), max(0.01, st["l"] + PRIOR * (1 - base)))
+            if sc > best_s: best_v, best_s = v, sc
+        out[k] = best_v
     return out
 
 

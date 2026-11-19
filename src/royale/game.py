@@ -46,7 +46,8 @@ def find_word(ws, *names, y_min=0.0, y_max=1.0):
 # the game's own tutorial (a new account): the trainer / the king talk in speech bubbles; a tap goes on
 TUTORIAL = ("play cards", "defend", "your tower", "towers", "under attack", "trainer", "tap to", "tap anywhere",
             "well done", "great job", "good job", "nice", "awesome", "let's", "lets ", "elixir", "drag", "destroy",
-            "crown", "you win", "victory", "hello", "welcome", "chest", "unlock", "collect", "claim", "next")
+            "crown", "you win", "victory", "hello", "welcome", "chest", "unlock", "collect", "claim", "next",
+            "resource card", "your gold", "new card", "card found", "common", "rare", "epic", "tap", "found")
 NAME_WORDS = ("choose a name", "enter name", "your name", "name your", "player name")
 
 
@@ -123,7 +124,12 @@ class RoyaleBot:
             fr = frame()
             if not in_battle(fr):
                 out_since = out_since or time.monotonic()
-                if time.monotonic() - out_since > 2.5: break           # the battle is over
+                if time.monotonic() - out_since > 1.0:
+                    tp = tutorial_point(words(fr))                     # the tutorial talks over its battle
+                    if tp:
+                        self._tutorial_battle = True
+                        tap(*tp); time.sleep(0.8); out_since = time.monotonic(); continue
+                if time.monotonic() - out_since > 4.0: break           # the battle is over
                 time.sleep(0.2)
                 continue
             out_since = None
@@ -176,7 +182,9 @@ class RoyaleBot:
                     self.losses += not won
                     try:
                         from royale import learn
-                        learn.record(_u().INSTANCE_ID, getattr(self, "params", {}) or {}, won)
+                        if not getattr(self, "_tutorial_battle", False):     # the tutorial's battles teach nothing
+                            learn.record(_u().INSTANCE_ID, getattr(self, "params", {}) or {}, won)
+                        self._tutorial_battle = False
                     except Exception:
                         log.debug("Clash Royale: learning failed", exc_info=True)
                     log.info(f"Clash Royale: {'WIN' if won else 'loss'} — {self.wins} won / {self.losses} lost")
@@ -234,6 +242,7 @@ class RoyaleBot:
             tp = tutorial_point(ws)
             if tp:                                          # the tutorial: tap the bubble, the bot plays its battles
                 self.unknown_since = None
+                self._tutorial_battle = True
                 if not getattr(self, "_tut_told", False):
                     self._tut_told = True
                     log.info("Clash Royale: the game's tutorial — going through it (tapping on, playing its battles)")
