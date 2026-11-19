@@ -78,3 +78,18 @@ def follows(name, hand):
     if not v: return {}
     share = {c: p for c, p in v.get("top", [])}
     return {n: share[key(n)] for n in hand if key(n) in share}
+
+
+def predict_deck(seen, k=8):
+    """The opponent's cards seen so far -> their likely whole deck [(card key, probability)], the seen ones first.
+    P(card | each seen card) from 252k decks, averaged: two or three cards seen are usually enough."""
+    decks = data().get("decks", {})
+    seen_k = [key(s) for s in seen or () if key(s) in decks]
+    if not seen_k: return []
+    score = {}
+    for s in seen_k:
+        for o, p in decks[s].get("with", []):
+            score[o] = score.get(o, 0.0) + p
+    out = [(s, 1.0) for s in dict.fromkeys(seen_k)]
+    out += sorted(((o, round(v / len(seen_k), 3)) for o, v in score.items() if o not in seen_k), key=lambda x: -x[1])
+    return out[:k]

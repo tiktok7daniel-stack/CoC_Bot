@@ -95,6 +95,11 @@ class RoyaleBot:
         deck = list(self.s.get("deck") or [])
         self.eyes = Eyes(deck)
         self.brain = Brain(deck)
+        try:
+            from royale.memory import Memory
+            self.brain.mem = Memory(_u().INSTANCE_ID)           # learns from every battle it plays
+        except Exception:
+            logger.debug("Clash Royale: match memory off", exc_info=True)
         self.wins = self.losses = self.battles = 0
         try:                                         # the stronger eyes: fetched / converted once in the background
             from royale import strong_eyes
@@ -171,6 +176,9 @@ class RoyaleBot:
                 self._arch_logged = self.brain.arch
                 log.info(f"Clash Royale: their deck looks like {self.brain.arch} "
                          f"({', '.join(sorted(self.brain.enemy_seen))}) — playing against it")
+            if self.brain.predicted and self.brain.predicted != getattr(self, "_pred_logged", None):
+                self._pred_logged = set(self.brain.predicted)
+                log.info("Clash Royale: their deck probably also has " + ", ".join(sorted(self.brain.predicted)))
             if d:
                 self._spent = (__import__("royale.brain", fromlist=["card"]).card(d["card"]).get("cost", 4),
                                time.monotonic(), el)
@@ -218,12 +226,20 @@ class RoyaleBot:
                     self.losses += not won
                     try:
                         from royale import learn
+                        self._was_tutorial = getattr(self, "_tutorial_battle", False)
                         if not getattr(self, "_tutorial_battle", False):     # the tutorial's battles teach nothing
                             learn.record(_u().INSTANCE_ID, getattr(self, "params", {}) or {}, won)
                         self._tutorial_battle = False
                     except Exception:
                         log.debug("Clash Royale: learning failed", exc_info=True)
                     log.info(f"Clash Royale: {'WIN' if won else 'loss'} — {self.wins} won / {self.losses} lost")
+                    try:
+                        if self.brain.mem and not getattr(self, "_was_tutorial", False):
+                            summary = self.brain.mem.end(won, self.brain.enemy_plays, self.brain.arch)
+                            log.info("Clash Royale: " + summary.replace("\n", " | "))
+                            if self.s.get("notify", True): self.notify(summary)
+                    except Exception:
+                        log.debug("Clash Royale: match summary failed", exc_info=True)
                     if self.s.get("notify", True):
                         try: self.notify(f"{'🏆 كسبت' if won else '❌ خسرت'} ماتش كلاش رويال — "
                                          f"{self.wins} فوز / {self.losses} خسارة النهارده")

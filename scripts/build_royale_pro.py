@@ -5,6 +5,7 @@ set FirstLight CR / RoyaleFish trained on) boiled down to what the bot can use f
   respond   the opponent played card C at a spot: what pros answered with, and where (within 4 s)
   place     where pros put each card when they start something themselves (nothing of theirs in the last 4 s)
   follow    what pros play right after a card of theirs on the same lane (combos: tank -> support)
+  decks     which cards are played together (the opponent's whole deck guessed from the first cards seen)
 
 Tiles are the 18 x 32 grid seen from the player's side (y 0 = own king), mirrored so the threat / play is always on
 the LEFT lane (x < 9); the bot mirrors back. Only the most common answers are kept.
@@ -41,6 +42,8 @@ def main(n_parts=52, local=None):
     respond = collections.defaultdict(collections.Counter)    # (threat, ybin) -> (card, x, y)
     place = collections.defaultdict(collections.Counter)      # card -> (x, y)
     follow = collections.defaultdict(collections.Counter)     # card -> next card
+    with_ = collections.defaultdict(collections.Counter)      # card -> the other cards of the same deck
+    in_decks = collections.Counter()                          # card -> decks it was in
     games = plays = 0
     t0 = time.time()
     for i, part in enumerate(local or parts(n_parts)):
@@ -59,6 +62,12 @@ def main(n_parts=52, local=None):
         for tag, ev in by.items():
             ev.sort()
             games += 1
+            for sd in ("team", "opponent"):                   # the deck = the cards one side played
+                deck = {e[2] for e in ev if e[1] == sd}
+                for c in deck:
+                    in_decks[c] += 1
+                    for o in deck:
+                        if o != c: with_[c][o] += 1
             plays += len(ev)
             for side_me in ("team", "opponent"):
                 # each player's own view: their king at y 0
@@ -103,7 +112,10 @@ def main(n_parts=52, local=None):
     out = {"games": games, "plays": plays, "source": f"{HF}/datasets/{REPO}",
            "respond": {k: answers(v) for k, v in respond.items() if sum(v.values()) >= 30},
            "place": {k: top(v, 6) for k, v in place.items() if sum(v.values()) >= 30},
-           "follow": {k: top(v, 6) for k, v in follow.items() if sum(v.values()) >= 30}}
+           "follow": {k: top(v, 6) for k, v in follow.items() if sum(v.values()) >= 30},
+           # P(other card in the deck | this card in the deck): the opponent's whole deck from 1-2 cards seen
+           "decks": {c: {"n": n, "with": [[o, round(k / n, 3)] for o, k in with_[c].most_common(20)]}
+                     for c, n in in_decks.items() if n >= 50}}
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(out, f, separators=(",", ":"))
     print(f"done: {games} games, {plays} plays -> {OUT} ({os.path.getsize(OUT) / 1e6:.1f} MB)")

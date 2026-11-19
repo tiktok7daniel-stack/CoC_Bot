@@ -144,6 +144,7 @@ class Brain:
         self.deck = list(deck or [])
         from royale import learn
         self.p = dict(learn.DEFAULT, **(params or {}))     # this battle's settings (royale.learn picks them)
+        self.mem = None                                     # royale.memory.Memory: set by the game
         self.reset()
 
     def reset(self):
@@ -165,6 +166,9 @@ class Brain:
         self.heavy_mine_at = 0.0               # our last heavy card (never two together)
         self.support_due_back = False
         self.tower_seen = {}                   # their / our princess towers: highest health seen (crowns)
+        self.enemy_plays = []                  # (second, card, lane): how they played (the match summary)
+        self.predicted = set()                 # their whole deck guessed from the cards seen (252k decks)
+        if getattr(self, "mem", None): self.mem.start()
 
     # -------------------------------------------------------------- time / elixir
     def elapsed(self):
@@ -229,8 +233,10 @@ class Brain:
                 if cn and not group_recent and u not in SPAWNED:   # one card, even when it makes 3 skeletons
                     self.enemy_elixir = max(0.0, self.enemy_elixir - card(cn).get("cost", 3))
                     self.enemy_cycle.append(cn)
+                    self.enemy_plays.append((round(self.elapsed()), cn, lane(x)))
+                    self._predict()
                     self.enemy_seen.add(cn)
-                    a, plan = K.archetype(self.enemy_seen)
+                    a, plan = K.archetype(self.enemy_seen | self.predicted)
                     if a and a != self.arch: self.arch, self.arch_plan = a, plan
                     if card(cn).get("cost", 0) >= 6 and y >= RIVER_Y + 6:     # heavy card at their back: punish
                         self.heavy_at = (lane(x), now)
@@ -354,12 +360,14 @@ class Brain:
                 score += 2.5 - 0.6 * rank
                 break
         if any(a in r for a in kn.get("avoid", [])): score -= 2.0    # what it beats (Mega Knight on a swarm…)
-        keep = K.reserved(self.enemy_seen, name)                    # kept for a threat they have (Log for the barrel)
+        keep = K.reserved(self.enemy_seen | self.predicted, name)                    # kept for a threat they have (Log for the barrel)
         if keep and keep != threat.get("main") and not threat.get("urgent"): score -= 2.5
         if self.p.get("pro_moves", True):                           # what real players answered it with
             pro_hand = getattr(self, "_pro_hand", None) or {}
             if pro_hand.get(name):
                 score += 3.0 * pro_hand[name] / max(pro_hand.values())
+        if getattr(self, "mem", None):                              # what worked in OUR battles against it
+            score += self.mem.bonus(threat.get("main"), name)
         cost = c.get("cost", 4)
         trade = threat["value"] - cost
         score += 0.25 * max(-4.0, min(3.0, trade))                              # positive elixir trade
@@ -401,6 +409,7 @@ class Brain:
         """
         now = now or time.monotonic()
         stable = self.observe(enemies, now)
+        if getattr(self, "mem", None): self.mem.tick(towers, now)
         if now - self.last_play < 0.55: return None                              # one card at a time (the game
                                                                                  # shows it ~0.5 s later)
         towers = towers or {}
@@ -421,8 +430,10 @@ class Brain:
             best = max(playable, key=lambda p: self._counter_score(p[1], t))
             sc = self._counter_score(best[1], t)
             if sc > 0.8:
-                return self._play(best, self._defense_tile(best[1], side, t), f"defend {side} vs "
-                                  f"{', '.join(sorted({u for u, _, _ in t['units']}))}", now)
+                d = self._play(best, self._defense_tile(best[1], side, t), f"defend {side} vs "
+                               f"{', '.join(sorted({u for u, _, _ in t['units']}))}", now)
+                if d and getattr(self, "mem", None): self.mem.defended(t.get("main"), best[1], side, towers, now)
+                return d
 
         # 2a. they just dropped a heavy card at their back: punish the other lane first
         if self.p.get("punish_heavy", True) and self.heavy_at and now - self.heavy_at[1] < 4:
@@ -493,7 +504,7 @@ class Brain:
             if ours < theirs: push_ok = True
             elif ours > theirs and elixir < 9.5: return None
         # the card that answers our win condition was just played: it is out of their hand -> push now
-        recent = list(self.enemy_cycle)[-2:]
+        recent = list(self.enemy_cycle)[-3:]                     # played in the last 3 = not back in hand yet
         for i, n in playable:
             if "win" in roles(n) and any(a in recent for a in K.ANSWERS_TO.get(n, [])):
                 push_ok = True
@@ -540,6 +551,15 @@ class Brain:
         y = 1 if self.support_due_back else 11
         self.support_due = None
         return self._play((i, n), (LEFT_BRIDGE_X if side == "left" else RIGHT_BRIDGE_X, y), f"{n} behind the {first}", now)
+
+    def _predict(self):
+        """Their whole deck from the cards seen: cards played with them in 45%+ of 252k real decks."""
+        try:
+            names = {pro.key(n): n for n in cards_db()}
+            self.predicted = {names[k] for k, p in pro.predict_deck(self.enemy_seen) if p >= 0.45 and k in names} \
+                - self.enemy_seen
+        except Exception:
+            self.predicted = set()
 
     def _play(self, pick, tile, why, now):
         i, n = pick
