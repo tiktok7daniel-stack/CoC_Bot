@@ -439,6 +439,7 @@ class Brain:
         -> None or {"slot", "card", "tile": (x, y), "why"}
         """
         now = now or time.monotonic()
+        enemies = self._not_ours(enemies or [], allies or [])
         self.hp_seen = hp or {}
         if spells: self._spells(spells, now)
         stable = self.observe(enemies, now)
@@ -702,6 +703,38 @@ class Brain:
             if c.get("kind") == "building" and not any(d[5] for d in near): v -= 1.5
             s["v"] = round(v, 2)
 
+    def _not_ours(self, enemies, allies):
+        """A unit of a card WE just played, where we played it (or on its way from there), is ours even when the
+        eyes say "theirs" — the side check can miss, and spelling our own troops is the worst mistake there is."""
+        out = []
+        t = self.elapsed()
+        for e in enemies:
+            u, x, y = e[0], e[1], e[2]
+            cn = unit_card(u)
+            mine = False
+            for p in reversed(self.plays):
+                if t - p["t"] > 12: break
+                if p["card"] == cn or (cn and card(p["card"]).get("units") and u in (card(p["card"]).get("units") or [])):
+                    spd = (card(p["card"]).get("speed") or 60) / 60.0
+                    if dist((x, y), p["tile"]) <= 2.5 + spd * (t - p["t"]) and y <= RIVER_Y + 3 + spd * (t - p["t"]):
+                        mine = True
+                        break
+            if mine:
+                allies = list(allies) + [(u, x, y, e[3] if len(e) > 3 else 0.5)]
+            else:
+                out.append(e)
+        self._allies_extra = [a for a in allies]
+        return out
+
+    def _spell_hits_us(self, name, tile):
+        """Would this spell land on our own troops / buildings? (never cast it then)"""
+        rad = (card(name).get("splash") or SPELL_SPLASH_DEFAULT.get(name, 2.5)) + 1.0
+        ours = list(getattr(self, "_allies", []) or []) + list(getattr(self, "_allies_extra", []) or [])
+        t = self.elapsed()
+        ours += [(p["card"], p["tile"][0], p["tile"][1], 1.0) for p in self.plays
+                 if t - p["t"] <= 4 and "spell" not in roles(p["card"])]
+        return any(dist((a[1], a[2]), tile) <= rad for a in ours)
+
     def _ltile(self, name, anywhere=False):
         """Where the learned brains would put `name` now: the surer of the two."""
         bt = pt = None
@@ -786,6 +819,8 @@ class Brain:
     def _play(self, pick, tile, why, now):
         i, n = pick
         if tile is None: return None
+        if "spell" in roles(n) and self._spell_hits_us(n, tile):
+            return None                                  # never a spell on our own troops
         if n in K.SUPPORT or (pro.data().get("follow", {}).get(pro.key(n)) and "win" in roles(n)):  # its support next
             self.support_due = (lane(tile[0]), now + 5.0, n)
             self.support_due_back = tile[1] <= 3

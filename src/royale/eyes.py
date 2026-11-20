@@ -38,9 +38,12 @@ class Eyes:
         self.deck = names
         cards = [self.by_name[n] for n in names] if len(names) == 8 else self.all_cards
         self._card_det = CardDetector(cards)
-        # units that can be ours: only those of our deck are asked "ours or theirs?" (others are theirs)
+        # units that can be ours: only those of our deck are asked "ours or theirs?" (others are theirs).
+        # While the deck is not known yet EVERY unit is asked: before 5.43.1 an unknown deck meant "everything is
+        # theirs", so the bot's own first troops were taken for the enemy and spelled (Fireball on itself)
         self.units.cards = [self.by_name[n] for n in names]
-        self.units.possible_ally_names = {u.name for n in names for u in self.by_name[n].units}
+        self.units.possible_ally_names = ({u.name for n in names for u in self.by_name[n].units} if len(names) == 8
+                                          else {u.name for c in self.all_cards for u in c.units})
 
     def learn_deck(self, hand):
         """Hand cards seen in the first looks of a battle -> the deck once 8 different ones were seen 2+ times."""
@@ -51,8 +54,7 @@ class Eyes:
         if len(sure) == 8:
             self.set_deck(sure)
             return True
-        # cards seen so far can be ours already (ally / enemy check for them)
-        self.units.possible_ally_names = {u.name for n in sure for u in self.by_name[n].units}
+        # the deck is not known yet: every unit stays "ask ours or theirs" (set_deck)
         return False
 
     # -------------------------------------------------------------- one look
