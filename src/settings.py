@@ -30,6 +30,7 @@ def default_settings():
         "game_mode_set": "",         # "user" = the user picked this game (only that counts, never a guess)
         "royale": {                  # Clash Royale mode
             "deck": [],              # the 8 cards (found by itself in the first battle; can be set)
+            "tag": "",               # player tag (#ABC123) for the official Clash Royale API (exact deck / results)
             "max_battles": 0,        # stop after this many battles (0 = keep playing)
             "notify": True,          # every result to the phone
             "auto_train": True,      # train the eyes on this PC's NVIDIA card by themselves (once a week at most)
@@ -188,6 +189,9 @@ def default_app_settings():
         "telegram_bot_token": _cfg("TELEGRAM_BOT_TOKEN", ""),
         "groq_api_key": _cfg("GROQ_API_KEY", ""),
         "clash_api_key": "",         # developer.clashofclans.com key (allowed IP = this PC's public IP)
+        "royale_api_key": "",        # developer.clashroyale.com key (allowed IP = this PC's public IP)
+        "royale_dev_email": "",      # or the developer.clashroyale.com login: a key is made for the current IP
+        "royale_dev_password": "",
         "clash_dev_email": "",       # developer.clashofclans.com login: the bot makes a key for every new IP itself
         "clash_dev_password": "",
         "tesseract_path": _cfg("TESSERACT_PATH", ""),  # empty = find automatically

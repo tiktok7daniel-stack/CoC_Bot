@@ -128,6 +128,7 @@ class RoyaleBot:
                             f"{100 * bi.get('tile_within1', 0):.0f}%)")
         except Exception:
             pass
+        self._api_start()
         self.account = None
         if self.s.get("manage_account", True):
             try:
@@ -145,6 +146,10 @@ class RoyaleBot:
         self.brain.p = dict(learn.DEFAULT, **self.params)
         if not self.s.get("learned_brain", True): self.brain.p["learned"] = False
         self.brain.reset()
+        self._battle_t = time.time()
+        if getattr(self, "_api_deck", None) and self.eyes.deck != self._api_deck:
+            self.eyes.set_deck(self._api_deck)                   # the exact deck from the official API
+            self.brain.deck = list(self._api_deck)
         self.battles += 1
         log.info("Clash Royale: this battle's settings " + ", ".join(f"{k}={v}" for k, v in self.params.items()))
         log.info(f"Clash Royale: battle #{self.battles}")
@@ -259,6 +264,7 @@ class RoyaleBot:
                     self.losses += not won
                     if self.account:
                         self.account.count("battles"); self.account.count("wins", int(won))
+                    self._api_after_battle(won)
                     try:                                    # the learned brain learns from this battle by itself
                         from royale import selfplay
                         if not getattr(self, "_tutorial_battle", False):
@@ -385,6 +391,84 @@ class RoyaleBot:
                 self.unknown_since = time.monotonic() + 600     # once in 10 minutes
                 start_game(log)
             time.sleep(1.0)
+
+
+def _api_names(eyes, keys):
+    """API card keys -> the eyes' card names (Mini P.E.K.K.A -> the eyes' minipekka...)."""
+    from royale import cr_api
+    by = {cr_api.key_of(n): n for n in eyes.by_name}
+    return [by[k] for k in keys if k in by]
+
+
+def _api_start(self):
+    """In the background: our exact deck from the official API (known before the first battle), and the meta
+    (the decks the best players use now) refreshed once a day."""
+    import threading
+    from royale import cr_api
+    if not cr_api.tag(_u().INSTANCE_ID): return
+
+    def work():
+        try:
+            deck = _api_names(self.eyes, [k for k, *_ in cr_api.my_deck(_u().INSTANCE_ID)])
+            if len(deck) == 8:
+                self._api_deck = deck
+                self.log.info("Clash Royale: my deck from the official API = " + ", ".join(deck))
+        except Exception as e:
+            self.log.info(f"Clash Royale API: {e}")
+        try:
+            m = cr_api.build_meta()
+            if m.get("battles"):
+                self.log.info(f"Clash Royale API: the meta now — {m['battles']} battles of the best players, "
+                              f"{len(m.get('decks', []))} decks")
+        except Exception as e:
+            self.log.debug(f"Clash Royale API meta: {e}")
+    threading.Thread(target=work, daemon=True, name="cr-api").start()
+
+
+def _api_after_battle(self, won_seen):
+    """A few seconds after the battle the official battle log has it: the opponent's whole deck with levels, the
+    crowns and the real result -> the log, the phone, the match memory (and the result is corrected)."""
+    import threading
+    from royale import cr_api
+    if not cr_api.tag(_u().INSTANCE_ID) or getattr(self, "_tutorial_battle", False): return
+    t0 = getattr(self, "_battle_t", time.time())
+
+    def work():
+        b = None
+        for _ in range(6):
+            time.sleep(10)
+            try:
+                b = cr_api.last_battle(_u().INSTANCE_ID, after=t0)
+            except Exception:
+                b = None
+            if b: break
+        if not b: return
+        deck = ", ".join(f"{k} {lv}" for k, lv in b["their_deck"])
+        mine = sum(lv or 0 for _k, lv in b["my_deck"]) / max(1, len(b["my_deck"]))
+        theirs = sum(lv or 0 for _k, lv in b["their_deck"]) / max(1, len(b["their_deck"]))
+        self.log.info(f"Clash Royale API: {'WIN' if b['won'] else 'loss'} {b['crowns']}-{b['their_crowns']} — "
+                      f"their deck: {deck} (levels: mine {mine:.1f}, theirs {theirs:.1f})")
+        if b["won"] != bool(won_seen):
+            self.log.info("Clash Royale API: the real result differs from what the screen showed — corrected")
+            self.wins += 1 if b["won"] else -1
+            self.losses += -1 if b["won"] else 1
+        try:
+            mem = self.brain.mem
+            if mem:
+                mem.d.setdefault("api_battles", []).append({"t": round(time.time()), "won": b["won"],
+                                                            "crowns": [b["crowns"], b["their_crowns"]],
+                                                            "their_deck": b["their_deck"], "levels": [mine, theirs]})
+                mem.d["api_battles"] = mem.d["api_battles"][-300:]
+        except Exception:
+            pass
+        if self.s.get("notify", True):
+            try: self.notify(f"📋 ديك الخصم كامل: {deck}\nمتوسط اللفل: أنا {mine:.1f} — هو {theirs:.1f}")
+            except Exception: pass
+    threading.Thread(target=work, daemon=True, name="cr-api-battle").start()
+
+
+RoyaleBot._api_start = _api_start
+RoyaleBot._api_after_battle = _api_after_battle
 
 
 def _save_deck(deck):

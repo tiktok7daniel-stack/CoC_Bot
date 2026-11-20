@@ -115,6 +115,21 @@ class RoyaleScreen(Screen):
         g2.addWidget(setup, 0, 1)
         v.addWidget(w2)
 
+        # ---------- the official Clash Royale API: exact deck, levels, results, the meta
+        from PySide6.QtWidgets import QLineEdit
+        from ..widgets.controls import bind_line
+        from .bot_settings_screen import secret_field
+        api = GlassCard("royale_api", "key", "royale_api_sub")
+        tg = QLineEdit(); tg.setPlaceholderText("#2PP0JCLQ8"); tg.setLayoutDirection(Qt.LeftToRight); tg.setFixedWidth(200)
+        bind_line(self.store, tg, "royale.tag")
+        api.add(form_row("royale_tag", None, tg))
+        api.add(form_row("royale_api_key", "royale_api_key_sub", secret_field(self.store, "royale_api_key", "eyJ0eXAiOiJKV1Qi…")))
+        em = QLineEdit(); em.setLayoutDirection(Qt.LeftToRight); em.setMinimumWidth(260)
+        bind_line(self.store, em, "royale_dev_email", "app")
+        api.add(form_row("royale_dev_email", "royale_dev_email_sub", em))
+        api.add(form_row("royale_dev_pass", None, secret_field(self.store, "royale_dev_password", "••••••••")))
+        v.addWidget(api)
+
         # ---------- training the eyes on this PC
         train = GlassCard("royale_train", "school", "royale_train_sub")
         self.train_state = label("", "sub", wrap=True)

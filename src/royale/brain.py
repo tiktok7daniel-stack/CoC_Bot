@@ -808,11 +808,19 @@ class Brain:
             pass
 
     def _predict(self):
-        """Their whole deck from the cards seen: cards played with them in 45%+ of 252k real decks."""
+        """Their whole deck from the cards seen: the decks played RIGHT NOW by the best players (official API,
+        royale.cr_api, refreshed daily) first, else the cards played with them in 45%+ of 252k real decks."""
         try:
             names = {pro.key(n): n for n in cards_db()}
-            self.predicted = {names[k] for k, p in pro.predict_deck(self.enemy_seen) if p >= 0.45 and k in names} \
-                - self.enemy_seen
+            guess = []
+            try:
+                from royale import cr_api
+                guess = [(k, p) for k, p in cr_api.predict_deck([pro.key(c) for c in self.enemy_seen]) if p >= 0.45]
+            except Exception:
+                guess = []
+            if not guess:
+                guess = [(k, p) for k, p in pro.predict_deck(self.enemy_seen) if p >= 0.45]
+            self.predicted = {names[k] for k, p in guess if k in names} - self.enemy_seen
         except Exception:
             self.predicted = set()
 
