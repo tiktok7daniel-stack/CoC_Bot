@@ -3,19 +3,21 @@ The learned brain teaches itself from its own battles (reinforcement learning, n
 
   every battle   each moment the bot decided (play a card here / wait) is written down with what it saw, then the
                  battle is scored: towers it took / lost in the 10 s after each moment, and the win or the loss
-  every 15       the network is trained again on this PC (low priority, in the background):
+  every 3        the networks are trained again on this PC (low priority, in the background):
   battles          moments that led to good things are made more likely, bad ones less (advantage-weighted
                    learning, the kind of RL that is safe on few games), mixed with 40k pro moments it never saw
                    so it cannot forget how real players play
-  checked        the new brain is kept only if it still plays like the pros on unseen moments (no collapse), and
-                 after 30 battles it must win at least as often as the one before — else it is put back
+  every card     judged on its own too: the elixir worth it killed minus its cost, a building that pulled nothing
+                 is wasted (-1.5) — the lesson lands on the move that earned it
+  checked        a new brain is kept only if it still plays like the pros on unseen moments (no collapse), and
+                 every 30 battles the win rate is compared: a block that wins clearly less puts the best brains back
 Files: ~/.CoC_Bot/learn/royale_selfplay_<account>/ (battles), ~/.CoC_Bot/models/royale_policy_<account>.onnx
 """
 import json, math, os, sys, time
 from pathlib import Path
 
 HOME = Path.home() / ".CoC_Bot"
-EVERY = 15
+EVERY = 3                    # trained again every 3 battles (a few seconds in the background)
 HORIZON = 10.0
 _ROOT = getattr(sys, "_MEIPASS", None) or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -80,6 +82,7 @@ def record(acc, steps, towers, won, opp_steps=()):
             dealt = sum(max(0.0, a.get(k, 1) - b.get(k, a.get(k, 1))) for k in a if k.startswith("their"))
             lost = sum(max(0.0, a.get(k, 1) - b.get(k, a.get(k, 1))) for k in a if k.startswith("our"))
             r = (lost - dealt - 0.5 * final) if opp else (dealt - lost + 0.5 * final)
+            r += 0.25 * float(s.get("v", 0.0))         # the card's own trade (royale.brain.score_moves)
             rows.append({**s, "r": round(r, 4), **({"o": 1} if opp else {})})
     d = bdir(acc)
     d.mkdir(parents=True, exist_ok=True)
@@ -87,29 +90,50 @@ def record(acc, steps, towers, won, opp_steps=()):
     (d / f"{time.strftime('%Y%m%d_%H%M%S')}.json").write_text(json.dumps({"won": bool(won), "v": st["version"],
                                                                            "steps": rows}), encoding="utf-8")
     st["battles"] += 1
-    pv = st["per_version"].setdefault(str(st["version"]), {"w": 0, "n": 0})
-    pv["n"] += 1; pv["w"] += int(bool(won))
     _check_rollback(acc, st)
+    st["blocks"][-1]["n"] += 1
+    st["blocks"][-1]["w"] += int(bool(won))
     _write_state(acc, st)
 
 
+BLOCK = 30
+
+
+def _model_files(acc):
+    out = []
+    for p in (model_path(acc), board_path(acc)):
+        out += [p, p.with_suffix(".npz")]
+    return out
+
+
 def _check_rollback(acc, st):
-    """A self-trained brain that wins less than the one before it (30 battles each) is put back."""
-    v = st["version"]
-    if v == 0: return
-    cur, prev = st["per_version"].get(str(v), {}), st["per_version"].get(str(v - 1), {})
-    if cur.get("n", 0) >= 30 and prev.get("n", 0) >= 30:
-        if cur["w"] / cur["n"] < prev["w"] / prev["n"] - 0.08:
-            p = model_path(acc)
-            old = p.with_name(p.stem + "_prev.onnx")
-            if old.exists():
-                os.replace(old, p)
-                if old.with_suffix(".npz").exists(): os.replace(old.with_suffix(".npz"), p.with_suffix(".npz"))
-            else:
-                p.unlink(missing_ok=True); p.with_suffix(".npz").unlink(missing_ok=True)
-            st["rolled_back"] = st.get("rolled_back", 0) + 1
-            st["version"] = v - 1
-            st["note"] = f"v{v} won less ({cur['w']}/{cur['n']}) than v{v - 1} ({prev['w']}/{prev['n']}): put back"
+    """The brains change every few battles, so they are judged in blocks of 30 battles: at the start of each block
+    the brains are saved; a block that wins clearly less (10+ points) than the best block so far puts the best
+    block's brains back. It never gets worse for long."""
+    import shutil
+    blocks = st.setdefault("blocks", [])
+    if not blocks or blocks[-1]["n"] >= BLOCK:
+        if blocks:
+            done = blocks[-1]
+            best = max(blocks, key=lambda b: (b["w"] / max(1, b["n"]), -b["k"]))
+            if done["w"] / done["n"] < best["w"] / best["n"] - 0.10 and best is not done:
+                src = bdir(acc) / "blocks" / str(best["k"])
+                for f in _model_files(acc):
+                    b = src / f.name
+                    if b.exists(): shutil.copy2(b, f)
+                    elif f.exists(): f.unlink()
+                st["rolled_back"] = st.get("rolled_back", 0) + 1
+                st["note"] = (f"block {done['k']} won {done['w']}/{done['n']}, less than block {best['k']} "
+                              f"({best['w']}/{best['n']}): its brains are back")
+        k = (blocks[-1]["k"] + 1) if blocks else 0
+        dst = bdir(acc) / "blocks" / str(k)
+        dst.mkdir(parents=True, exist_ok=True)
+        for f in _model_files(acc):
+            if f.exists(): shutil.copy2(f, dst / f.name)
+        blocks.append({"k": k, "w": 0, "n": 0})
+        for old in blocks[:-6]:                                   # the newest 6 blocks are kept on disk
+            shutil.rmtree(bdir(acc) / "blocks" / str(old["k"]), ignore_errors=True)
+    st["blocks"] = blocks[-12:]
 
 
 def due(acc):
@@ -130,7 +154,7 @@ def start(acc):
 
 
 # ------------------------------------------------------------------ the training (its own process)
-def run(acc, epochs=4):
+def run(acc, epochs=2):
     import numpy as np, torch, torch.nn.functional as F
     from royale import policy_net as N
     torch.set_num_threads(max(1, (os.cpu_count() or 4) // 2))
@@ -155,7 +179,7 @@ def run(acc, epochs=4):
     base = anchor_acc(m)
     # the bot's own moments, newest 200 battles
     rows = []
-    for f in sorted(bdir(acc).glob("2*.json"))[-200:]:
+    for f in sorted(bdir(acc).glob("2*.json"))[-60:]:              # the newest 60 battles
         try: rows += json.loads(f.read_text(encoding="utf-8"))["steps"]
         except (OSError, ValueError, KeyError): pass
     rows = [r for r in rows if len(r.get("x", [])) == nf and len(r.get("ids", [])) == 14]

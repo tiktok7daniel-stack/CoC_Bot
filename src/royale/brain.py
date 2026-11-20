@@ -174,6 +174,7 @@ class Brain:
         self.enemy_hist = []                   # (second, card, tile x, tile y): what the learned brain sees
         self.steps = []                        # what it saw + what it did, every moment (royale.selfplay learns)
         self.opp_steps = []                    # the same for every card the OPPONENT played (seen from their side)
+        self.deaths = []                       # their units that died: (second, unit, x, y, elixir worth, hits buildings only)
         self._my_el = 5.0
         self.tower_log = []                    # (second, towers) once a second: how each moment turned out
         self._ctx, self._last_wait = None, -9.0
@@ -260,7 +261,13 @@ class Brain:
             t = self.known_enemy[tid]
             t.update(vy=(y - t["y"]) / max(0.05, now - t["last"]), x=x, y=y, last=now)
         for k in [k for k, t in self.known_enemy.items() if now - t["last"] > 4]:
-            del self.known_enemy[k]
+            t = self.known_enemy.pop(k)
+            # gone from the arena = killed (the whole arena is in view): what it was worth, where, when
+            cn = unit_card(t["unit"])
+            if cn and t["y"] <= RIVER_Y + 6 and t["unit"] not in SPAWNED:
+                c = card(cn)
+                self.deaths.append((self.elapsed() - 4.0, t["unit"], t["x"], t["y"],
+                                    c.get("cost", 3) / max(1, c.get("count") or 1), bool(c.get("buildings_only"))))
         return stable
 
     # -------------------------------------------------------------- threats
@@ -674,6 +681,26 @@ class Brain:
         y = 1 if self.support_due_back else 11
         self.support_due = None
         return self._play((i, n), (LEFT_BRIDGE_X if side == "left" else RIGHT_BRIDGE_X, y), f"{n} behind the {first}", now)
+
+    def score_moves(self):
+        """After the battle: every card WE played is judged on its own (the idea RoyaleFish found decisive: the
+        lesson lands on the move that earned it, not 100 moves later):
+          trade     elixir worth of their units that died near it within 10 s, minus what it cost
+          building  a building that pulled nothing (no building-only troop died near it) was wasted: -1.5
+          spell     the same trade: a Fireball that killed 2 elixir of troops is -2
+        -> step["v"] (elixir) for royale.selfplay."""
+        for s in self.steps:
+            cid = s.get("card", 0)
+            if not cid: continue
+            name = next((n for n in cards_db() if policy.card_id(n) == cid), None)
+            if not name: continue
+            c = card(name)
+            x, y = s["tile"] % 18, s["tile"] // 18
+            near = [d for d in self.deaths if s["t"] <= d[0] <= s["t"] + 10.0 and dist((d[2], d[3]), (x, y)) <= 7.0
+                    and lane(d[2]) == lane(x)]
+            v = sum(d[4] for d in near) - c.get("cost", 3)
+            if c.get("kind") == "building" and not any(d[5] for d in near): v -= 1.5
+            s["v"] = round(v, 2)
 
     def _ltile(self, name, anywhere=False):
         """Where the learned brains would put `name` now: the surer of the two."""
