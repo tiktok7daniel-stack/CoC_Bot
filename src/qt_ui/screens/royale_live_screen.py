@@ -151,6 +151,13 @@ class RoyaleLiveScreen(Screen):
 
     def __init__(self, ctx):
         super().__init__(ctx)
+        top = QHBoxLayout()
+        from ..widgets.controls import IconButton
+        pop = IconButton("expand", "rl_popout", kind="go", size=14)
+        pop.clicked.connect(self.pop_out)
+        top.addWidget(pop)
+        top.addStretch(1)
+        self.root.addLayout(top)
         row = QHBoxLayout()
         row.setSpacing(12)
         self.arena = Arena()
@@ -188,6 +195,44 @@ class RoyaleLiveScreen(Screen):
         self.timer.start(250)
         on_lang(lambda: self.refresh(force=True))
 
+    def pop_out(self):
+        """The battle view in its own small window, kept on top: put it beside LDPlayer and watch both."""
+        from PySide6.QtWidgets import QWidget as _W, QVBoxLayout as _V
+        if getattr(self, "_pop", None) is not None and self._pop.isVisible():
+            self._pop.raise_(); self._pop.activateWindow(); return
+        w = _W(None, Qt.Window | Qt.WindowStaysOnTopHint)
+        w.setWindowTitle(tr("nv_royale_live"))
+        w.setStyleSheet(f"background: {TOKENS['void']}; color: {TOKENS['text']};")
+        lay = _V(w)
+        lay.setContentsMargins(6, 6, 6, 6)
+        arena = Arena()
+        info = QLabel()
+        info.setWordWrap(True)
+        info.setTextFormat(Qt.RichText)
+        info.setFont(ui_font(9.5))
+        lay.addWidget(arena, 1)
+        lay.addWidget(info)
+        w.resize(420, 820)
+        w._arena, w._info = arena, info
+        self._pop = w
+        w.show()
+        self.refresh(force=True)
+
+    def _feed_pop(self, d):
+        w = getattr(self, "_pop", None)
+        if w is None or not w.isVisible(): return
+        w._arena.set_data(d)
+        if d.get("phase") != "battle":
+            w._info.setText(tr("rl_phase_" + str(d.get("phase") or "none"))); return
+        dec, th = d.get("decision"), d.get("think") or {}
+        t = d.get("time_s", 0)
+        head = (f"<b>{int(t // 60)}:{int(t % 60):02d}</b> · {tr('rl_elixir')} {d.get('elixir')} · "
+                f"{tr('rl_their_elixir')} {d.get('their_elixir')}")
+        what = (f"<b style='color:{TOKENS['gold']}'>▶ {dec['card']} {tuple(dec['tile'])}</b> — {dec.get('why', '')}"
+                if dec else tr("rl_waiting"))
+        more = f"{tr('rl_thought')}: {th.get('tried', 0)} · {th.get('ms', 0)} ms" if th.get("tried") else ""
+        w._info.setText("<br>".join(x for x in (head, what, more) if x))
+
     def _path(self):
         acc = self.store.account or "main"
         return Path.home() / ".CoC_Bot" / "learn" / \
@@ -197,13 +242,15 @@ class RoyaleLiveScreen(Screen):
         self.refresh(force=True)
 
     def refresh(self, force=False):
-        if not self.isVisible() and not force: return
+        popped = getattr(self, "_pop", None) is not None and self._pop.isVisible()
+        if not self.isVisible() and not popped and not force: return
         p = self._path()
         try:
             mt = p.stat().st_mtime
         except OSError:
             self.arena.set_data({"phase": "none"})
             self.l_state.setText(tr("rl_no_data"))
+            self._feed_pop({"phase": "none"})
             return
         if mt == self._mtime and not force:
             return
@@ -216,6 +263,7 @@ class RoyaleLiveScreen(Screen):
         if d.get("phase") == "battle" and _t.time() - d.get("t", 0) > 8: d["phase"] = "stale"
         self.arena.set_data(d)
         self.show_panel(d)
+        self._feed_pop(d)
 
     def show_panel(self, d):
         if d.get("phase") != "battle":
