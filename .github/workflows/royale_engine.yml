@@ -29,6 +29,10 @@ jobs:
           python third_party/clash_royale_env/build.py
       - name: Check it loads
         run: python -c "import sys; sys.path.insert(0, 'assets/royale/engine'); import clash_royale_env as c; e = c.ClashRoyaleEnv([15,6,25,40,24,72,33,7],[15,6,25,40,24,72,33,7],3600); e.reset(); print('ok', len(e.get_units()))"
+      - name: The bot's checks with the real engine
+        run: |
+          python -m pip install numpy
+          python scripts/test_royale_engine.py
       - uses: actions/upload-artifact@v4
         with:
           name: engine-${{ matrix.python }}
