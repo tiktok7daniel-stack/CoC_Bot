@@ -558,7 +558,10 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
         # the opponent answers (5.84): a move is only as good as it stays after their likeliest answers — half the
         # worst case, half the average (they do not always find the best answer)
         vs = [v]
-        if time.perf_counter() - t0 < THINK_BUDGET * 0.75:
+        # only for an attack (a card for their half, nothing of theirs on ours): a defense is judged on the threat
+        # in front of it — "what if they send more" made every defense look worse than waiting (5.87: the Giant push
+        # went undefended in the engine test)
+        if not defend and ty >= 13 and time.perf_counter() - t0 < THINK_BUDGET * 0.75:
             for rp in replies(brain, n, tx, ty):
                 e2 = rollout_reply(env, hs, x, y, rp)
                 if e2 is not None: vs.append(_value(e2, brain, before, cost) - base)

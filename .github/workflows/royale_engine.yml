@@ -64,7 +64,9 @@ jobs:
         run: |
           python -m pip install numpy onnxruntime
           python scripts/test_royale_engine.py
+          if ($LASTEXITCODE -ne 0) { exit 1 }
           python scripts/test_royale_spells.py
+          if ($LASTEXITCODE -ne 0) { exit 1 }
       - name: The eyes on the graphics card (DirectML onnxruntime installs and loads)
         run: python -c "import sys; sys.path.insert(0, 'src'); import ort_gpu; ort_gpu._install(); print(open(ort_gpu.LOG, encoding='utf-8').read()[-600:]); sys.exit(0 if ort_gpu.READY.exists() else 1)"
 
@@ -86,7 +88,9 @@ jobs:
           python -m pip install numpy psutil gymnasium tensorboard onnx onnxruntime
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
       - name: Train for a few minutes with the account's deck
-        run: python scripts/test_royale_training.py
+        run: |
+          python scripts/test_royale_training.py
+          if ($LASTEXITCODE -ne 0) { exit 1 }
       - name: Expert Iteration (search -> answers -> training -> gate)
         run: python scripts/test_royale_exit.py
 
