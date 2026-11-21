@@ -447,10 +447,17 @@ class RoyaleBot:
                 continue
             ws = words(fr)
             b = find_word(ws, "battle", y_min=0.55, y_max=0.9)
+            qm = find_word(ws, "quick match", y_min=0.3, y_max=0.8)          # the 2v2 window left open
+            if qm and not in_battle(fr):
+                log.info("Clash Royale: 2v2 — Quick Match")
+                tap(*qm)
+                time.sleep(2.0)
+                continue
             if b and self._cards_study_due():
                 self._study_cards()
                 continue
-            if b and self.s.get("auto_deck", True) and not getattr(self, "_deck_checked", False):
+            if b and self.s.get("auto_deck", True) and not self.s.get("lock_deck", True) \
+                    and not getattr(self, "_deck_checked", False):
                 self._deck_checked = True
                 self._pick_deck()
                 continue
@@ -479,9 +486,24 @@ class RoyaleBot:
                         continue
                 else:
                     tap(*b)
-                for _ in range(60):                          # matchmaking: up to ~1 minute
+                for k in range(60):                          # matchmaking: up to ~1 minute
                     time.sleep(1)
-                    if in_battle(frame()) or not _u().running(): break
+                    fr2 = frame()
+                    if in_battle(fr2) or not _u().running(): break
+                    if k % 2 == 0:
+                        # 2v2 (the user's mode): its window asks Play with Friend / Quick Match -> Quick Match
+                        qm = find_word(words(fr2), "quick match", "quick", y_min=0.3, y_max=0.8)
+                        if qm:
+                            log.info("Clash Royale: 2v2 — Quick Match")
+                            tap(*qm)
+                continue
+            # the result screen of a 2v2 (Exit / Play Again / add friend / chat): Exit, then Battle again
+            # (the user's order: never Play Again)
+            ex = find_word(ws, "exit", y_min=0.85)
+            if ex and find_word(ws, "play again", "play", y_min=0.85):
+                log.info("Clash Royale: battle over — Exit")
+                tap(*ex)
+                time.sleep(2.0)
                 continue
             ok = find_word(ws, "ok", "continue", "tap to continue", "close", y_min=0.5)
             if ok:

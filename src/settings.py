@@ -36,6 +36,7 @@ def default_settings():
             "scan_cards": True,      # weekly: every card's Info page photographed and read (royale.card_scan)
             "engine_think": True,    # every move thought through in the battle engine (royale.engine) when it is built
             "local_ai": False,       # True: the local AI model (royale.board + royale.policy, learning every battle) plays
+            "lock_deck": True,       # the user's own deck is played as it is: the bot never changes it (the user's order)
             "training_camp": False,  # True: plays only Training Camp battles (against the trainer, no trophies)
             "confirm_battles": False,  # True: waits in the lobby for the app's "Start a battle" button before each battle
             # the deck the bot puts in when the official API is not set up (8 cards). Hog 2.6: picked for this account
