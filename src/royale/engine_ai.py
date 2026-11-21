@@ -262,7 +262,7 @@ def new_battle():
 
 def _background_pids():
     out = []
-    for f in (_pid_file(), HOME / "gate.pid"):
+    for f in (_pid_file(), HOME / "gate.pid", HOME / "exit" / "exit.pid"):    # PPO, its gate, Expert Iteration
         try: out.append(int(f.read_text()))
         except (OSError, ValueError): pass
     return out

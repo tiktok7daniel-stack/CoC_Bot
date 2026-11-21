@@ -76,6 +76,24 @@ def cards_db():
     return _DB["cards"]
 
 
+_EXIT = {"t": 0.0, "v": False}
+
+
+def _exit_trained():
+    """Has Expert Iteration put a brain in use on this PC? (checked once a minute)"""
+    import time as _t
+    if _t.monotonic() - _EXIT["t"] > 60:
+        _EXIT["t"] = _t.monotonic()
+        try:
+            import json as _j
+            from pathlib import Path as _P
+            p = _P.home() / ".CoC_Bot" / "royale_ai" / "exit" / "progress.json"
+            _EXIT["v"] = p.exists() and int(_j.loads(p.read_text(encoding="utf-8")).get("accepted", 0)) > 0
+        except Exception:
+            _EXIT["v"] = False
+    return _EXIT["v"]
+
+
 def card(name):
     return cards_db().get(name) or {}
 
@@ -516,8 +534,10 @@ class Brain:
             if self._pol and self._board and self._board.get("cards"):
                 pc, bc = self._pol.get("cards") or {}, self._board["cards"]
                 # two brains that learned differently (play history / whole arena): together they choose better
-                self._pol["cards"] = {n: 0.5 * pc.get(n, 0.0) + 0.5 * bc.get(n, 0.0) for n in set(pc) | set(bc)}
-                self._pol["play"] = 0.5 * self._pol["play"] + 0.5 * self._board["play"]
+                # the arena brain trained on the engine's answers (royale.exit_train) knows more: it leads then
+                wb = 0.8 if _exit_trained() else 0.5
+                self._pol["cards"] = {n: (1 - wb) * pc.get(n, 0.0) + wb * bc.get(n, 0.0) for n in set(pc) | set(bc)}
+                self._pol["play"] = (1 - wb) * self._pol["play"] + wb * self._board["play"]
         self._ctx = (round(el_t, 2), [round(float(v), 4) for v in self._pol["_x"][0]], list(self._pol["_ids"]),
                      (self._board or {}).get("_in")) if self._pol else None
         if self.p.get("ai_only", False) and self._pol and self._pol.get("cards"):

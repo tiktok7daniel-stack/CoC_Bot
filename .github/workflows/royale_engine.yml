@@ -13,6 +13,8 @@ on:
       - "scripts/test_royale_spells.py"
       - "src/royale/brain.py"
       - "src/royale/card_use.py"
+      - "src/royale/exit_train.py"
+      - "scripts/test_royale_exit.py"
       - "scripts/test_royale_training.py"
   workflow_dispatch:
 
@@ -76,10 +78,12 @@ jobs:
       - name: Install the training stack (CPU)
         run: |
           python -m pip install --upgrade pip
-          python -m pip install numpy psutil gymnasium tensorboard
+          python -m pip install numpy psutil gymnasium tensorboard onnx onnxruntime
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
       - name: Train for a few minutes with the account's deck
         run: python scripts/test_royale_training.py
+      - name: Expert Iteration (search -> answers -> training -> gate)
+        run: python scripts/test_royale_exit.py
 
   commit:
     needs: build

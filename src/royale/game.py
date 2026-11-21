@@ -1083,6 +1083,15 @@ def _gate_after_battle(self):
     deck = list(self.brain.deck or self.eyes.deck or [])
     # the self-play AI trains by itself between battles on this deck (paused while a battle runs)
     if self.s.get("ai_self_play", True) and engine.ready() and len(deck) == 8 and not engine_ai.running():
+        # Expert Iteration (royale.exit_train): the arena brain learns the engine's best answers on this PC's GPU
+        try:
+            from royale import exit_train
+            if not engine_ai.missing() and not exit_train.running():
+                ok, msg = exit_train.start(deck, _u().INSTANCE_ID)
+                self.log.info("Clash Royale AI: " + msg)
+            if exit_train.running(): return
+        except Exception:
+            self.log.debug("expert iteration start failed", exc_info=True)
         miss = engine_ai.missing()
         if miss:
             if not getattr(self, "_train_missing_told", False):
