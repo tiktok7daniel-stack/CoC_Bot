@@ -289,7 +289,7 @@ class IconButton(QPushButton):
 
 class StatusPill(QLabel):
     """Rounded pill with a colored dot: running / stopped / paused …"""
-    COLORS = {"running": "ok", "idle": "info", "starting": "info", "stopped": "dim", "paused": "warn", "scheduled": "warn",
+    COLORS = {"running": "ok", "ready": "ok", "idle": "info", "starting": "info", "stopped": "dim", "paused": "warn", "scheduled": "warn",
               "break": "warn", "limit": "warn", "error": "bad", "ok": "ok", "bad": "bad", "warn": "warn", "info": "info"}
 
     def __init__(self, key="stopped", text=None):

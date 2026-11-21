@@ -231,12 +231,14 @@ class RoyaleScreen(Screen):
         """One battle: the bot waiting in the lobby goes in."""
         import time as _t
         self.store.set("royale.go_request", _t.time())
+        self.store.save(silent=True)          # straight to the bot (it only reads saved settings)
         self.ctx.banner(tr("royale_go_started"), "ok", "play")
 
     def scan_cards_now(self):
         """The bot opens every card's Info page at the next menu and sends the pictures to be studied."""
         import time as _t
         self.store.set("royale.card_scan_request", _t.time())
+        self.store.save(silent=True)          # straight to the bot (it only reads saved settings)
         self.ctx.banner(tr("royale_scan_started"), "ok", "camera")
 
     def train_now(self):

@@ -318,7 +318,13 @@ class MainWindow(QMainWindow):
         elif a == "setup": self.setup.open_wizard()
         elif a == "start": self.account_action(acc, "start")
         elif a == "stop": self.account_action(acc, "stop")
-        elif a == "wake": self.account_action(acc, "wake")
+        elif a == "wake":
+            if self.store.get("game_mode") == "royale":         # Clash Royale: "run now" = start one battle
+                self.store.set("royale.go_request", time.time())
+                self.store.save(silent=True)
+                self.toast.show_msg(tr("royale_go_started"), "ok")
+            else:
+                self.account_action(acc, "wake")
         elif a == "pause":
             st = self.poller.account_state()
             paused = bool(st.get("end_time")) and st.get("end_time", 0) > time.time()

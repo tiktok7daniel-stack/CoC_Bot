@@ -263,7 +263,7 @@ class FooterCapsule(QFrame):
         self.setStyleSheet(f"FooterCapsule {{ background: {TOKENS['glass2']}; border: 1px solid {TOKENS['border']}; border-radius: 16px; }}")
 
     def set_state(self, key, text, emulator, version):
-        self.dot.set_color(TOKENS[{"running": "ok", "idle": "info", "starting": "info", "error": "bad", "stopped": "dim"}.get(key, "warn")],
+        self.dot.set_color(TOKENS[{"running": "ok", "ready": "ok", "idle": "info", "starting": "info", "error": "bad", "stopped": "dim"}.get(key, "warn")],
                            pulse=key in ("running", "starting", "idle"))
         self.state.setText(text)
         self.emu.setText(emulator)

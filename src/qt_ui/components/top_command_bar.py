@@ -193,7 +193,7 @@ class TopCommandBar(QFrame):
         running = bool(acc_state.get("running"))
         self.btn_start.setEnabled(not running)
         self.btn_stop.setEnabled(running)
-        self.btn_wake.setEnabled(running and k != "running")
+        self.btn_wake.setEnabled(running and k != "running" or k == "ready")
         paused = bool(acc_state.get("end_time")) and acc_state.get("end_time", 0) > (now or 0)
         key = "resume_now" if paused else "pause_title"
         self._text_keys[self.btn_pause] = key

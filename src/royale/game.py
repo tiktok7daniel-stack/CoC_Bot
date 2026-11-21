@@ -329,6 +329,8 @@ class RoyaleBot:
         log = self.log
         start_game(log)
         max_b = int(self.s.get("max_battles", 0) or 0)
+        self._status("now")                                  # the app shows "running", not "starting…"
+        self._say("✅ كلاش رويال: البوت شغال ومتوصل باللعبة", "the bot is running and connected to the game", phone=True)
         while _u().running():
             if max_b and self.battles >= max_b:
                 log.info(f"Clash Royale: {max_b} battles played — done")
@@ -766,10 +768,12 @@ def _go_ok(self):
     if go > getattr(self, "_go_used", 0):
         self._go_used = go
         self._waiting_told = False
+        self._status("now")
         self._say("▶️ كلاش رويال: دوست ابدأ — داخل ماتش دلوقتي", "Start pressed — going into a battle")
         return True
     if not getattr(self, "_waiting_told", False):
         self._waiting_told = True
+        self._status("waiting_start")
         self._say("⏸️ كلاش رويال: جاهز ومستنيك — دوس «ابدأ ماتش» في البرنامج عشان أدخل الماتش",
                   "ready, waiting for the Start button", phone=True)
     return False
@@ -798,6 +802,15 @@ def _recover(self, err):
     time.sleep(min(60, 5 * n))
 
 
+def _status(self, st):
+    """The app's status line: "now" = running, "waiting_start" = ready, waiting for Start a battle."""
+    if getattr(self, "_last_status", None) == st: return
+    self._last_status = st
+    try: _u().update_status(st)
+    except Exception: pass
+
+
+RoyaleBot._status = _status
 RoyaleBot._say = _say
 RoyaleBot._go_ok = _go_ok
 RoyaleBot._recover = _recover

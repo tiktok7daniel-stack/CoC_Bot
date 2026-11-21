@@ -145,6 +145,7 @@ def status_key(a, now=None):
     s = a.get("status")
     if s in ("paused", "scheduled", "limit", "break", "error"): return s
     if s == "now": return "running"
+    if s == "waiting_start": return "ready"                    # Clash Royale: waiting for "Start a battle"
     if s in ("starting", "", None): return "starting"
     try:
         float(s)
