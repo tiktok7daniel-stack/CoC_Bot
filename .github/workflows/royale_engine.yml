@@ -12,6 +12,7 @@ on:
       - "scripts/test_royale_engine.py"
       - "scripts/test_royale_spells.py"
       - "src/royale/brain.py"
+      - "src/royale/card_use.py"
       - "scripts/test_royale_training.py"
   workflow_dispatch:
 

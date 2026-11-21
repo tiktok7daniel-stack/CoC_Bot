@@ -632,7 +632,8 @@ class Brain:
             # all and the elixir leaked); the Log with nothing to hit rolls into their tower instead
             troops = [p for p in playable if "spell" not in roles(p[1]) and p[1] not in WIN_SPELLS]
             if troops:
-                cheap = min(troops, key=lambda p: (("win" in roles(p[1])), card(p[1]).get("cost", 9)))
+                cheap = min(troops, key=lambda p: (("win" in roles(p[1])), "building" in roles(p[1]),
+                                                   card(p[1]).get("cost", 9)))
                 return self._play(cheap, (8, 1), "full elixir: cycling at the back", now)
             for i, n in playable:
                 if n == "goblin_barrel":
@@ -963,6 +964,7 @@ class Brain:
         kill is worth most of their cost — or they finish a tower (the Log: also chip a tower when the elixir is
         full and there is nothing else to hit). Never on an empty spot or on one big unit they hardly scratch."""
         hit = self._spell_hits(name, tile)
+        n_small = name in SMALL_SPELL_RULES
         dmg = card(name).get("damage") or SPELL_DAMAGE_DEFAULT.get(name, 100)
         cost = card(name).get("cost", 3)
         val = 0.0
@@ -977,7 +979,7 @@ class Brain:
             near = dist(tile, (x, y)) <= 3.0 or (name in ROLLING and abs(tile[0] - x) <= 2.5 and 0 <= y - tile[1] <= 11)
             if not near: continue
             hp = tw.get(f"their_{k}")
-            if hp is not None and 0 < hp <= 0.06: return True          # the last bit of a tower
+            if hp is not None and 0 < hp <= (0.06 if n_small else 0.12): return True   # the last bit of a tower
             if name in ROLLING and not hit and (getattr(self, "_my_el", 0) >= 9.5 or self.elapsed() >= 170):
                 return True                                            # full elixir / the last seconds: chip
         return False
@@ -1142,11 +1144,19 @@ class Brain:
             return None                                  # only on units that are surely THEIRS
         # each card's own way of being used (the user's correction, 5.72): checked here so every source of a move
         # (rules, the engine, the trained AI, the learned brain) obeys it
-        if n == "goblin_barrel":
+        if n in ("goblin_barrel", "miner", "graveyard", "goblin_drill"):
             tile = self._barrel_tile(tile)               # always straight onto their tower, never at home
             why = why if "tower" in why else f"{why} -> on their tower"
-        elif n in SMALL_SPELL_RULES and not self._small_spell_ok(n, tile):
-            return None                                  # Arrows / Log / Zap only where they really pay
+        elif __import__("royale.card_use", fromlist=["x"]).DAMAGE_SPELLS.__contains__(n) and \
+                not self._small_spell_ok(n, tile):
+            return None                                  # a damage spell only where it really pays
+        try:                                             # every card in its own right place (royale.card_use)
+            from royale import card_use
+            cu = card_use.check(self, n, tile, why)
+        except Exception:
+            cu = (tile, why)
+        if cu is None: return None
+        tile, why = cu
         if n in K.SUPPORT or (pro.data().get("follow", {}).get(pro.key(n)) and "win" in roles(n)):  # its support next
             self.support_due = (lane(tile[0]), now + 5.0, n)
             self.support_due_back = tile[1] <= 3

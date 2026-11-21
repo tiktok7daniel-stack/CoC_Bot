@@ -44,5 +44,23 @@ d = b._decide(["the_log", "goblin_barrel", "arrows", "valkyrie"], [0, 1, 2], 10,
               [(0, "the_log"), (1, "goblin_barrel"), (2, "arrows")], empty, {"their_left": 1.0, "their_right": 1.0}, now)
 check("full elixir with only spells in hand: a play, not a leak", d is not None, str(d))
 
+# 5.73: every card in its own place (royale.card_use)
+setup([]); d = b._play((0, "hog_rider"), (4, 6), "x", now)
+check("Hog with nothing to defend goes to the bridge", d and d["tile"][1] >= 12, str(d and d["tile"]))
+setup([]); d = b._play((0, "musketeer"), (3, 13), "x", now)
+check("Musketeer alone at the bridge goes behind our tower", d and d["tile"][1] <= 4, str(d and d["tile"]))
+setup([]); b.plays = [{"card": "hog_rider", "tile": (3, 13), "t": b.elapsed()}]
+d = b._play((0, "musketeer"), (3, 12), "x", now)
+check("Musketeer behind our Hog stays with it", d and d["tile"][1] >= 10, str(d and d["tile"]))
+setup([("knight", 4, 10)]); d = b._play((0, "musketeer"), (4, 9), "x", now)
+check("Musketeer not dropped on top of a Knight", d and d["tile"][1] <= 7, str(d and d["tile"]))
+setup([]); b.enemy_seen = set(); b.predicted = set()
+check("no Cannon with nothing to pull", b._play((0, "cannon"), (8, 9), "x", now) is None)
+setup([("hog_rider", 3, 14)]); d = b._play((0, "cannon"), (3, 3), "x", now)
+check("Cannon vs a Hog goes in the middle", d and 6 <= d["tile"][0] <= 11 and 6 <= d["tile"][1] <= 11, str(d and d["tile"]))
+setup([]); check("no Bats alone with nothing to do", b._play((0, "bats"), (14, 20), "x", now) is None)
+setup([("mini_pekka", 4, 9)]); check("Bats on a Mini P.E.K.K.A", b._play((0, "bats"), (4, 9), "x", now) is not None)
+setup([("giant", 4, 10)]); check("no Fireball on one Giant", b._play((0, "fireball"), (4, 10), "x", now) is None)
+
 print(f"\n{'ALL PASSED' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)
