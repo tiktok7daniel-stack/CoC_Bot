@@ -2,7 +2,7 @@
 import os, shutil, sys, sysconfig, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.abspath(os.path.join(HERE, "..", "..", "assets", "royale", "engine"))
+OUT = os.path.abspath(os.environ.get("ENGINE_OUT") or os.path.join(HERE, "..", "..", "assets", "royale", "engine"))
 
 
 def main():
