@@ -32,7 +32,7 @@ def bar_fraction(frame, box, theirs=True):
     r, g, b = s[..., 0], s[..., 1], s[..., 2]
     if theirs:
         fill = (r > 185) & (g < 115) & (b < 125) & (r - g > 95)
-        dark = (r > 55) & (r < 190) & (g < 100) & (b < 100) & (r - g > 30)
+        dark = (r > 55) & (r < 190) & (g < 110) & (b < 100) & (r - g > 30)
     else:
         fill = (b > 200) & (g > 150) & (r < 140)
         dark = (b > 50) & (b < 170) & (r < 80) & (b - r > 30)
@@ -57,17 +57,17 @@ def bar_fraction(frame, box, theirs=True):
         if fill[max(0, row - 5):row + 6, mid].sum() > 7: continue
         k, miss = best_e, 0
         limit = best_a + int(1.3 * w) + 4
-        while k < n and k <= limit and miss <= 2:       # the dark rest (2-pixel gaps allowed)
+        while k < n and k <= limit and miss <= 3:       # the dark rest (3-pixel gaps allowed)
             miss = 0 if dark[row, k] else miss + 1
             k += 1
-        if miss <= 2: continue                          # it never ended: the arena behind is dark red too — unsure
+        if miss <= 3: continue                          # it never ended: the arena behind is dark red too — unsure
         end = k - miss
         total = end - best_a
         if 0.35 * w <= total:
             rows.append((best_e - best_a, (best_e - best_a) / total))
     if not rows: return None
     rows.sort(reverse=True)
-    return round(float(np.median([fr for _, fr in rows[:3]])), 2)
+    return round(float(np.median([fr for _, fr in rows[:5]])), 2)
 
 
 def read(frame, dets, tile_of, theirs_of):

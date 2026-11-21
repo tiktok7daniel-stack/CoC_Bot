@@ -420,7 +420,7 @@ class Brain:
                 score += 2.5 - 0.6 * rank
                 break
         if any(a in r for a in kn.get("avoid", [])): score -= 2.0    # what it beats (Mega Knight on a swarm…)
-        keep = K.reserved(self.enemy_seen | self.predicted, name)                    # kept for a threat they have (Log for the barrel)
+        keep = K.reserved(self.their_threats(), name)                # kept for a threat they can play (Log for the barrel)
         if keep and keep != threat.get("main") and not threat.get("urgent"): score -= 2.5
         if self.p.get("pro_moves", True):                           # what real players answered it with
             pro_hand = getattr(self, "_pro_hand", None) or {}
@@ -472,7 +472,7 @@ class Brain:
         ty = int(min(13, max(2, cy - 2)))
         return (tx, ty)
 
-    def decide(self, hand, ready, elixir, enemies, allies=(), towers=None, now=None, hp=None, spells=None):
+    def decide(self, hand, ready, elixir, enemies, allies=(), towers=None, now=None, hp=None, spells=None, evo=None):
         """
         hand: the 4 card names in hand (slot 0..3); ready: playable slots; elixir: ours (0..10);
         enemies / allies: [(unit, tile_x, tile_y, conf)]; towers: {"their_left": hp 0..1, ...}
@@ -481,6 +481,7 @@ class Brain:
         now = now or time.monotonic()
         enemies = self._not_ours(enemies or [], allies or [])
         self.hp_seen = hp or {}
+        self.evo_seen = evo or []
         if spells: self._spells(spells, now)
         stable = self.observe(enemies, now)
         self._stable, self._towers_now, self._allies = stable, dict(towers or {}), list(allies or [])
@@ -533,6 +534,7 @@ class Brain:
         if late and t["center"] and t["center"][1] > 13 and elixir < 9.5:
             pass                                                                 # a tank: let it come (tower helps)
         elif t["value"] >= self.p.get("defend_min", 1.5) or (t.get("urgent") and t["units"]):
+            self._pl_lost = None
             self._pro_hand = (pro.answer(t["main"], (t["center"] or (0, 10))[1], side, [n for _, n in playable])
                               if t.get("main") else {})
             self._pro_wins = (pro.answer_wins(t["main"], (t["center"] or (0, 10))[1], [n for _, n in playable])
@@ -576,6 +578,7 @@ class Brain:
                                   prior=prior, extra_tiles=extra, max_cards=4)
                     if pl:
                         best, tile, why = (pl[0], pl[1]), pl[2], f" — {pl[4]}"
+                        self._pl_lost = pl[7]
                         deep = any(y <= 8 for _u, _x, y in t["units"])
                         if pl[6] and not t.get("urgent") and not deep:
                             # better a moment later (a building waiting decays, a troop would meet them away from
@@ -591,7 +594,8 @@ class Brain:
             if sc > 0.8:
                 d = self._play(best, tile, f"defend {side} vs "
                                f"{', '.join(sorted({u for u, _, _ in t['units']}))}{why}", now)
-                if d and getattr(self, "mem", None): self.mem.defended(t.get("main"), best[1], side, towers, now)
+                if d and getattr(self, "mem", None):
+                    self.mem.defended(t.get("main"), best[1], side, towers, now, getattr(self, "_pl_lost", None))
                 return d
 
         if now < getattr(self, "_hold_until", 0.0): return None                 # a defense is coming in a moment
@@ -635,7 +639,7 @@ class Brain:
         if pol["cards"][n] < 0.4: return None
         r = roles(n)
         if "spell" in r: return None                                  # spells: only where the rules see a target
-        if K.reserved(self.enemy_seen | self.predicted, n): return None
+        if K.reserved(self.their_threats(), n): return None
         if n in K.NOT_TOGETHER[0] and now - self.heavy_mine_at < 6: return None
         if card(n).get("cost", 4) >= 6 and elixir < 9 and not self.double_elixir(): return None
         lt = self._ltile(n)
@@ -694,6 +698,9 @@ class Brain:
             elif ours > theirs and elixir < 9.5: return None
         # the card that answers our win condition was just played: it is out of their hand -> push now
         recent = list(self.enemy_cycle)[-3:]                     # played in the last 3 = not back in hand yet
+        hand_now = self.their_hand()
+        if hand_now is not None:                                 # their hand worked out: everything not in it is out
+            recent = [c for c in (self.enemy_seen | self.predicted) if c not in hand_now]
         for i, n in playable:
             if "win" in roles(n) and any(a in recent for a in K.ANSWERS_TO.get(n, [])):
                 push_ok = True
@@ -722,6 +729,8 @@ class Brain:
                 x, y = THEIR_TOWERS[side]
                 return self._play((i, n), (int(x), int(y) - 1), f"{n} on their {side} tower", now)
             pt = pro.place(n, side) if self.p.get("pro_moves", True) else None   # where real players start it
+            ab = pro.attack_best(n, side)                                       # where it hurts most (attack atlas)
+            if ab: pt = ab
             wp = pro.winners_place(self.their_plan(), n, side)                  # where WINNERS start it vs this deck
             if wp: pt = wp
             lt = self._ltile(n) if self.p.get("learned", True) and self._pol else None
@@ -780,6 +789,17 @@ class Brain:
     king_level = None
     their_level = None                         # the opponent's usual level (learned from past battle logs)
 
+    evo_cards = {}                             # our card -> evolution cycles (official API: evolutionLevel > 0)
+
+    def my_evo(self, name):
+        """How often our `name` comes out evolved: one play in (cycles + 1); 0 when it has no evolution."""
+        cyc = self.evo_cards.get(name)
+        return 1.0 / (cyc + 1) if cyc else 0.0
+
+    def is_evo(self, u, x, y):
+        """The big model saw this unit of theirs as the evolved one."""
+        return any(uu == u and abs(xx - x) <= 1 and abs(yy - y) <= 1 for uu, xx, yy in getattr(self, "evo_seen", ()) or ())
+
     def my_level(self, name):
         if not name: return None
         k = "".join(ch for ch in str(name).lower() if ch.isalnum())
@@ -816,6 +836,36 @@ class Brain:
         ours += [(p["card"], p["tile"][0], p["tile"][1], 1.0) for p in self.plays
                  if t - p["t"] <= 4 and "spell" not in roles(p["card"])]
         return any(dist((a[1], a[2]), tile) <= rad for a in ours)
+
+    def calib(self):
+        try: return self.mem.calib() if getattr(self, "mem", None) else 1.0
+        except Exception: return 1.0
+
+    def their_hand(self):
+        """The 4 cards in their hand now, worked out like a player counts the cycle: the deck (seen + guessed) minus
+        the last 4 different cards they played (those wait in the queue). None until 6 of their cards are known."""
+        deck = list(dict.fromkeys(list(self.enemy_seen) + sorted(self.predicted)))[:8]
+        if len(self.enemy_seen) < 4 or len(deck) < 6: return None
+        queue = []
+        for c in reversed(self.enemy_cycle):
+            if c not in queue: queue.append(c)
+            if len(queue) == 4: break
+        return {c for c in deck if c not in queue}
+
+    def their_next(self):
+        """The card that comes back into their hand with their next play (the oldest one waiting)."""
+        queue = []
+        for c in reversed(self.enemy_cycle):
+            if c not in queue: queue.append(c)
+            if len(queue) == 4: break
+        return queue[-1] if len(queue) == 4 else None
+
+    def their_threats(self):
+        """Threats to keep a counter for: what they hold now and what comes next; every card known when unsure."""
+        h = self.their_hand()
+        if h is None: return self.enemy_seen | self.predicted
+        nx = self.their_next()
+        return h | ({nx} if nx else set())
 
     def their_plan(self):
         """Their deck's plan (main win condition), from what they played and what their deck probably holds."""

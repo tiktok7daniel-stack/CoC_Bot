@@ -41,9 +41,10 @@ class Memory:
         try: return float(v)
         except (TypeError, ValueError): return None
 
-    def defended(self, threat, mine, side, towers, now):
+    def defended(self, threat, mine, side, towers, now, predicted=None):
         if not threat or not mine: return
-        self.pending.append({"threat": threat, "mine": mine, "side": side, "t": now, "hp": self._hp(towers, side)})
+        self.pending.append({"threat": threat, "mine": mine, "side": side, "t": now, "hp": self._hp(towers, side),
+                             "pred": predicted})
 
     def tick(self, towers, now):
         keep = []
@@ -53,10 +54,21 @@ class Memory:
             hp0, hp1 = p["hp"], self._hp(towers, p["side"])
             if hp0 is None or hp1 is None or hp0 <= 0: continue
             ok = (hp0 - hp1) / hp0 < 0.08                  # the tower lost (almost) nothing: the answer held
+            if p.get("pred") is not None:                  # the simulation's guess against what really happened
+                actual = max(0.0, (hp0 - hp1) / hp0)
+                c = self.d.setdefault("calib", {"ratio": 1.0, "n": 0})
+                r = (actual + 0.03) / (float(p["pred"]) + 0.03)
+                c["ratio"] = max(0.6, min(1.6, c["ratio"] * 0.9 + r * 0.1))
+                c["n"] += 1
             st = self.d["answers"].setdefault(f"{p['threat']}|{p['mine']}", {"ok": 0, "bad": 0})
             st["ok" if ok else "bad"] += 1
             self.log.append((p["threat"], p["mine"], ok))
         self.pending = keep
+
+    def calib(self):
+        """How much harder (>1) or softer (<1) their attacks really hit than the simulation thought (after 10+)."""
+        c = self.d.get("calib") or {}
+        return c.get("ratio", 1.0) if c.get("n", 0) >= 10 else 1.0
 
     def bonus(self, threat, mine):
         """How our own battles rate `mine` against `threat` (nothing until tried twice): -1.5 .. +1.5, and a

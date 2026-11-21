@@ -87,7 +87,7 @@ class Eyes:
             "allies": al,
             "towers": {"their_left": nums.left_enemy_princess_hp.number, "their_right": nums.right_enemy_princess_hp.number,
                        "our_left": nums.left_ally_princess_hp.number, "our_right": nums.right_ally_princess_hp.number},
-            "hp": hp, "spells": spells,
+            "hp": hp, "spells": spells, "evo": list(getattr(self, "evo_now", []) or []),
             "t": time.monotonic(),
         }
 
@@ -112,9 +112,11 @@ class Eyes:
         from royale import strong_eyes
         h, w = shape[:2]
         sw, sh = small.width / w, small.height / h
+        self.evo_now = []
         for name, cf, x0, y0, x1, y1 in dets:
             u = strong_eyes.unit_name(name)
             if not u: continue
+            evolved = name.endswith("-evolution")
             dx, dy = (x0 + x1) / 2 * 720.0 / w, y1 * 1280.0 / h               # the 720x1280 game, bottom-centre
             tx = int(round((dx - C.TILE_INIT_X) / C.TILE_WIDTH - 0.5))
             ty = int(round((C.DISPLAY_HEIGHT - C.TILE_INIT_Y - dy) / C.TILE_HEIGHT - 0.5))
@@ -125,6 +127,7 @@ class Eyes:
                 except Exception:
                     pass
             lst = al if side == "ally" else en
+            if evolved and side != "ally": self.evo_now.append((u, tx, ty))
             same = next((k for k, d in enumerate(lst) if d[0] == u and abs(d[1] - tx) <= 1 and abs(d[2] - ty) <= 1), None)
             if same is None: lst.append((u, tx, ty, cf))
             elif cf > lst[same][3]: lst[same] = (u, tx, ty, cf)

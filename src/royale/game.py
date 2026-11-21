@@ -156,6 +156,8 @@ class RoyaleBot:
         log.info("Clash Royale: this battle's settings " + ", ".join(f"{k}={v}" for k, v in self.params.items()))
         log.info(f"Clash Royale: battle #{self.battles}")
         out_since, last = None, None
+        from royale.abilities import Abilities
+        abil, abil_base = Abilities(log), False                       # hero / champion ability buttons
         plays = 0
         look_ms, looks, slow_told = 0.0, 0, False
         self._slot_used = {}                                       # slot -> when it was played (picture lags)
@@ -202,7 +204,7 @@ class RoyaleBot:
                      (__import__("royale.brain", fromlist=["card"]).card(st["hand"][i]).get("cost", 11) <= el)]
             try:
                 d = self.brain.decide(st["hand"], ready, el, st["enemies"], st["allies"], st["towers"],
-                                      hp=st.get("hp"), spells=st.get("spells"))
+                                      hp=st.get("hp"), spells=st.get("spells"), evo=st.get("evo"))
             except Exception:
                 log.warning("Clash Royale: a decision failed — next look", exc_info=True)
                 d = None
@@ -226,6 +228,11 @@ class RoyaleBot:
                 log.info(f"Clash Royale: {d['card']} -> tile {d['tile']} ({d['why']}) — elixir {st['elixir']:.0f}, "
                          f"theirs ~{self.brain.enemy_elixir:.0f}")
             last = st
+            if not abil_base:
+                abil.reset(fr); abil_base = True                       # the strip above the cards, before any hero
+            elif not d:
+                try: abil.tick(fr, self.brain, el, tap)
+                except Exception: log.debug("ability check failed", exc_info=True)
             if self.s.get("keep_frames", True):
                 try:
                     from royale import frames
@@ -417,6 +424,10 @@ def _api_start(self):
         try:
             md = cr_api.my_deck(_u().INSTANCE_ID)
             lv = {k: (int(l) + 16 - int(m)) for k, l, m, _e in md if l and m}       # the levels shown in the game
+            from royale.brain import card as _card, cards_db as _cdb
+            _nm = {cr_api.key_of(n): n for n in _cdb()}
+            self.brain.evo_cards = {_nm[k]: ((_card(_nm[k]).get("evo") or {}).get("cycles") or 2)
+                                    for k, _l, _m, e in md if e and k in _nm}
             if lv:
                 self.brain.levels = lv
                 self.brain.king_level = round(sum(lv.values()) / len(lv))

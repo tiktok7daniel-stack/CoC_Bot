@@ -57,5 +57,45 @@ def main(src):
     print(f"{n} cards got sight / radius / deploy / life / mass; level table {len(db['levels']['multiplier'])} levels")
 
 
+
+
+
+def evolutions(rf_dir):
+    """The evolved units' own numbers (RoyaleFish data_16635 card_logic: EXT.<Unit>_EV1 records) -> cards.json
+    "evo": {hp, damage, hit_ms, range, speed, splash, cycles} on the card it evolves."""
+    import gzip
+    logic = json.load(gzip.open(os.path.join(rf_dir, "card_logic.json.gz")))
+    specs = json.load(gzip.open(os.path.join(rf_dir, "card_specs.json.gz")))["specs"]
+    nodes = logic["nodes"]
+    db = json.load(open(OUT, encoding="utf-8"))
+    by_id = {c.get("id"): n for n, c in db["cards"].items()}
+    n = 0
+    for s in specs:
+        ev = s.get("evolution") or {}
+        form = ev.get("evolution_form_id")
+        name = by_id.get(s.get("card_id"))
+        if not form or not name: continue
+        rec = (nodes.get(f"EXT.{form}") or nodes.get(f"CHARACTER.{form}") or nodes.get(f"BUILDING.{form}") or {}) \
+            .get("effective_record") or {}
+        if not rec: continue
+        def num(k):
+            v = rec.get(k)
+            return v if isinstance(v, (int, float)) else None
+        # the record holds level-1 numbers of the same table as the base card: kept as they are
+        evo = {"hp": num("Hitpoints"), "damage": num("Damage"), "hit_ms": num("HitSpeed"),
+               "range": (num("Range") or 0) / 1000.0 or None, "speed": num("Speed"),
+               "splash": (num("AreaDamageRadius") or 0) / 1000.0 or None, "cycles": ev.get("cycle_required")}
+        base = db["cards"][name]
+        # a record that only changes behaviour (no own numbers) keeps the base numbers
+        for k in ("hp", "damage", "hit_ms", "range", "speed", "splash"):
+            if evo[k] is None: evo[k] = base.get(k)
+        db["cards"][name]["evo"] = evo
+        n += 1
+    with open(OUT, "w", encoding="utf-8") as f:
+        json.dump(db, f, indent=0, ensure_ascii=False)
+    print(f"{n} cards got their evolution's numbers")
+
+
 if __name__ == "__main__":
-    main(sys.argv[1])
+    if sys.argv[1] == "--evo": evolutions(sys.argv[2])
+    else: main(sys.argv[1])

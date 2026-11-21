@@ -164,3 +164,21 @@ def winners_place(plan, name, side, min_share=0.3):
     if not v or v[0][2] < min_share: return None
     x, y = v[0][0], v[0][1]
     return (x, y) if side == "left" else (17 - x, y)
+
+
+# ------------------------------------------------------------------ the attack atlas (scripts/build_royale_attack_atlas.py)
+_AA = {"d": None}
+
+
+def attack_best(name, side):
+    """Where an attack with `name` hurts most against the defenses real players make -> (x, y) on `side` or None."""
+    if _AA["d"] is None:
+        try:
+            with open(os.path.join(_ROOT, "assets", "royale", "attack_atlas.json"), encoding="utf-8") as f:
+                _AA["d"] = json.load(f)
+        except (OSError, ValueError):
+            _AA["d"] = {}
+    v = (_AA["d"].get("atlas") or {}).get(name)
+    if not v: return None
+    x, y = v["best_xy"]
+    return (x, y) if side == "left" else (17 - x, y)

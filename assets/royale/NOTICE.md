@@ -33,3 +33,8 @@ attack combo won. Only aggregated counts are shipped.
 ## cards/ (berserker, boss_bandit, goblin_curse, goblin_demolisher, goblin_machine, goblinstein, suspicious_bush, vines, rune_giant, spirit_empress, void)
 Card pictures from RoyaleAPI's cr-api-assets (https://github.com/RoyaleAPI/cr-api-assets), cropped to the bot's
 card format. Elixir costs of Rune Giant / Spirit Empress / Void worked out from the replays' deck average elixir.
+
+## attack_atlas.json, the evolutions' numbers, the recent pro plays in pro.json
+attack_atlas.json: scripts/build_royale_attack_atlas.py (simulated against the defenses of the replays).
+cards.json "evo": RoyaleFish data_16635 card_logic (Apache-2.0), scripts/build_royale_stats.py --evo.
+pro.json "place" also holds 11k recent pro plays from hastylmao/Hasty-CR data/vod (MIT), scripts/build_royale_vod.py.

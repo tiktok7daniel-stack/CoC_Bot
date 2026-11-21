@@ -48,6 +48,19 @@ def tower_mult(level):
     return 1.0 + (level_mult(level) - 1.0) * 0.77 if level else 1.0
 
 
+# what an evolution's special ability is worth in a fight (approximate: the game's evolved records keep the base
+# numbers; the difference is the ability - a shield, a heal, a stronger first shot...) -> (x life, x damage)
+EVO_EFFECT = {"knight": (1.6, 1.0), "musketeer": (1.0, 1.35), "archers": (1.0, 1.35), "barbarians": (1.2, 1.2),
+              "bats": (1.5, 1.0), "firecracker": (1.0, 1.4), "royal_giant": (1.0, 1.3), "skeletons": (1.6, 1.0),
+              "valkyrie": (1.0, 1.3), "bomber": (1.0, 1.3), "wizard": (1.4, 1.0), "pekka": (1.3, 1.0),
+              "mega_knight": (1.0, 1.3), "cannon": (1.0, 1.3), "tesla": (1.0, 1.3), "mortar": (1.0, 1.3),
+              "ice_spirit": (1.0, 1.5), "royal_recruits": (1.0, 1.3), "wall_breakers": (1.0, 1.3), "battle_ram": (1.2, 1.0),
+              "baby_dragon": (1.0, 1.2), "inferno_dragon": (1.0, 1.2), "royal_hogs": (1.0, 1.2), "goblin_giant": (1.0, 1.2),
+              "electro_dragon": (1.0, 1.2), "dart_goblin": (1.0, 1.3), "witch": (1.3, 1.0), "giant": (1.0, 1.2),
+              "skeleton_army": (1.3, 1.0), "executioner": (1.0, 1.2), "hunter": (1.0, 1.2), "princess": (1.0, 1.2),
+              "minion_horde": (1.2, 1.0), "goblin_cage": (1.2, 1.0), "furnace": (1.2, 1.0), "lumberjack": (1.0, 1.2)}
+
+
 KAMIKAZE_UNITS = {"ice_spirit", "fire_spirit", "electro_spirit", "heal_spirit", "wall_breakers", "wall_breaker",
                   "skeleton_barrel", "fire_spirits", "ice_spirits"}
 
@@ -56,13 +69,17 @@ class U:
     __slots__ = ("name", "team", "x", "y", "hp", "hp0", "dmg", "hit", "cd", "rng", "spd", "air", "hits_air",
                  "bonly", "splash", "building", "value", "wait", "tower", "born", "radius", "sight", "life", "kamikaze")
 
-    def __init__(self, name, team, x, y, c, hp_frac=1.0, wait=0.0, per_value=1.0, level=None):
+    def __init__(self, name, team, x, y, c, hp_frac=1.0, wait=0.0, per_value=1.0, level=None, evo=0.0):
         self.name, self.team, self.x, self.y = name, team, float(x), float(y)
         n = max(1, c.get("count") or 1)
         k = level_mult(level)                    # the card's real level (the numbers in cards.json are level 1)
-        self.hp0 = float(c.get("hp") or 300.0) * k
+        # evo: 1 = this one is evolved, 0..1 = how often it will be (ours: one play in cycles+1)
+        eh, ed = EVO_EFFECT.get(name, (1.0, 1.0)) if evo else (1.0, 1.0)
+        eh, ed = 1.0 + (eh - 1.0) * evo, 1.0 + (ed - 1.0) * evo
+        k_h, k_d = k * eh, k * ed
+        self.hp0 = float(c.get("hp") or 300.0) * k_h
         self.hp = self.hp0 * max(0.05, min(1.0, hp_frac))
-        self.dmg = float(c.get("damage") or 0.0) * k
+        self.dmg = float(c.get("damage") or 0.0) * k_d
         self.radius = float(c.get("radius") or 0.5)
         self.sight = float(c.get("sight") or SIGHT)
         self.life = float(c.get("life_s") or 30.0)
@@ -267,13 +284,16 @@ def board(brain, stable, hp=None, allies=None, their_towers=False):
         cn = unit_card(u)
         c = card(cn) if cn else {}
         if not c or c.get("kind") == "spell": continue
-        units.append(U(u, "them", x + 0.5, y + 0.5, c, brain.life(u, x, y), 0.0, c.get("cost", 3),
-                       getattr(brain, "their_level", None)))
+        un = U(cn, "them", x + 0.5, y + 0.5, c, brain.life(u, x, y), 0.0, c.get("cost", 3),
+               getattr(brain, "their_level", None), 1.0 if brain.is_evo(u, x, y) else 0.0)
+        un.dmg *= brain.calib()                       # corrected by what real battles showed (royale.memory)
+        units.append(un)
     for a in (allies if allies is not None else getattr(brain, "_allies", []) or []):
         cn = unit_card(a[0])
         c = card(cn) if cn else {}
         if not c or c.get("kind") == "spell": continue
-        units.append(U(a[0], "us", a[1] + 0.5, a[2] + 0.5, c, 1.0, 0.0, c.get("cost", 3), brain.my_level(cn)))
+        units.append(U(cn, "us", a[1] + 0.5, a[2] + 0.5, c, 1.0, 0.0, c.get("cost", 3), brain.my_level(cn),
+                       brain.my_evo(cn)))
     for team, towers, pre in (("us", OUR_TOWERS, "our"), ("them", THEIR_TOWERS, "their")):
         if team == "them" and not their_towers: continue
         for side in ("left", "right"):
@@ -288,9 +308,13 @@ def board(brain, stable, hp=None, allies=None, their_towers=False):
     return units
 
 
+_last_lost = [0.0]                                     # the tower life the last scored simulation lost (0..1)
+
+
 def score(units, cost):
     """Our view after the simulation: their elixir worth killed + what is left of ours - tower damage - cost."""
     s = 0.0
+    _last_lost[0] = max([(u.hp0 - max(0.0, u.hp)) / u.hp0 for u in units if u.team == "us" and u.tower] or [0.0])
     for u in units:
         if u.team == "them" and not u.tower:
             s += u.value * (1.0 - max(0.0, u.hp) / u.hp0)
@@ -338,7 +362,8 @@ def _with(base, name, c, tx, ty, delay=0.0, level=None):
         ang = 2 * math.pi * k / n
         ox, oy = (0.6 * math.cos(ang), 0.6 * math.sin(ang)) if n > 1 else (0.0, 0.0)
         units.append(U(name, "us", tx + 0.5 + ox, ty + 0.5 + oy, c, 1.0,
-                       (c.get("deploy_ms") or 1000) / 1000.0 + delay, c.get("cost", 3), level))
+                       (c.get("deploy_ms") or 1000) / 1000.0 + delay, c.get("cost", 3), level,
+                       getattr(_with, "evo", {}).get(name, 0.0)))
     return units
 
 
@@ -361,12 +386,13 @@ def plan(brain, side, threat, candidates, stable, hp=None, max_cards=3, prior=No
         for tx, ty in tiles:
             if not brain.legal(tx, ty, name): continue
             for delay in (0.0, 1.5):
+                _with.evo = {name: brain.my_evo(name)}
                 sc = score(simulate(_with(base, name, c, tx, ty, delay, brain.my_level(name))), c.get("cost", 3)) \
                     + (prior or {}).get(name, 0.0)
                 if delay: sc -= 0.15                    # a small price for waiting (the picture may change)
                 if best is None or sc > best[3]:
                     best = (slot, name, (tx, ty), sc, f"thought it through: {sc - nothing:+.1f} elixir vs doing nothing",
-                            sc - nothing, delay > 0)
+                            sc - nothing, delay > 0, _last_lost[0])
     return best
 
 

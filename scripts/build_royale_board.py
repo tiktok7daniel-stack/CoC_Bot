@@ -18,7 +18,9 @@ OUT = os.path.join(HERE, "..", "assets", "royale")
 
 
 def _game_samples(args):
-    ev, vocab, names, cost, seed = args
+    ev, vocab, names, cost, seed = args[:5]
+    team_won = args[5] if len(args) > 5 else None             # the replay's result: the winner's moves count more
+    wt = lambda side: 1.0 if team_won is None else (1.4 if (team_won if side == "team" else not team_won) else 0.6)
     from royale.sim import Arena
     from royale import board_net as B
     from build_royale_policy import key, regen_rate
@@ -57,17 +59,18 @@ def _game_samples(args):
             w = rng.uniform(last_t + 0.5, t - 0.5)
             arena.run_to(w); regen(w); last_t = w
             g, tk, ids, hd = snap(w, side)
-            out.append((g, tk, ids, hd, 0, 0, 0))
+            out.append((g, tk, ids, hd, 0, 0, 0, wt(side)))
         arena.run_to(t); regen(t); last_t = t
         g, tk, ids, hd = snap(t, side)
         mx, my = (x, y) if side == "team" else (17 - x, 31 - y)
-        out.append((g, tk, ids, hd, 1, vocab.get(c, 1), max(0, min(31, my)) * 18 + max(0, min(17, mx))))
+        out.append((g, tk, ids, hd, 1, vocab.get(c, 1), max(0, min(31, my)) * 18 + max(0, min(17, mx)), wt(side)))
         arena.play("us" if side == "team" else "them", names.get(c, c), x, y)
         played[side].append(c)
         el[side] = max(0.0, el[side] - cost.get(c, 3.0))
     if not out: return None
-    g, tk, ids, hd, pl, c, ti = zip(*out)                     # compact arrays (millions of moments fit in memory)
+    g, tk, ids, hd, pl, c, ti, w = zip(*out)                  # compact arrays (millions of moments fit in memory)
     return (np.asarray(g, np.float16), np.asarray(tk, np.float16), np.asarray(ids, np.int16), np.asarray(hd, np.int16),
+            np.asarray(w, np.float16),
             np.asarray(pl, np.int8), np.asarray(c, np.int16), np.asarray(ti, np.int16))
 
 
@@ -81,7 +84,7 @@ def main(n_parts=12, per_part=2500, epochs=3, cache=None):
     names = {P.key(n): n for n in cards_db()}                   # data key -> the bot's card name
     cost, _ = P.costs()
     t0 = time.time()
-    G, T, I, H, Pl, C, Ti = [], [], [], [], [], [], []
+    G, T, I, H, Pl, C, Ti, Wl = [], [], [], [], [], [], [], []
     plist = P.parts(n_parts) if not cache else sorted(
         os.path.join("actions", f) for f in os.listdir(cache) if f.endswith(".parquet"))[:n_parts]
     with Pool(max(1, (os.cpu_count() or 4))) as pool:
@@ -92,14 +95,18 @@ def main(n_parts=12, per_part=2500, epochs=3, cache=None):
                 if cols["kind"][j] != "play_card" or cols["grid_x"][j] is None: continue
                 by[cols["replay_tag"][j]].append((cols["time_seconds"][j] or 0.0, cols["side"][j], P.key(cols["card_key"][j]),
                                                   int(cols["grid_x"][j]), int(cols["grid_y"][j])))
-            games = list(by.values())[:per_part]
-            for ev in games: ev.sort()
-            for res in pool.imap_unordered(_game_samples, [(ev, vocab, names, cost, k) for k, ev in enumerate(games)],
-                                           chunksize=16):
+            res_part = P.results(part, cache) if cache else {}
+            games = list(by.items())[:per_part]
+            for _tg, ev in games: ev.sort()
+            for res in pool.imap_unordered(_game_samples, [(ev, vocab, names, cost, k, res_part.get(tg))
+                                                           for k, (tg, ev) in enumerate(games)], chunksize=16):
                 if res is None: continue
-                for lst, arr in zip((G, T, I, H, Pl, C, Ti), res): lst.append(arr)
+                g_, t_, i_, h_, w_, *rest = res
+                Wl.append(w_)
+                for lst, arr in zip((G, T, I, H, Pl, C, Ti), (g_, t_, i_, h_, *rest)): lst.append(arr)
             print(f"part {i + 1}/{len(plist)}: {sum(len(x) for x in G):,} moments, {time.time() - t0:.0f}s", flush=True)
     G, T, I, H, Pl, C, Ti = (torch.from_numpy(np.concatenate(x)) for x in (G, T, I, H, Pl, C, Ti))
+    Wt = torch.from_numpy(np.concatenate(Wl).astype(np.float32))
 
     class _W:                                         # stored small, widened per batch
         def __init__(self, a, f): self.a, self.f = a, f
@@ -127,13 +134,15 @@ def main(n_parts=12, per_part=2500, epochs=3, cache=None):
             j = pp[b * Bs:(b + 1) * Bs]
             pl, cl, tl = m(G[j], T[j], I[j], H[j], C[j])
             mk = Pl[j] > 0
-            loss = F.binary_cross_entropy_with_logits(pl, Pl[j])
+            wj = Wt[j]
+            loss = (F.binary_cross_entropy_with_logits(pl, Pl[j], reduction="none") * wj).mean()
             if mk.any():
                 hm = torch.full_like(cl[mk], -30.0).scatter(1, H[j][mk], 0.0); hm[:, 0] = -30.0
                 inh = (H[j][mk] == C[j][mk][:, None]).any(1)
                 hm = torch.where(inh[:, None], hm, torch.zeros_like(hm))
-                loss = loss + 0.5 * F.cross_entropy(cl[mk] + hm, C[j][mk]) + 0.5 * F.cross_entropy(cl[mk], C[j][mk]) \
-                    + F.cross_entropy(tl[mk], Ti[j][mk])
+                wm = wj[mk]
+                ce = lambda a, b: (F.cross_entropy(a, b, reduction="none") * wm).mean()
+                loss = loss + 0.5 * ce(cl[mk] + hm, C[j][mk]) + 0.5 * ce(cl[mk], C[j][mk]) + ce(tl[mk], Ti[j][mk])
             opt.zero_grad(); loss.backward(); opt.step(); sched.step(); step += 1
             if step % 300 == 0:
                 print(f"epoch {ep + 1} step {step}/{steps} loss {loss.item():.3f} {time.time() - t0:.0f}s", flush=True)
@@ -186,7 +195,7 @@ def anchor(part="actions/part-000050.parquet", cache=None, games=500, keep=30000
         ev.sort()
         r = _game_samples((ev, meta["vocab"], names, cost, k))
         if r: res.append(r)
-    g, t, i, h, p, c, ti = (np.concatenate(x) for x in zip(*res))
+    g, t, i, h, _w, p, c, ti = (np.concatenate(x) for x in zip(*res))
     sel = np.random.default_rng(5).permutation(len(g))[:keep]
     np.savez_compressed(os.path.join(OUT, "board_anchor.npz"), glob=g[sel], tok=t[sel], tokid=i[sel], hand=h[sel],
                         play=p[sel], card=c[sel], tile=ti[sel])
