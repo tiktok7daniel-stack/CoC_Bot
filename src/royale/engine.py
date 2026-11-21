@@ -31,7 +31,7 @@ VETO_MARGIN = -2.5             # the brain's attack is dropped only when it is c
                                # 8 s are short for an attack's full worth, and the opponent there does not answer)
 
 _S = {"mod": None, "ok": None, "why": "", "ids": None, "maxhp": {}, "bodies": {}, "skips": {}}
-OURS_STANDING = 0.6            # our units still standing are worth this much of their elixir (they may still die)
+OURS_STANDING = 1.0            # our units still standing are worth this much of their elixir (they may still die)
 
 
 def _dir():

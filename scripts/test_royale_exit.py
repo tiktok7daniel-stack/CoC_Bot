@@ -27,7 +27,6 @@ check("search made answers", len(samples) >= 10, str(len(samples)))
 check("both sides played cards (45 s: ~8+ expected)", st["moves"] >= 8, str(st["moves"]))
 plays = [s[1] for s in samples]
 print("  play targets:", [round(p, 2) for p in plays[:12]])
-vals = [round(max(r[0] for r in X.search(cx, *a)), 2) for a in []]
 check("answers are not all 'wait'", max(plays) > 0.5)
 arr = X._arrays(samples)
 X.HOME.mkdir(parents=True, exist_ok=True)
