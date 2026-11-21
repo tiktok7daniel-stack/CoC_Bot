@@ -27,7 +27,8 @@ OFFENSE_DISCOUNT = 0.5         # in a rollout the opponent does not answer: dama
 WAIT_MARGIN = 0.4              # a move must beat waiting by this much (elixir)
 VETO_MARGIN = -1.0             # the brain's move is dropped when it is this much worse than waiting
 
-_S = {"mod": None, "ok": None, "why": "", "ids": None, "maxhp": {}}
+_S = {"mod": None, "ok": None, "why": "", "ids": None, "maxhp": {}, "bodies": {}}
+OURS_STANDING = 0.6            # our units still standing are worth this much of their elixir (they may still die)
 
 
 def _dir():
@@ -100,6 +101,7 @@ def _max_hp(m, cid):
         e.step_self_play_fast(-1, 0.0, 0.0, -1, 0.0, 0.0, 1)
         new = [u for u in e.get_units() if u.id not in before and not u.tower]
         hp = max((u.hp for u in new), default=None)
+        _S["bodies"][cid] = max(1, len(new))
     except Exception:
         hp = None
     _S["maxhp"][cid] = hp
@@ -228,7 +230,7 @@ def mirror(brain, st, hand, my_elixir):
 
 
 # ------------------------------------------------------------------ thinking
-def _value(env, brain, before):
+def _value(env, brain, before, spent=0.0):
     """How good the arena is for us now vs `before` (elixir worth)."""
     from royale.brain import card
     v = 0.0
@@ -239,8 +241,9 @@ def _value(env, brain, before):
             hp0 = before["towers"][(team, slot)]
             v += sign * TOWER_ELIXIR[slot] * (hp0 - hp) / mx
     army = _army(env)
-    v += (before["army"][1] - army[1])          # their units' worth destroyed
-    v += 0.35 * (army[0] - before["army"][0])   # ours still standing (a counter-push)
+    v += before["army"][1] - army[1]                        # their units' worth destroyed
+    v += OURS_STANDING * (army[0] - before["army"][0])      # ours still standing (a counter-push), or lost
+    v -= spent                                              # the elixir the move cost
     return v
 
 
@@ -253,7 +256,8 @@ def _army(env):
         try: info = m.get_card_info(u.card_id)
         except Exception: continue
         mh = _max_hp(m, u.card_id) or max(1, u.hp)
-        out[u.team] += info["cost"] / 3.0 * min(1.0, u.hp / mh)
+        per = info["cost"] / float(_S["bodies"].get(u.card_id, 1))     # one body's share of the card
+        out[u.team] += per * min(1.0, u.hp / mh)
     return out
 
 
@@ -356,6 +360,7 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
     base = _value(rollout(env, None, 0, 0), brain, before)
     best, tried = None, 0
     ids = card_ids()
+    m = module()
     for i, n, (tx, ty) in candidates(brain, playable, rule_d, defend, first):
         hs = slots.get(n)
         if hs is None: continue
@@ -364,7 +369,8 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
             if not env.is_valid_placement(ids[n][0], x, y, 0): continue
         except Exception:
             continue
-        v = _value(rollout(env, hs, x, y), brain, before) - base
+        cost = float((m.get_card_info(ids[n][0]) or {}).get("cost", 3))
+        v = _value(rollout(env, hs, x, y), brain, before, cost) - base
         tried += 1
         if best is None or v > best[0]: best = (v, i, n, (tx, ty))
         if time.perf_counter() - t0 > 0.25: break                 # a look must stay fast
