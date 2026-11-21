@@ -13,12 +13,13 @@ from ..i18n import on_lang, tr
 from ..theme import TOKENS, color, ui_font
 
 NAV = [
+    ("royale_home", "nv_royale_home", "home"), ("royale_live", "nv_royale_live", "eye"), ("royale", "nv_royale", "sliders"),
     ("dash", "nv_home", "trophy"), ("deck", "nv_deck", "bolt"), ("acc", "nv_acc", "id"), ("atk", "nv_atk", "swords"), ("bb", "nv_bb", "moon"),
     ("res", "nv_stats", "chart"), ("upg", "nv_village", "home"), ("teach", "nv_manager", "hammer"), ("learn", "nv_learn", "school"),
-    ("log", "nv_log", "scroll"), ("set", "nv_bot", "bot"), ("royale", "nv_royale", "swords"), ("royale_live", "nv_royale_live", "eye"),
+    ("log", "nv_log", "scroll"), ("set", "nv_bot", "bot"), 
 ]
 # Clash Royale mode: only its own screen (+ the general ones: accounts, the bot's settings / Telegram)
-ROYALE_KEYS = {"royale", "royale_live", "acc", "set"}
+ROYALE_KEYS = {"royale_home", "royale_live", "royale", "acc", "set"}
 SOON = []   # clan capital / clan war / chat removed: not part of the farming bot
 
 
@@ -141,11 +142,13 @@ class Sidebar(QFrame):
         brand.setSpacing(10)
         self.crest = QLabel()
         self.crest.setPixmap(icons.pixmap("crest", 48))
-        glow = QGraphicsDropShadowEffect(self.crest)
-        glow.setBlurRadius(26)
-        glow.setOffset(0, 2)
-        glow.setColor(QColor(245, 183, 64, 70))
-        self.crest.setGraphicsEffect(glow)
+        from ..theme import LIGHT
+        if not LIGHT:
+            glow = QGraphicsDropShadowEffect(self.crest)
+            glow.setBlurRadius(26)
+            glow.setOffset(0, 2)
+            glow.setColor(QColor(245, 183, 64, 70))
+            self.crest.setGraphicsEffect(glow)
         brand.addWidget(self.crest)
         names = QVBoxLayout()
         names.setSpacing(0)
@@ -282,7 +285,8 @@ class PulseDot(QWidget):
         self.phase = 0.0
         self.t = QTimer(self)
         self.t.timeout.connect(self._tick)
-        self.t.start(60)
+        from ..theme import LIGHT
+        self.t.start(250 if LIGHT else 60)
 
     def set_color(self, c, pulse=False):
         self.c = QColor(c)

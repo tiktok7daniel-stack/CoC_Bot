@@ -74,7 +74,8 @@ class GlassCard(QFrame):
         self.body.setSpacing(4)
         self.v.addLayout(self.body)
         self.v.addStretch(1)   # a card taller than its content keeps everything at the top
-        if glow:
+        from ..theme import LIGHT
+        if glow and not LIGHT:
             eff = QGraphicsDropShadowEffect(self)
             eff.setBlurRadius(36)
             eff.setOffset(0, 6)

@@ -44,6 +44,18 @@ TOKENS = {
 FONTS = {"ui": "IBM Plex Sans Arabic", "ui2": "Cairo", "mono": "JetBrains Mono", "display": "Lilita One"}
 
 
+def _light():
+    """Light UI (default on): no hover glows / ripples / drop shadows / intro animation — a faster, calmer app."""
+    try:
+        import settings
+        return settings.load_app().get("light_ui", True) is not False
+    except Exception:
+        return True
+
+
+LIGHT = _light()
+
+
 def color(name, alpha=None):
     c = QColor(TOKENS.get(name, name))
     if alpha is not None: c.setAlphaF(alpha)

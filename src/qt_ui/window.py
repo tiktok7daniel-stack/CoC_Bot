@@ -21,6 +21,7 @@ from .screens.bot_settings_screen import BotSettingsScreen
 from .screens.builder_base_screen import BuilderBaseScreen
 from .screens.dashboard_screen import DashboardScreen
 from .screens.royale_screen import RoyaleScreen
+from .screens.royale_home_screen import RoyaleHomeScreen
 from .screens.royale_live_screen import RoyaleLiveScreen
 from .screens.logs_diagnostics_screen import LogsScreen
 from .screens.setup_wizard_dialog import SetupWizard
@@ -128,7 +129,8 @@ class MainWindow(QMainWindow):
         self.banner = Banner(canvas)
         self.screens = {}
         for cls in (DashboardScreen, UpgradeDeckScreen, AccountsScreen, AttackScreen, BuilderBaseScreen, StatisticsScreen, VillageScreen,
-                    VillageManagerScreen, LearnScreen, LogsScreen, BotSettingsScreen, RoyaleScreen, RoyaleLiveScreen):
+                    VillageManagerScreen, LearnScreen, LogsScreen, BotSettingsScreen, RoyaleScreen, RoyaleLiveScreen,
+                    RoyaleHomeScreen):
             s = cls(self.ctx)
             self.screens[s.key] = s
             self.stack.addWidget(s)
@@ -248,11 +250,13 @@ class MainWindow(QMainWindow):
         if royale != self._royale or force:
             self._royale = royale
             self.sidebar.set_mode(royale)
+            for b in (self.top.btn_pause, self.top.btn_wake, self.top.btn_setup):
+                b.setVisible(not royale)                  # Clash Royale: Start / Stop are enough
             self.sync_accounts()
         cur = getattr(self, "current", None)
         if cur is None: return
-        if royale and cur not in ("royale", "royale_live", "acc", "set"): self.show_screen("royale")
-        elif not royale and cur in ("royale", "royale_live"): self.show_screen("dash")
+        if royale and cur not in ("royale_home", "royale", "royale_live", "acc", "set"): self.show_screen("royale_home")
+        elif not royale and cur in ("royale_home", "royale", "royale_live"): self.show_screen("dash")
 
     def choose_game(self, force=True):
         """The game chooser (when the program opens, and from the sidebar's 'change game')."""
@@ -266,7 +270,7 @@ class MainWindow(QMainWindow):
             self.store.set("ui_game_remember", bool(dlg.remember.isChecked()), "app")
             self._royale = None
             self.apply_game_mode()
-            self.show_screen("royale" if k == "royale" else "dash")
+            self.show_screen("royale_home" if k == "royale" else "dash")
             try: self.store.save(silent=True)
             except Exception: pass
         dlg.chosen.connect(picked)
@@ -288,8 +292,9 @@ class MainWindow(QMainWindow):
         if key == "setup":
             self.setup.open_wizard()
             return
-        if getattr(self, "_royale", None) and key not in ("royale", "royale_live", "acc", "set"): key = "royale"
-        elif getattr(self, "_royale", None) is False and key in ("royale", "royale_live"): key = "dash"
+        if getattr(self, "_royale", None) and key not in ("royale_home", "royale", "royale_live", "acc", "set"):
+            key = "royale_home"
+        elif getattr(self, "_royale", None) is False and key in ("royale_home", "royale", "royale_live"): key = "dash"
         s = self.screens.get(key)
         if not s: return
         self.current = key

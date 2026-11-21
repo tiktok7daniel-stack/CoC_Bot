@@ -57,8 +57,9 @@ def create_app(argv=None):
     theme.load_fonts()
     app.setFont(theme.ui_font(10))
     app.setStyleSheet(theme.qss())
-    from . import fx
-    fx.install(app)
+    if not theme.LIGHT:                      # light UI: no ripples / hover halos
+        from . import fx
+        fx.install(app)
     app.setWindowIcon(QIcon(icons.pixmap("crest", 64)))
     lang = _saved_language()
     set_lang(lang)
@@ -80,7 +81,7 @@ def run_qt(port, pipe=None, debug=False):
     api = Api(port)
     try:
         import settings
-        show_intro = settings.load_app().get("intro", True) is not False
+        show_intro = settings.load_app().get("intro", not theme.LIGHT) is not False
     except Exception:
         show_intro = True
     if not show_intro:
