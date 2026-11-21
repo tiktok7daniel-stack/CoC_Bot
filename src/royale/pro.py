@@ -93,3 +93,34 @@ def predict_deck(seen, k=8):
     out = [(s, 1.0) for s in dict.fromkeys(seen_k)]
     out += sorted(((o, round(v / len(seen_k), 3)) for o, v in score.items() if o not in seen_k), key=lambda x: -x[1])
     return out[:k]
+
+
+# ------------------------------------------------------------------ who won (assets/royale/pro_wins.json)
+_W = {"d": None}
+
+
+def wins():
+    if _W["d"] is None:
+        try:
+            with open(os.path.join(_ROOT, "assets", "royale", "pro_wins.json"), encoding="utf-8") as f:
+                _W["d"] = json.load(f)
+        except (OSError, ValueError):
+            _W["d"] = {}
+    return _W["d"]
+
+
+def answer_wins(threat, y, hand, min_n=40):
+    """Our hand's cards -> (games, win rate of the player who answered `threat` with it) in 252k real games."""
+    a = wins().get("answers") or {}
+    b = min(31, max(0, int(y))) // 4
+    row = None
+    for bb in (b, b + 1, b - 1):
+        row = a.get(f"{key(threat)}|{bb}")
+        if row: break
+    if not row: return {}
+    return {n: tuple(row[key(n)]) for n in hand if key(n) in row and row[key(n)][0] >= min_n}
+
+
+def combo_win(a, b):
+    v = (wins().get("combos") or {}).get(f"{key(a)}+{key(b)}")
+    return tuple(v) if v else None

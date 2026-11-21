@@ -24,3 +24,8 @@ From the game's data tables as published by RoyaleAPI (cr-api-data, https://roya
 via the copy kept in hastylmao/Hasty-CR (MIT License, Copyright (c) 2026 HastyCR contributors), merged by
 scripts/build_royale_stats.py. Body blocking, tower-reading smoothing and the legal-tile mask follow ideas from
 Hasty-CR and advaynathany/alphaclash (MIT); no code copied.
+
+## pro_wins.json
+Results (victory / defeat, side-corrected), decks and card plays of the 252k RoyaleAPI Path-of-Legends replays in
+VanguardX101/IL_Replay, joined game by game by scripts/build_royale_wins.py: how often each answer, deck and
+attack combo won. Only aggregated counts are shipped.

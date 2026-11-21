@@ -80,17 +80,33 @@ def load_part(part, cache):
     return {c: t.column(c).to_pylist() for c in t.column_names}, t.num_rows
 
 
-def samples(cols, n, vocab, cost, rng):
+def results(part, cache):
+    """replay tag -> did "team" win (the RoyaleAPI replays' result), for weighting the winners' moves."""
+    try:
+        import pyarrow.parquet as pq
+        f = os.path.join(cache, "replays_" + os.path.basename(part))
+        if not os.path.exists(f): return {}
+        t = pq.read_table(f, columns=["replay_tag", "result"])
+        return {tg: r == "victory" for tg, r in zip(t.column("replay_tag").to_pylist(), t.column("result").to_pylist())
+                if r in ("victory", "defeat")}
+    except Exception:
+        return {}
+
+
+def samples(cols, n, vocab, cost, rng, res=None):
     by = collections.defaultdict(list)
     for j in range(n):
         if cols["kind"][j] != "play_card" or cols["grid_x"][j] is None: continue
         by[cols["replay_tag"][j]].append((cols["time_seconds"][j] or 0.0, cols["side"][j], key(cols["card_key"][j]),
                                           int(cols["grid_x"][j]), int(cols["grid_y"][j])))
-    X, I, P, C, T = [], [], [], [], []
-    for ev in by.values():
+    X, I, P, C, T, W = [], [], [], [], [], []
+    for tag, ev in by.items():
         ev.sort()
         for me in ("team", "opponent"):
             flip = me == "opponent"
+            r = (res or {}).get(tag)
+            # the winner's moves count more than the loser's (unknown result: plain)
+            wt = 1.0 if r is None else (1.4 if (r if me == "team" else not r) else 0.6)
             seq = [(t, s == me, c, (17 - x) if flip else x, (31 - y) if flip else y) for t, s, c, x, y in ev]
             el = {True: 6.0, False: 6.0}                        # the game's start (cards.json timeline)
             last_t = 0.0
@@ -113,20 +129,20 @@ def samples(cols, n, vocab, cost, rng):
                     for side in (True, False):
                         el[side] = min(10.0, el[side] + (w - last_t) * regen_rate(w))
                     f, ids = state(w)
-                    X.append(f); I.append(ids + [0]); P.append(0); C.append(0); T.append(0)
+                    X.append(f); I.append(ids + [0]); P.append(0); C.append(0); T.append(0); W.append(wt)
                     last_t = w
                 for side in (True, False):
                     el[side] = min(10.0, el[side] + (t - last_t) * regen_rate(t))
                 last_t = t
                 if mine:
                     f, ids = state(t)
-                    X.append(f); I.append(ids + [vocab.get(c, 1)]); P.append(1); C.append(vocab.get(c, 1))
+                    X.append(f); I.append(ids + [vocab.get(c, 1)]); P.append(1); C.append(vocab.get(c, 1)); W.append(wt)
                     T.append(min(31, max(0, y)) * 18 + min(17, max(0, x)))
                     own.append((t, c, x, y))
                 else:
                     en.append((t, c, x, y))
                 el[mine] = max(0.0, el[mine] - cost.get(c, 3.0))
-    return X, I, P, C, T
+    return X, I, P, C, T, W
 
 
 def model(V, n_float):
@@ -142,7 +158,7 @@ def main(n_parts=52, epochs=3, cache=None):
     cost, _ = costs()
     # the card vocabulary: every card of the game seen in the data (0 = none, 1 = unknown)
     vocab = {}
-    Xs, Is, Ps, Cs, Ts = [], [], [], [], []
+    Xs, Is, Ps, Cs, Ts, Ws = [], [], [], [], [], []
     t0 = time.time()
     plist = parts(n_parts)
     for i, part in enumerate(plist):
@@ -150,12 +166,14 @@ def main(n_parts=52, epochs=3, cache=None):
         for c in cols["card_key"]:
             k = key(c)
             if k not in vocab: vocab[k] = len(vocab) + 2
-        X, I, P, C, T = samples(cols, n, vocab, cost, rng)
+        X, I, P, C, T, W = samples(cols, n, vocab, cost, rng, results(part, cache) if cache else None)
+        Ws.append(np.asarray(W, np.float32))
         Xs.append(np.asarray(X, np.float32)); Is.append(np.asarray(I, np.int16))
         Ps.append(np.asarray(P, np.float32)); Cs.append(np.asarray(C, np.int64)); Ts.append(np.asarray(T, np.int64))
         print(f"part {i + 1}/{len(plist)}: {sum(len(x) for x in Xs):,} moments, {time.time() - t0:.0f}s", flush=True)
     X = np.concatenate(Xs); I = np.concatenate(Is); P = np.concatenate(Ps); C = np.concatenate(Cs); T = np.concatenate(Ts)
-    del Xs, Is, Ps, Cs, Ts
+    Wt = torch.from_numpy(np.concatenate(Ws))
+    del Xs, Is, Ps, Cs, Ts, Ws
     V = len(vocab) + 2
     n = len(X)
     idx = np.random.default_rng(7).permutation(n)
@@ -180,14 +198,17 @@ def main(n_parts=52, epochs=3, cache=None):
             j = perm[b * B:(b + 1) * B]
             pl, cl, tl = m(tx[j], ti[j])
             mask = tp[j] > 0
-            loss = F.binary_cross_entropy_with_logits(pl, tp[j])
+            wj = Wt[j]
+            loss = (F.binary_cross_entropy_with_logits(pl, tp[j], reduction="none") * wj).mean()
             if mask.any():
                 hand = ti[j][mask][:, N_EN + N_OWN:N_EN + N_OWN + N_HAND]      # the card is chosen from the hand
                 hm = torch.full_like(cl[mask], -30.0).scatter(1, hand, 0.0)
                 hm[:, 0] = -30.0
                 inhand = (hand == tc[j][mask][:, None]).any(1)
                 hm = torch.where(inhand[:, None], hm, torch.zeros_like(hm))
-                loss = loss + F.cross_entropy(cl[mask] + hm, tc[j][mask]) * 0.5 + F.cross_entropy(cl[mask], tc[j][mask]) * 0.5 + F.cross_entropy(tl[mask], tt[j][mask])
+                wm = wj[mask]
+                ce = lambda a, b: (F.cross_entropy(a, b, reduction="none") * wm).mean()
+                loss = loss + ce(cl[mask] + hm, tc[j][mask]) * 0.5 + ce(cl[mask], tc[j][mask]) * 0.5 + ce(tl[mask], tt[j][mask])
             opt.zero_grad(); loss.backward(); opt.step(); sched.step(); step += 1
             if step % 500 == 0:
                 print(f"epoch {ep + 1} step {step}/{steps} loss {loss.item():.3f} {time.time() - t0:.0f}s", flush=True)

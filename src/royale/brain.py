@@ -421,6 +421,11 @@ class Brain:
             pro_hand = getattr(self, "_pro_hand", None) or {}
             if pro_hand.get(name):
                 score += 3.0 * pro_hand[name] / max(pro_hand.values())
+            # ...and how often the player who answered it that way WON the game (RoyaleAPI replays' results):
+            # 60% wins -> +1.2, 40% -> -1.2
+            pw = (getattr(self, "_pro_wins", None) or {}).get(name)
+            if pw and pw[0] >= 40:
+                score += 6.0 * (pw[1] - 0.5) * min(1.0, pw[0] / 400.0)
         pol = (self._pol or {}).get("cards") or {}
         if pol.get(name) and self.p.get("learned", True):            # the learned brain's choice in this moment
             score += 2.5 * pol[name] / max(pol.values())
@@ -524,6 +529,8 @@ class Brain:
             pass                                                                 # a tank: let it come (tower helps)
         elif t["value"] >= self.p.get("defend_min", 1.5) or (t.get("urgent") and t["units"]):
             self._pro_hand = (pro.answer(t["main"], (t["center"] or (0, 10))[1], side, [n for _, n in playable])
+                              if t.get("main") else {})
+            self._pro_wins = (pro.answer_wins(t["main"], (t["center"] or (0, 10))[1], [n for _, n in playable])
                               if t.get("main") else {})
             ranked = sorted(((self._counter_score(n, t), (i, n)) for i, n in playable), key=lambda r: -r[0])
             best, sc = ranked[0][1], ranked[0][0]

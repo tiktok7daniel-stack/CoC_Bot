@@ -55,7 +55,13 @@ def choose(account, min_battles=3):
     meta = cr_api.build_meta()
     king = max((lv for lv, _id in have.values()), default=14)
     best = None
-    for d in meta.get("decks", []):
+    # the decks of today's best players (API) + every deck of the 252k replays with its real win rate
+    try:
+        from royale import pro
+        replay_decks = pro.wins().get("decks") or []
+    except Exception:
+        replay_decks = []
+    for d in list(meta.get("decks", [])) + replay_decks:
         cards = d["cards"]
         if len(cards) != 8 or any(c not in have for c in cards) or d["n"] < min_battles: continue
         win = (d["w"] + 2) / (d["n"] + 4)                         # pulled toward 50% when it has few battles
