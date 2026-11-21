@@ -164,6 +164,12 @@ class RoyaleBot:
                                              "(the engine compares its own choices, the guards stop sure mistakes)")
         if self.brain.p["ai"]: log.info("Clash Royale: the local AI model plays this battle (the rules only guard it)")
         self.brain.reset()
+        # 2v2 (two opponents: their elixir counted as two players, no single-deck hand guess) — known from the Quick
+        # Match / 2v2 result screens; Training Camp is always 1v1
+        self.brain.p["2v2"] = bool(getattr(self, "_mode_2v2", False)) and not self.s.get("training_camp", False)
+        if self.brain.p["2v2"]:
+            self.brain.enemy_elixir *= 2.0                         # both start with their own elixir
+            log.info("Clash Royale: a 2v2 battle — two opponents counted")
         self._prev_hand = None
         try:
             from royale import live_view
@@ -523,6 +529,7 @@ class RoyaleBot:
             qm = find_word(ws, "quick match", y_min=0.3, y_max=0.8)          # the 2v2 window left open
             if qm and not in_battle(fr):
                 log.info("Clash Royale: 2v2 — Quick Match")
+                self._mode_2v2 = True
                 tap(*qm)
                 time.sleep(2.0)
                 continue
@@ -568,6 +575,7 @@ class RoyaleBot:
                         qm = find_word(words(fr2), "quick match", "quick", y_min=0.3, y_max=0.8)
                         if qm:
                             log.info("Clash Royale: 2v2 — Quick Match")
+                            self._mode_2v2 = True
                             tap(*qm)
                 continue
             # "Choose your reward" after a battle (2026): the first choice, then its claim / OK
@@ -584,6 +592,7 @@ class RoyaleBot:
             # (the user's order: never Play Again)
             ex = find_word(ws, "exit", y_min=0.85)
             if ex and find_word(ws, "play again", "play", y_min=0.85):
+                self._mode_2v2 = True                         # this result screen is 2v2's
                 log.info("Clash Royale: battle over — Exit")
                 tap(*ex)
                 time.sleep(2.0)

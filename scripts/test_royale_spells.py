@@ -94,5 +94,13 @@ for k, (u, c) in enumerate(seq):
 cards = [h[1] for h in b4.enemy_hist]
 check("a flicker of the eyes is not a new card", cards.count("witch") == 0 and cards.count("musketeer") == 1, str(cards))
 
+# 5.86: 2v2 — two opponents: their elixir fills twice as fast up to 20, no single-deck hand guess
+b5 = Brain(); b5.deck = list(b.deck); b5.reset(); b5.p["2v2"] = True
+b5.enemy_elixir, b5.enemy_t = 4.0, time.monotonic() - 2.8
+b5._regen_enemy(time.monotonic())
+check("2v2: their elixir fills for two players", 5.8 <= b5.enemy_elixir <= 6.2, f"{b5.enemy_elixir:.2f}")
+b5.enemy_seen = {"hog_rider", "cannon", "musketeer", "fireball", "the_log", "ice_golem", "skeletons"}
+check("2v2: no single-deck hand guess", b5.their_hand() is None)
+
 print(f"\n{'ALL PASSED' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)

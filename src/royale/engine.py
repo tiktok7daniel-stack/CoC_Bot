@@ -244,7 +244,16 @@ def mirror(brain, st, hand, my_elixir):
     if not any(hand): return None, "no card of the hand is known to the engine"
     their = [n for n in list(brain.enemy_seen) + sorted(brain.predicted) if n in ids][:8]
     _set_levels(m, level_scale(brain), 1.0)                   # our levels vs theirs (5.85)
-    env = m.ClashRoyaleEnv(_deck_ids(m, deck), _deck_ids(m, their), 3600)
+
+    def vid(n):
+        """Our card as it comes out now (5.86): its Evolution when the evolved picture shows in the hand (charged),
+        its Hero version when it is a hero card of ours; else the plain card."""
+        base, evo, hero = ids[n]
+        look = (getattr(brain, "hand_look", {}) or {}).get(n, "")
+        if hero and (n in (getattr(brain, "heroes", set()) or set()) or "hero" in look): return hero
+        if evo and "ev1" in look: return evo
+        return base
+    env = m.ClashRoyaleEnv(_filler_deck(m, [vid(n) for n in deck]), _deck_ids(m, their), 3600)
     env.reset()
     env.set_current_tick(int(min(3599, brain.elapsed() * 10)))
     # towers: fractions of life (the engine's towers are level 9; a fraction is what perception can trust)
@@ -272,6 +281,11 @@ def mirror(brain, st, hand, my_elixir):
                 gx = sum(p[0] for p in chunk) / len(chunk)
                 gy = sum(p[1] for p in chunk) / len(chunk)
                 cid = ids[cn][0]
+                if team == 1 and ids[cn][1]:                      # their unit seen evolved by the big eyes
+                    try:
+                        if brain.is_evo(chunk[0][2], chunk[0][0], chunk[0][1]): cid = ids[cn][1]
+                    except Exception:
+                        pass
                 hp = -1.0
                 if team == 1:
                     f = brain.life(chunk[0][2], chunk[0][0], chunk[0][1])
@@ -282,14 +296,17 @@ def mirror(brain, st, hand, my_elixir):
     put(allies, 0)
     put([(u, x, y) for u, x, y in (brain._stable or [])], 1)
     env.set_elixir_for_team(0, float(my_elixir))
-    env.set_elixir_for_team(1, float(brain.enemy_elixir or 5.0))
-    want = [ids[h][0] for h in hand if h]
+    # 2v2: the engine has one opponent — the one with more elixir is the danger (half the pool, at least)
+    el1 = float(brain.enemy_elixir or 5.0)
+    if brain.p.get("2v2"): el1 = min(10.0, max(el1 / 2.0, el1 - 10.0))
+    env.set_elixir_for_team(1, el1)
+    want = [vid(h) for h in hand if h]
     slots = {}
     if len(want) == 4 and len(hand) == 4 and env.set_hand_for_team(0, want):
         slots = {h: i for i, h in enumerate(hand) if h}
     else:
         got = env.get_hand_for_team(0)
-        slots = {h: got.index(ids[h][0]) for h in hand if h and ids[h][0] in got}
+        slots = {h: got.index(vid(h)) for h in hand if h and vid(h) in got}
     env.step_self_play_fast(-1, 0.0, 0.0, -1, 0.0, 0.0, 1)        # the injected bodies settle onto the board
     return env, slots
 

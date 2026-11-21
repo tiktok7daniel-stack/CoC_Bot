@@ -218,7 +218,9 @@ class Brain:
         return _DB["elixir"]["steps"][-1]["ms_per_elixir"] / 1000.0
 
     def _regen_enemy(self, now):
-        self.enemy_elixir = min(10.0, self.enemy_elixir + (now - self.enemy_t) / self.seconds_per_elixir())
+        # 2v2 (5.86): two opponents, each with his own elixir -> one pool that fills twice as fast, up to 20
+        two = 2.0 if self.p.get("2v2") else 1.0
+        self.enemy_elixir = min(10.0 * two, self.enemy_elixir + two * (now - self.enemy_t) / self.seconds_per_elixir())
         self.enemy_t = now
 
     def lead(self, name, x, y, unit=None):
@@ -1080,7 +1082,9 @@ class Brain:
 
     def their_hand(self):
         """The 4 cards in their hand now, worked out like a player counts the cycle: the deck (seen + guessed) minus
-        the last 4 different cards they played (those wait in the queue). None until 6 of their cards are known."""
+        the last 4 different cards they played (those wait in the queue). None until 6 of their cards are known.
+        2v2: two decks and two hands — not counted (None) rather than counted wrong (5.86)."""
+        if self.p.get("2v2"): return None
         deck = list(dict.fromkeys(list(self.enemy_seen) + sorted(self.predicted)))[:8]
         if len(self.enemy_seen) < 4 or len(deck) < 6: return None
         queue = []

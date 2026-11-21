@@ -162,5 +162,14 @@ if hasattr(m, "set_team_level_scale"):
 else:
     check("the engine has card levels (rebuilt)", False, "set_team_level_scale missing")
 
+# 5.86: our charged Evolution and our Hero cards go into the engine as themselves
+b7 = brain([]); b7.hand_look = {"cannon": "_ev1"}
+st7 = {"hand": ["cannon", "musketeer", "fireball", "the_log"], "ready": [0, 1, 2, 3], "towers": {}, "allies": []}
+env7, slots7 = engine.mirror(b7, st7, st7["hand"], 6.0)
+evo_id = engine.card_ids()["cannon"][1]
+if env7 is not None and evo_id:
+    got7 = env7.get_hand_for_team(0)
+    check("a charged Evolution is the evolved card in the engine", got7[slots7["cannon"]] == evo_id, f"{got7} evo {evo_id}")
+
 print(f"\n{'ALL PASSED' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)
