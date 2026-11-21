@@ -186,11 +186,9 @@ def mirror(brain, st, hand, my_elixir):
     # thinking (before 5.71 it did, and the engine hardly ever thought: 0.1 ms a moment in the user's reports):
     # the known cards are thought through, the deck is filled up with the hand and plain filler cards
     hand = [h if h in ids else None for h in hand]
-    deck = [n for n in (brain.deck or []) if n in ids]
-    for h in hand:
-        if h and h not in deck: deck.append(h)
+    deck = [h for h in hand if h]                                  # the hand first: it must be in the deck
+    deck = list(dict.fromkeys(deck + [n for n in (brain.deck or []) if n in ids]))[:8]
     if not any(hand): return None, "no card of the hand is known to the engine"
-    deck = deck[:8]
     their = [n for n in list(brain.enemy_seen) + sorted(brain.predicted) if n in ids][:8]
     env = m.ClashRoyaleEnv(_deck_ids(m, deck), _deck_ids(m, their), 3600)
     env.reset()
@@ -359,10 +357,13 @@ def _skip(why):
 
 def new_battle():
     _S["skips"] = {}
+    _S["last_error"] = ""
 
 
 def skips():
-    return dict(_S["skips"])
+    out = dict(_S["skips"])
+    if _S.get("last_error"): out["last_error"] = _S["last_error"]
+    return out
 
 
 def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
@@ -374,6 +375,8 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
         env, slots = mirror(brain, st, hand, my_elixir)
     except Exception as ex:
         if log and _S["skips"].get("mirror error", 0) < 3: log.warning(f"Clash Royale: engine mirror failed: {ex!r}")
+        import traceback
+        _S["last_error"] = traceback.format_exc(limit=4)[-600:]
         return _skip("mirror error")
     if env is None: return _skip(slots or "mirror refused")
     _S["skips"]["thought"] = _S["skips"].get("thought", 0) + 1
@@ -395,6 +398,19 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
                 ai_note = f"; the trained AI wanted {n} at {first[0][2]}"
         elif p:
             ai_note = "; the trained AI wanted to wait"
+    except Exception:
+        pass
+    # the AI model trained on pro games (royale.policy): its 3 likeliest cards on its own tiles are thought through
+    # too, and one of them is played when it beats waiting (AI mode: brain.p["ai"])
+    try:
+        pol = getattr(brain, "_pol", None)
+        if pol and pol.get("cards"):
+            names = dict((m, i) for i, m in playable)
+            for n, pr in sorted(pol["cards"].items(), key=lambda kv: -kv[1])[:3]:
+                if n not in names or pr < 0.08: continue
+                lt = brain._ltile(n, anywhere=bool((__import__("royale.brain", fromlist=["card"]).card(n)
+                                                      or {}).get("anywhere")))
+                if lt: first.append((names[n], n, (int(lt[0][0]), int(lt[0][1]))))
     except Exception:
         pass
     before = _snap_state(env)
@@ -438,8 +454,8 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
         # (before 5.69 the engine cancelled it and the bot looked slow and hesitant)
         if rule_d and (rule_v is None or rule_v >= VETO_MARGIN): return None
         return ("wait", f"engine: nothing beats waiting ({tried} moves, best {v:+.1f})")
-    if first and not rule_d and best[2] == first[0][1] and v > WAIT_MARGIN:
-        return ("play", i, n, tile, f"engine: the trained AI's {n} at {tile} is +{v:.1f} vs waiting{ai_note}")
+    if first and not rule_d and any(best[2] == f[1] for f in first) and v > WAIT_MARGIN:
+        return ("play", i, n, tile, f"AI: {n} at {tile}, checked in the engine +{v:.1f} vs waiting{ai_note}")
     if rule_d:
         if v < VETO_MARGIN:
             return ("wait", f"engine: {rule_d['card']} now is {v:+.1f} elixir vs waiting — dropped")

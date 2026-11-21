@@ -35,6 +35,8 @@ def default_settings():
             "safe_play": True,       # never experiments in a battle: the best known way every time (still learns)
             "scan_cards": True,      # weekly: every card's Info page photographed and read (royale.card_scan)
             "engine_think": True,    # every move thought through in the battle engine (royale.engine) when it is built
+            "ai_play": True,         # AI mode: the AI model decides, the engine checks it, the rules only guard
+            "ai_self_play": True,    # the self-play AI trains by itself between battles (paused in battle)
             "local_ai": False,       # True: the local AI model (royale.board + royale.policy, learning every battle) plays
             "lock_deck": True,       # the user's own deck is played as it is: the bot never changes it (the user's order)
             "training_camp": False,  # True: plays only Training Camp battles (against the trainer, no trophies)

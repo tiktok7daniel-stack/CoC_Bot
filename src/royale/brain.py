@@ -654,7 +654,10 @@ class Brain:
         play = pol.get("play", 0.0)
         probs = {n: pol["cards"].get(n, 0.0) for _, n in playable}
         side = max(th, key=lambda s_: th[s_]["value"]) if th else None
-        urgent = side is not None and th[side].get("urgent") and th[side].get("units")
+        # a real threat (the same bar the rules defend at): the AI model alone tends to wait too long on defense
+        # (it was trained on what players did, and they defend late) — the reflex defense goes in (5.74)
+        urgent = side is not None and th[side].get("units") and (
+            th[side].get("urgent") or th[side]["value"] >= self.p.get("defend_min", 1.5))
         if play >= 0.5:
             for n, pr in sorted(probs.items(), key=lambda kv: -kv[1]):
                 if pr < 0.12: break

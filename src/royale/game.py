@@ -155,7 +155,9 @@ class RoyaleBot:
         self.brain.p = dict(learn.DEFAULT, **self.params)
         if not self.s.get("learned_brain", True): self.brain.p["learned"] = False
         # the local AI model decides the moves (on by default); off: the rule brain decides with the models' advice
-        self.brain.p["ai"] = bool(self.s.get("local_ai", False)) and self.brain.p.get("learned", True)
+        # AI mode (on by default since 5.74, the user's choice): the AI model trained on pro games decides, the battle
+        # engine simulates its best choices (and the self-play AI's) and keeps the best; the rules only guard it
+        self.brain.p["ai"] = bool(self.s.get("ai_play", True)) and self.brain.p.get("learned", True)
         if self.brain.p["ai"]: log.info("Clash Royale: the local AI model plays this battle (the rules only guard it)")
         self.brain.reset()
         self._prev_hand = None
@@ -214,6 +216,7 @@ class RoyaleBot:
         perf = {"capture": 0.0, "look": 0.0, "decide": 0.0, "engine": 0.0, "tap": 0.0, "loop": 0.0, "n": 0,
                 "worst_loop": 0.0}
         full_s, t_prev, b_t0, self._engine_drops = 0.0, time.monotonic(), time.monotonic(), 0
+        play_log, slow = [], []
         self._perf = perf
         while _u().running():
             t0 = time.monotonic()
@@ -251,12 +254,20 @@ class RoyaleBot:
             if self.eyes.learn_deck([h for i, h in enumerate(st["hand"]) if i in st["ready"]]):
                 log.info("Clash Royale: my deck = " + ", ".join(self.eyes.deck))
                 self.brain.deck = list(self.eyes.deck)
-                try: self._check_deck()
-                except Exception: log.debug("deck check failed", exc_info=True)
+                def _chk():
+                    try: self._check_deck()
+                    except Exception: log.debug("deck check failed", exc_info=True)
+                __import__("threading").Thread(target=_chk, daemon=True, name="deck-check").start()
             if len(self.eyes.deck) == 8 and getattr(self, "_studied", None) != sorted(self.eyes.deck):
-                self._study_deck()
-                try: _save_deck(self.eyes.deck)
-                except Exception: pass
+                self._studied = sorted(self.eyes.deck)
+                deck_now = list(self.eyes.deck)
+
+                def _study():                                  # its own thread: never a pause in the battle
+                    try: self._study_deck()
+                    except Exception: log.debug("deck study failed", exc_info=True)
+                    try: _save_deck(deck_now)
+                    except Exception: pass
+                __import__("threading").Thread(target=_study, daemon=True, name="deck-study").start()
             # what was just spent: the picture can lag a moment behind a play ("Not enough Elixir!")
             el = st["elixir"]
             t_now = time.monotonic()
@@ -297,6 +308,13 @@ class RoyaleBot:
             perf["engine"] += (time.monotonic() - t_eng) * 1000
             lp = (time.monotonic() - t0) * 1000
             perf["loop"] += lp; perf["n"] += 1; perf["worst_loop"] = max(perf["worst_loop"], lp)
+            if lp > 1500 and len(slow) < 6:                 # where a long moment went (the freezes in the reports)
+                try:
+                    slow.append({"ms": round(lp), "capture": round((t_cap - t0) * 1000),
+                                 "look": round((t_dec - t_cap) * 1000), "decide": round((t_eng - t_dec) * 1000),
+                                 "engine": round((time.monotonic() - t_eng) * 1000), "t": round(self.brain.elapsed())})
+                except Exception:
+                    pass
             st["_perf"] = {k: (round(v / max(1, perf["n"])) if k not in ("n", "worst_loop") else round(v))
                            for k, v in perf.items()}
             try:
@@ -305,7 +323,15 @@ class RoyaleBot:
                 live_view.battle(_u().INSTANCE_ID, self.brain, st, d, force=bool(d))
             except Exception:
                 pass
+            if d and d["card"] in ("goblin_barrel", "miner", "graveyard", "goblin_drill") and d["tile"][1] < 20:
+                # the last guard before the tap: these go onto THEIR tower, never into our half
+                fixed = self.brain._barrel_tile(tuple(d["tile"]))
+                log.warning(f"Clash Royale: {d['card']} was aimed at {d['tile']} ({d['why']}) — sent to their tower "
+                            f"{fixed} instead")
+                d["tile"], d["why"] = fixed, d["why"] + " | guard: onto their tower"
             if d:
+                play_log.append({"t": round(self.brain.elapsed(), 1), "card": d["card"], "tile": list(d["tile"]),
+                                 "why": str(d.get("why", ""))[:90], "el": round(float(st["elixir"]), 1)})
                 self._spent = (__import__("royale.brain", fromlist=["card"]).card(d["card"]).get("cost", 4),
                                time.monotonic(), el)
                 self._slot_used[d["slot"]] = time.monotonic()
@@ -348,7 +374,8 @@ class RoyaleBot:
                         "big_model_ms": round(strong_eyes.speed_ms() or 0) if "strong_eyes" in dir() else None,
                         "engine_on": bool(engine_on), "version": __import__("version").VERSION,
                         "seconds": round(time.monotonic() - b_t0), "full_elixir_s": round(full_s),
-                        "engine_dropped": getattr(self, "_engine_drops", 0)})
+                        "engine_dropped": getattr(self, "_engine_drops", 0),
+                        "ai": bool(self.brain.p.get("ai")), "slow": slow, "plays_list": play_log[-60:]})
             try:
                 from royale import engine as _eng
                 rep["engine_why"] = _eng.skips()
@@ -1037,10 +1064,24 @@ RoyaleBot._start_training_camp = _start_training_camp
 def _gate_after_battle(self):
     """Between battles: a newer trained version is tested against the one in use (its own process, paused while
     a battle runs)."""
-    from royale import engine_ai
-    if not engine_ai.newest() or getattr(self, "_gate_running", False): return
+    from royale import engine_ai, engine
     import threading
     deck = list(self.brain.deck or self.eyes.deck or [])
+    # the self-play AI trains by itself between battles on this deck (paused while a battle runs)
+    if self.s.get("ai_self_play", True) and engine.ready() and len(deck) == 8 and not engine_ai.running():
+        miss = engine_ai.missing()
+        if miss:
+            if not getattr(self, "_train_missing_told", False):
+                self._train_missing_told = True
+                self.log.info("Clash Royale AI: self-play training needs " + ", ".join(miss) +
+                              " (the app's Royale page installs them) — the AI plays with what it has")
+        else:
+            try:
+                ok, msg = engine_ai.start(deck, self.log)
+                self.log.info("Clash Royale AI: self-play training " + ("started — " if ok else "not started — ") + msg)
+            except Exception:
+                self.log.debug("self-play start failed", exc_info=True)
+    if not engine_ai.newest() or getattr(self, "_gate_running", False): return
 
     def _gate():
         self._gate_running = True

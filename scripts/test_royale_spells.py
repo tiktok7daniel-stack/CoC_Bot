@@ -62,5 +62,14 @@ setup([]); check("no Bats alone with nothing to do", b._play((0, "bats"), (14, 2
 setup([("mini_pekka", 4, 9)]); check("Bats on a Mini P.E.K.K.A", b._play((0, "bats"), (4, 9), "x", now) is not None)
 setup([("giant", 4, 10)]); check("no Fireball on one Giant", b._play((0, "fireball"), (4, 10), "x", now) is None)
 
+# 5.74: AI mode — the AI model plays, but a Hog coming at our tower is always defended
+b2 = Brain(); b2.deck = list(b.deck); b2.reset(); b2.p["ai"] = True
+t0, got = time.monotonic(), None
+for k in range(25):
+    got = b2.decide(['witch', 'arrows', 'cannon', 'valkyrie'], [0, 1, 2, 3], 7.0, [("hog_rider", 3, 16 - k * 0.4, 0.9)],
+                    [], {"their_left": 1.0, "their_right": 1.0, "our_left": 1.0, "our_right": 1.0}, now=t0 + k * 0.5)
+    if got: break
+check("AI mode defends a Hog", got is not None and got["card"] != "goblin_barrel", str(got))
+
 print(f"\n{'ALL PASSED' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)
