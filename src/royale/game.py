@@ -488,7 +488,26 @@ def _pick_deck(self):
     """The strongest deck the player owns, from the official API and today's meta -> copied into the game."""
     from royale import cr_api, deck_pick
     acc = _u().INSTANCE_ID
-    if not cr_api.tag(acc) or not deck_pick.due(acc): return
+    if not cr_api.tag(acc):
+        # no official API: the deck chosen for this account in the settings, copied in once
+        want = [c for c in (self.s.get("wanted_deck") or []) if c]
+        if len(want) != 8 or not deck_pick.due(acc, every=365 * 86400): return
+        from royale.brain import card
+        ids = [card(c).get("id") for c in want]
+        if not all(ids):
+            self.log.info("Clash Royale: the wanted deck has a card the bot does not know — not copied")
+            return
+        pick = {"cards": want, "ids": ids, "why": "the deck chosen for this account", "current": []}
+        self.log.info("Clash Royale: putting in the chosen deck = " + ", ".join(want))
+        if deck_pick.apply(acc, pick, self.log, int(self.s.get("deck_slot", 0) or 0)):
+            names = _api_names(self.eyes, [cr_api.key_of(c) for c in want])
+            if len(names) == 8:
+                self._api_deck = names
+                self.eyes.set_deck(names); self.brain.deck = list(names)
+            try: self.notify("🃏 كلاش رويال: حطيت الديك المختار — " + ", ".join(want))
+            except Exception: pass
+        return
+    if not deck_pick.due(acc): return
     try:
         pick = deck_pick.choose(acc)
     except Exception as e:
