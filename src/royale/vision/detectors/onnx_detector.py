@@ -20,6 +20,9 @@ class OnnxDetector:
 
         so = ort.SessionOptions()
         so.intra_op_num_threads = max(2, (os.cpu_count() or 4) // 2)
+        if "DmlExecutionProvider" in providers():                # DirectML: sequential, no memory patterns
+            so.enable_mem_pattern = False
+            so.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
         try:
             self.sess = ort.InferenceSession(self.model_path, sess_options=so, providers=providers())
         except Exception:

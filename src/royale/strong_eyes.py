@@ -92,7 +92,8 @@ def _load():
         import onnxruntime as ort
         av = ort.get_available_providers()
         prov = [p for p in ("CUDAExecutionProvider", "DmlExecutionProvider") if p in av] + ["CPUExecutionProvider"]
-        so = ort.SessionOptions()
+        import ort_gpu
+        so = ort_gpu.session_options(ort, prov)
         so.intra_op_num_threads = 2
         _S["sess"] = ort.InferenceSession(str(ONNX), sess_options=so, providers=prov)
         _S["mtime"] = ONNX.stat().st_mtime
@@ -171,6 +172,32 @@ def submit(frame_rgb):
                 _A["ms"] = (time.monotonic() - t0) * 1000
         _A["thread"] = threading.Thread(target=work, daemon=True, name="cr-strong-eyes-run")
         _A["thread"].start()
+
+
+SYNC_MS = 28.0          # the big model answers this fast (graphics card): it looks at the very picture being decided on
+
+
+def look_now(frame_rgb):
+    """The big model's detections for THIS picture when it is fast enough (same moment as the decision: positions
+    are exact, no 0.6 s old answer); otherwise in the background, its answer at most 0.35 s old (5.83)."""
+    ms = _A.get("ms") or 0.0
+    if 0 < ms <= SYNC_MS:
+        t0 = time.monotonic()
+        try:
+            d = detect(frame_rgb)
+        except Exception:
+            d = []
+        _A["dets"], _A["t"], _A["seen"] = d, t0, (frame_rgb, d)
+        _A["ms"] = 0.8 * ms + 0.2 * (time.monotonic() - t0) * 1000
+        _A["sync"] = True
+        return d
+    _A["sync"] = False
+    submit(frame_rgb)
+    return latest(0.35)
+
+
+def same_moment():
+    return bool(_A.get("sync"))
 
 
 def latest(max_age=0.6):

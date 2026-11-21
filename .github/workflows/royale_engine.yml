@@ -14,6 +14,9 @@ on:
       - "src/royale/brain.py"
       - "src/royale/card_use.py"
       - "src/royale/exit_train.py"
+      - "src/ort_gpu.py"
+      - "src/royale/eyes.py"
+      - "src/royale/strong_eyes.py"
       - "scripts/test_royale_exit.py"
       - "scripts/test_royale_training.py"
   workflow_dispatch:
@@ -62,6 +65,8 @@ jobs:
           python -m pip install numpy onnxruntime
           python scripts/test_royale_engine.py
           python scripts/test_royale_spells.py
+      - name: The eyes on the graphics card (DirectML onnxruntime installs and loads)
+        run: python -c "import sys; sys.path.insert(0, 'src'); import ort_gpu; ort_gpu._install(); print(open(ort_gpu.LOG, encoding='utf-8').read()[-600:]); sys.exit(0 if ort_gpu.READY.exists() else 1)"
 
   training-smoke:
     needs: build

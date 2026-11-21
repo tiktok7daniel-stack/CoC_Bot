@@ -381,6 +381,13 @@ class RoyaleBot:
                         "engine_dropped": getattr(self, "_engine_drops", 0),
                         "ai": bool(self.brain.p.get("ai")), "slow": slow, "plays_list": play_log[-60:]})
             try:
+                import ort_gpu
+                from royale import strong_eyes as _se
+                rep["eyes_gpu"] = ort_gpu.on_gpu()
+                rep["eyes_same_moment"] = _se.same_moment()
+            except Exception:
+                pass
+            try:
                 from royale import engine as _eng
                 rep["engine_why"] = _eng.skips()
             except Exception:
@@ -467,6 +474,11 @@ class RoyaleBot:
         start_game(log)
         max_b = int(self.s.get("max_battles", 0) or 0)
         self._status("now")                                  # the app shows "running", not "starting…"
+        try:                                                 # the eyes on the graphics card (once, in the background)
+            import ort_gpu
+            ort_gpu.install_in_background(log)
+        except Exception:
+            pass
         self._say("✅ كلاش رويال: البوت شغال ومتوصل باللعبة", "the bot is running and connected to the game", phone=True)
         while _u().running():
             if max_b and self.battles >= max_b:

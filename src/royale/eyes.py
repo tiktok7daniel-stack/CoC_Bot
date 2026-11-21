@@ -78,8 +78,7 @@ class Eyes:
         try:                                         # the stronger eyes (174 kinds), in the background: never waited for
             from royale import strong_eyes
             if strong_eyes.ready():
-                strong_eyes.submit(frame_rgb)
-                self._merge(strong_eyes.latest(), frame_rgb.shape, img, en, al)
+                self._merge(strong_eyes.look_now(frame_rgb), frame_rgb.shape, img, en, al)
                 hp, spells = self._health()
         except Exception:
             pass
@@ -133,7 +132,11 @@ class Eyes:
             if evolved and side != "ally": self.evo_now.append((u, tx, ty))
             same = next((k for k, d in enumerate(lst) if d[0] == u and abs(d[1] - tx) <= 1 and abs(d[2] - ty) <= 1), None)
             if same is None: lst.append((u, tx, ty, cf))
-            elif cf > lst[same][3]: lst[same] = (u, tx, ty, cf)
+            else:
+                # both eyes see the same unit on the same tile: surer than either alone (5.83); the big model's
+                # place (finer boxes) is kept
+                a = lst[same][3]
+                lst[same] = (u, tx, ty, min(0.99, 1 - (1 - float(a)) * (1 - float(cf))))
 
 
 # ------------------------------------------------------------------ where to tap (fractions of the screen)
