@@ -558,6 +558,16 @@ class RoyaleBot:
                             log.info("Clash Royale: 2v2 — Quick Match")
                             tap(*qm)
                 continue
+            # "Choose your reward" after a battle (2026): the first choice, then its claim / OK
+            if find_word(ws, "choose") and find_word(ws, "reward", "rewards"):
+                log.info("Clash Royale: a reward to choose after the battle — taking one")
+                tap(0.3, 0.5)
+                time.sleep(0.8)
+                ws2 = words(frame())
+                c = find_word(ws2, "claim", "collect", "confirm", "ok", "continue", y_min=0.4)
+                if c: tap(*c)
+                time.sleep(1.2)
+                continue
             # the result screen of a 2v2 (Exit / Play Again / add friend / chat): Exit, then Battle again
             # (the user's order: never Play Again)
             ex = find_word(ws, "exit", y_min=0.85)

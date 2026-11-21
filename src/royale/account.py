@@ -5,6 +5,10 @@ The Clash Royale account, looked after by the bot between battles (like a player
             says gems / buy / not enough is backed out of
   clan      donates to the clan's requests (free: gold + XP for us) and asks for cards when the request is ready
   rewards   free rewards that wait in the lobby (claim / collect / free) are taken
+  mastery   card mastery rewards (Cards tab: a card's Mastery page -> Claim) are collected
+  gifts     gifts in the clan chat (sent by a member with the Pass) are claimed
+  shop      the shop's FREE daily offer is taken (only a button that says FREE — never one with a price)
+  war       Clan War (River Race) battles: the bot plays the day's war battles with the war decks
   report    once a day: battles, wins, upgrades, donations -> the phone
 
 Every step reads the screen (OCR) before it taps and goes back to the Battle tab when anything is unexpected.
@@ -88,11 +92,16 @@ class Account:
     def run(self):
         """One round of chores (a few minutes at most)."""
         self.last_run = time.monotonic()
-        for step in (self.upgrade_cards, self.clan, self.report):
+        steps = [self.rewards, self.upgrade_cards, self.mastery, self.clan, self.shop_free, self.report]
+        if self.war_due(): steps.insert(-1, self.war)
+        self.war_started = False
+        for step in steps:
             try:
                 step()
             except Exception:
                 self.log.debug(f"Clash Royale account: {step.__name__} failed", exc_info=True)
+            if self.war_started:                     # a war battle is starting: the battle loop takes it from here
+                return
             _back()
 
     # -------------------------------------------------------------- cards
@@ -159,6 +168,7 @@ class Account:
         if given:
             self.count("donations", given)
             self.log.info(f"Clash Royale account: {given} cards donated to the clan")
+        self.gifts()
         ws = _ws()
         r = g.find_word(ws, "request", y_min=0.5)
         if r and not _bad(ws):
@@ -174,6 +184,154 @@ class Account:
                 self.count("requests")
                 self.log.info("Clash Royale account: cards requested from the clan")
 
+    # -------------------------------------------------------------- free rewards
+    def _tap_through(self, n=8):
+        """A reward show (chest opening, cards flying): tapped through until the screen settles."""
+        g = _g()
+        for _ in range(n):
+            ws = _ws()
+            if _bad(ws): return
+            nxt = g.find_word(ws, "ok", "continue", "tap to", "close", "collect", y_min=0.35)
+            if nxt: g.tap(*nxt)
+            elif len([t for t, _ in ws if len(t) > 1]) <= 4: g.tap(0.5, 0.6)
+            else: return
+            time.sleep(0.9)
+
+    def _claim_loop(self, words, what, y=(0.1, 0.92), most=12, bad=None):
+        """Taps buttons that say `words` (claim / collect...) one after the other. -> how many."""
+        g = _g()
+        bad = bad or _bad
+        n = 0
+        for _ in range(most):
+            ws = _ws()
+            if bad(ws): break
+            b = g.find_word(ws, *words, y_min=y[0], y_max=y[1])
+            if not b: break
+            g.tap(*b)
+            time.sleep(1.2)
+            n += 1
+            self._tap_through(5)
+        if n:
+            self.count(what, n)
+        return n
+
+    def rewards(self):
+        """Free rewards waiting on the Battle tab (Trophy Road, the Pass's free track, chests ready): claimed."""
+        _tab("battle")
+        stop = lambda ws: _has(ws, "buy", "purchase", "$", "€", "gems to", "not enough", "open now", "speed up",
+                               "subscribe", "leave", "log out", "delete")
+        n = self._claim_loop(("claim", "collect", "claim all"), "rewards", bad=stop)
+        if n: self.log.info(f"Clash Royale account: {n} free rewards claimed in the lobby")
+
+    def mastery(self):
+        """Card Mastery: Cards tab -> the Mastery button / a card's mastery page -> Claim every reward ready."""
+        g = _g()
+        ws = _tab("cards")
+        m = g.find_word(ws, "mastery", "masteries", y_min=0.1, y_max=0.92)
+        if not m or _bad(ws):
+            return
+        g.tap(*m)
+        time.sleep(1.5)
+        got = 0
+        for _ in range(10):                          # every card that has a reward waiting
+            ws = _ws()
+            if _bad(ws): break
+            c = self._claim_loop(("claim", "collect"), "mastery", most=6)
+            if not c:
+                # a card with a reward waiting is marked: its "claim" / "!" badge opens its page
+                r = g.find_word(ws, "reward", "ready", y_min=0.15, y_max=0.92)
+                if not r: break
+                g.tap(*r)
+                time.sleep(1.3)
+                if not self._claim_loop(("claim", "collect"), "mastery", most=6): break
+                _g().tap(0.5, 0.1)                     # out of the card's page
+                time.sleep(0.8)
+            got += c
+        if got:
+            self.log.info(f"Clash Royale account: {got} card mastery rewards collected")
+
+    def gifts(self):
+        """The clan chat's gifts (a member with the Pass sends them to everyone): Claim. The gift's text names the
+        Pass, so only real spending words stop it here."""
+        stop = lambda ws: _has(ws, "buy", "purchase", "$", "€", "gems to", "not enough", "subscribe", "leave",
+                               "log out", "delete")
+        n = self._claim_loop(("claim", "open gift", "collect"), "gifts", y=(0.12, 0.88), most=10, bad=stop)
+        if n: self.log.info(f"Clash Royale account: {n} clan gifts claimed")
+
+    def shop_free(self):
+        """The shop's daily FREE offer. Only a button whose own text is "free" is tapped, and the popup after it
+        only on its "free" button; anything with a price, buy or purchase is backed out of."""
+        g = _g()
+        if self.d.get("shop_free") == date.today().isoformat(): return
+        ws = _tab("shop")
+        if not _has(ws, "shop", "daily", "deals", "free", "offers", "chest"): return
+        free = [b for t, b in ws if t.strip(" !.") == "free" and 0.12 < (b[2] + b[4]) / 2 < 0.9]
+        if not free:
+            self.d["shop_free"] = date.today().isoformat(); self._save()
+            return
+        b = free[0]
+        g.tap((b[1] + b[3]) / 2, (b[2] + b[4]) / 2)
+        time.sleep(1.3)
+        ws = _ws()
+        if _has(ws, "buy", "purchase", "$", "€", "not enough") or any(any(ch.isdigit() for ch in t) and "gem" in t
+                                                                     for t, _ in ws):
+            self.log.info("Clash Royale account: the shop asked for a price — backed out")
+            return
+        conf = [b for t, b in ws if t.strip(" !.") in ("free", "claim", "collect")]
+        if conf:
+            b = conf[0]
+            g.tap((b[1] + b[3]) / 2, (b[2] + b[4]) / 2)
+            time.sleep(1.5)
+        self._tap_through(6)
+        self.d["shop_free"] = date.today().isoformat(); self._save()
+        self.count("shop_free")
+        self.log.info("Clash Royale account: the shop's free daily offer taken")
+        try: self.notify("🎁 كلاش رويال: خدت هدية الشوب المجانية بتاعة النهارده")
+        except Exception: pass
+
+    # -------------------------------------------------------------- clan war
+    def war_due(self):
+        day = self.d.get("war_day", {})
+        return day.get("d") != date.today().isoformat() or (day.get("n", 0) < 4 and not day.get("none"))
+
+    def war(self):
+        """Clan War (River Race): Clan tab -> the war page -> Battle -> the war battle is played by the battle loop
+        (royale.game: anything in a battle is played there). At most 4 a day; stops when none is left."""
+        g = _g()
+        today = date.today().isoformat()
+        day = self.d.get("war_day", {})
+        if day.get("d") != today: day = {"d": today, "n": 0}
+        ws = _tab("clan")
+        w = g.find_word(ws, "river race", "clan war", "war", y_min=0.05, y_max=0.9)
+        if not w or _bad(ws):
+            day["none"] = True; self.d["war_day"] = day; self._save()
+            return
+        g.tap(*w)
+        time.sleep(1.8)
+        ws = _ws()
+        b = g.find_word(ws, "battle", "duel", "attack", y_min=0.45, y_max=0.95)
+        if not b or _bad(ws) or _has(ws, "no battles left", "0/4", "come back"):
+            day["none"] = True; self.d["war_day"] = day; self._save()
+            return
+        g.tap(*b)
+        time.sleep(1.8)
+        ws = _ws()
+        # empty war decks: the game fills one for free ("randomize" / "auto") — the main deck is never touched
+        r = g.find_word(ws, "randomize", "random", "auto", y_min=0.3)
+        if r and not _bad(ws):
+            g.tap(*r); time.sleep(1.0)
+            ws = _ws()
+        go = g.find_word(ws, "battle", "duel", "start", y_min=0.45)
+        if go and not _bad(ws):
+            g.tap(*go)
+            self.log.info("Clash Royale account: a Clan War battle — the AI plays it")
+            day["n"] = day.get("n", 0) + 1
+            self.count("war_battles")
+        else:
+            day["none"] = True
+        self.d["war_day"] = day; self._save()
+        self.war_started = bool(go)
+
     # -------------------------------------------------------------- daily report
     def report(self):
         today = date.today().isoformat()
@@ -187,7 +345,9 @@ class Account:
         b, w = s.get("battles", 0), s.get("wins", 0)
         txt = (f"📊 تقرير كلاش رويال ({k}) — حساب {self.acc}\n"
                f"ماتشات: {b} — فوز {w} / خسارة {b - w}" + (f" ({100 * w // max(1, b)}%)" if b else "") + "\n"
-               f"كروت اترقّت: {s.get('upgrades', 0)} — تبرعات للكلان: {s.get('donations', 0)}")
+               f"كروت اترقّت: {s.get('upgrades', 0)} — تبرعات للكلان: {s.get('donations', 0)}\n"
+               f"مكافآت: {s.get('rewards', 0)} — ماستري: {s.get('mastery', 0)} — هدايا الكلان: {s.get('gifts', 0)}"
+               f" — هدية الشوب: {s.get('shop_free', 0)} — ماتشات الكلان وور: {s.get('war_battles', 0)}")
         self.log.info("Clash Royale account: " + txt.replace("\n", " | "))
         try: self.notify(txt)
         except Exception: pass
