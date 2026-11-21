@@ -142,7 +142,9 @@ class RoyaleBot:
         from royale.eyes import in_battle, tile_xy, card_xy
         log = self.log
         from royale import learn
-        self.params = learn.choose(_u().INSTANCE_ID)              # this battle's way of playing (learned)
+        # safe play (default): always the best known way, no experiments on your trophies — it still learns from
+        # every result; off: 2 settings are tried per battle to find better ones faster
+        self.params = learn.choose(_u().INSTANCE_ID, explore=not self.s.get("safe_play", True))
         self.brain.p = dict(learn.DEFAULT, **self.params)
         if not self.s.get("learned_brain", True): self.brain.p["learned"] = False
         self.brain.reset()

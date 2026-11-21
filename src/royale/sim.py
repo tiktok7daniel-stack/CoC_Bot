@@ -48,9 +48,13 @@ def tower_mult(level):
     return 1.0 + (level_mult(level) - 1.0) * 0.77 if level else 1.0
 
 
+KAMIKAZE_UNITS = {"ice_spirit", "fire_spirit", "electro_spirit", "heal_spirit", "wall_breakers", "wall_breaker",
+                  "skeleton_barrel", "fire_spirits", "ice_spirits"}
+
+
 class U:
     __slots__ = ("name", "team", "x", "y", "hp", "hp0", "dmg", "hit", "cd", "rng", "spd", "air", "hits_air",
-                 "bonly", "splash", "building", "value", "wait", "tower", "born", "radius", "sight", "life")
+                 "bonly", "splash", "building", "value", "wait", "tower", "born", "radius", "sight", "life", "kamikaze")
 
     def __init__(self, name, team, x, y, c, hp_frac=1.0, wait=0.0, per_value=1.0, level=None):
         self.name, self.team, self.x, self.y = name, team, float(x), float(y)
@@ -62,6 +66,8 @@ class U:
         self.radius = float(c.get("radius") or 0.5)
         self.sight = float(c.get("sight") or SIGHT)
         self.life = float(c.get("life_s") or 30.0)
+        # spirits / Wall Breakers hit once and are gone (they were hitting forever: far too strong)
+        self.kamikaze = name in KAMIKAZE_UNITS
         self.hit = max(0.3, (c.get("hit_ms") or 1200) / 1000.0)
         self.cd = 0.0
         self.rng = max(0.6, float(c.get("range") or 1.0))
@@ -127,12 +133,14 @@ def step(units, dt=DT):
         tgt = min(cands, key=lambda o: _dist(u, o))
         if _dist(u, tgt) <= u.rng + 0.5:
             if u.cd <= 0 and u.dmg > 0:
-                if u.splash > 0:
+                if u.splash > 0 or u.kamikaze:
+                    rad = u.splash if u.splash > 0 else 1.5
                     for o in foes:
-                        if u.can_hit(o) and math.hypot(o.x - tgt.x, o.y - tgt.y) <= u.splash: o.hp -= u.dmg
+                        if u.can_hit(o) and math.hypot(o.x - tgt.x, o.y - tgt.y) <= rad: o.hp -= u.dmg
                 else:
                     tgt.hp -= u.dmg
                 u.cd = u.hit
+                if u.kamikaze: u.hp = 0
         elif u.spd > 0:
             # body block: an enemy body right in front (between it and its target) holds a ground unit back —
             # a Skeleton in front of a Hog Rider costs it about half a second

@@ -540,8 +540,9 @@ class Brain:
                         main = t.get("main")
                         trk = next((k for k in self.known_enemy.values() if unit_card(k["unit"]) == main), None)
                         if main and trk:
+                            others = sorted({unit_card(u) for u, _x, _y in t["units"] if unit_card(u)} - {main})
                             ans = atlas.answers(main, (trk["fx"], trk["fy"]), side,
-                                                [n for _, n in playable if "spell" not in roles(n)])
+                                                [n for _, n in playable if "spell" not in roles(n)], others)
                             if ans:
                                 best_sc = max(v[0][3] for v in ans.values())
                                 for n, spots in ans.items():

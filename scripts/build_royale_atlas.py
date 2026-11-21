@@ -28,7 +28,7 @@ HORIZON = {"bridge": 14.0, "corner": 15.0, "back": 20.0}
 def horizon(threat, spot):
     """Long enough for the threat to reach our tower and hit it a few times (a Golem from the back needs ~30 s)."""
     from royale.brain import card
-    spd = max(0.5, (card(threat).get("speed") or 60) / 60.0)
+    spd = max(0.5, min((card(t).get("speed") or 60) for t in threat.split("+")) / 60.0)
     walk = (SPOTS[spot][1] - 5.0) / spd                       # to our princess tower's row
     return max(HORIZON[spot], min(40.0, 1.0 + walk + 8.0))
 
@@ -39,17 +39,45 @@ def tiles():
     return [(x, y) for x in range(0, 11) for y in range(1, 14) if b.legal(x, y, "knight")]
 
 
+def combos(n=40):
+    """The pros' most played two-card ATTACKS (royale.pro 'follow': what is played right after a card on the same
+    lane), at least one card a win condition / tank."""
+    import json as _j
+    from royale.brain import cards_db
+    from royale.deck_pick import WIN_CONDITIONS
+    db = cards_db()
+    key = lambda s_: "".join(ch for ch in s_.lower() if ch.isalnum())
+    by = {key(k): k for k in db}
+    pro = _j.load(open(os.path.join(HERE, "..", "assets", "royale", "pro.json"), encoding="utf-8"))
+    out = []
+    for a, v in pro.get("follow", {}).items():
+        for b, share in v["top"]:
+            if a in by and b in by and a != b and (a in WIN_CONDITIONS or b in WIN_CONDITIONS) and \
+                    all(db[by[k]].get("kind") in ("troop", "hero") and db[by[k]].get("hp") for k in (a, b)):
+                out.append((v["n"] * share, by[a], by[b]))
+    out.sort(reverse=True)
+    seen, res = set(), []
+    for _n, a, b in out:
+        if (a, b) not in seen:
+            seen.add((a, b)); res.append((a, b))
+        if len(res) == n: break
+    return res
+
+
 def board(threat, spot, level):
     from royale import sim
     from royale.brain import card, OUR_TOWERS
-    c = card(threat)
     u = [sim._tower("us", *OUR_TOWERS["left"], "princess", level), sim._tower("us", *OUR_TOWERS["right"], "princess", level),
          sim._tower("us", *OUR_TOWERS["king"], "king", level)]
-    n = max(1, c.get("count") or 1)
     sx, sy = SPOTS[spot]
-    for k in range(n):
-        u.append(sim.U(threat, "them", sx + 0.5 + 0.5 * (k % 3 - 1), sy + 0.5 + 0.5 * (k // 3), c, 1.0,
-                       (c.get("deploy_ms") or 1000) / 1000.0, c.get("cost", 3), level))
+    for i, th in enumerate(threat.split("+")):              # a combo: the second card 1 s later, just behind
+        c = card(th)
+        n = max(1, c.get("count") or 1)
+        x0, y0, wait = (sx, sy, 0.0) if i == 0 else (sx, min(31, sy + 2), 1.0)
+        if c.get("anywhere") or th == "miner": x0, y0 = OUR_TOWERS["left"][0] - 0.5, OUR_TOWERS["left"][1] + 1.5
+        for k in range(n):
+            u.append(sim.U(th, "them", x0 + 0.5 + 0.5 * (k % 3 - 1), y0 + 0.5 + 0.5 * (k // 3), c, 1.0,
+                           (c.get("deploy_ms") or 1000) / 1000.0 + wait, c.get("cost", 3), level))
     return u
 
 
@@ -89,6 +117,25 @@ def job(args):
     return f"{threat}|{spot}", out
 
 
+def main_combos(level=11, n=40):
+    """The pros' most played two-card attacks against every defending card -> added to atlas.json."""
+    from royale.brain import cards_db
+    db = cards_db()
+    defenders = sorted(k for k, c in db.items() if c.get("kind") in ("troop", "hero", "building") and c.get("hp"))
+    jobs = [(f"{a}+{b}", s, defenders, level) for a, b in combos(n) for s in ("bridge", "corner")]
+    t0 = time.time()
+    data = json.load(open(OUT, encoding="utf-8"))
+    with Pool(os.cpu_count() or 4) as pool:
+        for i, (k, v) in enumerate(pool.imap_unordered(job, jobs, chunksize=1)):
+            data["atlas"][k] = v
+            if i % 10 == 0: print(f"{i + 1}/{len(jobs)} {time.time() - t0:.0f}s", flush=True)
+    data["meta"]["combos"] = [f"{a}+{b}" for a, b in combos(n)]
+    data["meta"]["combo_tries"] = len(jobs) * len(defenders) * len(tiles()) * len(DELAYS)
+    with open(OUT, "w", encoding="utf-8") as f:
+        json.dump(data, f, separators=(",", ":"))
+    print(f"done: {data['meta']['combo_tries']:,} defenses against {len(jobs) // 2} combos in {time.time() - t0:.0f}s")
+
+
 def main(level=11):
     from royale.brain import cards_db
     db = cards_db()
@@ -110,4 +157,5 @@ def main(level=11):
 
 
 if __name__ == "__main__":
-    main(int(sys.argv[1]) if len(sys.argv) > 1 else 11)
+    if "--combos" in sys.argv: main_combos()
+    else: main(int(sys.argv[1]) if len(sys.argv) > 1 else 11)

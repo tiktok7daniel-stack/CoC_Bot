@@ -108,6 +108,7 @@ class RoyaleScreen(Screen):
         play = GlassCard("royale_title", "swords", "royale_sub")
         play.add(num_row(self.store, "royale_max", "royale.max_battles", "royale_max_sub", lo=0, hi=10000, width=120))
         play.add(toggle_row(self.store, "royale_notify", "royale.notify", "royale_notify_sub"))
+        play.add(toggle_row(self.store, "royale_safe", "royale.safe_play", "royale_safe_sub"))
         g2.addWidget(play, 0, 0)
         setup = GlassCard("royale_setup", "sliders", "royale_setup_sub")
         for k in ("royale_need_1", "royale_need_2", "royale_need_3", "royale_need_4"):

@@ -32,6 +32,7 @@ def default_settings():
             "deck": [],              # the 8 cards (found by itself in the first battle; can be set)
             "tag": "",               # player tag (#ABC123) for the official Clash Royale API (exact deck / results)
             "auto_deck": True,       # the bot picks the strongest deck you own (API + the meta) and copies it in
+            "safe_play": True,       # never experiments in a battle: the best known way every time (still learns)
             "deck_slot": 0,          # the deck slot it uses (1-10; 0 = the slot selected in the game)
             "max_battles": 0,        # stop after this many battles (0 = keep playing)
             "notify": True,          # every result to the phone

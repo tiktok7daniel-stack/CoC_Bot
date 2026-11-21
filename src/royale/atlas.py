@@ -27,11 +27,17 @@ def _spot(x, y, side):
     return min(spots, key=lambda k: (spots[k][0] - lx) ** 2 + (spots[k][1] - y) ** 2) if spots else None
 
 
-def answers(threat, first_xy, side, hand):
-    """-> {card: [(x, y, delay, score, tower hp lost), ...]} for the cards of our hand, tiles for THIS lane."""
+def answers(threat, first_xy, side, hand, others=()):
+    """-> {card: [(x, y, delay, score, tower hp lost), ...]} for the cards of our hand, tiles for THIS lane.
+    others: their other cards on the lane — a two-card attack the atlas knows (Ice Golem + Hog...) comes first."""
     a = data().get("atlas") or {}
     sp = _spot(first_xy[0], first_xy[1], side)
-    row = a.get(f"{threat}|{sp}")
+    row = None
+    for o in others or ():
+        row = a.get(f"{threat}+{o}|{sp}") or a.get(f"{o}+{threat}|{sp}") or \
+            a.get(f"{threat}+{o}|bridge") or a.get(f"{o}+{threat}|bridge")
+        if row: break
+    row = row or a.get(f"{threat}|{sp}")
     if not row: return {}
     out = {}
     for n in hand:
