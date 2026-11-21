@@ -857,6 +857,21 @@ class Brain:
         self._allies_extra = [a for a in allies]
         return out
 
+    def _spell_sure(self, name, tile):
+        """A damage spell goes only where every unit it would hit is surely theirs. The side the eyes give is not
+        enough (our Hog at their tower, our survivors after a defense were read as theirs and spelled — the
+        user's Fireball / Arrows on their own troops): a unit counts as theirs only when its card is NOT in our
+        deck. A tower in reach is always theirs. Deck not known yet -> no spell on units at all."""
+        rad = (card(name).get("splash") or SPELL_SPLASH_DEFAULT.get(name, 2.5)) + 0.5
+        if any(dist(t, tile) <= rad + 1.5 for t in THEIR_TOWERS.values()):
+            hit = [u for u, x, y in (self._stable or []) if dist((x, y), tile) <= rad]
+            if not hit: return True                      # the tower itself (finishing it)
+        if len(self.deck or []) != 8: return False
+        mine = {unit_card(u) or u for n in self.deck for u in ((card(n) or {}).get("units") or [n])} | set(self.deck)
+        hit = [u for u, x, y in (self._stable or []) if dist((x, y), tile) <= rad]
+        if not hit: return False
+        return all((unit_card(u) or u) not in mine and u not in mine for u in hit)
+
     def _spell_hits_us(self, name, tile):
         """Would this spell land on our own troops / buildings? (never cast it then)"""
         rad = (card(name).get("splash") or SPELL_SPLASH_DEFAULT.get(name, 2.5)) + 1.0
@@ -998,6 +1013,8 @@ class Brain:
         if tile is None: return None
         if "spell" in roles(n) and self._spell_hits_us(n, tile):
             return None                                  # never a spell on our own troops
+        if "spell" in roles(n) and n not in WIN_SPELLS and not self._spell_sure(n, tile):
+            return None                                  # only on units that are surely THEIRS
         if n in K.SUPPORT or (pro.data().get("follow", {}).get(pro.key(n)) and "win" in roles(n)):  # its support next
             self.support_due = (lane(tile[0]), now + 5.0, n)
             self.support_due_back = tile[1] <= 3
