@@ -368,6 +368,20 @@ class RoyaleBot:
                 tap(*ok)
                 time.sleep(1.5)
                 continue
+            # "You got:" (a chest's rewards shown) -> a tap anywhere goes on
+            if any(t.startswith("you got") for t, _ in ws):
+                tap(0.5, 0.85)
+                time.sleep(1.0)
+                continue
+            # another tab of the lobby (Shop / Cards / Clan / Events: the bar at the bottom, no Battle button):
+            # back to the Battle tab — never anything on the Shop page (offers cost money)
+            if find_word(ws, "shop", "cards", "clan", "events", "social", y_min=0.88) and \
+                    not find_word(ws, "battle", y_min=0.55, y_max=0.9):
+                from royale.account import TABS, TAB_Y
+                log.info("Clash Royale: on another tab of the lobby — back to Battle")
+                tap(TABS["battle"], TAB_Y)
+                time.sleep(1.2)
+                continue
             if any(any(k in t for k in NAME_WORDS) for t, _ in ws):
                 if not getattr(self, "_name_told", False):     # typing a name is the user's (once per account)
                     self._name_told = True
@@ -670,10 +684,17 @@ def _study_cards(self):
     self._cards_studied_at = time.time()
     self.log.info("Clash Royale: studying every card (Info page of each)")
     try:
-        pages = card_scan.scan(_u().INSTANCE_ID, self.log, self.brain)
+        n = card_scan.scan(_u().INSTANCE_ID, self.log, self.brain, on_done=self._cards_read)
     except Exception:
         self.log.debug("card study failed", exc_info=True)
         return
+    try: self.notify(f"📸 كلاش رويال: صورت صفحات {n} كارت بسرعة — بقراهم وببعتهم للتحليل وأنا بكمل لعب")
+    except Exception: pass
+
+
+def _cards_read(self, pages):
+    """The card pictures were read (in the background): what they said goes to the settings, the eyes and the
+    deck choice."""
     try: self.eyes.set_deck(self.eyes.deck)                 # the new pictures go into the card reader
     except Exception: pass
     evo = sorted({p["name"] for p in pages.values() if p.get("name") and p["form"] == "evolution"})
@@ -700,7 +721,7 @@ def _study_cards(self):
         self._deck_checked = False
         self._pick_after_learn = False
     try:
-        self.notify(f"📸 كلاش رويال: فتحت Info لـ {len(pages)} كارت وصورتهم وبعتهم للتحليل"
+        self.notify(f"✅ كلاش رويال: قريت {len(pages)} كارت من الصور وبعتهم للتحليل"
                     + (f"\nمتطور: {', '.join(evo)}" if evo else "") + (f"\nهيرو: {', '.join(hero)}" if hero else ""))
     except Exception:
         pass
@@ -708,6 +729,7 @@ def _study_cards(self):
 
 RoyaleBot._cards_study_due = _cards_study_due
 RoyaleBot._study_cards = _study_cards
+RoyaleBot._cards_read = _cards_read
 RoyaleBot._study_deck = _study_deck
 RoyaleBot._check_deck = _check_deck
 RoyaleBot._pick_deck = _pick_deck

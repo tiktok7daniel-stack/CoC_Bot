@@ -101,97 +101,128 @@ def read_page(frame, words):
     return out
 
 
-def scan(acc, log, brain=None, max_pages=30):
-    """Opens every card's Info page once. -> {card: page info}."""
-    import numpy as np
-    from PIL import Image
-    from royale import game, collection
+def scan(acc, log, brain=None, max_pages=30, on_done=None):
+    """FAST: every card of the deck and the collection -> tap, Info, a picture, the X — nothing is read meanwhile
+    (the Info button's place is learned on the first card, then tapped straight away). Then, in the background
+    while the bot goes on playing, every picture is read, kept and sent in one commit to the learning repo, and
+    on_done(pages) is called. -> number of pictures taken."""
+    from royale import game
     from royale.account import _tab, _bad, TABS, TAB_Y
     import utils
     DIR.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y%m%d_%H%M%S")
-    pages, files, seen_spots = {}, {}, set()
+    shots = []                                         # (frame, in_deck)
+    info_off = [None]                                  # where Info shows, relative to the tapped card
 
     def close():
         for _ in range(3):
-            fr = game.frame()
-            x = red_x(fr)
+            x = red_x(game.frame())
             if not x: return True
-            game.tap(*x); time.sleep(0.9)
+            game.tap(*x); time.sleep(0.45)
         return False
 
-    def study(tx, ty, in_deck=False):
-        game.tap(tx, ty); time.sleep(0.9)
-        ws = game.words(game.frame())
-        if _bad(ws): close(); return
-        info = game.find_word(ws, "info", y_min=max(0.0, ty - 0.05), y_max=min(1.0, ty + 0.25))
-        if not info:                                   # the tap opened nothing (or something else): out again
-            game.tap(tx, ty); time.sleep(0.5)
-            return
-        game.tap(*info); time.sleep(1.4)
+    def find_info(tx, ty):
+        """The Info button under the tapped card: read only a small strip there (fast)."""
         fr = game.frame()
-        ws = game.words(fr)
-        if _bad(ws): close(); return
-        p = read_page(fr, ws)
+        H, W = fr.shape[:2]
+        x0, x1 = max(0.0, tx - 0.2), min(1.0, tx + 0.2)
+        y0, y1 = max(0.0, ty - 0.05), min(1.0, ty + 0.3)
+        crop = fr[int(y0 * H):int(y1 * H), int(x0 * W):int(x1 * W)]
+        for b in utils.ocr_boxes(crop):
+            t = b[0].strip().lower()
+            if b[5] > 0.4 and t.startswith("info"):
+                return x0 + (b[1] + b[3]) / 2 * (x1 - x0), y0 + (b[2] + b[4]) / 2 * (y1 - y0)
+        if _bad([(b[0].strip().lower(), b) for b in utils.ocr_boxes(crop)]): return None
+        return None
+
+    def shoot(tx, ty, in_deck=False):
+        game.tap(tx, ty); time.sleep(0.45)
+        if info_off[0]:                                # Info where it was on the other cards: straight to it
+            game.tap(tx + info_off[0][0], ty + info_off[0][1]); time.sleep(0.75)
+            if not red_x(game.frame()):                # the page did not open: look for Info properly
+                game.tap(tx, ty); time.sleep(0.45)
+                info = find_info(tx, ty)
+                if not info: game.tap(tx, ty); time.sleep(0.3); return
+                game.tap(*info); time.sleep(0.75)
+        else:
+            info = find_info(tx, ty)
+            if not info: game.tap(tx, ty); time.sleep(0.3); return
+            info_off[0] = (info[0] - tx, info[1] - ty)
+            game.tap(*info); time.sleep(0.9)
+        fr = game.frame()
+        if red_x(fr): shots.append((fr, in_deck))
+        close()
+
+    t0 = time.time()
+    _tab("cards")
+    ws = game.words(game.frame())
+    d = game.find_word(ws, "decks", y_max=0.25)
+    if d: game.tap(*d); time.sleep(0.8)
+    seen = set()
+    for t, b in game.words(game.frame()):                  # the deck: the 8 "Level N" labels at the top
+        if re.search(r"level\s*\d{1,2}", t, re.I) and (b[2] + b[4]) / 2 < 0.6:
+            cx, cy = (b[1] + b[3]) / 2, (b[2] + b[4]) / 2
+            if (round(cx, 1), round(cy, 1)) in seen: continue
+            seen.add((round(cx, 1), round(cy, 1)))
+            shoot(cx, cy - 0.06, in_deck=True)
+    ws = game.words(game.frame())
+    c = game.find_word(ws, "collection", y_max=0.25)
+    if c:
+        game.tap(*c); time.sleep(1.0)
+        last = None
+        for _page in range(max_pages):
+            labels = [((b[1] + b[3]) / 2, (b[2] + b[4]) / 2) for t, b in game.words(game.frame())
+                      if re.search(r"level\s*\d{1,2}", t, re.I)]
+            sig = tuple(sorted((round(x, 2), round(y, 2)) for x, y in labels))
+            if not labels or sig == last: break            # the end of the collection
+            last = sig
+            for cx, cy in labels:
+                if 0.2 < cy < 0.88: shoot(cx, cy - 0.06)
+            try: utils.Input_Handler.drag(0.5, 0.78, 0.5, 0.33, 0.5, 0.1, 12)
+            except Exception: break
+            time.sleep(0.8)
+    game.tap(TABS["battle"], TAB_Y)
+    _mark(acc, len(shots))
+    log.info(f"Clash Royale: {len(shots)} card pages photographed in {time.time() - t0:.0f}s — reading them in the background")
+    import threading
+    threading.Thread(target=_process, args=(acc, log, brain, shots, stamp, on_done), daemon=True,
+                     name="royale-cards").start()
+    return len(shots)
+
+
+def _process(acc, log, brain, shots, stamp, on_done):
+    """In the background: every picture read, the card pictures kept, everything sent in one commit."""
+    import io
+    from PIL import Image
+    from royale import collection
+    import utils
+    pages, files = {}, {}
+    for k, (fr, in_deck) in enumerate(shots):
+        try:
+            ws = [(b[0].strip().lower(), b) for b in utils.ocr_boxes(fr) if b[5] > 0.4]
+            p = read_page(fr, ws)
+        except Exception:
+            ws, p = [], {"form": "plain"}
+        p["in_deck"] = in_deck
         name = p.get("name")
         key = f"{name or 'unknown'}{'_' + p['form'] if p['form'] != 'plain' else ''}"
         if name and key in pages:
-            close(); return
+            pages[key]["in_deck"] = pages[key].get("in_deck") or in_deck
+            continue
         H, W = fr.shape[:2]
         if name and p.get("art_box"):
             x0, y0, x1, y1 = p["art_box"]
             art = Image.fromarray(fr[int(y0 * H):int(y1 * H), int(x0 * W):int(x1 * W)])
             suf = {"evolution": "_ev1", "hero": "_hero"}.get(p["form"], "")
-            art.resize((252, 313), Image.Resampling.LANCZOS).save(DIR / f"{name}{suf}_user.jpg", quality=92)
-        p["in_deck"] = in_deck
-        pages[key if name else f"unknown_{len(pages)}"] = p
-        import io
+            try: art.resize((252, 313), Image.Resampling.LANCZOS).save(DIR / f"{name}{suf}_user.jpg", quality=92)
+            except OSError: pass
+        pages[key if name else f"unknown_{k}"] = p
         buf = io.BytesIO()
         Image.fromarray(fr).save(buf, "JPEG", quality=85)
-        stem = f"inbox/royale_cards/{_safe(acc)}_{stamp}/{len(pages):03d}_{key}"
+        stem = f"inbox/royale_cards/{_safe(acc)}_{stamp}/{k + 1:03d}_{key}"
         files[stem + ".jpg"] = buf.getvalue()
         files[stem + ".json"] = json.dumps({"page": p, "words": [[t, list(b)] for t, b in ws][:80],
                                             "account": str(acc)}, ensure_ascii=False, indent=1).encode("utf-8")
-        log.info(f"Clash Royale: card page — {name or '?'} {p.get('level', '')} {p['form']}"
-                 + (f" cycles {p['cycles']}" if p.get("cycles") else "") + (f" ability {p['ability']}" if p.get("ability") else ""))
-        close()
-
-    _tab("cards")
-    ws = game.words(game.frame())
-    d = game.find_word(ws, "decks", y_max=0.25)
-    if d: game.tap(*d); time.sleep(1.0)
-    # the deck: 2 rows of 4 cards at the top of the Decks page
-    fr = game.frame()
-    for t, b in game.words(fr):
-        m = re.search(r"level\s*(\d{1,2})", t, re.I)
-        if m and (b[2] + b[4]) / 2 < 0.6:
-            cx, cy = (b[1] + b[3]) / 2, (b[2] + b[4]) / 2
-            if (round(cx, 1), round(cy, 1)) in seen_spots: continue
-            seen_spots.add((round(cx, 1), round(cy, 1)))
-            study(cx, cy - 0.06, in_deck=True)
-    # the collection, page by page
-    ws = game.words(game.frame())
-    c = game.find_word(ws, "collection", y_max=0.25)
-    if c:
-        game.tap(*c); time.sleep(1.2)
-        still = 0
-        for _page in range(max_pages):
-            before = len(pages)
-            fr = game.frame()
-            labels = []
-            for t, b in game.words(fr):
-                if re.search(r"level\s*\d{1,2}", t, re.I):
-                    labels.append(((b[1] + b[3]) / 2, (b[2] + b[4]) / 2))
-            for cx, cy in labels:
-                if 0.2 < cy < 0.88: study(cx, cy - 0.06)
-            still = still + 1 if len(pages) == before else 0
-            if still >= 2 or not utils: break
-            try: utils.Input_Handler.drag(0.5, 0.78, 0.5, 0.33, 0.5, 0.1, 12)
-            except Exception: break
-            time.sleep(1.0)
-    game.tap(TABS["battle"], TAB_Y)
-    _mark(acc, len(pages))
-    # what the brain needs now
     if brain is not None:
         for p in pages.values():
             n = p.get("name")
@@ -203,8 +234,7 @@ def scan(acc, log, brain=None, max_pages=30):
         (DIR / f"pages_{_safe(acc)}.json").write_text(json.dumps(pages, ensure_ascii=False), encoding="utf-8")
     except OSError:
         pass
-    # the levels read from the pages are the collection the deck choice uses (royale.deck_pick.choose_offline)
-    try:
+    try:                                       # the levels read = the collection the deck choice uses
         lv = dict(collection.load(acc, max_age=10 ** 9))
         for p in pages.values():
             if p.get("name") and p.get("level"): lv[p["name"]] = max(lv.get(p["name"], 0), p["level"])
@@ -213,19 +243,22 @@ def scan(acc, log, brain=None, max_pages=30):
             collection._path(acc).write_text(json.dumps({"t": time.time(), "levels": lv}), encoding="utf-8")
     except Exception:
         pass
-    # to the learning repo (one commit), when it is set up
     if files:
         try:
             import learn_sync
             if learn_sync.configured():
                 files[f"inbox/royale_cards/{_safe(acc)}_{stamp}/cards.json"] = json.dumps(
                     pages, ensure_ascii=False, indent=1).encode("utf-8")
-                learn_sync.commit_files(files, f"royale cards: {len(pages)} card pages from {acc}")
-                log.info(f"Clash Royale: {len(pages)} card pages sent to the learning repo")
+                learn_sync.commit_files(files, f"royale cards: {len(shots)} card pages from {acc}")
+                log.info(f"Clash Royale: {len(shots)} card pages sent to the learning repo")
+            else:
+                log.info("Clash Royale: the learning repo is not set up — the card pages stay on this PC")
         except Exception as e:
             log.info(f"Clash Royale: sending the card pages failed — {e}")
-    log.info(f"Clash Royale: studied {len(pages)} cards (deck + collection)")
-    return pages
+    log.info(f"Clash Royale: read {len(pages)} cards from the pictures")
+    if on_done:
+        try: on_done(pages)
+        except Exception: log.debug("card pages: on_done failed", exc_info=True)
 
 
 def _safe(x):
