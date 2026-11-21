@@ -1,0 +1,286 @@
+"""Does the high-resolution branch buy placement accuracy?
+
+    python_ai/venv/Scripts/python.exe python_ai/eval/prove_hires.py --episodes 12
+
+The coarse head can represent an exact cell in principle (nearest-upsample +
+3x3 conv mixes neighbouring pooled cells); the question is whether it does at
+scale, on correlated rollout states with a target moving in both axes. A
+controlled A/B:
+
+  * one collection shared by all arms, so states and targets are identical
+  * same checkpoint, seed, epochs, batch size, learning rate, clipping and anchor
+  * the only difference is whether `place_hires`/`place_ctx_hi` are trainable; the control leaves them at their zero init
+
+Held-out exact-cell match is the headline, reported beside train match because
+a fresh branch could simply memorise. Modal share and top-1 probability are
+printed together: a dissolved head shows a high modal share at a top-1
+probability near 1/612.
+"""
+import argparse
+import os
+import sys
+import time
+
+import numpy as np
+import torch
+
+from python_ai.rl.checkpointing import atomic_save
+
+from python_ai.rl.optim_step import clip_and_step
+import torch.nn.functional as F
+
+# Run as a script, the repo root is not on sys.path.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__)))))
+
+import python_ai  # noqa: E402,F401
+
+from python_ai.trainers import distill_tactics as D  # noqa: E402
+from python_ai.advisors import tactics  # noqa: E402
+from python_ai.models.policy_io import load_net  # noqa: E402
+from python_ai.engine_constants import BOARD_W  # noqa: E402
+
+CANNON, FIREBALL = tactics.CANNON_ID, tactics.FIREBALL_ID
+NAME = {CANNON: "Cannon", FIREBALL: "Fireball"}
+
+
+def soft_target_logits(score_map, T):
+    """Advisor score map -> target logits at temperature T.
+
+    Standardised over the legal cells first, so T means the same for the
+    Cannon's coverage sums and the Fireball's damage sums. Pick T from the
+    target's own entropy (printed by main), not from the outcome.
+    """
+    finite = torch.isfinite(score_map)
+    out = torch.full_like(score_map, float("-inf"))
+    for i in range(score_map.shape[0]):
+        m = finite[i]
+        v = score_map[i][m]
+        std = v.std()
+        if not torch.isfinite(std) or std < 1e-8:
+            # A flat surface carries no preference: a uniform target over the
+            # legal cells.
+            out[i][m] = 0.0
+        else:
+            out[i][m] = (v - v.mean()) / std / T
+    return out
+
+
+def fit(net, frozen, obs, hxs, targets, idx, args, train_hires,
+        maps=None, soft_T=None):
+    """Fit the placement pathway on `idx`. Mirrors distill_tactics.main()."""
+    trainable = []
+    for name, p in net.named_parameters():
+        train_it = name.startswith(("place_ctx", "place_up", "card_id_embed"))
+        if name.startswith(("place_hires", "place_ctx_hi")):
+            # place_ctx_hi also matches the "place_ctx" prefix, so decide it
+            # here, or the control arm would train half the branch.
+            train_it = train_hires
+        p.requires_grad_(train_it)
+        if train_it:
+            trainable.append(p)
+    opt = torch.optim.Adam(trainable, lr=args.lr)
+    n = len(idx)
+
+    for epoch in range(args.epochs):
+        perm = np.random.permutation(n)
+        tot = seen = 0
+        for i in range(0, n, args.batch):
+            rows = idx[perm[i:i + args.batch]]
+            ob = torch.tensor(obs[rows])
+            hx = torch.tensor(hxs[rows])
+            B = ob.shape[0]
+            feats, embeds, sp = net.extract_features(ob)
+            with torch.no_grad():
+                _f2, e2, s2 = frozen.extract_features(ob)
+
+            loss = torch.zeros(())
+            for cid in D.TARGET_CARDS:
+                slot = D.slot_of(net, ob, cid)
+                m = slot >= 0
+                if not bool(m.any()):
+                    continue
+                logits = net.placement_given_card(
+                    hx[m], embeds[m], slot[m].clamp(min=0), ob[m], sp[m])
+                if soft_T is None:
+                    tgt = torch.tensor(targets[cid][rows][m.numpy()], dtype=torch.long)
+                    loss = loss + F.cross_entropy(logits, tgt)
+                else:
+                    # KL to the advisor's whole surface. masked_kl rather than
+                    # F.kl_div: both sides carry -inf on illegal cells, where
+                    # torch evaluates 0 * (-inf - -inf) = nan.
+                    tgt_logits = soft_target_logits(
+                        torch.tensor(maps[cid][rows][m.numpy()]), soft_T)
+                    loss = loss + D.masked_kl(logits, tgt_logits)
+
+            if args.anchor > 0:
+                anchor = torch.zeros(())
+                for s in range(net.hand_size):
+                    si = torch.full((B,), s, dtype=torch.long)
+                    new = net.placement_given_card(hx, embeds, si, ob, sp)
+                    with torch.no_grad():
+                        old = frozen.placement_given_card(hx, e2, si, ob, s2)
+                    keep = torch.ones(B, dtype=torch.bool)
+                    for cid in D.TARGET_CARDS:
+                        keep &= D.slot_of(net, ob, cid) != s
+                    if bool(keep.any()):
+                        anchor = anchor + D.masked_kl(new[keep], old[keep])
+                loss = loss + args.anchor * anchor
+
+            opt.zero_grad(set_to_none=True)
+            loss.backward()
+            clip_and_step(opt, trainable, 0.5)
+            tot += loss.item() * B
+            seen += B
+        print(f"    epoch {epoch}: loss {tot / max(1, seen):.4f}", flush=True)
+    return net
+
+
+@torch.no_grad()
+def score(net, obs, hxs, targets, idx, label):
+    """Exact-cell match, modal share and top-1 probability, per card."""
+    out = {}
+    for cid in D.TARGET_CARDS:
+        hits = near = tot = 0
+        modes, top1, dists = [], [], []
+        for i in range(0, len(idx), 256):
+            rows = idx[i:i + 256]
+            ob = torch.tensor(obs[rows])
+            hx = torch.tensor(hxs[rows])
+            slot = D.slot_of(net, ob, cid)
+            m = slot >= 0
+            if not bool(m.any()):
+                continue
+            feats, embeds, sp = net.extract_features(ob)
+            logits = net.placement_given_card(
+                hx[m], embeds[m], slot[m].clamp(min=0), ob[m], sp[m])
+            tgt = torch.tensor(targets[cid][rows][m.numpy()], dtype=torch.long)
+            cells = logits.argmax(-1)
+            hits += int((cells == tgt).sum())
+            # Chebyshev tile distance to the advisor's cell. Exact match is
+            # harsh for the Cannon, whose coverage score has many near-ties, so
+            # a head one tile away can score zero having learned the geometry.
+            d = torch.maximum((cells % BOARD_W - tgt % BOARD_W).abs(),
+                              (cells // BOARD_W - tgt // BOARD_W).abs())
+            near += int((d <= 2).sum())
+            dists += d.tolist()
+            tot += int(m.sum())
+            modes += cells.tolist()
+            top1 += logits.softmax(-1).max(-1).values.tolist()
+        if tot == 0:
+            continue
+        counts = np.bincount(modes, minlength=612)
+        modal = counts.max() / max(1, len(modes))
+        out[cid] = (hits / tot, modal, float(np.mean(top1)), tot,
+                    int(counts.argmax()), near / tot, float(np.mean(dists)))
+        cell = out[cid][4]
+        print(f"    {label:9s} {NAME[cid]:8s}  exact {hits / tot:6.1%}  "
+              f"within-2 {near / tot:6.1%}  mean dist {np.mean(dists):5.2f}   "
+              f"modal ({cell % BOARD_W},{cell // BOARD_W}) {modal:5.1%}   "
+              f"top-1 p {np.mean(top1):.4f}   n={tot}")
+    return out
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--net", default="model_weights_selfplay.pth")
+    ap.add_argument("--episodes", type=int, default=12)
+    ap.add_argument("--epochs", type=int, default=8)
+    ap.add_argument("--batch", type=int, default=128)
+    ap.add_argument("--lr", type=float, default=3e-4)
+    ap.add_argument("--anchor", type=float, default=1.0)
+    ap.add_argument("--opp-elixir", type=float, default=1.5)
+    ap.add_argument("--holdout", type=float, default=0.25,
+                    help="fraction of states, taken as a CONTIGUOUS TAIL. "
+                         "Random rows would leak: states inside one episode are "
+                         "highly correlated, so a shuffled split scores a "
+                         "neighbour of every training state.")
+    ap.add_argument("--out-treatment", default="model_weights_hires.pth")
+    ap.add_argument("--out-soft", default="model_weights_hires_soft.pth")
+    ap.add_argument("--soft-T", type=float, default=0.5,
+                    help="temperature for the soft arm, applied to the "
+                         "STANDARDIZED advisor score. Read the printed target "
+                         "entropy before changing it: near 100%% of max is a "
+                         "uniform target that trains on nothing.")
+    ap.add_argument("--out-control", default="model_weights_hires_control.pth",
+                    help="the coarse-only arm. Saved because the engine-scored "
+                         "follow-up (prove_placement.py) needs all three nets: "
+                         "the seed, this, and the treatment. Without it a later "
+                         "comparison would conflate 'distillation happened' "
+                         "with 'the branch helped'.")
+    args = ap.parse_args()
+
+    here = python_ai.PACKAGE_DIR
+    torch.set_num_threads(max(1, os.cpu_count() // 2))
+    dev = torch.device("cpu")
+
+    seed_path = os.path.join(here, args.net)
+    print(f"\ncollecting {args.episodes} episodes at {args.opp_elixir}x "
+          f"from {args.net} ...", flush=True)
+    t0 = time.time()
+    collector = load_net(seed_path, dev)
+    obs, hxs, targets, maps = D.collect(collector, args.episodes,
+                                        args.opp_elixir, dev, want_maps=True)
+    n = len(obs)
+    cut = int(n * (1.0 - args.holdout))
+    train_idx, test_idx = np.arange(cut), np.arange(cut, n)
+    print(f"collected {n} states in {time.time() - t0:.0f}s "
+          f"({len(train_idx)} train / {len(test_idx)} held out)\n", flush=True)
+
+    # Report the target's entropy before fitting: a near-uniform target trains,
+    # looks busy and carries no signal.
+    for cid in D.TARGET_CARDS:
+        tl = soft_target_logits(torch.tensor(maps[cid][:256]), args.soft_T)
+        p = tl.softmax(-1)
+        ent = -(p * torch.log(p.clamp_min(1e-12))).sum(-1)
+        n_legal = torch.isfinite(tl).sum(-1).float()
+        print(f"  soft target T={args.soft_T}: {NAME[cid]:8s} entropy "
+              f"{float((ent / n_legal.log()).mean()):.1%} of max "
+              f"({float(n_legal.mean()):.0f} legal cells)")
+    print()
+
+    arms = (("control", False, None),
+            ("treatment", True, None),
+            ("soft", True, args.soft_T))
+    files = {"control": args.out_control, "treatment": args.out_treatment,
+             "soft": args.out_soft}
+    results = {}
+    for label, train_hires, soft_T in arms:
+        print(f"--- {label}: place_hires trainable={train_hires}  "
+              f"target={'argmax' if soft_T is None else f'soft T={soft_T}'}")
+        torch.manual_seed(0)
+        np.random.seed(0)
+        net = load_net(seed_path, dev, verbose=False)
+        frozen = load_net(seed_path, dev, verbose=False)
+        for p in frozen.parameters():
+            p.requires_grad_(False)
+        t = time.time()
+        fit(net, frozen, obs, hxs, targets, train_idx, args, train_hires,
+            maps=maps, soft_T=soft_T)
+        print(f"    fitted in {time.time() - t:.0f}s")
+        score(net, obs, hxs, targets, train_idx, "train")
+        results[label] = score(net, obs, hxs, targets, test_idx, "HELD-OUT")
+        out = os.path.join(here, files[label])
+        atomic_save({"model": net.state_dict()}, out)
+        print(f"    saved {out}")
+        print()
+
+    print("=" * 72)
+    print("HELD-OUT (the headline)")
+    cols = [a[0] for a in arms]
+    for cid in D.TARGET_CARDS:
+        got = {k: results[k].get(cid) for k in cols}
+        if not all(got.values()):
+            continue
+        print(f"  {NAME[cid]}")
+        for metric, i, fmt in (("exact cell", 0, "6.1%"),
+                               ("within 2", 5, "6.1%"),
+                               ("mean dist", 6, "6.2f"),
+                               ("top-1 p", 2, "6.4f"),
+                               ("modal share", 1, "6.1%")):
+            row = "   ".join(f"{k} {got[k][i]:{fmt}}" for k in cols)
+            print(f"    {metric:12s} {row}")
+
+
+if __name__ == "__main__":
+    main()

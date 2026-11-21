@@ -1,0 +1,175 @@
+"""
+The bot's own AI, trained by playing against itself in the battle engine (royale.engine), on this PC.
+
+  training   third_party/clash_royale_env/python_ai (itzik123/ClashRoyaleAi, MIT): a recurrent PPO network (CNN + LSTM,
+             ~1.9M parameters) that picks the card and then one of 612 cells, trained on YOUR deck first against a
+             search-based teacher that pilots 16 real ladder decks (difficulty = how far ahead the teacher looks),
+             then in a self-play league against its own past versions. Runs in the background at low priority;
+             it saves and resumes, so it can be stopped and started any time.
+  playing    every moment of a battle the engine mirror of the arena is shown to the trained network, and its move
+             joins the candidates royale.engine thinks through — so the network proposes and the engine checks it
+             against waiting and against every other candidate before anything is played.
+
+Files: ~/.CoC_Bot/royale_ai/ (weights, training log). Needs torch, gymnasium and tensorboard (installed on demand).
+"""
+import os, subprocess, sys, time
+from pathlib import Path
+
+HOME = Path.home() / ".CoC_Bot" / "royale_ai"
+PKG = Path(__file__).resolve().parents[2] / "third_party" / "clash_royale_env"
+NEEDS = (("torch", "torch"), ("gymnasium", "gymnasium"), ("tensorboard", "tensorboard"), ("numpy", "numpy"))
+_S = {"net": None, "net_mtime": 0.0, "hid": None, "why": ""}
+
+
+def weights():
+    """The newest trained weights (phase 1 or the self-play league), or None."""
+    if not HOME.exists(): return None
+    pth = sorted(HOME.glob("model_weights*.pth"), key=lambda p: p.stat().st_mtime)
+    return pth[-1] if pth else None
+
+
+def missing():
+    import importlib.util
+    return [pip for mod, pip in NEEDS if importlib.util.find_spec(mod) is None]
+
+
+def _pid_file():
+    return HOME / "train.pid"
+
+
+def running():
+    try:
+        pid = int(_pid_file().read_text())
+    except (OSError, ValueError):
+        return False
+    try:
+        import psutil
+        p = psutil.Process(pid)
+        return p.is_running() and p.status() != psutil.STATUS_ZOMBIE
+    except Exception:
+        return False
+
+
+def deck_spec(names):
+    """Our card names -> the engine's ids, for CLASH_DECK (a Hero the engine lacks plays as its plain card)."""
+    from royale import engine
+    ids = engine.card_ids()
+    out = [str(ids[n][0]) for n in names if n in ids]
+    return ",".join(out) if len(out) == 8 else None
+
+
+def start(deck_names, log=None):
+    """Start (or resume) training in the background. -> (True, message) / (False, why)."""
+    from royale import engine
+    if running(): return True, "already training"
+    if engine.module() is None: return False, "the battle engine is not built for this Python yet"
+    need = missing()
+    if need:
+        try:
+            import deps
+            for mod, pip in NEEDS:
+                if pip in need: deps.ensure(mod, [pip])
+        except Exception:
+            pass
+        return False, "installing " + ", ".join(need) + " — press again in a few minutes"
+    spec = deck_spec(deck_names or [])
+    if not spec: return False, "the deck is not known yet (play one battle first)"
+    HOME.mkdir(parents=True, exist_ok=True)
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join([str(PKG), engine._dir() or "", env.get("PYTHONPATH", "")])
+    env["CLASH_DECK"] = spec
+    env["CLASH_WEIGHTS"] = str(HOME / "model_weights.pth")
+    env["CLASH_LOGDIR"] = str(HOME / "runs")
+    py = sys.executable
+    if py.lower().endswith("pythonw.exe"): py = py[:-len("pythonw.exe")] + "python.exe"
+    kw = {}
+    if sys.platform == "win32":
+        kw["creationflags"] = 0x08000000 | 0x00004000          # no window, below-normal priority
+    out = open(HOME / "train.log", "a", encoding="utf-8")
+    out.write(f"\n=== {time.strftime('%Y-%m-%d %H:%M')} training deck {spec}\n")
+    out.flush()
+    p = subprocess.Popen([py, "-u", "-m", "python_ai.trainers.train"], cwd=str(PKG), env=env,
+                         stdout=out, stderr=subprocess.STDOUT, **kw)
+    _pid_file().write_text(str(p.pid))
+    if log: log.info(f"Clash Royale AI: training started on this PC (deck {spec}) — log {HOME / 'train.log'}")
+    return True, "training started"
+
+
+def stop():
+    try:
+        import psutil
+        pid = int(_pid_file().read_text())
+        proc = psutil.Process(pid)
+        for c in proc.children(recursive=True): c.terminate()
+        proc.terminate()
+        return True
+    except Exception:
+        return False
+
+
+def progress():
+    """The newest line of the training log that says how far it got."""
+    try:
+        lines = (HOME / "train.log").read_text(encoding="utf-8", errors="ignore").splitlines()[-200:]
+    except OSError:
+        return ""
+    for ln in reversed(lines):
+        if "Episode" in ln or "episode" in ln or "Win" in ln: return ln.strip()[:160]
+    return lines[-1].strip()[:160] if lines else ""
+
+
+# ------------------------------------------------------------------ playing
+def _net():
+    """The trained network (reloaded when training saved a newer one), or None."""
+    w = weights()
+    if w is None: return None
+    try:
+        mt = w.stat().st_mtime
+        if _S["net"] is not None and mt == _S["net_mtime"]: return _S["net"]
+        import torch
+        if str(PKG) not in sys.path: sys.path.insert(0, str(PKG))
+        from royale import engine
+        if engine._dir() and engine._dir() not in sys.path: sys.path.insert(0, engine._dir())
+        from python_ai.models.policy_io import load_net
+        net = load_net(str(w), torch.device("cpu"))
+        for prm in net.parameters(): prm.requires_grad_(False)
+        net.eval()
+        _S["net"], _S["net_mtime"] = net, mt
+        return net
+    except Exception as e:
+        _S["why"] = f"could not load the trained AI: {e}"
+        _S["net"] = None
+        return None
+
+
+def new_battle():
+    _S["hid"] = None
+
+
+def propose(env):
+    """The trained network's move on the mirrored arena: (hand slot or None for wait, engine x, engine y)."""
+    net = _net()
+    if net is None: return None
+    try:
+        import numpy as np, torch
+        from python_ai.engine_constants import BOARD_W
+        if _S["hid"] is None:
+            _S["hid"] = (torch.zeros(1, net.LSTM_HIDDEN), torch.zeros(1, net.LSTM_HIDDEN))
+        with torch.no_grad():
+            obs = torch.tensor(np.asarray(env.get_observation_for_team(0), dtype=np.float32)).unsqueeze(0)
+            feats, emb, sp = net.extract_features(obs)
+            lg, _, _, _, hid = net.step_lstm_and_card(feats, _S["hid"], net.affordability_mask(obs))
+            gi = int(lg.argmax(-1).item())
+            cell = int(net.placement_given_card(hid[0], emb, torch.tensor([gi]), obs, sp).argmax(-1).item())
+        _S["hid"] = hid
+        if gi >= 4: return (None, 0.0, 0.0)
+        return (gi, float(cell % BOARD_W), float(cell // BOARD_W))
+    except Exception as e:
+        _S["why"] = f"the trained AI failed: {e}"
+        return None
+
+
+def status():
+    w = weights()
+    return {"training": running(), "weights": str(w) if w else "", "missing": missing(), "why": _S["why"],
+            "progress": progress()}

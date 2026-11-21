@@ -55,4 +55,4 @@ jobs:
           git add assets/royale/engine/*.pyd
           git diff --cached --quiet && exit 0
           git commit -m "Clash Royale: battle engine built for Windows (Python 3.10-3.13) [skip ci]"
-          git push
+          git pull --rebase origin ${{ github.ref_name }} && git push origin HEAD:${{ github.ref_name }}

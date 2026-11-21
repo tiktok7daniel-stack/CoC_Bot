@@ -35,12 +35,18 @@ check("the user's deck's cards are known", all(n in ids for n in user), str([n f
 e = m.ClashRoyaleEnv(engine._filler_deck(m, []), engine._filler_deck(m, []), 3600)
 e.reset()
 e.inject(ids["knight"][0] if "knight" in ids else 2, *engine.eng_xy(3, 10), 0, -1.0, 0)
+e.step_self_play_fast(-1, 0.0, 0.0, -1, 0.0, 0.0, 1)          # an injected body joins the board on the next tick
 u = [u for u in e.get_units() if not u.tower]
-check("tile -> engine point", u and abs(u[0].x - 3) < 0.01 and abs(u[0].y - 11) < 0.01,
+check("tile -> engine point", u and abs(u[0].x - 3) < 0.3 and abs(u[0].y - 11) < 0.3,
       f"{[(x.x, x.y) for x in u]}")
 tw = [(t.x, t.y, t.team) for t in e.get_units() if t.tower]
 print("  towers:", tw)
 check("our towers at the bottom (team 0, low y)", all((t[1] < 10) == (t[2] == 0) for t in tw))
+# the bot's tower places (royale.brain) land on the engine's towers
+from royale.brain import OUR_TOWERS, THEIR_TOWERS
+ok_t = all(any(abs(tx - (bx - 0.5)) < 0.01 and abs(ty - (by + 1)) < 0.01 for tx, ty, _ in tw)
+           for bx, by in list(OUR_TOWERS.values()) + list(THEIR_TOWERS.values()))
+check("the bot's tower places = the engine's", ok_t)
 
 
 def brain(stable, seen=()):

@@ -156,6 +156,14 @@ class RoyaleBot:
         if self.s.get("engine_think", True):                 # the battle engine thinks every move through
             from royale import engine
             engine_on = engine.selftest(log)
+            if engine_on:
+                try:
+                    from royale import engine_ai
+                    engine_ai.new_battle()
+                    w = engine_ai.weights()
+                    if w: log.info(f"Clash Royale: the bot's own trained AI proposes moves ({w.name})")
+                except Exception:
+                    pass
             if not engine_on and not getattr(self, "_engine_told", False):
                 self._engine_told = True
                 log.info("Clash Royale: the battle engine is not used — " + (engine.status()["why"] or "not available"))
@@ -835,7 +843,12 @@ def _engine_turn(self, st, d, ready, el):
     from royale import engine
     now = time.monotonic()
     enemies = bool(self.brain._stable)
-    if not d and not enemies: return d
+    if not d and not enemies:
+        try:
+            from royale import engine_ai
+            if not engine_ai.weights(): return d                   # nothing to think about without a trained AI
+        except Exception:
+            return d
     if not d and now - getattr(self, "_engine_t", 0) < 0.4: return d      # defense thinking: ~2 times a second
     self._engine_t = now
     res = engine.think(self.brain, st, st["hand"], [(i, st["hand"][i]) for i in ready], el, d, self.log)

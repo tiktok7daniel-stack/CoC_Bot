@@ -276,8 +276,8 @@ def rollout(env, slot, x, y):
     return s
 
 
-def candidates(brain, playable, rule_d, defend):
-    """(hand slot, card, our tile) to think through."""
+def candidates(brain, playable, rule_d, defend, first=()):
+    """(hand slot, card, our tile) to think through; `first` (the trained AI's move) goes first."""
     from royale.brain import card, roles, THEIR_TOWERS
     from royale import pro
     out = []
@@ -289,6 +289,7 @@ def candidates(brain, playable, rule_d, defend):
         if (n, t) in seen: return
         seen.add((n, t))
         out.append((i, n, t))
+    for i, n, t in first: add(i, n, t)
     if rule_d: add(rule_d["slot"], rule_d["card"], rule_d["tile"])
     cards = [(i, n) for i, n in playable] if defend else ([(rule_d["slot"], rule_d["card"])] if rule_d else [])
     enemies = [(x, y) for _u, x, y in (brain._stable or [])]
@@ -332,11 +333,30 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
         return None
     if env is None: return None
     defend = any(y <= 17 for _u, x, y in (brain._stable or []))
+    # the bot's own trained AI (royale.engine_ai): its move on this arena, once a second (its memory steps at 1 Hz)
+    first, ai_note = [], ""
+    try:
+        from royale import engine_ai
+        if time.monotonic() - _S.get("ai_t", 0.0) >= 1.0:
+            _S["ai_t"] = time.monotonic()
+            _S["ai_p"] = engine_ai.propose(env)
+        p = _S.get("ai_p")
+        if p and p[0] is not None:
+            names = {v: k for k, v in slots.items()}
+            n = names.get(p[0])
+            if n and any(n == m for _i, m in playable):
+                i = next(i for i, m in playable if m == n)
+                first = [(i, n, (int(round(p[1])), int(round(p[2] - 1))))]
+                ai_note = f"; the trained AI wanted {n} at {first[0][2]}"
+        elif p:
+            ai_note = "; the trained AI wanted to wait"
+    except Exception:
+        pass
     before = _snap_state(env)
     base = _value(rollout(env, None, 0, 0), brain, before)
     best, tried = None, 0
     ids = card_ids()
-    for i, n, (tx, ty) in candidates(brain, playable, rule_d, defend):
+    for i, n, (tx, ty) in candidates(brain, playable, rule_d, defend, first):
         hs = slots.get(n)
         if hs is None: continue
         x, y = eng_xy(tx, ty)
@@ -354,12 +374,14 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
     if defend:
         if v > WAIT_MARGIN:
             return ("play", i, n, tile, f"engine: {n} at {tile} is +{v:.1f} elixir vs waiting "
-                                         f"({tried} moves thought through, {ms:.0f} ms)")
+                                         f"({tried} moves thought through, {ms:.0f} ms{ai_note})")
         return ("wait", f"engine: nothing beats waiting ({tried} moves, best {v:+.1f})")
+    if first and not rule_d and best[2] == first[0][1] and v > WAIT_MARGIN:
+        return ("play", i, n, tile, f"engine: the trained AI's {n} at {tile} is +{v:.1f} vs waiting{ai_note}")
     if rule_d:
         if v < VETO_MARGIN:
             return ("wait", f"engine: {rule_d['card']} now is {v:+.1f} elixir vs waiting — dropped")
-        return ("play", i, n, tile, f"engine: {n} best at {tile} ({v:+.1f} vs waiting, {tried} spots, {ms:.0f} ms)")
+        return ("play", i, n, tile, f"engine: {n} best at {tile} ({v:+.1f} vs waiting, {tried} spots, {ms:.0f} ms{ai_note})")
     return None
 
 

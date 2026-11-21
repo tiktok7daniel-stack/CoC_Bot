@@ -152,6 +152,15 @@ class RoyaleScreen(Screen):
         b = IconButton("play", "royale_train_now", size=14)
         b.clicked.connect(self.train_now)
         train.add(b)
+        # the bot's own AI: self-play in the battle engine, on this PC
+        self.ai_state = label("", "sub", wrap=True)
+        train.add(self.ai_state)
+        ai_go = IconButton("bolt", "royale_ai_train", kind="go", size=14)
+        ai_go.clicked.connect(self.ai_train)
+        train.add(ai_go)
+        ai_stop = IconButton("stop", "royale_ai_stop", size=14)
+        ai_stop.clicked.connect(self.ai_stop)
+        train.add(ai_stop)
         v.addWidget(train)
         from PySide6.QtCore import QTimer
         self._tt = QTimer(self)
@@ -226,6 +235,8 @@ class RoyaleScreen(Screen):
         except Exception:
             pass
         self.train_state.setText(txt)
+        try: self.show_ai()
+        except Exception: pass
 
     def go_battle(self):
         """One battle: the bot waiting in the lobby goes in."""
@@ -240,6 +251,38 @@ class RoyaleScreen(Screen):
         self.store.set("royale.card_scan_request", _t.time())
         self.store.save(silent=True)          # straight to the bot (it only reads saved settings)
         self.ctx.banner(tr("royale_scan_started"), "ok", "camera")
+
+    def ai_train(self):
+        try:
+            from royale import engine_ai
+            ok, msg = engine_ai.start(self.store.get("royale.deck", []))
+            self.ctx.banner(tr("royale_ai_started") if ok else msg, "ok" if ok else "bad", "bolt")
+        except Exception as e:
+            self.ctx.banner(str(e), "bad", "x")
+        self.show_training()
+
+    def ai_stop(self):
+        try:
+            from royale import engine_ai
+            engine_ai.stop()
+        except Exception:
+            pass
+        self.show_training()
+
+    def show_ai(self):
+        try:
+            from royale import engine, engine_ai
+            es = engine.status()
+            st = engine_ai.status()
+        except Exception as e:
+            self.ai_state.setText(str(e)); return
+        parts = []
+        parts.append(tr("royale_engine_ok") if es.get("loaded") else tr("royale_engine_missing"))
+        if st.get("training"): parts.append(tr("royale_ai_running") + (" — " + st["progress"] if st.get("progress") else ""))
+        elif st.get("weights"): parts.append(tr("royale_ai_have"))
+        else: parts.append(tr("royale_ai_none"))
+        if st.get("missing"): parts.append(tr("royale_ai_missing") + ", ".join(st["missing"]))
+        self.ai_state.setText("\n".join(parts))
 
     def train_now(self):
         try:
