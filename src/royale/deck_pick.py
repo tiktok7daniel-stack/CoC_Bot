@@ -104,24 +104,30 @@ def apply(account, pick, log, slot=0):
         dev.shell(f'am start -a android.intent.action.VIEW -d "{deck_link(pick["ids"], pick.get("tower"), scheme)}"')
         time.sleep(4.0)
         if game.find_word(game.words(game.frame()), "copy", "use deck", y_min=0.3): break
+    copied = False
     for _ in range(8):
         ws = game.words(game.frame())
         if _bad(ws):
             log.info("Clash Royale: the deck copy asked for something that costs — backed out")
             break
-        b = game.find_word(ws, "copy", "use deck", "use", "ok", "confirm", "yes", y_min=0.3)
+        # only the game's own Copy button counts; a plain OK / Yes is tapped only after Copy (its "replace?")
+        b = game.find_word(ws, "copy", "use deck", y_min=0.3)
+        if not b and copied: b = game.find_word(ws, "ok", "confirm", "yes", y_min=0.3)
         if b:
             game.tap(*b)
+            copied = True
             time.sleep(1.5)
-            ws2 = game.words(game.frame())
-            if not game.find_word(ws2, "copy", "use deck", y_min=0.3):
-                _write(account, pick)
-                game.tap(TABS["battle"], TAB_Y)
-                time.sleep(1.2)
-                return True
+            if not game.find_word(game.words(game.frame()), "copy", "use deck", "ok", "confirm", "yes", y_min=0.3):
+                break
+            continue
+        if copied: break
         time.sleep(1.0)
     game.tap(TABS["battle"], TAB_Y)
-    return False
+    time.sleep(1.2)
+    if not copied:
+        log.info("Clash Royale: the copy-deck window never showed — the deck was NOT changed")
+    # "copied" is only a hope: the first battle's hand (or the official API) tells whether the deck really changed
+    return copied
 
 
 def _write(account, pick):
@@ -132,6 +138,20 @@ def _write(account, pick):
         STATE.write_text(json.dumps(d), encoding="utf-8")
     except (OSError, ValueError):
         pass
+
+
+def forget(account):
+    """The deck did not really change: try again next time."""
+    try:
+        d = json.loads(STATE.read_text(encoding="utf-8"))
+        d.pop(str(account), None)
+        STATE.write_text(json.dumps(d), encoding="utf-8")
+    except (OSError, ValueError):
+        pass
+
+
+def mark(account, pick):
+    _write(account, pick)
 
 
 def due(account, every=12 * 3600):

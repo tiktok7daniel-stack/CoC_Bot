@@ -149,7 +149,8 @@ class RoyaleBot:
         if not self.s.get("learned_brain", True): self.brain.p["learned"] = False
         self.brain.reset()
         self._battle_t = time.time()
-        if getattr(self, "_api_deck", None) and self.eyes.deck != self._api_deck:
+        if getattr(self, "_api_deck", None) and self.eyes.deck != self._api_deck and \
+                not getattr(self, "_expected_deck", None):           # a fresh copy is checked by the hand first
             self.eyes.set_deck(self._api_deck)                   # the exact deck from the official API
             self.brain.deck = list(self._api_deck)
         self.battles += 1
@@ -192,6 +193,8 @@ class RoyaleBot:
             if self.eyes.learn_deck([h for i, h in enumerate(st["hand"]) if i in st["ready"]]):
                 log.info("Clash Royale: my deck = " + ", ".join(self.eyes.deck))
                 self.brain.deck = list(self.eyes.deck)
+                try: self._check_deck()
+                except Exception: log.debug("deck check failed", exc_info=True)
                 try: _save_deck(self.eyes.deck)
                 except Exception: pass
             # what was just spent: the picture can lag a moment behind a play ("Not enough Elixir!")
@@ -526,12 +529,14 @@ def _pick_deck(self):
                 "current": []}
         self.log.info("Clash Royale: putting in the chosen deck = " + ", ".join(want))
         if deck_pick.apply(acc, pick, self.log, int(self.s.get("deck_slot", 0) or 0)):
-            names = _api_names(self.eyes, [cr_api.key_of(c) for c in want])
-            if len(names) == 8:
-                self._api_deck = names
-                self.eyes.set_deck(names); self.brain.deck = list(names)
-            try: self.notify("🃏 كلاش رويال: حللت حسابك وحطيت أحسن ديك — " + ", ".join(want) +
-                             (f"\n({pick_off['why']})" if pick_off else ""))
+            _expect_deck(self, acc, pick, _api_names(self.eyes, [cr_api.key_of(c) for c in want]))
+            try: self.notify("🃏 كلاش رويال: حللت حسابك واخترت ديك — " + ", ".join(want) +
+                             (f"\n({pick_off['why']})" if pick_off else "") +
+                             "\nهتأكد في أول ماتش إنه اتحط فعلاً في اللعبة")
+            except Exception: pass
+        else:
+            try: self.notify("⚠️ كلاش رويال: اخترت ديك " + ", ".join(want) + " بس اللعبة ما فتحتش شباك نسخ الديك — "
+                             "الديك ما اتغيرش، وهلعب بالديك اللي عندك وأتعرف عليه من الماتش")
             except Exception: pass
         return
     if not deck_pick.due(acc): return
@@ -550,16 +555,47 @@ def _pick_deck(self):
     self.log.info("Clash Royale: the strongest deck you own now = " + ", ".join(pick["cards"]) + f" — {pick['why']}")
     ok = deck_pick.apply(acc, pick, self.log, int(self.s.get("deck_slot", 0) or 0))
     if ok:
-        names = _api_names(self.eyes, pick["cards"])
-        if len(names) == 8:
-            self._api_deck = names
-            self.eyes.set_deck(names); self.brain.deck = list(names)
-        try: self.notify("🃏 كلاش رويال: اخترت أقوى ديك عندك — " + ", ".join(pick["cards"]) + f"\n({pick['why']})")
+        _expect_deck(self, acc, pick, _api_names(self.eyes, pick["cards"]))
+        self._api_deck = None
+        self._api_start()                                  # the official API then says which deck is really in
+        try: self.notify("🃏 كلاش رويال: اخترت أقوى ديك عندك — " + ", ".join(pick["cards"]) + f"\n({pick['why']})"
+                         "\nهتأكد في أول ماتش إنه اتحط فعلاً في اللعبة")
         except Exception: pass
     else:
         self.log.info("Clash Royale: the game did not show the copy-deck window — deck not changed")
 
 
+def _expect_deck(self, acc, pick, names):
+    """The copy was tapped: the eyes are NOT told the new deck (before 5.52.1 they were, and when the game had
+    not really changed it the bot looked only for cards it did not have and played blind). The deck is learned
+    from the first battle's hand as always and compared with this."""
+    self._expected_deck = {"acc": acc, "pick": pick, "names": sorted(names)} if len(names) == 8 else None
+    self.eyes.set_deck([]); self.eyes.seen_counts = {}
+    self.brain.deck = []
+
+
+def _check_deck(self):
+    """The deck seen in battle vs the deck the bot put in -> told; when it is not in, tried again (max 2)."""
+    from royale import deck_pick
+    exp = getattr(self, "_expected_deck", None)
+    if not exp: return
+    self._expected_deck = None
+    seen = sorted(self.eyes.deck)
+    if seen == exp["names"]:
+        self.log.info("Clash Royale: the chosen deck is really in the game")
+        try: self.notify("✅ كلاش رويال: اتأكدت — الديك الجديد متحط في اللعبة: " + ", ".join(self.eyes.deck))
+        except Exception: pass
+        return
+    self.log.info("Clash Royale: the deck in the game is NOT the chosen one: " + ", ".join(self.eyes.deck))
+    deck_pick.forget(exp["acc"])
+    self._deck_tries = getattr(self, "_deck_tries", 0) + 1
+    if self._deck_tries < 2: self._deck_checked = False         # once more at the next menu
+    try: self.notify("⚠️ كلاش رويال: الديك الجديد ما اتحطش في اللعبة — بلعب بالديك اللي فيها: " +
+                     ", ".join(self.eyes.deck) + (" — هحاول أحطه تاني" if self._deck_tries < 2 else ""))
+    except Exception: pass
+
+
+RoyaleBot._check_deck = _check_deck
 RoyaleBot._pick_deck = _pick_deck
 RoyaleBot._api_start = _api_start
 RoyaleBot._api_after_battle = _api_after_battle
