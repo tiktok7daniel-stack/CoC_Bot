@@ -48,6 +48,7 @@ SPELL_DAMAGE_DEFAULT = {"zap": 75, "the_log": 96, "arrows": 122, "fireball": 269
                         "lightning": 413, "earthquake": 170, "giant_snowball": 69, "barbarian_barrel": 72,
                         "royal_delivery": 171}
 ROLLING = {"the_log", "barbarian_barrel"}                                   # spells that roll forward from the drop point
+SMALL_SPELL_RULES = {"arrows", "the_log", "zap"}                  # checked by Brain._small_spell_ok
 WIN_SPELLS = {"goblin_barrel", "graveyard", "miner"}           # win conditions you can send anywhere
 # units that come out of another one (death / spawner): not a card the opponent played
 KAMIKAZE = {"ice_spirit", "fire_spirit", "electro_spirit", "heal_spirit", "wall_breakers", "skeleton_barrel"}
@@ -627,12 +628,19 @@ class Brain:
 
         # 4. never leak elixir
         if elixir >= self.p.get("cycle_at", 9.5):
-            cheap = min(playable, key=lambda p: (("win" in roles(p[1])), card(p[1]).get("cost", 9)))
-            r = roles(cheap[1])
-            tile = (8, 1) if "spell" not in r else None
-            if tile is None:
-                return None
-            return self._play(cheap, tile, "full elixir: cycling at the back", now)
+            # the cheapest TROOP / building at the back (before 5.72 a spell being the cheapest meant no play at
+            # all and the elixir leaked); the Log with nothing to hit rolls into their tower instead
+            troops = [p for p in playable if "spell" not in roles(p[1]) and p[1] not in WIN_SPELLS]
+            if troops:
+                cheap = min(troops, key=lambda p: (("win" in roles(p[1])), card(p[1]).get("cost", 9)))
+                return self._play(cheap, (8, 1), "full elixir: cycling at the back", now)
+            for i, n in playable:
+                if n == "goblin_barrel":
+                    return self._play((i, n), THEIR_TOWERS["left"], "full elixir: Goblin Barrel on their tower", now)
+                if n in ROLLING:
+                    side, (x, y) = self._their_target_tower()
+                    return self._play((i, n), (int(x), int(y) - 3), f"full elixir: the Log into their {side} tower", now)
+            return None
         return None
 
     def _model_decide(self, playable, elixir, stable, th, now):
@@ -905,10 +913,74 @@ class Brain:
             hit = [u for u, x, y in (self._stable or []) if dist((x, y), tile) <= rad]
             if not hit: return True                      # the tower itself (finishing it)
         if len(self.deck or []) != 8: return False
-        mine = {unit_card(u) or u for n in self.deck for u in ((card(n) or {}).get("units") or [n])} | set(self.deck)
-        hit = [u for u, x, y in (self._stable or []) if dist((x, y), tile) <= rad]
+        if name in ROLLING:
+            hit = self._spell_hits(name, tile)
+        else:
+            hit = [u for u, x, y in (self._stable or []) if dist((x, y), tile) <= rad]
         if not hit: return False
-        return all((unit_card(u) or u) not in mine and u not in mine for u in hit)
+        # a unit our deck also makes (their Goblins vs our Goblin Barrel, Skeletons vs our Witch) is ours only when
+        # it can be: that card played in the last 12 s, or a unit of ours that makes it standing on the board
+        # (before 5.72 any such unit was taken as ours and their Goblins were never Logged)
+        t = self.elapsed()
+        live = {p["card"] for p in self.plays if t - p["t"] <= 12}
+        allies = list(getattr(self, "_allies", []) or []) + list(getattr(self, "_allies_extra", []) or [])
+        live |= {unit_card(a[0]) or a[0] for a in allies}
+        maybe_ours = {unit_card(u) or u for n in live for u in ((card(n) or {}).get("units") or [n])} | live
+        return all((unit_card(u) or u) not in maybe_ours and u not in maybe_ours for u in hit)
+
+    def _their_target_tower(self, prefer=None):
+        """(side, (x, y)) of the tower to hit: the lane asked for when its tower stands, else the weaker one,
+        the King once both are down."""
+        tw = getattr(self, "_towers_now", None) or {}
+        up = [s for s in ("left", "right") if not self.their_tower_down(s) and (tw.get(f"their_{s}") is None
+                                                                              or tw.get(f"their_{s}") > 0)]
+        if not up: return "king", THEIR_TOWERS["king"]
+        if prefer in up: return prefer, THEIR_TOWERS[prefer]
+        s = min(up, key=lambda k: tw.get(f"their_{k}") if tw.get(f"their_{k}") is not None else 1.0)
+        return s, THEIR_TOWERS[s]
+
+    def _barrel_tile(self, tile):
+        """Goblin Barrel: thrown right onto their tower (the goblins land at its foot and hit it at once)."""
+        for k, (x, y) in THEIR_TOWERS.items():
+            if dist(tile, (x, y)) <= 2.5 and (k == "king" or not self.their_tower_down(k)):
+                return (int(x), int(y) - 1)
+        _s, (x, y) = self._their_target_tower(lane(tile[0]) if tile[1] >= RIVER_Y else None)
+        return (int(x), int(y) - 1)
+
+    def _spell_hits(self, name, tile):
+        """The enemy units this spell hits: the Log rolls ~10 tiles forward (toward their side) and ~2 wide."""
+        out = []
+        for u, x, y in (self._stable or []):
+            if name in ROLLING:
+                if abs(x - tile[0]) <= 2.0 and tile[1] - 0.5 <= y <= tile[1] + 10.5: out.append(u)
+            else:
+                rad = card(name).get("splash") or SPELL_SPLASH_DEFAULT.get(name, 2.5)
+                if dist((x, y), tile) <= rad + 0.3: out.append(u)
+        return out
+
+    def _small_spell_ok(self, name, tile):
+        """Arrows / The Log / Zap: worth it only when they kill a swarm or real value — 2+ units, or what they
+        kill is worth most of their cost — or they finish a tower (the Log: also chip a tower when the elixir is
+        full and there is nothing else to hit). Never on an empty spot or on one big unit they hardly scratch."""
+        hit = self._spell_hits(name, tile)
+        dmg = card(name).get("damage") or SPELL_DAMAGE_DEFAULT.get(name, 100)
+        cost = card(name).get("cost", 3)
+        val = 0.0
+        for u in hit:
+            c = card(unit_card(u) or u)
+            hp = c.get("hp") or 300
+            val += c.get("cost", 3) / max(1, c.get("count") or 1) * (1.0 if hp <= dmg * 1.1 else 0.1)
+        if len(hit) >= 2 and val >= 0.5 * cost: return True
+        if val >= 0.75 * cost: return True
+        tw = getattr(self, "_towers_now", None) or {}
+        for k, (x, y) in THEIR_TOWERS.items():
+            near = dist(tile, (x, y)) <= 3.0 or (name in ROLLING and abs(tile[0] - x) <= 2.5 and 0 <= y - tile[1] <= 11)
+            if not near: continue
+            hp = tw.get(f"their_{k}")
+            if hp is not None and 0 < hp <= 0.06: return True          # the last bit of a tower
+            if name in ROLLING and not hit and (getattr(self, "_my_el", 0) >= 9.5 or self.elapsed() >= 170):
+                return True                                            # full elixir / the last seconds: chip
+        return False
 
     def _spell_hits_us(self, name, tile):
         """Would this spell land on our own troops / buildings? (never cast it then)"""
@@ -1068,6 +1140,13 @@ class Brain:
             return None                                  # never a spell on our own troops
         if "spell" in roles(n) and n not in WIN_SPELLS and not self._spell_sure(n, tile):
             return None                                  # only on units that are surely THEIRS
+        # each card's own way of being used (the user's correction, 5.72): checked here so every source of a move
+        # (rules, the engine, the trained AI, the learned brain) obeys it
+        if n == "goblin_barrel":
+            tile = self._barrel_tile(tile)               # always straight onto their tower, never at home
+            why = why if "tower" in why else f"{why} -> on their tower"
+        elif n in SMALL_SPELL_RULES and not self._small_spell_ok(n, tile):
+            return None                                  # Arrows / Log / Zap only where they really pay
         if n in K.SUPPORT or (pro.data().get("follow", {}).get(pro.key(n)) and "win" in roles(n)):  # its support next
             self.support_due = (lane(tile[0]), now + 5.0, n)
             self.support_due_back = tile[1] <= 3

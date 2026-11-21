@@ -10,6 +10,8 @@ on:
       - "src/royale/engine.py"
       - "src/royale/engine_ai.py"
       - "scripts/test_royale_engine.py"
+      - "scripts/test_royale_spells.py"
+      - "src/royale/brain.py"
       - "scripts/test_royale_training.py"
   workflow_dispatch:
 
@@ -56,6 +58,7 @@ jobs:
         run: |
           python -m pip install numpy
           python scripts/test_royale_engine.py
+          python scripts/test_royale_spells.py
 
   training-smoke:
     needs: build
