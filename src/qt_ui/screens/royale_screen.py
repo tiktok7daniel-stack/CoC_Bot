@@ -128,6 +128,8 @@ class RoyaleScreen(Screen):
         bind_line(self.store, em, "royale_dev_email", "app")
         api.add(form_row("royale_dev_email", "royale_dev_email_sub", em))
         api.add(form_row("royale_dev_pass", None, secret_field(self.store, "royale_dev_password", "••••••••")))
+        api.add(toggle_row(self.store, "royale_auto_deck", "royale.auto_deck", "royale_auto_deck_sub"))
+        api.add(num_row(self.store, "royale_deck_slot", "royale.deck_slot", "royale_deck_slot_sub", lo=0, hi=10, width=90))
         v.addWidget(api)
 
         # ---------- training the eyes on this PC

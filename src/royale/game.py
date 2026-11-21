@@ -327,6 +327,10 @@ class RoyaleBot:
                 continue
             ws = words(fr)
             b = find_word(ws, "battle", y_min=0.55, y_max=0.9)
+            if b and self.s.get("auto_deck", True) and not getattr(self, "_deck_checked", False):
+                self._deck_checked = True
+                self._pick_deck()
+                continue
             if b and self.account and self.account.due(self.battles):
                 log.info("Clash Royale: looking after the account (cards, clan, rewards)")
                 self.account.run()
@@ -467,6 +471,37 @@ def _api_after_battle(self, won_seen):
     threading.Thread(target=work, daemon=True, name="cr-api-battle").start()
 
 
+def _pick_deck(self):
+    """The strongest deck the player owns, from the official API and today's meta -> copied into the game."""
+    from royale import cr_api, deck_pick
+    acc = _u().INSTANCE_ID
+    if not cr_api.tag(acc) or not deck_pick.due(acc): return
+    try:
+        pick = deck_pick.choose(acc)
+    except Exception as e:
+        self.log.info(f"Clash Royale: picking a deck — {e}")
+        return
+    if not pick:
+        self.log.info("Clash Royale: no meta deck you own all 8 cards of yet — keeping your deck")
+        return
+    if sorted(pick["cards"]) == sorted(pick.get("current") or []):
+        self.log.info(f"Clash Royale: your deck is already the best pick ({pick['why']})")
+        deck_pick._write(acc, pick)
+        return
+    self.log.info("Clash Royale: the strongest deck you own now = " + ", ".join(pick["cards"]) + f" — {pick['why']}")
+    ok = deck_pick.apply(acc, pick, self.log, int(self.s.get("deck_slot", 0) or 0))
+    if ok:
+        names = _api_names(self.eyes, pick["cards"])
+        if len(names) == 8:
+            self._api_deck = names
+            self.eyes.set_deck(names); self.brain.deck = list(names)
+        try: self.notify("🃏 كلاش رويال: اخترت أقوى ديك عندك — " + ", ".join(pick["cards"]) + f"\n({pick['why']})")
+        except Exception: pass
+    else:
+        self.log.info("Clash Royale: the game did not show the copy-deck window — deck not changed")
+
+
+RoyaleBot._pick_deck = _pick_deck
 RoyaleBot._api_start = _api_start
 RoyaleBot._api_after_battle = _api_after_battle
 
