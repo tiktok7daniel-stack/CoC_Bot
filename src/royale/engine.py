@@ -111,13 +111,39 @@ def _max_hp(m, cid):
     return hp
 
 
+def _kind_of(m, cid):
+    """'special' (Champion / Hero), 'evo' (Evolution) or 'plain' — the engine's deck slots depend on it."""
+    k = _S.setdefault("kinds", {})
+    if cid not in k:
+        try:
+            info = m.get_card_info(cid) or {}
+            k[cid] = "special" if (info.get("is_champion") or info.get("is_hero")) else \
+                ("evo" if info.get("is_evolution") or 123 <= cid <= 163 else "plain")
+        except Exception:
+            k[cid] = "plain"
+    return k[cid]
+
+
 def _filler_deck(m, want):
-    """8 distinct card ids starting with `want` (a deck the engine accepts: plain cards only)."""
-    deck = []
+    """8 distinct card ids starting with `want`, in slots the engine accepts: a Champion / Hero only in slot 1 or 2,
+    an Evolution only in slot 0 or 2 (the real game's rule; before 5.77 an opponent with a Champion made the engine
+    refuse the deck and the bot played without thinking: 58 of 69 thoughts lost in one of the user's battles).
+    What does not fit is left out (its units are still put on the board)."""
+    cards = []
     for c in list(want) + [15, 6, 25, 40, 24, 72, 33, 7, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12]:
-        if c and c not in deck: deck.append(c)
-        if len(deck) == 8: break
-    return deck
+        if c and c not in cards: cards.append(c)
+    slots = [None] * 8
+    special = [c for c in cards[:8] if _kind_of(m, c) == "special"][:2]
+    evo = [c for c in cards[:8] if _kind_of(m, c) == "evo"]
+    for c, i in zip(special, (1, 2)): slots[i] = c
+    for c in evo:
+        for i in (0, 2):
+            if slots[i] is None: slots[i] = c; break
+    used = set(x for x in slots if x)
+    plain = [c for c in cards if c not in used and _kind_of(m, c) == "plain"]
+    for i in range(8):
+        if slots[i] is None and plain: slots[i] = plain.pop(0)
+    return [c for c in slots if c][:8]
 
 
 def _deck_ids(m, names):
