@@ -160,6 +160,19 @@ class RoyaleBot:
                 try:
                     from royale import engine_ai
                     engine_ai.new_battle()
+                    if engine_ai.newest() and not getattr(self, "_gate_running", False):
+                        import threading
+                        def _gate(deck=list(self.brain.deck or self.eyes.deck or [])):
+                            self._gate_running = True
+                            try:
+                                msg = engine_ai.gate_in_background(deck)       # its own process: the battle stays fast
+                                if msg:
+                                    log.info("Clash Royale AI: " + msg)
+                                    try: self.notify("🤖 كلاش رويال: " + msg)
+                                    except Exception: pass
+                            finally:
+                                self._gate_running = False
+                        threading.Thread(target=_gate, daemon=True, name="ai-gate").start()
                     w = engine_ai.weights()
                     if w: log.info(f"Clash Royale: the bot's own trained AI proposes moves ({w.name})")
                 except Exception:

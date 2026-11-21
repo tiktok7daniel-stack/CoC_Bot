@@ -32,8 +32,11 @@ if "Traceback" in log and not alive:
 if not alive and time.time() - t0 < limit - 20:
     print("FAIL: the trainer stopped early")
     sys.exit(1)
+print("newest weights:", engine_ai.newest())
+if engine_ai.newest():
+    print("gate:", engine_ai.gate(deck))
 w = engine_ai.weights()
-print("weights:", w)
+print("trusted weights:", w)
 if w:
     m = engine.module()
     env = m.ClashRoyaleEnv([int(x) for x in engine_ai.deck_spec(deck).split(",")], [15, 6, 25, 40, 24, 72, 33, 7], 3600)

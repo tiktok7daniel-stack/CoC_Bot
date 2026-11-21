@@ -21,11 +21,96 @@ NEEDS = (("torch", "torch"), ("gymnasium", "gymnasium"), ("tensorboard", "tensor
 _S = {"net": None, "net_mtime": 0.0, "hid": None, "why": ""}
 
 
-def weights():
-    """The newest trained weights (phase 1 or the self-play league), or None."""
+TRUSTED = "trusted.pth"
+GATE_GAMES = 20                # a new version plays this many games (both sides) against the trusted one
+GATE_WIN = 0.55                # and replaces it only with this share of the points
+
+
+def newest():
+    """The newest weights training wrote (phase 1 or the self-play league), or None."""
     if not HOME.exists(): return None
     pth = sorted(HOME.glob("model_weights*.pth"), key=lambda p: p.stat().st_mtime)
     return pth[-1] if pth else None
+
+
+def weights():
+    """The weights the bot PLAYS with: the trusted version (the first one, then only versions that beat it)."""
+    t = HOME / TRUSTED
+    return t if t.exists() else None
+
+
+def _load(path):
+    import torch
+    if str(PKG) not in sys.path: sys.path.insert(0, str(PKG))
+    from royale import engine
+    if engine._dir() and engine._dir() not in sys.path: sys.path.insert(0, engine._dir())
+    from python_ai.models.policy_io import load_net
+    net = load_net(str(path), torch.device("cpu"))
+    for prm in net.parameters(): prm.requires_grad_(False)
+    net.eval()
+    return net
+
+
+def _duel(m, deck, net0, net1, steps=400):
+    """One game in the engine, net0 bottom vs net1 top, same deck. -> net0's score (1 / 0.5 / 0)."""
+    import numpy as np, torch
+    from python_ai.engine_constants import BOARD_W
+    env = m.ClashRoyaleEnv(deck, deck, 3600)
+    env.reset()
+    hid = [(torch.zeros(1, net0.LSTM_HIDDEN), torch.zeros(1, net0.LSTM_HIDDEN)),
+           (torch.zeros(1, net1.LSTM_HIDDEN), torch.zeros(1, net1.LSTM_HIDDEN))]
+    acts = [None, None]
+    with torch.no_grad():
+        for _ in range(steps):
+            for team, net in ((0, net0), (1, net1)):
+                obs = torch.tensor(np.asarray(env.get_observation_for_team(team), dtype=np.float32)).unsqueeze(0)
+                feats, emb, sp = net.extract_features(obs)
+                lg, _, _, _, h = net.step_lstm_and_card(feats, hid[team], net.affordability_mask(obs))
+                gi = int(lg.argmax(-1).item())
+                cell = int(net.placement_given_card(h[0], emb, torch.tensor([gi]), obs, sp).argmax(-1).item())
+                hid[team] = h
+                acts[team] = (gi, float(cell % BOARD_W), float(cell // BOARD_W))
+            r = env.step_self_play(acts[0][0], acts[0][1], acts[0][2], acts[1][0], acts[1][1], acts[1][2], 10)
+            if r.done: break
+    a, b = env.get_towers_alive(0), env.get_towers_alive(1)
+    if a != b: return 1.0 if a > b else 0.0
+    loser = env.resolve_timeout_outcome()
+    return 0.5 if loser < 0 else (1.0 if loser == 1 else 0.0)
+
+
+def gate(deck_names, log=None):
+    """A newer version than the trusted one is played against it (GATE_GAMES, both sides); it becomes the trusted
+    version only when it scores GATE_WIN or better. The first version ever trained is trusted as it is.
+    -> a short report, or None when there is nothing new."""
+    import shutil
+    from royale import engine
+    new = newest()
+    if new is None: return None
+    t = HOME / TRUSTED
+    if t.exists() and new.stat().st_mtime <= t.stat().st_mtime: return None
+    if not t.exists():
+        shutil.copy2(new, t)
+        return f"first trained AI version is now in use ({new.name})"
+    spec = deck_spec(deck_names or [])
+    m = engine.module()
+    if not spec or m is None: return None
+    deck = [int(x) for x in spec.split(",")]
+    try:
+        a, b = _load(new), _load(t)
+        pts = 0.0
+        for g in range(GATE_GAMES):
+            pts += _duel(m, deck, a, b) if g % 2 == 0 else 1.0 - _duel(m, deck, b, a)
+        share = pts / GATE_GAMES
+    except Exception as e:
+        return f"could not test the new version: {e}"
+    if share >= GATE_WIN:
+        shutil.copy2(new, t)
+        msg = f"the new AI version beat the old one {share:.0%} over {GATE_GAMES} games — now in use"
+    else:
+        os.utime(t, None)          # this version was judged: wait for a newer one
+        msg = f"the new AI version scored {share:.0%} against the one in use — kept the old one"
+    if log: log.info("Clash Royale AI: " + msg)
+    return msg
 
 
 def missing():
@@ -118,6 +203,25 @@ def progress():
     return lines[-1].strip()[:160] if lines else ""
 
 
+def gate_in_background(deck_names):
+    """gate() in its own Python process (the games are CPU work; in the bot's process they would slow its battle
+    decisions). Waits for it. -> its report or None."""
+    import json
+    src = str(Path(__file__).resolve().parents[1])
+    code = ("import sys, json; sys.path.insert(0, %r); from royale import engine_ai; "
+            "print('GATE:' + json.dumps(engine_ai.gate(%r)))") % (src, list(deck_names or []))
+    py = sys.executable
+    if py.lower().endswith("pythonw.exe"): py = py[:-len("pythonw.exe")] + "python.exe"
+    kw = {"creationflags": 0x08000000 | 0x00004000} if sys.platform == "win32" else {}
+    try:
+        r = subprocess.run([py, "-c", code], capture_output=True, text=True, timeout=1800, **kw)
+    except Exception as e:
+        return f"could not test the new version: {e}"
+    for ln in (r.stdout or "").splitlines():
+        if ln.startswith("GATE:"): return json.loads(ln[5:])
+    return None
+
+
 # ------------------------------------------------------------------ playing
 def _net():
     """The trained network (reloaded when training saved a newer one), or None."""
@@ -126,14 +230,7 @@ def _net():
     try:
         mt = w.stat().st_mtime
         if _S["net"] is not None and mt == _S["net_mtime"]: return _S["net"]
-        import torch
-        if str(PKG) not in sys.path: sys.path.insert(0, str(PKG))
-        from royale import engine
-        if engine._dir() and engine._dir() not in sys.path: sys.path.insert(0, engine._dir())
-        from python_ai.models.policy_io import load_net
-        net = load_net(str(w), torch.device("cpu"))
-        for prm in net.parameters(): prm.requires_grad_(False)
-        net.eval()
+        net = _load(w)
         _S["net"], _S["net_mtime"] = net, mt
         return net
     except Exception as e:
@@ -171,5 +268,5 @@ def propose(env):
 
 def status():
     w = weights()
-    return {"training": running(), "weights": str(w) if w else "", "missing": missing(), "why": _S["why"],
+    return {"training": running(), "weights": str(w) if w else "", "newest": str(newest() or ""), "missing": missing(), "why": _S["why"],
             "progress": progress()}

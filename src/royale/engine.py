@@ -22,6 +22,7 @@ independent. Anything wrong -> the bot plays as before, and says why.
 import math, os, sys, time
 
 ROLLOUT_TICKS = 80             # 8 s ahead
+ACTION_DELAY_TICKS = 4         # from the screen the decision was made on to the card on the board: ~0.4 s
 TOWER_ELIXIR = {0: 18.0, 1: 10.0, 2: 10.0}    # what a whole tower is worth, in elixir (King more: it ends the game)
 OFFENSE_DISCOUNT = 0.5         # in a rollout the opponent does not answer: damage we deal counts half
 WAIT_MARGIN = 0.4              # a move must beat waiting by this much (elixir)
@@ -267,12 +268,16 @@ def _snap_state(env):
 
 
 def rollout(env, slot, x, y):
+    """The arena run ROLLOUT_TICKS ahead with our move. The move lands ACTION_DELAY_TICKS late, as it does for real
+    (the picture the decision was made on is already old and the taps take time; the card then has its own
+    deploy second in the engine) — a lesson of FirstLight CR, whose model got markedly better once it played
+    with the real game's delay."""
     s = env.snapshot()
+    left = ROLLOUT_TICKS
     if slot is not None:
+        s.step_self_play_fast(-1, 0.0, 0.0, -1, 0.0, 0.0, ACTION_DELAY_TICKS)
         s.step_self_play_fast(slot, x, y, -1, 0.0, 0.0, 10)
-        left = ROLLOUT_TICKS - 10
-    else:
-        left = ROLLOUT_TICKS
+        left -= ACTION_DELAY_TICKS + 10
     while left > 0:
         r = s.step_self_play_fast(-1, 0.0, 0.0, -1, 0.0, 0.0, min(20, left))
         left -= 20

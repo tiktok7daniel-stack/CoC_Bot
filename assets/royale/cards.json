@@ -3235,6 +3235,32 @@
 "deploy_ms": null,
 "units": [],
 "rarity": null
+},
+"ronin": {
+"id": 26000106,
+"cost": 5,
+"kind": "troop",
+"anywhere": false,
+"air": false,
+"hits_air": false,
+"hits_ground": true,
+"buildings_only": false,
+"hp": 695.0,
+"damage": 145.0,
+"hit_ms": 1400,
+"range": 1.2,
+"splash": null,
+"speed": 90.0,
+"count": 1,
+"deploy_ms": 1000,
+"units": [
+"ronin"
+],
+"rarity": "Legendary",
+"sight": 5.5,
+"radius": 0.6,
+"mass": 6,
+"source": "FirstLight CR card_specs (Apache-2.0)"
 }
 },
 "levels": {
