@@ -334,7 +334,7 @@ def _with(base, name, c, tx, ty, delay=0.0, level=None):
     return units
 
 
-def plan(brain, side, threat, candidates, stable, hp=None, max_cards=3, prior=None):
+def plan(brain, side, threat, candidates, stable, hp=None, max_cards=3, prior=None, extra_tiles=None):
     """Every candidate card on its candidate tiles — now, and 1.5 s later — simulated.
     -> (slot, card, tile, score, why, gain over doing nothing, wait) or None. wait=True: placing it a bit later is
     better (a building would decay waiting / the troop would meet them out of the tower's range) -> hold it."""
@@ -347,7 +347,9 @@ def plan(brain, side, threat, candidates, stable, hp=None, max_cards=3, prior=No
     for slot, name in candidates[:max_cards]:
         c = card(name)
         if not c or c.get("kind") == "spell": continue
-        for tx, ty in candidate_tiles(name, side, threat):
+        tiles = list(dict.fromkeys(list((extra_tiles or {}).get(name, [])) + candidate_tiles(name, side, threat)))
+        for tx, ty in tiles:
+            if not brain.legal(tx, ty, name): continue
             for delay in (0.0, 1.5):
                 sc = score(simulate(_with(base, name, c, tx, ty, delay, brain.my_level(name))), c.get("cost", 3)) \
                     + (prior or {}).get(name, 0.0)

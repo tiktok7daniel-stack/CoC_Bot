@@ -236,7 +236,7 @@ class Brain:
             if tid is None:
                 self._next_id += 1
                 tid = self._next_id
-                self.known_enemy[tid] = {"unit": u, "x": x, "y": y, "first": now, "last": now}
+                self.known_enemy[tid] = {"unit": u, "x": x, "y": y, "first": now, "last": now, "fx": x, "fy": y}
                 cn = unit_card(u)
                 group_recent = any(t["unit"] == u and now - t["first"] < 1.5 and t is not self.known_enemy[tid]
                                    for t in self.known_enemy.values())
@@ -532,8 +532,28 @@ class Brain:
                 # think it through: the good answers on their tiles, simulated a few seconds ahead
                 try:
                     good = [(p, s) for s, p in ranked if s > 0.8 and "spell" not in roles(p[1])][:3]
+                    # the defense atlas: the best spots every card of the hand had against this threat in millions
+                    # of tried defenses — its best card joins the candidates and its spots are tried first
+                    extra, prior = {}, {p[1]: 0.15 * s for p, s in good}
+                    try:
+                        from royale import atlas
+                        main = t.get("main")
+                        trk = next((k for k in self.known_enemy.values() if unit_card(k["unit"]) == main), None)
+                        if main and trk:
+                            ans = atlas.answers(main, (trk["fx"], trk["fy"]), side,
+                                                [n for _, n in playable if "spell" not in roles(n)])
+                            if ans:
+                                best_sc = max(v[0][3] for v in ans.values())
+                                for n, spots in ans.items():
+                                    extra[n] = [(x, y) for x, y, *_r in spots]
+                                    prior[n] = prior.get(n, 0.0) + 0.3 * (spots[0][3] >= best_sc - 0.05)
+                                top = max(ans, key=lambda n: ans[n][0][3])
+                                if all(p[1] != top for p, _ in good):
+                                    good.append((next(p for p in playable if p[1] == top), 1.0))
+                    except Exception:
+                        pass
                     pl = sim.plan(self, side, t, [p for p, _ in good], stable, getattr(self, "hp_seen", None),
-                                  prior={p[1]: 0.15 * s for p, s in good})
+                                  prior=prior, extra_tiles=extra, max_cards=4)
                     if pl:
                         best, tile, why = (pl[0], pl[1]), pl[2], f" — {pl[4]}"
                         deep = any(y <= 8 for _u, _x, y in t["units"])
