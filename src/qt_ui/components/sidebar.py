@@ -13,13 +13,13 @@ from ..i18n import on_lang, tr
 from ..theme import TOKENS, color, ui_font
 
 NAV = [
-    ("royale_home", "nv_royale_home", "home"), ("royale_live", "nv_royale_live", "eye"), ("royale", "nv_royale", "sliders"),
+    ("royale_home", "nv_royale_home", "home"), ("royale_ai", "nv_royale_ai", "bolt"), ("royale_live", "nv_royale_live", "eye"), ("royale", "nv_royale", "sliders"),
     ("dash", "nv_home", "trophy"), ("deck", "nv_deck", "bolt"), ("acc", "nv_acc", "id"), ("atk", "nv_atk", "swords"), ("bb", "nv_bb", "moon"),
     ("res", "nv_stats", "chart"), ("upg", "nv_village", "home"), ("teach", "nv_manager", "hammer"), ("learn", "nv_learn", "school"),
     ("log", "nv_log", "scroll"), ("set", "nv_bot", "bot"), 
 ]
 # Clash Royale mode: only its own screen (+ the general ones: accounts, the bot's settings / Telegram)
-ROYALE_KEYS = {"royale_home", "royale_live", "royale", "acc", "set"}
+ROYALE_KEYS = {"royale_home", "royale_ai", "royale_live", "royale", "acc", "set"}
 SOON = []   # clan capital / clan war / chat removed: not part of the farming bot
 
 

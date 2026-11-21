@@ -333,6 +333,23 @@ class RoyaleBot:
                 live_view.battle(_u().INSTANCE_ID, self.brain, st, d, force=bool(d), frame=fr)
             except Exception:
                 pass
+            now_t = time.monotonic()
+            if d:
+                # never a card that is in none of the account's real decks (5.89): it can only be a misread — the
+                # Goblin Barrel read as Goblin Gang was played as a troop in our half
+                try:
+                    known = {c for k in self.eyes.known_decks() for c in k}
+                except Exception:
+                    known = set()
+                ed = list(getattr(self.eyes, "deck", []) or [])
+                new_deck = len(ed) == 8 and not set(ed) <= known          # a deck of the user's we do not know yet
+                if known and not new_deck and d["card"] not in known:
+                    if now_t - getattr(self, "_misread_told", 0) > 10:
+                        self._misread_told = now_t
+                        log.warning(f"Clash Royale: '{d['card']}' is in none of your decks — a misread card, not played")
+                    try: self.brain.undo(d)
+                    except Exception: pass
+                    d = None
             if d and d["card"] in ("goblin_barrel", "miner", "graveyard", "goblin_drill") and d["tile"][1] < 20:
                 # the last guard before the tap: these go onto THEIR tower, never into our half
                 fixed = self.brain._barrel_tile(tuple(d["tile"]))

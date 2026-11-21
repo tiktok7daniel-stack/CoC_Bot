@@ -156,7 +156,7 @@ class RoyaleHomeScreen(Screen):
     # -------------------------------------------------------------- actions
     def open_view(self):
         w = self.ctx.window
-        s = w.screens.get("royale_live")
+        s = w.screens.get("royale_ai") or w.screens.get("royale_live")
         if s: s.pop_out()
 
     def train(self):

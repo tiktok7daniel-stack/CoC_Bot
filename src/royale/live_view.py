@@ -63,6 +63,34 @@ def _boxes(brain, st):
     return out
 
 
+def _cands_at():
+    """The engine's moves of this moment as screen points: [(x, y, value, card)]."""
+    try:
+        from royale import engine
+        from royale.eyes import tile_xy
+        last = engine._S.get("last") or {}
+        if time.time() - float(last.get("t", 0)) > 3: return []
+        return [[*tile_xy(*c["tile"]), c["v"], c["card"]] for c in (last.get("cands") or [])[:16]]
+    except Exception:
+        return []
+
+
+def _model(brain):
+    """What the AI model thinks this moment (5.89): play now or wait, each playable card's chance, its tiles."""
+    pol = getattr(brain, "_pol", None) or {}
+    if not pol.get("cards"): return None
+    cands = []
+    for c in (getattr(brain, "_ai_cands", None) or [])[:4]:
+        try:
+            from royale.eyes import tile_xy
+            cands.append({"card": c[1], "tile": list(c[2]), "at": list(tile_xy(*c[2]))})
+        except Exception:
+            pass
+    return {"play": round(float(pol.get("play", 0.0)), 3),
+            "cards": {k: round(float(v), 3) for k, v in sorted(pol["cards"].items(), key=lambda kv: -kv[1])[:6]},
+            "tiles": cands, "ai_only": bool(getattr(brain, "p", {}).get("ai_only"))}
+
+
 def _save_frame(acc, frame):
     """A small copy of the screen (360 px wide) for the app's "the bot's eyes" panel, twice a second."""
     if frame is None or time.time() - _S.get("ft", 0) < 0.5: return False
@@ -135,8 +163,13 @@ def battle(acc, brain, st, d, force=False, frame=None):
         "engine": engine_state(),
         "perf": st.get("_perf") or {},
         "frame_t": _S.get("frame_t", 0.0),
+        "model": _model(brain),
         "boxes": _boxes(brain, st),
         "target": (list(__import__("royale.eyes", fromlist=["tile_xy"]).tile_xy(*d["tile"])) if d else None),
+        "slot": (d.get("slot") if d else None),
+        "card_at": (list(__import__("royale.eyes", fromlist=["card_xy"]).card_xy(d["slot"])) if d and
+                    d.get("slot") is not None else None),
+        "cands_at": _cands_at(),
     }
     _write(acc, data)
 
