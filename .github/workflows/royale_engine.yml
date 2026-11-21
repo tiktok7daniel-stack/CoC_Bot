@@ -59,7 +59,7 @@ jobs:
           path: assets/royale/engine
       - name: The bot's checks with the real engine
         run: |
-          python -m pip install numpy
+          python -m pip install numpy onnxruntime
           python scripts/test_royale_engine.py
           python scripts/test_royale_spells.py
 

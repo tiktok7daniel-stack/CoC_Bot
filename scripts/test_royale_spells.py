@@ -79,8 +79,9 @@ for k in range(30):
                   [], {"their_left": 1.0, "their_right": 1.0, "our_left": 1.0, "our_right": 1.0}, now=t0 + k * 0.7)
     if d:
         n_pl += 1
-        good = d["why"].startswith("AI model") and any(c[1] == d["card"] for c in b3._ai_cands)
-        if not good and ok_all: print("   not the model's:", d, b3._ai_cands)
+        cands = getattr(b3, "_ai_cands", [])
+        good = d["why"].startswith("AI model") and any(c[1] == d["card"] for c in cands)
+        if not good and ok_all: print("   not the model's:", d, cands, "model loaded:", bool(b3._pol))
         ok_all = ok_all and good
 check("AI-only: only the model's own cards are played", n_pl > 0 and ok_all, f"{n_pl} plays")
 
