@@ -519,7 +519,10 @@ class Brain:
                 self._pol["play"] = 0.5 * self._pol["play"] + 0.5 * self._board["play"]
         self._ctx = (round(el_t, 2), [round(float(v), 4) for v in self._pol["_x"][0]], list(self._pol["_ids"]),
                      (self._board or {}).get("_in")) if self._pol else None
-        d = self._decide(hand, ready, elixir, stable, playable, th, towers, now, allies)
+        if self.p.get("ai", False) and self._pol and self._pol.get("cards"):
+            d = self._model_decide(playable, elixir, stable, th, now)       # the local AI model plays
+        else:
+            d = self._decide(hand, ready, elixir, stable, playable, th, towers, now, allies)
         if d is None and self._ctx and el_t - self._last_wait >= 1.0:          # it chose to wait: a moment too
             self._last_wait = el_t
             self.steps.append({"t": self._ctx[0], "x": self._ctx[1], "ids": self._ctx[2], "card": 0, "tile": 0,
@@ -630,6 +633,41 @@ class Brain:
             if tile is None:
                 return None
             return self._play(cheap, tile, "full elixir: cycling at the back", now)
+        return None
+
+    def _model_decide(self, playable, elixir, stable, th, now):
+        """The local AI model is in charge: its two networks (the arena Transformer that sees every unit and the
+        play-history network; 252k pro games / 17M plays, then every battle of this account) decide whether to
+        play now, which card and where. The bot's rules only guard it: a spell must hit units that are surely
+        theirs, a tile the game refuses is moved to the nearest legal one, and when the model waits while a push
+        is about to hit our tower, the rules' reflex defense goes in."""
+        pol = self._pol
+        play = pol.get("play", 0.0)
+        probs = {n: pol["cards"].get(n, 0.0) for _, n in playable}
+        side = max(th, key=lambda s_: th[s_]["value"]) if th else None
+        urgent = side is not None and th[side].get("urgent") and th[side].get("units")
+        if play >= 0.5:
+            for n, pr in sorted(probs.items(), key=lambda kv: -kv[1]):
+                if pr < 0.12: break
+                if self._reserved(n): continue
+                i = next(i for i, m in playable if m == n)
+                if "spell" in roles(n) and n not in WIN_SPELLS:
+                    sv = self._spell_value(n, stable)            # the model chose the spell; its target: the best
+                    if not sv or sv[0] < (card(n).get("cost", 3) - 0.5): continue   # cluster that is surely theirs
+                    tile = sv[1]
+                else:
+                    lt = self._ltile(n, anywhere=bool(card(n).get("anywhere")))
+                    if not lt: continue
+                    tile = lt[0]
+                d = self._play((i, n), tile, f"AI model ({play:.0%} play now, {pr:.0%} {n})", now)
+                if d: return d
+        if urgent:                                               # a reflex: the push is at our tower
+            d = self._decide([n for _, n in playable], [i for i, _ in playable], elixir, stable, playable, th,
+                             self._towers_now, now, self._allies)
+            if d and d["why"].startswith("defend"):
+                d["why"] = "AI reflex — " + d["why"]
+                return d
+            if d: self.undo(d)
         return None
 
     def _learned_play(self, playable, elixir, now):
@@ -1008,9 +1046,24 @@ class Brain:
         except Exception:
             self.predicted = set()
 
+    def undo(self, d):
+        """Take back the play decide() just returned (the AI player chose something else)."""
+        snap = getattr(self, "_undo_snap", None)
+        if not d or not snap or not self.plays or self.plays[-1] is not d: return
+        (self.support_due, self.support_due_back, self.heavy_mine_at, self.last_play, nt, ns, self._ctx) = snap
+        while len(self.last_tiles) > nt: self.last_tiles.pop()
+        del self.steps[ns:]
+        self.plays.pop()
+
+    def play_ai(self, slot, n, tile, why, now):
+        """A move the AI player chose: through the same checks and records as the brain's own plays."""
+        return self._play((slot, n), tile, why, now)
+
     def _play(self, pick, tile, why, now):
         i, n = pick
         if tile is None: return None
+        self._undo_snap = (self.support_due, getattr(self, "support_due_back", False), self.heavy_mine_at,
+                           self.last_play, len(self.last_tiles), len(self.steps), getattr(self, "_ctx", None))
         if "spell" in roles(n) and self._spell_hits_us(n, tile):
             return None                                  # never a spell on our own troops
         if "spell" in roles(n) and n not in WIN_SPELLS and not self._spell_sure(n, tile):

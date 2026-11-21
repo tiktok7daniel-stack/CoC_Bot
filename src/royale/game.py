@@ -147,6 +147,9 @@ class RoyaleBot:
         self.params = learn.choose(_u().INSTANCE_ID, explore=not self.s.get("safe_play", True))
         self.brain.p = dict(learn.DEFAULT, **self.params)
         if not self.s.get("learned_brain", True): self.brain.p["learned"] = False
+        # the local AI model decides the moves (on by default); off: the rule brain decides with the models' advice
+        self.brain.p["ai"] = bool(self.s.get("local_ai", False)) and self.brain.p.get("learned", True)
+        if self.brain.p["ai"]: log.info("Clash Royale: the local AI model plays this battle (the rules only guard it)")
         self.brain.reset()
         self._prev_hand = None
         self._battle_t = time.time()
