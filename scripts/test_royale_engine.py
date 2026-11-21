@@ -99,5 +99,31 @@ b.deck = list(deck)[:5]                                     # the deck only half
 r = engine.think(b, st, st["hand"], [(i, n) for i, n in enumerate(st["hand"])], 7.0, None, Log())
 check("thinks with the deck half learned", engine.skips().get("thought", 0) == 2, str(engine.skips()))
 
+# the mirror under every unit the eyes can name, anywhere on the board, any towers / elixir (the user's battles
+# had "mirror error" in 58 of 69 thoughts): every crash is printed with its traceback
+import random, traceback
+from royale.brain import cards_db, _DB
+cards_db()
+units = sorted(set(_DB["unit_to_card"].keys()) | set(n.replace("_", "-") for n in _DB["unit_to_card"].keys()))
+random.seed(7)
+errs = {}
+for k in range(400):
+    stable = [(random.choice(units), random.uniform(-1, 18.5), random.uniform(-1, 32.5)) for _ in range(random.randint(0, 9))]
+    b = brain(stable, {random.choice(list(engine.card_ids())) for _ in range(random.randint(0, 8))})
+    b.enemy_elixir = random.uniform(-1, 11)
+    b._allies_extra = [(random.choice(units), random.uniform(0, 17), random.uniform(0, 31)) for _ in range(random.randint(0, 5))]
+    towers = {k2: random.choice([None, 0.0, 0.004, 0.5, 1.0, 1.2]) for k2 in ("their_left", "their_right", "our_left", "our_right")}
+    hand = random.sample(list(deck), 4)
+    if random.random() < 0.3: hand[random.randint(0, 3)] = "blank"
+    st4 = {"hand": hand, "ready": [0, 1, 2, 3], "towers": towers, "allies": []}
+    try:
+        env, slots = engine.mirror(b, st4, hand, random.uniform(0, 10))
+    except Exception as ex:
+        key = repr(ex)[:120]
+        if key not in errs:
+            errs[key] = traceback.format_exc(limit=6)
+            print("  MIRROR CRASH:", key, "\n", errs[key][-900:], "\n  stable:", stable[:4], "towers:", towers)
+check("the mirror never crashes on any arena", not errs, f"{len(errs)} kinds of crash")
+
 print(f"\n{'ALL PASSED' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)
