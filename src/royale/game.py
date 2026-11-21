@@ -324,7 +324,7 @@ class RoyaleBot:
             try:
                 from royale import live_view
                 if d: live_view.event("us", d["card"], d["tile"], d.get("why", ""))
-                live_view.battle(_u().INSTANCE_ID, self.brain, st, d, force=bool(d))
+                live_view.battle(_u().INSTANCE_ID, self.brain, st, d, force=bool(d), frame=fr)
             except Exception:
                 pass
             if d and d["card"] in ("goblin_barrel", "miner", "graveyard", "goblin_drill") and d["tile"][1] < 20:

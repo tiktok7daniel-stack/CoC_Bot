@@ -43,9 +43,49 @@ def event(who, card, tile, why=""):
     _S["events"] = _S["events"][-14:]
 
 
-def battle(acc, brain, st, d, force=False):
+def _boxes(brain, st):
+    """What the eyes see, as boxes on the screen (fractions): every unit with its name, side and life."""
+    from royale.eyes import tile_xy
+    from royale.vision import constants as C
+    hw, hh = C.TILE_WIDTH / C.DISPLAY_WIDTH * 0.6, C.TILE_HEIGHT / C.DISPLAY_HEIGHT * 0.75
+    out = []
+
+    def add(u, x, y, mine, life):
+        cx, cy = tile_xy(x, y)
+        out.append({"n": str(u), "m": mine, "b": [round(cx - hw, 4), round(cy - 2 * hh, 4), round(cx + hw, 4),
+                                                   round(cy + hh * 0.6, 4)], "l": life})
+    for u, x, y in (brain._stable or [])[:40]:
+        try: life = round(float(brain.life(u, x, y)), 2)
+        except Exception: life = 1.0
+        add(u, x, y, False, life)
+    for a in (getattr(brain, "_allies_extra", None) or st.get("allies") or [])[:40]:
+        add(a[0], a[1], a[2], True, 1.0)
+    return out
+
+
+def _save_frame(acc, frame):
+    """A small copy of the screen (360 px wide) for the app's "the bot's eyes" panel, twice a second."""
+    if frame is None or time.time() - _S.get("ft", 0) < 0.5: return False
+    _S["ft"] = time.time()
+    try:
+        import cv2
+        h, w = frame.shape[:2]
+        small = cv2.resize(frame, (360, int(h * 360 / w)), interpolation=cv2.INTER_AREA)
+        ok, buf = cv2.imencode(".jpg", cv2.cvtColor(small, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 70])
+        if not ok: return False
+        p = path(acc).with_suffix(".jpg")
+        tmp = p.with_name(p.name + f".{os.getpid()}.tmp")
+        tmp.write_bytes(buf.tobytes())
+        tmp.replace(p)
+        return True
+    except Exception:
+        return False
+
+
+def battle(acc, brain, st, d, force=False, frame=None):
     """One look of the battle. Cheap: skipped when the last write is under 0.25 s old (unless a move was made)."""
     now = time.time()
+    if _save_frame(acc, frame): _S["frame_t"] = now
     hist = list(getattr(brain, "enemy_hist", []) or [])
     if len(hist) < _S["eh"]: _S["eh"] = 0
     for _t, name, x, y in hist[_S["eh"]:]:                 # their plays the bot noticed since the last write
@@ -94,6 +134,9 @@ def battle(acc, brain, st, d, force=False):
         "events": _S["events"],
         "engine": engine_state(),
         "perf": st.get("_perf") or {},
+        "frame_t": _S.get("frame_t", 0.0),
+        "boxes": _boxes(brain, st),
+        "target": (list(__import__("royale.eyes", fromlist=["tile_xy"]).tile_xy(*d["tile"])) if d else None),
     }
     _write(acc, data)
 

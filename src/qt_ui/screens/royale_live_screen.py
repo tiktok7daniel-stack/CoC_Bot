@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 
 from PySide6.QtCore import QPointF, QRectF, Qt, QTimer
-from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen
+from PySide6.QtGui import QBrush, QColor, QFont, QImage, QPainter, QPen
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from ..i18n import on_lang, tr
@@ -146,6 +146,61 @@ class Arena(QWidget):
         p.drawText(QRectF(c.x() - s * 2, c.y() + rad, s * 4, s * 0.8), Qt.AlignHCenter | Qt.AlignTop, _short(u["u"]))
 
 
+class Camera(QWidget):
+    """The bot's eyes: the real game picture (royale.live_view saves it twice a second) with a box, name and life bar
+    on every unit the eyes read — red theirs, blue ours — and a gold circle where the bot just played."""
+    def __init__(self):
+        super().__init__()
+        self.setMinimumSize(200, 340)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.img, self.img_t, self.d = None, 0.0, {}
+
+    def set_data(self, d, img_path):
+        self.d = d or {}
+        ft = float(self.d.get("frame_t") or 0)
+        if ft and ft != self.img_t:
+            im = QImage(str(img_path))
+            if not im.isNull(): self.img, self.img_t = im, ft
+        self.update()
+
+    def paintEvent(self, _e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.fillRect(self.rect(), QColor(TOKENS["void"]))
+        if self.img is None or self.d.get("phase") != "battle":
+            p.setPen(QColor(TOKENS["text"]))
+            p.setFont(ui_font(10))
+            p.drawText(self.rect(), Qt.AlignCenter | Qt.TextWordWrap, tr("rl_camera_none"))
+            return
+        iw, ih = self.img.width(), self.img.height()
+        sc = min(self.width() / iw, self.height() / ih)
+        w, h = iw * sc, ih * sc
+        ox, oy = (self.width() - w) / 2, (self.height() - h) / 2
+        p.drawImage(QRectF(ox, oy, w, h), self.img)
+        p.setFont(ui_font(7.5, QFont.Bold))
+        for b in self.d.get("boxes") or []:
+            x0, y0, x1, y1 = b["b"]
+            col = QColor("#3fa9ff") if b.get("m") else QColor("#ff4d4d")
+            r = QRectF(ox + x0 * w, oy + y0 * h, (x1 - x0) * w, (y1 - y0) * h)
+            p.setPen(QPen(col, 2)); p.setBrush(Qt.NoBrush)
+            p.drawRect(r)
+            name = " ".join(x.capitalize() for x in str(b.get("n") or "").replace("-", "_").split("_") if x)[:16]
+            tw = p.fontMetrics().horizontalAdvance(name) + 6
+            lab = QRectF(r.left(), r.top() - 13, max(tw, r.width()), 13)
+            p.fillRect(lab, col)
+            p.setPen(QColor("#ffffff"))
+            p.drawText(lab, Qt.AlignCenter, name)
+            life = float(b.get("l", 1.0))
+            if not b.get("m") and life < 0.999:
+                bar = QRectF(r.left(), r.bottom() + 1, r.width(), 3)
+                p.fillRect(bar, QColor(0, 0, 0, 160))
+                p.fillRect(QRectF(bar.left(), bar.top(), bar.width() * max(0.0, life), 3), QColor("#ffd24d"))
+        t = self.d.get("target")
+        if t:
+            p.setPen(QPen(QColor(TOKENS["gold"]), 3)); p.setBrush(Qt.NoBrush)
+            p.drawEllipse(QPointF(ox + t[0] * w, oy + t[1] * h), 11, 11)
+
+
 class RoyaleLiveScreen(Screen):
     key, title_key, icon_name = "royale_live", "royale_live_title", "eye"
 
@@ -164,6 +219,10 @@ class RoyaleLiveScreen(Screen):
         left = GlassCard("rl_arena", "eye", "rl_arena_sub")
         left.add(self.arena)
         row.addWidget(left, 3)
+        self.camera = Camera()
+        cam = GlassCard("rl_camera", "eye", "rl_camera_sub")
+        cam.add(self.camera)
+        row.addWidget(cam, 3)
         side = QVBoxLayout()
         side.setSpacing(10)
         self.c_state = GlassCard("rl_state", "clock")
@@ -206,14 +265,18 @@ class RoyaleLiveScreen(Screen):
         lay = _V(w)
         lay.setContentsMargins(6, 6, 6, 6)
         arena = Arena()
+        camera = Camera()
+        pair = QHBoxLayout()
+        pair.addWidget(arena, 1)
+        pair.addWidget(camera, 1)
         info = QLabel()
         info.setWordWrap(True)
         info.setTextFormat(Qt.RichText)
         info.setFont(ui_font(9.5))
-        lay.addWidget(arena, 1)
+        lay.addLayout(pair, 1)
         lay.addWidget(info)
-        w.resize(420, 820)
-        w._arena, w._info = arena, info
+        w.resize(780, 820)
+        w._arena, w._info, w._camera = arena, info, camera
         self._pop = w
         w.show()
         self.refresh(force=True)
@@ -222,6 +285,7 @@ class RoyaleLiveScreen(Screen):
         w = getattr(self, "_pop", None)
         if w is None or not w.isVisible(): return
         w._arena.set_data(d)
+        w._camera.set_data(d, self._path().with_suffix(".jpg"))
         if d.get("phase") != "battle":
             w._info.setText(tr("rl_phase_" + str(d.get("phase") or "none"))); return
         dec, th = d.get("decision"), d.get("think") or {}
@@ -262,6 +326,7 @@ class RoyaleLiveScreen(Screen):
         import time as _t
         if d.get("phase") == "battle" and _t.time() - d.get("t", 0) > 8: d["phase"] = "stale"
         self.arena.set_data(d)
+        self.camera.set_data(d, p.with_suffix(".jpg"))
         self.show_panel(d)
         self._feed_pop(d)
 
