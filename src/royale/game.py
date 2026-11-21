@@ -578,6 +578,17 @@ class RoyaleBot:
                             self._mode_2v2 = True
                             tap(*qm)
                 continue
+            # the chat window open over the result screen (a teammate wrote / left the chat): its red X first, it
+            # covers the Exit button (the user's picture, 5.87)
+            if find_word(ws, "chat", y_max=0.12) and (find_word(ws, "exit", y_min=0.85) or
+                                                      find_word(ws, "has left", "has joined", "left the chat")):
+                log.info("Clash Royale: the chat is open over the result — closing it")
+                try:
+                    if not _u().tap_red_x(): tap(0.9, 0.055)
+                except Exception:
+                    tap(0.9, 0.055)
+                time.sleep(1.0)
+                continue
             # "Choose your reward" after a battle (2026): the first choice, then its claim / OK
             if find_word(ws, "choose") and find_word(ws, "reward", "rewards"):
                 log.info("Clash Royale: a reward to choose after the battle — taking one")

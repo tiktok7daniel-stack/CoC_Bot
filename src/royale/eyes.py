@@ -45,12 +45,51 @@ class Eyes:
         self.units.possible_ally_names = ({u.name for n in names for u in self.by_name[n].units} if len(names) == 8
                                           else {u.name for c in self.all_cards for u in c.units})
 
+    @staticmethod
+    def known_decks():
+        """The account's real decks (5.87): the learning repo's knowledge/royale_my_cards.json (deck + 2v2 deck, fetched
+        by learn_sync) and the deck in the settings. A hand reading is checked against them."""
+        import json as _j
+        from pathlib import Path as _P
+        out = []
+        try:
+            d = _j.loads((_P.home() / ".CoC_Bot" / "learn" / "royale_my_cards.json").read_text(encoding="utf-8"))
+            for k, v in d.items():
+                if not k.startswith("deck"): continue
+                cards = v.get("cards") if isinstance(v, dict) else v
+                if isinstance(cards, list) and len(cards) == 8 and all(isinstance(c, str) for c in cards):
+                    out.append(list(cards))
+        except (OSError, ValueError, AttributeError):
+            pass
+        try:
+            import settings, utils
+            dk = ((settings.load(utils.INSTANCE_ID) or {}).get("royale") or {}).get("deck") or []
+            if len(dk) == 8 and dk not in out: out.append(list(dk))
+        except Exception:
+            pass
+        return out
+
+    def _snap(self, sure):
+        """5+ of the cards read are one of the account's real decks -> that deck exactly (a card misread — Goblin
+        Barrel read as Goblin Gang, both with a goblin face — is put right, before it is locked in for the battle)."""
+        best = None
+        for k in self.known_decks():
+            ov = len(set(sure) & set(k))
+            if ov >= 5 and (best is None or ov > best[0]): best = (ov, k)
+        return best[1] if best else None
+
     def learn_deck(self, hand):
-        """Hand cards seen in the first looks of a battle -> the deck once 8 different ones were seen 2+ times."""
+        """Hand cards seen in the first looks of a battle -> the deck once 8 different ones were seen 2+ times
+        (or once 5 of them make one of the account's known decks)."""
         if len(self.deck) == 8: return False
         for n in hand:
             if n and n != "blank": self.seen_counts[n] = self.seen_counts.get(n, 0) + 1
         sure = [n for n, k in sorted(self.seen_counts.items(), key=lambda kv: -kv[1]) if k >= 2][:8]
+        if len(sure) >= 5:
+            real = self._snap(sure)
+            if real and all(n in self.by_name for n in real):
+                self.set_deck(real)
+                return True
         if len(sure) == 8:
             self.set_deck(sure)
             return True

@@ -223,7 +223,38 @@ def frame(dims, adb_grab, device):
         if c.frame_t and time.monotonic() - c.frame_t > STALE:
             _S["stale"] = _S.get("stale", 0) + 1
             return None
-        if now > _S["ok_until"]:              # check the stream shows the same as a real screenshot
+        if now > _S["ok_until"] and not _S.get("checking"):
+            # check the stream shows the same as a real screenshot — on its own thread (5.87): the ADB screenshot
+            # it needs can take seconds, and before it the battle stood still that long once a minute (10 s
+            # freezes in the user's reports); the picture of this look is used meanwhile
+            _S["checking"] = True
+            _S["ok_until"] = now + 10                     # at most one check every 10 s, whatever it finds
+            threading.Thread(target=_verify, args=(c, adb_grab), daemon=True, name="stream-check").start()
+        if (img.shape[1], img.shape[0]) != tuple(dims):
+            img = cv2.resize(img, tuple(dims), interpolation=cv2.INTER_LINEAR)
+        else:
+            img = img.copy()
+        return img
+    except Exception as e:
+        _S["fails_n"] = _S.get("fails_n", 0) + 1                # each failure in a row waits longer (max 30 min)
+        _S["off_until"] = now + min(1800, REST * 2 ** (_S["fails_n"] - 1))
+        _S["why"] = _why(e)
+        if _S["logged"] is not False:
+            _log(f"Live screen not available: {_why(e)}")
+            _S["logged"] = False
+        try:
+            if _S["client"] is not None: _S["client"].close()
+        except Exception:
+            pass
+        _S["client"] = None
+        return None
+
+
+def _verify(c, adb_grab):
+    """The stream vs a real screenshot (royale / CoC alike); switches the stream off when they differ."""
+    import cv2, numpy as np
+    now = time.time()
+    try:
             # the screenshot takes a moment: compare it with the stream pictures from just before and just after it.
             # While the screen moves (end of battle, loading) the two moments differ anyway: then nothing is decided
             # and the check is done again a few seconds later (a moving screen made it switch the stream off wrongly)
@@ -265,24 +296,10 @@ def frame(dims, adb_grab, device):
             if ok and _S["logged"] is not True:
                 _log(f"Live screen on: the emulator streams its screen ({c.size[0]}x{c.size[1]}), every look is instant")
                 _S["logged"] = True
-        if (img.shape[1], img.shape[0]) != tuple(dims):
-            img = cv2.resize(img, tuple(dims), interpolation=cv2.INTER_LINEAR)
-        else:
-            img = img.copy()
-        return img
     except Exception as e:
-        _S["fails_n"] = _S.get("fails_n", 0) + 1                # each failure in a row waits longer (max 30 min)
-        _S["off_until"] = now + min(1800, REST * 2 ** (_S["fails_n"] - 1))
         _S["why"] = _why(e)
-        if _S["logged"] is not False:
-            _log(f"Live screen not available: {_why(e)}")
-            _S["logged"] = False
-        try:
-            if _S["client"] is not None: _S["client"].close()
-        except Exception:
-            pass
-        _S["client"] = None
-        return None
+    finally:
+        _S["checking"] = False
 
 
 def _why(e):
