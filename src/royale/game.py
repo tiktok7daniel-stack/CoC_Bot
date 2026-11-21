@@ -152,6 +152,13 @@ class RoyaleBot:
         if self.brain.p["ai"]: log.info("Clash Royale: the local AI model plays this battle (the rules only guard it)")
         self.brain.reset()
         self._prev_hand = None
+        engine_on = False
+        if self.s.get("engine_think", True):                 # the battle engine thinks every move through
+            from royale import engine
+            engine_on = engine.selftest(log)
+            if not engine_on and not getattr(self, "_engine_told", False):
+                self._engine_told = True
+                log.info("Clash Royale: the battle engine is not used — " + (engine.status()["why"] or "not available"))
         self._battle_t = time.time()
         if getattr(self, "_api_deck", None) and self.eyes.deck != self._api_deck and \
                 not getattr(self, "_expected_deck", None):           # a fresh copy is checked by the hand first
@@ -223,6 +230,11 @@ class RoyaleBot:
             except Exception:
                 log.warning("Clash Royale: a decision failed — next look", exc_info=True)
                 d = None
+            if engine_on:
+                try:
+                    d = self._engine_turn(st, d, ready, el)
+                except Exception:
+                    log.debug("engine turn failed", exc_info=True)
             if self.brain.arch and self.brain.arch != getattr(self, "_arch_logged", None):
                 self._arch_logged = self.brain.arch
                 log.info(f"Clash Royale: their deck looks like {self.brain.arch} "
@@ -818,6 +830,31 @@ def _status(self, st):
     except Exception: pass
 
 
+def _engine_turn(self, st, d, ready, el):
+    """The battle engine thinks the move through: plays the best candidate, keeps the brain's, or waits."""
+    from royale import engine
+    now = time.monotonic()
+    enemies = bool(self.brain._stable)
+    if not d and not enemies: return d
+    if not d and now - getattr(self, "_engine_t", 0) < 0.4: return d      # defense thinking: ~2 times a second
+    self._engine_t = now
+    res = engine.think(self.brain, st, st["hand"], [(i, st["hand"][i]) for i in ready], el, d, self.log)
+    if not res: return d
+    if res[0] == "wait":
+        if d: self.brain.undo(d)
+        if now - getattr(self, "_engine_wait_log", 0) > 5:
+            self._engine_wait_log = now
+            self.log.info("Clash Royale: " + res[1])
+        return None
+    _, i, n, tile, why = res
+    if d and d["card"] == n and tuple(d["tile"]) == tuple(tile):
+        d["why"] = f"{d['why']} | {why}"
+        return d
+    if d: self.brain.undo(d)
+    return self.brain.play_ai(i, n, tile, why, time.monotonic())
+
+
+RoyaleBot._engine_turn = _engine_turn
 RoyaleBot._status = _status
 RoyaleBot._say = _say
 RoyaleBot._go_ok = _go_ok

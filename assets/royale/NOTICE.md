@@ -43,3 +43,7 @@ pro.json "place" also holds 11k recent pro plays from hastylmao/Hasty-CR data/vo
 The evolved and hero card pictures: RoyaleAPI cr-api-assets (cards-150), https://github.com/RoyaleAPI/cr-api-assets,
 under Supercell's Fan Content Policy (https://supercell.com/en/fan-content-policy/); scripts/import_card_variants.py.
 bowler_hero.jpg: cut from the user's own deck screenshot (not in cr-api-assets yet).
+
+## engine/ (the battle engine)
+clash_royale_env: itzik123/ClashRoyaleAi (MIT), vendored unchanged in third_party/clash_royale_env (see its README
+for the commit); built for Windows by .github/workflows/royale_engine.yml. Used by src/royale/engine.py.
