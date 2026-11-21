@@ -7,6 +7,10 @@ on:
     paths:
       - "third_party/clash_royale_env/**"
       - ".github/workflows/royale_engine.yml"
+      - "src/royale/engine.py"
+      - "src/royale/engine_ai.py"
+      - "scripts/test_royale_engine.py"
+      - "scripts/test_royale_training.py"
   workflow_dispatch:
 
 permissions:
