@@ -434,7 +434,14 @@ class RoyaleBot:
                     live_view.phase(_u().INSTANCE_ID, "searching")
                 except Exception:
                     pass
-                tap(*b)
+                if self.s.get("training_camp", False):
+                    # Training Camp only (the user's choice): battles against the game's trainer, no trophies —
+                    # the bot practises and learns without risking the account's ladder
+                    if not self._start_training_camp():
+                        time.sleep(2.0)
+                        continue
+                else:
+                    tap(*b)
                 for _ in range(60):                          # matchmaking: up to ~1 minute
                     time.sleep(1)
                     if in_battle(frame()) or not _u().running(): break
@@ -902,6 +909,40 @@ def _engine_turn(self, st, d, ready, el):
 
 
 RoyaleBot._engine_turn = _engine_turn
+def _start_training_camp(self):
+    """Lobby -> the menu (the three lines at the top right) -> Training Camp -> its battle button.
+    -> True when a battle is starting."""
+    log = self.log
+    menu = None
+    for _ in range(2):
+        ws = words(frame())
+        if find_word(ws, "training camp", "training", y_max=0.9): break
+        tap(0.93, 0.10)                                       # the menu button (no text on it)
+        time.sleep(1.2)
+    ws = words(frame())
+    tc = find_word(ws, "training camp", "training", y_max=0.9)
+    if not tc:
+        log.info("Clash Royale: the Training Camp button was not found in the menu — closing it")
+        tap(0.5, 0.97)
+        return False
+    log.info("Clash Royale: Training Camp (a battle against the trainer, no trophies)")
+    tap(*tc)
+    time.sleep(1.5)
+    for _ in range(6):                                        # its own screen: a Battle / Play / Start / OK button
+        fr = frame()
+        if __import__("royale.eyes", fromlist=["in_battle"]).in_battle(fr): return True
+        ws = words(fr)
+        if any(any(n in t for n in NEVER) for t, _ in ws): break
+        go = find_word(ws, "battle", "play", "start", "fight", "ok", "yes", y_min=0.3)
+        if go:
+            tap(*go)
+            time.sleep(1.5)
+            return True
+        time.sleep(1.0)
+    return True
+
+
+RoyaleBot._start_training_camp = _start_training_camp
 RoyaleBot._status = _status
 RoyaleBot._say = _say
 RoyaleBot._go_ok = _go_ok
