@@ -226,7 +226,29 @@ inline void spawnSpell(const CardStats& stats, float x, float y, int team, Board
     board.addEntity(spell);
 }
 
-inline void spawn(const CardStats& stats, float x, float y, int team, Board& board) {
+// Card levels (CoC_Bot, 5.85): the stats are level 11 (tournament standard); a real account's cards are often higher
+// (each level ~ +10 % hp and damage). One multiplier per team, set from Python (set_team_level_scale) before a
+// simulation; it applies to every unit / spell spawned for that team from then on. 1.0 = the engine's own levels.
+inline float& teamLevelScale(int team) {
+    static float scale[2] = {1.0f, 1.0f};
+    return scale[team == 1 ? 1 : 0];
+}
+
+inline void spawnScaled(const CardStats& stats, float x, float y, int team, Board& board);
+
+inline void spawn(const CardStats& stats0, float x, float y, int team, Board& board) {
+    const float m = teamLevelScale(team);
+    if (m != 1.0f) {
+        CardStats scaled = stats0;
+        scaled.hp = static_cast<int>(scaled.hp * m + 0.5f);
+        scaled.damage = static_cast<int>(scaled.damage * m + 0.5f);
+        spawnScaled(scaled, x, y, team, board);
+        return;
+    }
+    spawnScaled(stats0, x, y, team, board);
+}
+
+inline void spawnScaled(const CardStats& stats, float x, float y, int team, Board& board) {
     switch (stats.archetype) {
         case Archetype::MeleeSquad:             spawnMeleeSquad(stats, x, y, team, board); break;
         case Archetype::RangedSquad:             spawnRangedSquad(stats, x, y, team, board); break;

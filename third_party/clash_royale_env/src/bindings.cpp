@@ -3,6 +3,7 @@
 #include <optional>
 #include "ArenaLayout.h"
 #include "ClashEnv.h"
+#include "CardFactories.h"
 
 namespace py = pybind11;
 
@@ -20,6 +21,10 @@ PYBIND11_MODULE(clash_royale_env, m) {
     m.attr("ARENA_LEFT_BRIDGE_X") = ArenaLayout::LEFT_BRIDGE_X;
     m.attr("ARENA_RIGHT_BRIDGE_X") = ArenaLayout::RIGHT_BRIDGE_X;
     m.attr("ARENA_BRIDGE_Y") = ArenaLayout::BRIDGE_Y;
+    // Card levels per team (CoC_Bot): a multiplier on hp and damage of everything spawned for that team.
+    m.def("set_team_level_scale", [](int team, float scale) { CardFactories::teamLevelScale(team) = scale; },
+          py::arg("team"), py::arg("scale"));
+    m.def("get_team_level_scale", [](int team) { return CardFactories::teamLevelScale(team); }, py::arg("team"));
     m.def("arena_king_y", &ArenaLayout::kingY, py::arg("team"),
           "Row of `team`'s King Tower.");
     m.def("arena_princess_y", &ArenaLayout::princessY, py::arg("team"),

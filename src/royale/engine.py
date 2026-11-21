@@ -92,10 +92,35 @@ def eng_xy(tx, ty):
     return float(max(0, min(17, tx))), float(max(0.0, min(33.0, ty + 1)))
 
 
+def level_scale(brain):
+    """Our cards' strength vs theirs in the engine (5.85): the engine's cards are level 11; only the DIFFERENCE between
+    our levels (official API / card scan) and the opponent's usual level (their battle logs) is applied — +10 % hp
+    and damage a level, on our side — so towers keep the engine's own levels. Unknown -> 1.0."""
+    try:
+        theirs = getattr(brain, "their_level", None)
+        lv = [brain.my_level(n) for n in (brain.deck or [])]
+        lv = [float(x) for x in lv if x]
+        if not lv or not theirs: return 1.0
+        d = sum(lv) / len(lv) - float(theirs)
+        return float(max(0.6, min(1.8, 1.1 ** d)))
+    except Exception:
+        return 1.0
+
+
+def _set_levels(m, ours=1.0, theirs=1.0):
+    f = getattr(m, "set_team_level_scale", None)
+    if f is None: return False                       # an engine built before 5.85
+    f(0, float(ours)); f(1, float(theirs))
+    return True
+
+
 def _max_hp(m, cid):
-    """A card's first body's full life (read once from a scratch engine)."""
+    """A card's first body's full life at the engine's own level (read once from a scratch engine)."""
     if cid in _S["maxhp"]: return _S["maxhp"][cid]
     hp = None
+    g = getattr(m, "get_team_level_scale", None)
+    keep = (g(0), g(1)) if g else None
+    if keep: _set_levels(m, 1.0, 1.0)
     try:
         e = m.ClashRoyaleEnv(_filler_deck(m, [cid]), _filler_deck(m, []), 3600)
         e.reset()
@@ -107,6 +132,8 @@ def _max_hp(m, cid):
         _S["bodies"][cid] = max(1, len(new))
     except Exception:
         hp = None
+    finally:
+        if keep: _set_levels(m, *keep)
     _S["maxhp"][cid] = hp
     return hp
 
@@ -216,6 +243,7 @@ def mirror(brain, st, hand, my_elixir):
     deck = list(dict.fromkeys(deck + [n for n in (brain.deck or []) if n in ids]))[:8]
     if not any(hand): return None, "no card of the hand is known to the engine"
     their = [n for n in list(brain.enemy_seen) + sorted(brain.predicted) if n in ids][:8]
+    _set_levels(m, level_scale(brain), 1.0)                   # our levels vs theirs (5.85)
     env = m.ClashRoyaleEnv(_deck_ids(m, deck), _deck_ids(m, their), 3600)
     env.reset()
     env.set_current_tick(int(min(3599, brain.elapsed() * 10)))

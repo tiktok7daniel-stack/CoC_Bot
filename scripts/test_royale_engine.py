@@ -142,5 +142,25 @@ if env5 is not None:
     print(f"  Musketeer at the bridge: {alone:+.2f} if they do nothing, {worst:+.2f} after their best answer")
     check("their answer makes a lone Musketeer worse", worst < alone, f"{alone:+.2f} vs {worst:+.2f}")
 
+# 5.85: card levels — our cards 4 levels above theirs come out ~46 % stronger in the engine
+if hasattr(m, "set_team_level_scale"):
+    hog_id = engine.card_ids()["hog_rider"][0]
+    def spawned_hp(scale):
+        m.set_team_level_scale(0, scale)
+        e = m.ClashRoyaleEnv(engine._filler_deck(m, [hog_id]), engine._filler_deck(m, []), 3600)
+        e.reset()
+        ids0 = {u.id for u in e.get_units()}
+        e.inject(hog_id, 8.0, 10.0, 0, -1.0, 0)
+        e.step_self_play_fast(-1, 0.0, 0.0, -1, 0.0, 0.0, 1)
+        return max(u.hp for u in e.get_units() if u.id not in ids0 and not u.tower)
+    h1, h2 = spawned_hp(1.0), spawned_hp(1.1 ** 4)
+    m.set_team_level_scale(0, 1.0)
+    print(f"  Hog hp at the engine's level {h1}, 4 levels higher {h2}")
+    check("card levels change the units' strength", abs(h2 / h1 - 1.1 ** 4) < 0.02, f"{h2 / h1:.3f}")
+    b6 = brain([]); b6.levels = {n.replace("_", ""): 15 for n in deck}; b6.their_level = 11
+    check("our level 15 vs their 11 -> x1.46", abs(engine.level_scale(b6) - 1.4641) < 0.01, str(engine.level_scale(b6)))
+else:
+    check("the engine has card levels (rebuilt)", False, "set_team_level_scale missing")
+
 print(f"\n{'ALL PASSED' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)
