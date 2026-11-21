@@ -38,6 +38,26 @@ jobs:
           name: engine-${{ matrix.python }}
           path: assets/royale/engine/*.pyd
 
+  training-smoke:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          name: engine-3.12
+          path: assets/royale/engine
+      - name: Install the training stack (CPU)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy psutil gymnasium tensorboard
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Train for a few minutes with the account's deck
+        run: python scripts/test_royale_training.py
+
   commit:
     needs: build
     runs-on: ubuntu-latest
