@@ -165,7 +165,7 @@ class RoyaleBot:
                 try:
                     from royale import engine_ai
                     engine_ai.new_battle()
-                    if engine_ai.newest() and not getattr(self, "_gate_running", False):
+                    if False:
                         import threading
                         def _gate(deck=list(self.brain.deck or self.eyes.deck or [])):
                             self._gate_running = True
@@ -432,6 +432,12 @@ class RoyaleBot:
             if in_battle(fr):
                 self.unknown_since = None
                 last = self.battle()
+                try:
+                    from royale import engine_ai
+                    engine_ai.resume_background()                      # training / version test go on
+                    self._gate_after_battle()
+                except Exception:
+                    pass
                 self.results(last)
                 try:
                     from royale import live_view
@@ -974,6 +980,28 @@ def _start_training_camp(self):
 
 
 RoyaleBot._start_training_camp = _start_training_camp
+def _gate_after_battle(self):
+    """Between battles: a newer trained version is tested against the one in use (its own process, paused while
+    a battle runs)."""
+    from royale import engine_ai
+    if not engine_ai.newest() or getattr(self, "_gate_running", False): return
+    import threading
+    deck = list(self.brain.deck or self.eyes.deck or [])
+
+    def _gate():
+        self._gate_running = True
+        try:
+            msg = engine_ai.gate_in_background(deck)
+            if msg:
+                self.log.info("Clash Royale AI: " + msg)
+                try: self.notify("🤖 كلاش رويال: " + msg)
+                except Exception: pass
+        finally:
+            self._gate_running = False
+    threading.Thread(target=_gate, daemon=True, name="ai-gate").start()
+
+
+RoyaleBot._gate_after_battle = _gate_after_battle
 RoyaleBot._status = _status
 RoyaleBot._say = _say
 RoyaleBot._go_ok = _go_ok

@@ -22,6 +22,7 @@ independent. Anything wrong -> the bot plays as before, and says why.
 import math, os, sys, time
 
 ROLLOUT_TICKS = 80             # 8 s ahead
+THINK_BUDGET = 0.08            # seconds of thinking per look at most (a slow PC thinks through fewer moves, never waits)
 ACTION_DELAY_TICKS = 4         # from the screen the decision was made on to the card on the board: ~0.4 s
 TOWER_ELIXIR = {0: 18.0, 1: 10.0, 2: 10.0}    # what a whole tower is worth, in elixir (King more: it ends the game)
 OFFENSE_DISCOUNT = 0.5         # in a rollout the opponent does not answer: damage we deal counts half
@@ -378,7 +379,7 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
     base = _value(w_end, brain, before)
     if _S.get("debug") is not None:
         _S["debug"].append(("wait", round(base, 2), _detail(w_end, before)))
-    best, tried, scored = None, 0, []
+    best, tried, scored, rule_v = None, 0, [], None
     ids = card_ids()
     m = module()
     for i, n, (tx, ty) in candidates(brain, playable, rule_d, defend, first):
@@ -397,7 +398,8 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
         if _S.get("debug") is not None:
             _S["debug"].append((round(v, 2), n, (tx, ty), _detail(end, before)))
         if best is None or v > best[0]: best = (v, i, n, (tx, ty))
-        if time.perf_counter() - t0 > 0.25: break                 # a look must stay fast
+        if rule_d and n == rule_d["card"] and (tx, ty) == tuple(rule_d["tile"]): rule_v = v
+        if time.perf_counter() - t0 > THINK_BUDGET: break         # a look must stay fast
     ms = (time.perf_counter() - t0) * 1000
     # what was thought through, for the app's battle view (royale.live_view)
     _S["last"] = {"t": time.time(), "defend": defend, "wait": round(base, 2), "ms": round(ms),
@@ -409,6 +411,9 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
         if v > WAIT_MARGIN:
             return ("play", i, n, tile, f"engine: {n} at {tile} is +{v:.1f} elixir vs waiting "
                                          f"({tried} moves thought through, {ms:.0f} ms{ai_note})")
+        # nothing clearly better than waiting: the brain's own move stands unless the engine finds it clearly bad
+        # (before 5.69 the engine cancelled it and the bot looked slow and hesitant)
+        if rule_d and (rule_v is None or rule_v >= VETO_MARGIN): return None
         return ("wait", f"engine: nothing beats waiting ({tried} moves, best {v:+.1f})")
     if first and not rule_d and best[2] == first[0][1] and v > WAIT_MARGIN:
         return ("play", i, n, tile, f"engine: the trained AI's {n} at {tile} is +{v:.1f} vs waiting{ai_note}")

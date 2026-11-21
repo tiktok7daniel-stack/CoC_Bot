@@ -18,7 +18,7 @@ from pathlib import Path
 HOME = Path.home() / ".CoC_Bot" / "royale_ai"
 PKG = Path(__file__).resolve().parents[2] / "third_party" / "clash_royale_env"
 NEEDS = (("torch", "torch"), ("gymnasium", "gymnasium"), ("tensorboard", "tensorboard"), ("numpy", "numpy"))
-_S = {"net": None, "net_mtime": 0.0, "hid": None, "why": ""}
+_S = {"net": None, "net_mtime": 0.0, "hid": None, "why": "", "loading": False, "paused": []}
 
 
 TRUSTED = "trusted.pth"
@@ -214,10 +214,16 @@ def gate_in_background(deck_names):
     if py.lower().endswith("pythonw.exe"): py = py[:-len("pythonw.exe")] + "python.exe"
     kw = {"creationflags": 0x08000000 | 0x00004000} if sys.platform == "win32" else {}
     try:
-        r = subprocess.run([py, "-c", code], capture_output=True, text=True, timeout=1800, **kw)
+        p = subprocess.Popen([py, "-c", code], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, **kw)
+        HOME.mkdir(parents=True, exist_ok=True)
+        (HOME / "gate.pid").write_text(str(p.pid))
+        out, _ = p.communicate(timeout=3600)
     except Exception as e:
         return f"could not test the new version: {e}"
-    for ln in (r.stdout or "").splitlines():
+    finally:
+        try: (HOME / "gate.pid").unlink()
+        except OSError: pass
+    for ln in (out or "").splitlines():
         if ln.startswith("GATE:"): return json.loads(ln[5:])
     return None
 
@@ -240,11 +246,59 @@ def _net():
 
 
 def new_battle():
+    """A battle starts: the trained AI's memory is cleared and its network is loaded in the background (loading
+    torch inside a battle stopped the bot for seconds); training and the version test are paused so the battle
+    gets the whole CPU."""
     _S["hid"] = None
+    pause_background()
+    if weights() is not None and _S["net"] is None and not _S["loading"]:
+        import threading
+        def _load_bg():
+            _S["loading"] = True
+            try: _net()
+            finally: _S["loading"] = False
+        threading.Thread(target=_load_bg, daemon=True, name="ai-load").start()
+
+
+def _background_pids():
+    out = []
+    for f in (_pid_file(), HOME / "gate.pid"):
+        try: out.append(int(f.read_text()))
+        except (OSError, ValueError): pass
+    return out
+
+
+def pause_background():
+    """Suspend the training and the version test (and their workers) while the bot plays."""
+    try:
+        import psutil
+    except ImportError:
+        return
+    for pid in _background_pids():
+        try:
+            p = psutil.Process(pid)
+            for c in [p] + p.children(recursive=True):
+                if c.status() != psutil.STATUS_STOPPED:
+                    c.suspend(); _S["paused"].append(c.pid)
+        except Exception:
+            pass
+
+
+def resume_background():
+    """A battle is over: training and the version test go on."""
+    try:
+        import psutil
+    except ImportError:
+        return
+    for pid in _S["paused"]:
+        try: psutil.Process(pid).resume()
+        except Exception: pass
+    _S["paused"] = []
 
 
 def propose(env):
     """The trained network's move on the mirrored arena: (hand slot or None for wait, engine x, engine y)."""
+    if _S["net"] is None or _S["loading"]: return None          # loaded in the background, never in a battle
     net = _net()
     if net is None: return None
     try:
