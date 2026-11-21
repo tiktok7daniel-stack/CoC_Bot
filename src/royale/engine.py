@@ -26,7 +26,8 @@ ACTION_DELAY_TICKS = 4         # from the screen the decision was made on to the
 TOWER_ELIXIR = {0: 18.0, 1: 10.0, 2: 10.0}    # what a whole tower is worth, in elixir (King more: it ends the game)
 OFFENSE_DISCOUNT = 0.5         # in a rollout the opponent does not answer: damage we deal counts half
 WAIT_MARGIN = 0.4              # a move must beat waiting by this much (elixir)
-VETO_MARGIN = -1.0             # the brain's move is dropped when it is this much worse than waiting
+VETO_MARGIN = -2.5             # the brain's attack is dropped only when it is clearly worse than waiting (the rollout's
+                               # 8 s are short for an attack's full worth, and the opponent there does not answer)
 
 _S = {"mod": None, "ok": None, "why": "", "ids": None, "maxhp": {}, "bodies": {}}
 OURS_STANDING = 0.6            # our units still standing are worth this much of their elixir (they may still die)
@@ -197,8 +198,11 @@ def mirror(brain, st, hand, my_elixir):
     def put(units, team):
         groups = {}
         for u, x, y, *_ in units:
-            cn = unit_card(u) or u
-            if cn not in ids: continue
+            uu = str(u).replace("-", "_")                       # the eyes' names and the big model's ("hog-rider")
+            cn = unit_card(u) or unit_card(uu) or uu
+            if cn not in ids:
+                _S.setdefault("unknown_units", set()).add(str(u))
+                continue
             groups.setdefault(cn, []).append((x, y, u))
         for cn, pts in groups.items():
             per = max(1, (card(cn) or {}).get("count") or 1)
