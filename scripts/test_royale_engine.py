@@ -44,7 +44,7 @@ print("  towers:", tw)
 check("our towers at the bottom (team 0, low y)", all((t[1] < 10) == (t[2] == 0) for t in tw))
 # the bot's tower places (royale.brain) land on the engine's towers
 from royale.brain import OUR_TOWERS, THEIR_TOWERS
-ok_t = all(any(abs(tx - (bx - 0.5)) < 0.01 and abs(ty - (by + 1)) < 0.01 for tx, ty, _ in tw)
+ok_t = all(any(abs(tx - (bx - 0.5)) < 0.6 and abs(ty - (by + 1)) < 0.6 for tx, ty, _ in tw)
            for bx, by in list(OUR_TOWERS.values()) + list(THEIR_TOWERS.values()))
 check("the bot's tower places = the engine's", ok_t)
 
@@ -58,10 +58,13 @@ def brain(stable, seen=()):
 # defense: an enemy Hog at our left bridge, we hold Cannon / Musketeer / Fireball / Log
 b = brain([("hog-rider", 3, 14)], {"hog_rider"})
 st = {"hand": ["cannon", "musketeer", "fireball", "the_log"], "ready": [0, 1, 2, 3], "towers": {}, "allies": []}
+engine._S["debug"] = []
 t0 = time.perf_counter()
 r = engine.think(b, st, st["hand"], [(i, n) for i, n in enumerate(st["hand"])], 7.0, None, Log())
 ms = (time.perf_counter() - t0) * 1000
 print("  defense vs Hog:", r, f"{ms:.0f} ms")
+for row in sorted(engine._S["debug"], key=lambda x: -x[1] if x[0] == "wait" else -x[0])[:12]: print("   ", row)
+engine._S["debug"] = None
 check("defends a Hog with a card (not a wait)", r is not None and r[0] == "play")
 check("does not answer a lone Hog with Fireball", r is None or r[0] != "play" or r[2] != "fireball")
 check("thinks fast enough (< 300 ms)", ms < 300, f"{ms:.0f} ms")

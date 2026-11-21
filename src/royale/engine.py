@@ -262,6 +262,14 @@ def _army(env):
     return out
 
 
+def _detail(env, before):
+    """For checks: tower life lost per side and each side's army worth now vs before."""
+    lost = {t: sum(before["towers"][(t, k)] - max(0, env.get_tower_hp(t, k)) for k in (0, 1, 2)) for t in (0, 1)}
+    a = _army(env)
+    return {"our_tower_lost": lost[0], "their_tower_lost": lost[1], "army_ours": (round(before["army"][0], 2),
+            round(a[0], 2)), "army_theirs": (round(before["army"][1], 2), round(a[1], 2))}
+
+
 def _snap_state(env):
     return {"towers": {(t, s): max(0, env.get_tower_hp(t, s)) for t in (0, 1) for s in (0, 1, 2)},
             "army": _army(env)}
@@ -362,7 +370,10 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
     except Exception:
         pass
     before = _snap_state(env)
-    base = _value(rollout(env, None, 0, 0), brain, before)
+    w_end = rollout(env, None, 0, 0)
+    base = _value(w_end, brain, before)
+    if _S.get("debug") is not None:
+        _S["debug"].append(("wait", round(base, 2), _detail(w_end, before)))
     best, tried = None, 0
     ids = card_ids()
     m = module()
@@ -375,8 +386,11 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
         except Exception:
             continue
         cost = float((m.get_card_info(ids[n][0]) or {}).get("cost", 3))
-        v = _value(rollout(env, hs, x, y), brain, before, cost) - base
+        end = rollout(env, hs, x, y)
+        v = _value(end, brain, before, cost) - base
         tried += 1
+        if _S.get("debug") is not None:
+            _S["debug"].append((round(v, 2), n, (tx, ty), _detail(end, before)))
         if best is None or v > best[0]: best = (v, i, n, (tx, ty))
         if time.perf_counter() - t0 > 0.25: break                 # a look must stay fast
     ms = (time.perf_counter() - t0) * 1000
