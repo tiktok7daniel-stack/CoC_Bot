@@ -374,7 +374,7 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
     base = _value(w_end, brain, before)
     if _S.get("debug") is not None:
         _S["debug"].append(("wait", round(base, 2), _detail(w_end, before)))
-    best, tried = None, 0
+    best, tried, scored = None, 0, []
     ids = card_ids()
     m = module()
     for i, n, (tx, ty) in candidates(brain, playable, rule_d, defend, first):
@@ -389,11 +389,16 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
         end = rollout(env, hs, x, y)
         v = _value(end, brain, before, cost) - base
         tried += 1
+        scored.append({"card": n, "tile": [tx, ty], "v": round(v, 2)})
         if _S.get("debug") is not None:
             _S["debug"].append((round(v, 2), n, (tx, ty), _detail(end, before)))
         if best is None or v > best[0]: best = (v, i, n, (tx, ty))
         if time.perf_counter() - t0 > 0.25: break                 # a look must stay fast
     ms = (time.perf_counter() - t0) * 1000
+    # what was thought through, for the app's battle view (royale.live_view)
+    _S["last"] = {"t": time.time(), "defend": defend, "wait": round(base, 2), "ms": round(ms),
+                  "tried": tried, "ai": ai_note.strip("; "),
+                  "cands": sorted(scored, key=lambda c: -c["v"])[:24]}
     if best is None: return None
     v, i, n, tile = best
     if defend:

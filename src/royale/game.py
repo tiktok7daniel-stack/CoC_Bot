@@ -152,6 +152,11 @@ class RoyaleBot:
         if self.brain.p["ai"]: log.info("Clash Royale: the local AI model plays this battle (the rules only guard it)")
         self.brain.reset()
         self._prev_hand = None
+        try:
+            from royale import live_view
+            live_view.new_battle()
+        except Exception:
+            pass
         engine_on = False
         if self.s.get("engine_think", True):                 # the battle engine thinks every move through
             from royale import engine
@@ -263,6 +268,12 @@ class RoyaleBot:
             if self.brain.predicted and self.brain.predicted != getattr(self, "_pred_logged", None):
                 self._pred_logged = set(self.brain.predicted)
                 log.info("Clash Royale: their deck probably also has " + ", ".join(sorted(self.brain.predicted)))
+            try:
+                from royale import live_view
+                if d: live_view.event("us", d["card"], d["tile"], d.get("why", ""))
+                live_view.battle(_u().INSTANCE_ID, self.brain, st, d, force=bool(d))
+            except Exception:
+                pass
             if d:
                 self._spent = (__import__("royale.brain", fromlist=["card"]).card(d["card"]).get("cost", 4),
                                time.monotonic(), el)
@@ -391,6 +402,11 @@ class RoyaleBot:
                 self.unknown_since = None
                 last = self.battle()
                 self.results(last)
+                try:
+                    from royale import live_view
+                    live_view.phase(_u().INSTANCE_ID, "result", f"{self.wins} / {self.losses}")
+                except Exception:
+                    pass
                 continue
             ws = words(fr)
             b = find_word(ws, "battle", y_min=0.55, y_max=0.9)
@@ -413,6 +429,11 @@ class RoyaleBot:
                 self.unknown_since = None
                 self._reward_taps = 0
                 log.info("Clash Royale: Battle")
+                try:
+                    from royale import live_view
+                    live_view.phase(_u().INSTANCE_ID, "searching")
+                except Exception:
+                    pass
                 tap(*b)
                 for _ in range(60):                          # matchmaking: up to ~1 minute
                     time.sleep(1)

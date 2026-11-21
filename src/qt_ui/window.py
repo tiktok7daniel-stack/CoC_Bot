@@ -21,6 +21,7 @@ from .screens.bot_settings_screen import BotSettingsScreen
 from .screens.builder_base_screen import BuilderBaseScreen
 from .screens.dashboard_screen import DashboardScreen
 from .screens.royale_screen import RoyaleScreen
+from .screens.royale_live_screen import RoyaleLiveScreen
 from .screens.logs_diagnostics_screen import LogsScreen
 from .screens.setup_wizard_dialog import SetupWizard
 from .screens.statistics_screen import StatisticsScreen
@@ -127,7 +128,7 @@ class MainWindow(QMainWindow):
         self.banner = Banner(canvas)
         self.screens = {}
         for cls in (DashboardScreen, UpgradeDeckScreen, AccountsScreen, AttackScreen, BuilderBaseScreen, StatisticsScreen, VillageScreen,
-                    VillageManagerScreen, LearnScreen, LogsScreen, BotSettingsScreen, RoyaleScreen):
+                    VillageManagerScreen, LearnScreen, LogsScreen, BotSettingsScreen, RoyaleScreen, RoyaleLiveScreen):
             s = cls(self.ctx)
             self.screens[s.key] = s
             self.stack.addWidget(s)
@@ -250,8 +251,8 @@ class MainWindow(QMainWindow):
             self.sync_accounts()
         cur = getattr(self, "current", None)
         if cur is None: return
-        if royale and cur not in ("royale", "acc", "set"): self.show_screen("royale")
-        elif not royale and cur == "royale": self.show_screen("dash")
+        if royale and cur not in ("royale", "royale_live", "acc", "set"): self.show_screen("royale")
+        elif not royale and cur in ("royale", "royale_live"): self.show_screen("dash")
 
     def choose_game(self, force=True):
         """The game chooser (when the program opens, and from the sidebar's 'change game')."""
@@ -287,8 +288,8 @@ class MainWindow(QMainWindow):
         if key == "setup":
             self.setup.open_wizard()
             return
-        if getattr(self, "_royale", None) and key not in ("royale", "acc", "set"): key = "royale"
-        elif getattr(self, "_royale", None) is False and key == "royale": key = "dash"
+        if getattr(self, "_royale", None) and key not in ("royale", "royale_live", "acc", "set"): key = "royale"
+        elif getattr(self, "_royale", None) is False and key in ("royale", "royale_live"): key = "dash"
         s = self.screens.get(key)
         if not s: return
         self.current = key
