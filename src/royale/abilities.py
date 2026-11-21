@@ -12,12 +12,19 @@ good moment, paying its elixir:
   monk           Pensive Protection (1) a spell of theirs landing near him or a push in front of him
   little_prince  Royal Rescue (3)     2+ enemies near him: the guardian charges in
   boss_bandit / goblinstein (1-2)     a fight near them
+  hero cards (seen with their hero picture in the hand: Hero Bowler, Knight, Giant, Musketeer, ...):
+  bowler (hero)  Stone Swish (2)      plants his feet and throws 4 boulders far (11.5 tiles, 9 s): when he is in
+                                      reach of their tower or 2+ enemies; not while they still hold The Log /
+                                      Tornado / Barbarian Barrel (a push in the 2.5 s wind-up wastes it)
+  other heroes   (2, a guess)         a fight near them
 Never pays more elixir than there is; never taps a button that is grey (cooling down).
 """
 import time
 
 COST = {"archer_queen": 1, "golden_knight": 1, "skeleton_king": 2, "mighty_miner": 1, "monk": 1,
         "little_prince": 3, "boss_bandit": 1, "goblinstein": 2}
+HERO_COST = {"bowler": 2}                   # hero cards' abilities (the others: 2, until their cost is known)
+PUSHERS = {"the_log", "tornado", "barbarian_barrel", "fireball", "snowball", "giant_snowball", "bowler"}
 # the strip just above the cards (fractions of the 720x1280 screen): the left and the right button places
 REGIONS = {"left": (0.0, 0.745, 0.21, 0.835), "right": (0.79, 0.745, 1.0, 0.835)}
 
@@ -59,7 +66,8 @@ class Abilities:
 
     def tick(self, frame, brain, elixir, tap):
         """Use an ability when it pays. -> the champion whose ability was used, or None."""
-        heroes = [p for p in brain.plays if p["card"] in COST and brain.elapsed() - p["t"] < 90]
+        mine = getattr(brain, "heroes", set()) or set()
+        heroes = [p for p in brain.plays if (p["card"] in COST or p["card"] in mine) and brain.elapsed() - p["t"] < 90]
         if not heroes or not self.base: return None
         now = time.monotonic()
         btns = self.buttons(frame)
@@ -70,12 +78,13 @@ class Abilities:
             if not ready or now < self.backoff.get(k, 0) or now - self.last_tap.get(k, 0) < 3.0: continue
             hero = heroes[-1] if (k == "right" or len(heroes) == 1) else heroes[0]
             name = hero["card"]
-            if COST.get(name, 2) > elixir: continue
+            cost = COST.get(name) or HERO_COST.get(name, 2)
+            if cost > elixir: continue
             if not self._good_moment(name, hero, brain): continue
             tap(*xy)
             self.last_tap[k] = now
             self.backoff[k] = now + 6.0                       # it cools down: do not look again for a while
-            self.log.info(f"Clash Royale: {name} ability ({COST.get(name, '?')} elixir)")
+            self.log.info(f"Clash Royale: {name} ability ({cost} elixir)")
             return name
         return None
 
@@ -96,4 +105,10 @@ class Abilities:
         if name == "mighty_miner": return len(near) >= 2 or at_tower
         if name == "monk": return spell or len(near) >= 2
         if name == "little_prince": return len(near) >= 2
+        if name == "bowler":
+            hand = brain.their_hand() if hasattr(brain, "their_hand") else None
+            if hand and any(c in PUSHERS for c in hand): return False      # it would be pushed in the wind-up
+            reach = any(dist((hx, hy), t) <= 11.5 for t in THEIR_TOWERS.values()) and hy >= 15
+            return reach or len([1 for _u, x, y in getattr(brain, "_stable", []) or []
+                                 if dist((x, y), (hx, hy)) <= 11.5]) >= 2
         return len(near) >= 2

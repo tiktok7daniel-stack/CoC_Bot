@@ -190,11 +190,15 @@ class RoyaleBot:
                 continue
             # the deck is learned from coloured (playable) cards only: grey ones get mixed up (Mini P.E.K.K.A
             # was read as Little Prince on the user's screen)
+            try: self.brain.see_hand(st["hand"], st.get("hand_look"))
+            except Exception: pass
             if self.eyes.learn_deck([h for i, h in enumerate(st["hand"]) if i in st["ready"]]):
                 log.info("Clash Royale: my deck = " + ", ".join(self.eyes.deck))
                 self.brain.deck = list(self.eyes.deck)
                 try: self._check_deck()
                 except Exception: log.debug("deck check failed", exc_info=True)
+            if len(self.eyes.deck) == 8 and getattr(self, "_studied", None) != sorted(self.eyes.deck):
+                self._study_deck()
                 try: _save_deck(self.eyes.deck)
                 except Exception: pass
             # what was just spent: the picture can lag a moment behind a play ("Not enough Elixir!")
@@ -506,6 +510,12 @@ def _pick_deck(self):
         # no official API: the bot reads the collection from the screen itself (once a week), picks the best deck
         # for these levels from the replays' win rates; the settings' deck when the reading failed
         if not deck_pick.due(acc, every=7 * 86400): return
+        if not [c for c in (self.s.get("deck") or []) if c]:
+            # the deck in the game is not known yet: one battle first (the bot learns it from its hand), then it is
+            # compared with the others — before 5.52.1 a deck was copied in blind on the very first start
+            self.log.info("Clash Royale: learning your deck in a battle first, then comparing it with the best others")
+            self._pick_after_learn = True
+            return
         from royale import collection
         from royale.brain import card, cards_db
         lv = collection.load(acc)
@@ -514,7 +524,17 @@ def _pick_deck(self):
             try: lv = collection.scan(acc, self.log)
             except Exception: self.log.debug("collection scan failed", exc_info=True); lv = {}
         names = {cr_api.key_of(n): n for n in cards_db()}
-        pick_off = deck_pick.choose_offline(lv) if lv else None
+        cur = [c for c in (self.s.get("deck") or []) if c]
+        pick_off = deck_pick.choose_offline(lv, current=cur, evo=self.s.get("deck_evo") or [],
+                                            heroes=self.s.get("deck_heroes") or []) if lv else None
+        if pick_off and pick_off.get("keep"):
+            deck_pick.mark(acc, {"cards": cur, "why": pick_off["why"]})
+            self.log.info(f"Clash Royale: keeping your deck — {pick_off['why']}")
+            try: self.notify("🃏 كلاش رويال: ديكك الحالي هو الأحسن ليك (بالتطويرات والهيرو) — مش هغيره\n" + pick_off["why"])
+            except Exception: pass
+            return
+        if not pick_off and cur:
+            return                                      # nothing better known: the deck in the game stays
         if pick_off:
             want = [names.get(k, k) for k in pick_off["cards"]]
             self.log.info(f"Clash Royale: the best deck for this account = {', '.join(want)} — {pick_off['why']}")
@@ -595,6 +615,39 @@ def _check_deck(self):
     except Exception: pass
 
 
+def _study_deck(self):
+    """The deck is known: studied once (roles, how it attacks, what defends what, its weak spots) -> the brain
+    and the phone."""
+    from royale import deck_study
+    self._studied = sorted(self.eyes.deck)
+    try:
+        st = deck_study.study(self.eyes.deck, getattr(self.brain, "levels", None),
+                              evo=[n for n in self.eyes.deck if n in (self.brain.evo_cards or {})],
+                              heroes=getattr(self.brain, "heroes", set()))
+    except Exception:
+        self.log.debug("deck study failed", exc_info=True)
+        return
+    if not st: return
+    self.s["deck"] = list(self.eyes.deck)
+    if getattr(self, "_pick_after_learn", False):            # now the deck is known: compared at the next menu
+        self._pick_after_learn = False
+        self._deck_checked = False
+    self.brain.study = st
+    try:                                                 # remembered for the deck choice next time
+        import settings
+        cfg = settings.load(_u().INSTANCE_ID)
+        r = cfg.setdefault("royale", {})
+        r["deck_evo"], r["deck_heroes"] = st["evo"], st["heroes"]
+        settings.save(_u().INSTANCE_ID, cfg)
+        self.s["deck_evo"], self.s["deck_heroes"] = st["evo"], st["heroes"]
+    except Exception:
+        pass
+    self.log.info("Clash Royale: deck studied — " + st["text_ar"].replace("\n", " | "))
+    try: self.notify(st["text_ar"])
+    except Exception: pass
+
+
+RoyaleBot._study_deck = _study_deck
 RoyaleBot._check_deck = _check_deck
 RoyaleBot._pick_deck = _pick_deck
 RoyaleBot._api_start = _api_start

@@ -420,7 +420,7 @@ class Brain:
                 score += 2.5 - 0.6 * rank
                 break
         if any(a in r for a in kn.get("avoid", [])): score -= 2.0    # what it beats (Mega Knight on a swarm…)
-        keep = K.reserved(self.their_threats(), name)                # kept for a threat they can play (Log for the barrel)
+        keep = self._reserved(name)                                  # kept for a threat they can play (Log for the barrel)
         if keep and keep != threat.get("main") and not threat.get("urgent"): score -= 2.5
         if self.p.get("pro_moves", True):                           # what real players answered it with
             pro_hand = getattr(self, "_pro_hand", None) or {}
@@ -639,7 +639,7 @@ class Brain:
         if pol["cards"][n] < 0.4: return None
         r = roles(n)
         if "spell" in r: return None                                  # spells: only where the rules see a target
-        if K.reserved(self.their_threats(), n): return None
+        if self._reserved(n): return None
         if n in K.NOT_TOGETHER[0] and now - self.heavy_mine_at < 6: return None
         if card(n).get("cost", 4) >= 6 and elixir < 9 and not self.double_elixir(): return None
         lt = self._ltile(n)
@@ -755,6 +755,10 @@ class Brain:
         if not self.support_due or now > self.support_due[1]: return None
         side, _until, first = self.support_due
         sup = [(i, n) for i, n in playable if n in K.SUPPORT.get(first, [])]
+        study = getattr(self, "study", None) or {}
+        mates = [m for m, _w in ((study.get("attack") or {}).get(first) or {}).get("with", [])]
+        if mates:                                       # this deck's own partner for it (what winners did)
+            sup = [(i, n) for i, n in playable if n in mates] or sup
         fol = pro.follows(first, [n for _, n in playable]) if self.p.get("pro_moves", True) else {}
         if not sup:                                     # what real players played right after it, same lane
             sup = [(i, n) for i, n in playable if fol.get(n, 0) >= 0.08 and "spell" not in roles(n)]
@@ -791,8 +795,33 @@ class Brain:
 
     evo_cards = {}                             # our card -> evolution cycles (official API: evolutionLevel > 0)
 
+    study = None                               # royale.deck_study of the deck being played
+
+    def _reserved(self, name):
+        """Is our `name` kept for a threat they can play: the rules (Log for the barrel) and this deck's study
+        (its only good answer to a card the deck struggles with)."""
+        th = self.their_threats()
+        r = K.reserved(th, name)
+        if r: return r
+        kf = (self.study or {}).get("keep_for") or {}
+        for t, a in kf.items():
+            if a == name and any("".join(ch for ch in c if ch.isalnum()) == t for c in (th or ())): return t
+        return None
+    hand_look = {}                             # our hand card -> the picture it shows now ("", "_ev1", "_hero"...)
+    heroes = set()                             # our cards seen with their hero picture (Hero Bowler, ...)
+
+    def see_hand(self, hand, looks):
+        """What the hand shows: which card's evolution is charged right now, which are hero cards."""
+        self.hand_look = {n: v for n, v in zip(hand or [], looks or []) if n and n != "blank"}
+        for n, v in self.hand_look.items():
+            if "hero" in v: self.heroes.add(n)
+            if "ev1" in v and n not in self.evo_cards: self.evo_cards[n] = 2          # it has an evolution
+
     def my_evo(self, name):
-        """How often our `name` comes out evolved: one play in (cycles + 1); 0 when it has no evolution."""
+        """Is our `name` coming out evolved: seen in the hand -> sure (its evolved picture shows when the evolution
+        is charged); else one play in (cycles + 1); 0 when it has no evolution."""
+        if name in self.hand_look:
+            return 1.0 if "ev1" in self.hand_look[name] else 0.0
         cyc = self.evo_cards.get(name)
         return 1.0 / (cyc + 1) if cyc else 0.0
 

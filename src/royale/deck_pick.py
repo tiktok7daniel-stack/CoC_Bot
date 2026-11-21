@@ -162,7 +162,7 @@ def due(account, every=12 * 3600):
         return True
 
 
-def choose_offline(levels, current=None, min_games=300):
+def choose_offline(levels, current=None, min_games=300, evo=(), heroes=()):
     """No official API: the collection the bot read from the screen ({card: level}) x every deck of the 252k
     replays with its real (side-corrected) win rate -> the best deck for THIS account.
     score = win rate (pulled toward 50% on few games) + 4% per level above 13 on average (a deck you have high
@@ -173,6 +173,9 @@ def choose_offline(levels, current=None, min_games=300):
     if len(lv) < 30: return None                                   # the collection was not read well enough
     known = sorted(lv.values())
     default = known[len(known) // 2] - 1                           # a card not read: just under the usual level
+    evo_k, hero_k = {key(n) for n in evo or ()}, {key(n) for n in heroes or ()}
+    # an evolved card or a hero in the deck is much stronger than its plain card: +1.5% each (2 evo + 1 hero slots)
+    power = lambda cards: 0.015 * min(2, len(evo_k & set(cards))) + 0.015 * min(1, len(hero_k & set(cards)))
     best = None
     for d in pro.wins().get("decks") or []:
         if d["n"] < min_games or len(d["cards"]) != 8: continue
@@ -181,11 +184,26 @@ def choose_offline(levels, current=None, min_games=300):
         avg = sum(lv.get(c, default) for c in cards) / 8.0
         wcs = sum(1 for c in cards if c in WIN_CONDITIONS)
         proven = 0.02 * min(1.0, d["n"] / 5000.0)                 # thousands of games: proven, not luck
-        score = win + 0.04 * (avg - 13) + 0.01 * (wcs == 1) + proven + \
-            (0.02 if current and sorted(cards) == sorted(current) else 0)
+        score = win + 0.04 * (avg - 13) + 0.01 * (wcs == 1) + proven + power(cards) + \
+            (0.02 if current and sorted(cards) == sorted(key(c) for c in current) else 0)
         if best is None or score > best["score"]:
             best = {"cards": cards, "score": round(score, 4), "win": round(d["w"] / d["n"], 3), "n": d["n"],
                     "level": round(avg, 1)}
     if best:
         best["why"] = f"{best['win'] * 100:.0f}% wins over {best['n']} replay games, your levels {best['level']}"
+    # the deck the player has now (learned from the battles), studied the same way: it is changed only when the
+    # other one is clearly better (+3%) — a home-made deck with your evolutions / hero is often the strongest
+    if best and current and len(current) == 8:
+        try:
+            from royale import deck_study
+            st = deck_study.study(list(current), evo=evo, heroes=heroes)
+            cur_k = [key(c) for c in current]
+            cur_avg = sum(lv.get(c, default) for c in cur_k) / 8.0
+            cur = st["estimate"] + 0.04 * (cur_avg - 13) + power(cur_k) + 0.02
+            if cur + 0.03 >= best["score"]:
+                return {"keep": True, "cards": cur_k, "score": round(cur, 4), "other": best,
+                        "why": f"your deck ~{st['estimate'] * 100:.0f}% (levels {cur_avg:.1f}, evolutions / hero "
+                               f"counted) vs the best other {best['win'] * 100:.0f}% (levels {best['level']})"}
+        except Exception:
+            pass
     return best

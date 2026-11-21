@@ -38,3 +38,8 @@ card format. Elixir costs of Rune Giant / Spirit Empress / Void worked out from 
 attack_atlas.json: scripts/build_royale_attack_atlas.py (simulated against the defenses of the replays).
 cards.json "evo": RoyaleFish data_16635 card_logic (Apache-2.0), scripts/build_royale_stats.py --evo.
 pro.json "place" also holds 11k recent pro plays from hastylmao/Hasty-CR data/vod (MIT), scripts/build_royale_vod.py.
+
+## cards/*_ev1.jpg, *_hero.jpg, *_hero_ev1.jpg
+The evolved and hero card pictures: RoyaleAPI cr-api-assets (cards-150), https://github.com/RoyaleAPI/cr-api-assets,
+under Supercell's Fan Content Policy (https://supercell.com/en/fan-content-policy/); scripts/import_card_variants.py.
+bowler_hero.jpg: cut from the user's own deck screenshot (not in cr-api-assets yet).

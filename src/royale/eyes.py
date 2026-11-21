@@ -69,6 +69,9 @@ class Eyes:
             allies, enemies = self.units.run(img)
             nums = self.numbers.run(img)
         hand = [c.name for c in cards[1:5]]
+        # the picture each hand card shows: "_ev1" = its evolution is charged (this play comes out evolved),
+        # "_hero" = a hero card (its ability button comes up when it is on the field)
+        hand_look = list(getattr(self._card_det, "last_variants", [""] * 5))[1:5]
         en = [(d.unit.name, d.position.tile_x, d.position.tile_y, float(d.position.conf)) for d in enemies]
         al = [(d.unit.name, d.position.tile_x, d.position.tile_y, float(d.position.conf)) for d in allies]
         hp, spells = {}, []
@@ -81,7 +84,7 @@ class Eyes:
         except Exception:
             pass
         return {
-            "next": cards[0].name, "hand": hand, "ready": list(ready),
+            "next": cards[0].name, "hand": hand, "ready": list(ready), "hand_look": hand_look,
             "elixir": float(nums.elixir.number),
             "enemies": en,
             "allies": al,
