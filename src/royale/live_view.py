@@ -111,7 +111,7 @@ def _save_frame(acc, frame):
 
 
 def battle(acc, brain, st, d, force=False, frame=None):
-    """One look of the battle. Cheap: skipped when the last write is under 0.25 s old (unless a move was made)."""
+    """One look of the battle. Cheap: skipped when the last write is under 0.1 s old (unless a move was made)."""
     now = time.time()
     if _save_frame(acc, frame): _S["frame_t"] = now
     hist = list(getattr(brain, "enemy_hist", []) or [])
@@ -119,7 +119,7 @@ def battle(acc, brain, st, d, force=False, frame=None):
     for _t, name, x, y in hist[_S["eh"]:]:                 # their plays the bot noticed since the last write
         event("them", name, (int(x), int(y)))
     _S["eh"] = len(hist)
-    if not force and now - _S["t"] < 0.25: return
+    if not force and now - _S["t"] < 0.1: return             # 10 times a second (the Live AI screen)
     _S["t"] = now
     try:
         from royale import engine

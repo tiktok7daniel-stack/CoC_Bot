@@ -27,17 +27,34 @@ def _nice(n):
     return " ".join(x.capitalize() for x in str(n or "").replace("-", "_").split("_") if x)[:16]
 
 
-class AiPicture(QWidget):
+import os as _os
+try:                                   # drawn by the graphics card (OpenGL) — a plain widget where there is no screen
+    if _os.environ.get("QT_QPA_PLATFORM") == "offscreen": raise ImportError
+    from PySide6.QtOpenGLWidgets import QOpenGLWidget as _Base
+except Exception:
+    _Base = QWidget
+
+
+class AiPicture(_Base):
     def __init__(self):
         super().__init__()
         self.setMinimumSize(320, 560)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.img, self.img_t, self.d = None, 0.0, {}
+        self.live_t, self.seq, self.fps, self._n, self._n_t = 0.0, 0, 0.0, 0, time.monotonic()
+
+    def set_frame(self, img):
+        """A full-size picture straight from the bot's video (live_shm), up to 60 a second."""
+        self.img, self.live_t = img, time.monotonic()
+        self._n += 1
+        if time.monotonic() - self._n_t >= 1.0:
+            self.fps, self._n, self._n_t = self._n / (time.monotonic() - self._n_t), 0, time.monotonic()
+        self.update()
 
     def set_data(self, d, img_path):
         self.d = d or {}
         ft = float(self.d.get("frame_t") or 0)
-        if ft and ft != self.img_t:
+        if time.monotonic() - self.live_t > 0.5 and ft and ft != self.img_t:   # no live video: the small picture
             im = QImage(str(img_path))
             if not im.isNull(): self.img, self.img_t = im, ft
         self.update()
@@ -88,6 +105,12 @@ class AiPicture(QWidget):
                 bar = QRectF(r.left(), r.bottom() + 1, r.width(), 3)
                 p.fillRect(bar, QColor(0, 0, 0, 160))
                 p.fillRect(QRectF(bar.left(), bar.top(), bar.width() * max(0.0, life), 3), QColor("#ffd24d"))
+        if time.monotonic() - self.live_t < 0.5:
+            p.setPen(QColor("#4ade80"))
+            tag = f"● LIVE · {self.fps:.0f} fps · {iw}x{ih}"
+            r = QRectF(ox + 6, oy + h * 0.78, fm.horizontalAdvance(tag) + 10, 16)
+            p.fillRect(r, QColor(0, 0, 0, 170))
+            p.drawText(r, Qt.AlignCenter, tag)
         # the move: a gold arrow from the card in the hand to its tile
         t, c0 = self.d.get("target"), self.d.get("card_at")
         if t:
@@ -133,7 +156,29 @@ class RoyaleAiScreen(Screen):
         self._mtime = 0.0
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.refresh)
-        self.timer.start(250)
+        self.timer.start(100)                        # what it sees / thinks: 10 times a second
+        self.ftimer = QTimer(self)
+        self.ftimer.setTimerType(Qt.PreciseTimer)
+        self.ftimer.timeout.connect(self.frame_tick)
+        self.ftimer.start(16)                        # the picture: up to 60 a second, straight from memory
+        self._seq, self._touch_t = 0, 0.0
+
+    def frame_tick(self):
+        popped = getattr(self, "_pop", None) is not None and self._pop.isVisible()
+        if not self.isVisible() and not popped: return
+        try:
+            import live_shm
+        except Exception:
+            return
+        if time.monotonic() - self._touch_t > 1.0:   # tell the bot someone is watching (it only sends then)
+            self._touch_t = time.monotonic()
+            live_shm.touch()
+        r = live_shm.read(self._seq)
+        if not r: return
+        self._seq, w, h, data = r
+        img = QImage(data, w, h, 3 * w, QImage.Format_RGB888).copy()
+        if self.isVisible(): self.pic.set_frame(img)
+        if popped: self._pop._pic.set_frame(img)
         on_lang(lambda: self.refresh(force=True))
 
     def _path(self):

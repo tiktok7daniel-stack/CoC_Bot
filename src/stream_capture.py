@@ -86,7 +86,7 @@ def _enabled():
 class Stream:
     """One running scrcpy video stream; .latest() -> newest RGB picture."""
 
-    def __init__(self, device, bitrate=8_000_000, max_fps=30):   # 30 pictures a second is plenty; half the processor
+    def __init__(self, device, bitrate=12_000_000, max_fps=60):  # 60 a second: the Live AI screen shows every one
         self.device, self.bitrate, self.max_fps = device, bitrate, max_fps
         self.sock, self.shell = None, None
         self.alive = False
@@ -145,9 +145,24 @@ class Stream:
     def _loop(self):
         """Every packet comes with a 12-byte header (pts + size): decoded the moment it arrives, no waiting for the next."""
         import av
-        codec = av.CodecContext.create("h264", "r")
-        try: codec.thread_type = "SLICE"         # slice threads add no delay (frame threads hold pictures back)
-        except Exception: pass
+        codec, self.hw = None, False
+        try:                                     # decoded on the graphics card (D3D11 / CUDA) when PyAV can (5.90)
+            from av.codec.hwaccel import HWAccel
+            for dev in (("d3d11va", "cuda") if sys.platform == "win32" else ("cuda", "vaapi")):
+                try:
+                    codec = av.CodecContext.create("h264", "r", hwaccel=HWAccel(device_type=dev,
+                                                                                allow_software_fallback=True))
+                    self.hw = dev
+                    break
+                except Exception:
+                    codec = None
+        except Exception:
+            codec = None
+        if codec is None:
+            codec = av.CodecContext.create("h264", "r")
+            try: codec.thread_type = "SLICE"     # slice threads add no delay (frame threads hold pictures back)
+            except Exception: pass
+        import live_shm
         config = b""
         self.sock.settimeout(None)
         while self.alive:
@@ -160,9 +175,20 @@ class Stream:
                     continue
                 if config:
                     data, config = config + data, b""
-                for fr in codec.decode(av.Packet(data)):
+                if self.hw and getattr(self, "_hw_bad", False):
+                    codec, self.hw = av.CodecContext.create("h264", "r"), False
+                try:
+                    frs = codec.decode(av.Packet(data))
+                except Exception:
+                    if not self.hw: raise
+                    codec, self.hw = av.CodecContext.create("h264", "r"), False     # the card refused: processor
+                    frs = []
+                for fr in frs:
                     self.frame, self.frame_t = fr, time.monotonic()
                     self.frames += 1
+                    if live_shm.watching():        # the app's Live AI screen is open: every picture, full size
+                        try: live_shm.publish(fr.to_ndarray(format="rgb24"))
+                        except Exception: pass
             except Exception as e:
                 self.error = f"{type(e).__name__}: {e}"
                 self.alive = False
@@ -173,7 +199,12 @@ class Stream:
         fr = self.frame
         if fr is None: return None
         if self._arr_of is not fr:
-            self._arr, self._arr_of = fr.to_ndarray(format="rgb24"), fr
+            try:
+                self._arr, self._arr_of = fr.to_ndarray(format="rgb24"), fr
+            except Exception:
+                if not getattr(self, "hw", False): raise
+                self._hw_bad = True                # a picture on the card we cannot read: decode on the processor
+                return self._arr
         return self._arr
 
     def close(self):
