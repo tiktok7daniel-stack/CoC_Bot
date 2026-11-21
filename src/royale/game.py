@@ -199,9 +199,13 @@ class RoyaleBot:
         plays = 0
         look_ms, looks, slow_told = 0.0, 0, False
         self._slot_used = {}                                       # slot -> when it was played (picture lags)
+        perf = {"capture": 0.0, "look": 0.0, "decide": 0.0, "engine": 0.0, "tap": 0.0, "loop": 0.0, "n": 0,
+                "worst_loop": 0.0}
+        self._perf = perf
         while _u().running():
             t0 = time.monotonic()
             fr = frame()
+            t_cap = time.monotonic()
             if not in_battle(fr):
                 out_since = out_since or time.monotonic()
                 if time.monotonic() - out_since > 1.0:
@@ -217,6 +221,8 @@ class RoyaleBot:
                 tl = time.monotonic()
                 st = self.eyes.look(fr)
                 look_ms += (time.monotonic() - tl) * 1000; looks += 1
+                perf["capture"] += (t_cap - t0) * 1000
+                perf["look"] += (time.monotonic() - tl) * 1000
                 if looks == 50 and look_ms / looks > 250 and not slow_told:
                     slow_told = True
                     log.warning(f"Clash Royale: one look takes {look_ms / looks:.0f} ms — the PC is busy (close other "
@@ -251,11 +257,15 @@ class RoyaleBot:
                      time.monotonic() - self._slot_used.get(i, 0) > 0.8 and
                      (__import__("royale.brain", fromlist=["card"]).card(st["hand"][i]).get("cost", 11) <= el)]
             try:
+                t_dec = time.monotonic()
                 d = self.brain.decide(st["hand"], ready, el, st["enemies"], st["allies"], st["towers"],
                                       hp=st.get("hp"), spells=st.get("spells"), evo=st.get("evo"))
             except Exception:
                 log.warning("Clash Royale: a decision failed — next look", exc_info=True)
                 d = None
+            try: perf["decide"] += (time.monotonic() - t_dec) * 1000
+            except NameError: pass
+            t_eng = time.monotonic()
             if engine_on:
                 try:
                     d = self._engine_turn(st, d, ready, el)
@@ -268,6 +278,11 @@ class RoyaleBot:
             if self.brain.predicted and self.brain.predicted != getattr(self, "_pred_logged", None):
                 self._pred_logged = set(self.brain.predicted)
                 log.info("Clash Royale: their deck probably also has " + ", ".join(sorted(self.brain.predicted)))
+            perf["engine"] += (time.monotonic() - t_eng) * 1000
+            lp = (time.monotonic() - t0) * 1000
+            perf["loop"] += lp; perf["n"] += 1; perf["worst_loop"] = max(perf["worst_loop"], lp)
+            st["_perf"] = {k: (round(v / max(1, perf["n"])) if k not in ("n", "worst_loop") else round(v))
+                           for k, v in perf.items()}
             try:
                 from royale import live_view
                 if d: live_view.event("us", d["card"], d["tile"], d.get("why", ""))
@@ -280,9 +295,11 @@ class RoyaleBot:
                 self._slot_used[d["slot"]] = time.monotonic()
                 cx, cy = card_xy(d["slot"])
                 tx, ty = tile_xy(*d["tile"])
+                t_tap = time.monotonic()
                 tap(cx, cy)
                 time.sleep(0.04)
                 tap(tx, ty)
+                perf["tap"] += (time.monotonic() - t_tap) * 1000
                 plays += 1
                 log.info(f"Clash Royale: {d['card']} -> tile {d['tile']} ({d['why']}) — elixir {st['elixir']:.0f}, "
                          f"theirs ~{self.brain.enemy_elixir:.0f}")
@@ -307,6 +324,20 @@ class RoyaleBot:
         src = (getattr(_u().Frame_Handler, "_power", {}) or {}).get("src") or {}
         log.info(f"Clash Royale: battle over — {plays} cards played; one look {look_ms / max(1, looks):.0f} ms"
                  f"{big}; screen by {max(src, key=src.get) if src else '?'}")
+        try:                                       # where each moment's time went: the log, and Claude (learning repo)
+            n = max(1, perf["n"])
+            rep = {k: round(v / n, 1) for k, v in perf.items() if k not in ("n", "worst_loop")}
+            rep.update({"moments": perf["n"], "worst_loop_ms": round(perf["worst_loop"]), "plays": plays,
+                        "screen_by": (max(src, key=src.get) if src else "?"),
+                        "big_model_ms": round(strong_eyes.speed_ms() or 0) if "strong_eyes" in dir() else None,
+                        "engine_on": bool(engine_on), "version": __import__("version").VERSION})
+            log.info("Clash Royale: time per moment (ms) — " + ", ".join(f"{k} {v}" for k, v in rep.items()))
+            import json as _j, learn_sync
+            if learn_sync.configured():
+                learn_sync._put(f"inbox/royale_perf/{_u().INSTANCE_ID}_{time.strftime('%Y%m%d_%H%M%S')}.json",
+                                _j.dumps(rep, indent=1).encode("utf-8"), "royale perf: one battle")
+        except Exception:
+            log.debug("perf report failed", exc_info=True)
         return last
 
     # -------------------------------------------------------------- after the battle

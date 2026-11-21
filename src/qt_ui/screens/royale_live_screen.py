@@ -294,6 +294,12 @@ class RoyaleLiveScreen(Screen):
         if th.get("ai"): lines.append(th["ai"])
         lines.append((tr("rl_engine_on") if eng.get("on") else tr("rl_engine_off") + (f" ({eng.get('why')})" if eng.get("why") else "")) +
                      (" · " + tr("rl_ai_on") if eng.get("ai") else ""))
+        pf = d.get("perf") or {}
+        if pf.get("loop"):
+            lines.append(f"<span style='color:{TOKENS['muted']}'>{tr('rl_perf')}: "
+                         f"{tr('rl_p_capture')} {pf.get('capture')} · {tr('rl_p_look')} {pf.get('look')} · "
+                         f"{tr('rl_p_think')} {pf.get('decide', 0) + pf.get('engine', 0)} · {tr('rl_p_total')} {pf.get('loop')} ms"
+                         f" ({tr('rl_p_worst')} {pf.get('worst_loop')})</span>")
         self.l_think.setText("<br>".join(lines))
         them = []
         if d.get("arch"): them.append(f"{tr('rl_arch')}: {d['arch']}")

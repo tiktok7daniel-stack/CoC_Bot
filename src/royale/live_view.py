@@ -93,6 +93,7 @@ def battle(acc, brain, st, d, force=False):
         "think": think,
         "events": _S["events"],
         "engine": engine_state(),
+        "perf": st.get("_perf") or {},
     }
     _write(acc, data)
 
