@@ -47,6 +47,7 @@ SPELL_SPLASH_DEFAULT = {"zap": 2.5, "the_log": 2.0, "arrows": 4.0, "fireball": 2
 SPELL_DAMAGE_DEFAULT = {"zap": 75, "the_log": 96, "arrows": 122, "fireball": 269, "poison": 368, "rocket": 579,
                         "lightning": 413, "earthquake": 170, "giant_snowball": 69, "barbarian_barrel": 72,
                         "royal_delivery": 171}
+ROLLING = {"the_log", "barbarian_barrel"}                                   # spells that roll forward from the drop point
 WIN_SPELLS = {"goblin_barrel", "graveyard", "miner"}           # win conditions you can send anywhere
 # units that come out of another one (death / spawner): not a card the opponent played
 KAMIKAZE = {"ice_spirit", "fire_spirit", "electro_spirit", "heal_spirit", "wall_breakers", "skeleton_barrel"}
@@ -205,6 +206,8 @@ class Brain:
         """Where an enemy unit at (x, y) will be when spell `name` lands: its flight from our king tower (speed from
         the game data) + cast delay, times how fast the unit walks toward us."""
         c = card(name)
+        if name in ROLLING:                       # it rolls forward from where it is dropped: drop it just behind them
+            return (x, max(0.0, y - 1.0))
         ps = c.get("projectile_speed")
         if not ps: return (x, y)
         fly = dist(OUR_TOWERS["king"], (x, y)) / (ps / 60.0) + 0.25
@@ -213,6 +216,8 @@ class Brain:
             if t["unit"] == unit and abs(t["x"] - x) <= 2 and abs(t["y"] - y) <= 2: vy = t.get("vy"); break
         if vy is None or vy > 0.5:                                    # no track yet: its walking speed, toward us
             vy = -((card(unit_card(unit) or "").get("speed") or 60) / 60.0)
+            # already at one of our towers / buildings: it stands there hitting it, it does not walk on
+            if any(dist((x, y), tw) <= 3.0 for k, tw in OUR_TOWERS.items()): vy = 0.0
         return (x, max(0.0, y + vy * fly))
 
     # -------------------------------------------------------------- tracking
@@ -532,6 +537,13 @@ class Brain:
                               if t.get("main") else {})
             self._pro_wins = (pro.answer_wins(t["main"], (t["center"] or (0, 10))[1], [n for _, n in playable])
                               if t.get("main") else {})
+            # against THIS kind of deck (its plan: Hog, Golem, X-Bow...): what the winners answered this card with
+            plan = self.their_plan()
+            mu = pro.matchup_answers(plan, t["main"], (t["center"] or (0, 10))[1], [n for _, n in playable]) \
+                if t.get("main") and plan else {}
+            for n, (g, w, _tile) in mu.items():
+                self._pro_wins[n] = (g, w)                                # the matchup's own numbers come first
+            self._mu_tiles = {n: v[2] for n, v in mu.items() if v[2]}
             ranked = sorted(((self._counter_score(n, t), (i, n)) for i, n in playable), key=lambda r: -r[0])
             best, sc = ranked[0][1], ranked[0][0]
             tile, why = self._defense_tile(best[1], side, t), ""
@@ -710,6 +722,8 @@ class Brain:
                 x, y = THEIR_TOWERS[side]
                 return self._play((i, n), (int(x), int(y) - 1), f"{n} on their {side} tower", now)
             pt = pro.place(n, side) if self.p.get("pro_moves", True) else None   # where real players start it
+            wp = pro.winners_place(self.their_plan(), n, side)                  # where WINNERS start it vs this deck
+            if wp: pt = wp
             lt = self._ltile(n) if self.p.get("learned", True) and self._pol else None
             if lt and lt[1] >= 0.3 and lane(lt[0][0]) == side: pt = lt[0]        # this moment's learned spot
             if "tank" in r and c.get("speed", 60) <= 60 and not counter:
@@ -802,6 +816,14 @@ class Brain:
         ours += [(p["card"], p["tile"][0], p["tile"][1], 1.0) for p in self.plays
                  if t - p["t"] <= 4 and "spell" not in roles(p["card"])]
         return any(dist((a[1], a[2]), tile) <= rad for a in ours)
+
+    def their_plan(self):
+        """Their deck's plan (main win condition), from what they played and what their deck probably holds."""
+        try:
+            return pro.their_plan(list(self.enemy_seen | self.predicted),
+                                  {pro.key(n): (c.get("cost") or 4) for n, c in cards_db().items()})
+        except Exception:
+            return None
 
     def _ltile(self, name, anywhere=False):
         """Where the learned brains would put `name` now: the surer of the two."""

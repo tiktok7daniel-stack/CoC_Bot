@@ -338,6 +338,14 @@ class _UnitsNamespace:
         "zappy", UnitCategory.TROOP, Target.GROUND, Transport.GROUND
     )
 
+    BERSERKER: Unit = Unit("berserker", UnitCategory.TROOP, Target.GROUND, Transport.GROUND)
+    BOSS_BANDIT: Unit = Unit("boss_bandit", UnitCategory.TROOP, Target.GROUND, Transport.GROUND)
+    GOBLIN_DEMOLISHER: Unit = Unit("goblin_demolisher", UnitCategory.TROOP, Target.GROUND, Transport.GROUND)
+    GOBLIN_MACHINE: Unit = Unit("goblin_machine", UnitCategory.TROOP, Target.GROUND, Transport.GROUND)
+    GOBLINSTEIN: Unit = Unit("goblinstein", UnitCategory.TROOP, Target.GROUND, Transport.GROUND)
+    SUSPICIOUS_BUSH: Unit = Unit("suspicious_bush", UnitCategory.TROOP, Target.BUILDINGS, Transport.GROUND)
+    RUNE_GIANT: Unit = Unit("rune_giant", UnitCategory.TROOP, Target.BUILDINGS, Transport.GROUND)
+    SPIRIT_EMPRESS: Unit = Unit("spirit_empress", UnitCategory.TROOP, Target.ALL, Transport.GROUND)
 
 Units = _UnitsNamespace()
 NAME2UNIT = {

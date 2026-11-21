@@ -124,3 +124,43 @@ def answer_wins(threat, y, hand, min_n=40):
 def combo_win(a, b):
     v = (wins().get("combos") or {}).get(f"{key(a)}+{key(b)}")
     return tuple(v) if v else None
+
+
+WC = {"hogrider", "giant", "golem", "royalgiant", "balloon", "goblinbarrel", "miner", "graveyard", "xbow", "mortar",
+      "lavahound", "ramrider", "battleram", "electrogiant", "goblingiant", "royalhogs", "wallbreakers", "goblindrill",
+      "elixirgolem", "threemusketeers", "sparky", "pekka", "megaknight", "skeletonbarrel", "goblinstein", "bossbandit",
+      "runegiant", "giantskeleton", "princess", "rocket"}
+
+
+def their_plan(cards, cost=None):
+    """The opponent's deck plan (its main win condition) from the cards seen / guessed, or None."""
+    w = [key(c) for c in cards if key(c) in WC]
+    if not w: return None
+    return max(w, key=lambda c: (cost or {}).get(c, 4))
+
+
+def matchup_answers(plan, threat, y, hand, min_n=40):
+    """Against a deck whose plan is `plan`: our hand's cards -> (games, win rate, winners' best tile or None)."""
+    if not plan: return {}
+    m = wins().get("matchup") or {}
+    b = min(31, max(0, int(y))) // 4
+    row = None
+    for bb in (b, b + 1, b - 1):
+        row = m.get(f"{plan}|{key(threat)}|{bb}")
+        if row: break
+    if not row: return {}
+    out = {}
+    for n in hand:
+        v = row.get(key(n))
+        if v and v[0] >= min_n:
+            out[n] = (v[0], v[1], tuple(v[2][0][:2]) if v[2] else None)
+    return out
+
+
+def winners_place(plan, name, side, min_share=0.3):
+    """Where the WINNERS started `name` against a deck whose plan is `plan` -> (x, y) on `side` or None."""
+    if not plan: return None
+    v = (wins().get("wplace") or {}).get(f"{plan}|{key(name)}")
+    if not v or v[0][2] < min_share: return None
+    x, y = v[0][0], v[0][1]
+    return (x, y) if side == "left" else (17 - x, y)

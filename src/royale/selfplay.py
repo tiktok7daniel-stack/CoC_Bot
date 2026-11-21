@@ -17,7 +17,7 @@ import json, math, os, sys, time
 from pathlib import Path
 
 HOME = Path.home() / ".CoC_Bot"
-EVERY = 3                    # trained again every 3 battles (a few seconds in the background)
+EVERY = 1                    # trained again after every battle (in the background)
 HORIZON = 10.0
 _ROOT = getattr(sys, "_MEIPASS", None) or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

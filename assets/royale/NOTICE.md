@@ -29,3 +29,7 @@ Hasty-CR and advaynathany/alphaclash (MIT); no code copied.
 Results (victory / defeat, side-corrected), decks and card plays of the 252k RoyaleAPI Path-of-Legends replays in
 VanguardX101/IL_Replay, joined game by game by scripts/build_royale_wins.py: how often each answer, deck and
 attack combo won. Only aggregated counts are shipped.
+
+## cards/ (berserker, boss_bandit, goblin_curse, goblin_demolisher, goblin_machine, goblinstein, suspicious_bush, vines, rune_giant, spirit_empress, void)
+Card pictures from RoyaleAPI's cr-api-assets (https://github.com/RoyaleAPI/cr-api-assets), cropped to the bot's
+card format. Elixir costs of Rune Giant / Spirit Empress / Void worked out from the replays' deck average elixir.

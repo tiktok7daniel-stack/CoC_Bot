@@ -279,6 +279,17 @@ class _CardsNamespace:
     ZAP: Card = Card("zap", True, 2, [], 28000008)
     ZAPPIES: Card = Card("zappies", False, 4, [Units.ZAPPY], 26000052)
 
+    BERSERKER: Card = Card("berserker", False, 2, [Units.BERSERKER], 26000102)
+    BOSS_BANDIT: Card = Card("boss_bandit", False, 6, [Units.BOSS_BANDIT], 26000103)
+    GOBLIN_CURSE: Card = Card("goblin_curse", True, 2, [], 28000024)
+    GOBLIN_DEMOLISHER: Card = Card("goblin_demolisher", False, 4, [Units.GOBLIN_DEMOLISHER], 26000095)
+    GOBLIN_MACHINE: Card = Card("goblin_machine", False, 5, [Units.GOBLIN_MACHINE], 26000096)
+    GOBLINSTEIN: Card = Card("goblinstein", False, 5, [Units.GOBLINSTEIN], 26000099)
+    SUSPICIOUS_BUSH: Card = Card("suspicious_bush", False, 2, [Units.SUSPICIOUS_BUSH], 26000097)
+    VINES: Card = Card("vines", True, 3, [], 28000026)
+    RUNE_GIANT: Card = Card("rune_giant", False, 4, [Units.RUNE_GIANT], 0)
+    SPIRIT_EMPRESS: Card = Card("spirit_empress", False, 6, [Units.SPIRIT_EMPRESS], 0)
+    VOID: Card = Card("void", True, 5, [], 0)
 
 Cards = _CardsNamespace()
 NAME2CARD = {k: v for k, v in vars(Cards).items() if isinstance(v, Card)}

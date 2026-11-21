@@ -355,7 +355,9 @@ def plan(brain, side, threat, candidates, stable, hp=None, max_cards=3, prior=No
     for slot, name in candidates[:max_cards]:
         c = card(name)
         if not c or c.get("kind") == "spell": continue
-        tiles = list(dict.fromkeys(list((extra_tiles or {}).get(name, [])) + candidate_tiles(name, side, threat)))
+        mu = (getattr(brain, "_mu_tiles", None) or {}).get(name)          # the winners' tile in this matchup
+        mu_t = [(mu[0] if side == "left" else 17 - mu[0], mu[1])] if mu else []
+        tiles = list(dict.fromkeys(mu_t + list((extra_tiles or {}).get(name, [])) + candidate_tiles(name, side, threat)))
         for tx, ty in tiles:
             if not brain.legal(tx, ty, name): continue
             for delay in (0.0, 1.5):
