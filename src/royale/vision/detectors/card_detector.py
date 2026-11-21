@@ -49,7 +49,9 @@ class CardDetector:
             dtype=np.float32,
         ).ravel()
 
-    VARIANTS = ("", "_ev1", "_hero", "_hero_ev1")
+    # plain, evolved, hero, evolved hero; "_user" = the same card cut from the player's own screen (the game's
+    # current art can differ from the published pictures)
+    VARIANTS = ("", "_ev1", "_hero", "_hero_ev1", "_user", "_ev1_user", "_hero_user")
 
     def _calculate_card_hashes(self):
         """Every card with every picture it can show in the hand: plain, evolved (its evolution is charged), hero
