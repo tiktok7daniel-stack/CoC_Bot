@@ -120,7 +120,7 @@ def scan(acc, log, brain=None, max_pages=30):
             game.tap(*x); time.sleep(0.9)
         return False
 
-    def study(tx, ty):
+    def study(tx, ty, in_deck=False):
         game.tap(tx, ty); time.sleep(0.9)
         ws = game.words(game.frame())
         if _bad(ws): close(); return
@@ -143,6 +143,7 @@ def scan(acc, log, brain=None, max_pages=30):
             art = Image.fromarray(fr[int(y0 * H):int(y1 * H), int(x0 * W):int(x1 * W)])
             suf = {"evolution": "_ev1", "hero": "_hero"}.get(p["form"], "")
             art.resize((252, 313), Image.Resampling.LANCZOS).save(DIR / f"{name}{suf}_user.jpg", quality=92)
+        p["in_deck"] = in_deck
         pages[key if name else f"unknown_{len(pages)}"] = p
         import io
         buf = io.BytesIO()
@@ -167,7 +168,7 @@ def scan(acc, log, brain=None, max_pages=30):
             cx, cy = (b[1] + b[3]) / 2, (b[2] + b[4]) / 2
             if (round(cx, 1), round(cy, 1)) in seen_spots: continue
             seen_spots.add((round(cx, 1), round(cy, 1)))
-            study(cx, cy - 0.06)
+            study(cx, cy - 0.06, in_deck=True)
     # the collection, page by page
     ws = game.words(game.frame())
     c = game.find_word(ws, "collection", y_max=0.25)
@@ -201,6 +202,16 @@ def scan(acc, log, brain=None, max_pages=30):
     try:
         (DIR / f"pages_{_safe(acc)}.json").write_text(json.dumps(pages, ensure_ascii=False), encoding="utf-8")
     except OSError:
+        pass
+    # the levels read from the pages are the collection the deck choice uses (royale.deck_pick.choose_offline)
+    try:
+        lv = dict(collection.load(acc, max_age=10 ** 9))
+        for p in pages.values():
+            if p.get("name") and p.get("level"): lv[p["name"]] = max(lv.get(p["name"], 0), p["level"])
+        if lv:
+            collection.DIR.mkdir(parents=True, exist_ok=True)
+            collection._path(acc).write_text(json.dumps({"t": time.time(), "levels": lv}), encoding="utf-8")
+    except Exception:
         pass
     # to the learning repo (one commit), when it is set up
     if files:

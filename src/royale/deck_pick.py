@@ -82,6 +82,18 @@ def choose(account, min_battles=3):
     return best
 
 
+def slot_order(cards, evo=(), heroes=()):
+    """The game's deck slots: 1 = evolution, 2 = hero, 3 = evolution (the user's deck page) -> the cards in that
+    order, so the copied deck comes out with its evolutions / hero in their slots."""
+    k = lambda s: "".join(ch for ch in str(s).lower() if ch.isalnum())
+    ev = [c for c in cards if k(c) in {k(e) for e in evo or ()}][:2]
+    he = [c for c in cards if k(c) in {k(h) for h in heroes or ()} and c not in ev][:1]
+    rest = [c for c in cards if c not in ev and c not in he]
+    out = [ev[0] if ev else rest.pop(0)] + [he[0] if he else rest.pop(0)] + \
+          [ev[1] if len(ev) > 1 else rest.pop(0)] + rest
+    return out
+
+
 def deck_link(ids, tower=None, scheme=True):
     """The game's own copy-deck link (what the game's share button / RoyaleAPI's Copy button open)."""
     q = "deck=" + ";".join(str(i) for i in ids) + "&l=Royals" + (f"&tt={tower}" if tower else "")

@@ -528,8 +528,9 @@ def _pick_deck(self):
             except Exception: self.log.debug("collection scan failed", exc_info=True); lv = {}
         names = {cr_api.key_of(n): n for n in cards_db()}
         cur = [c for c in (self.s.get("deck") or []) if c]
-        pick_off = deck_pick.choose_offline(lv, current=cur, evo=self.s.get("deck_evo") or [],
-                                            heroes=self.s.get("deck_heroes") or []) if lv else None
+        owned_evo = sorted(set(self.s.get("owned_evo") or []) | set(self.s.get("deck_evo") or []))
+        owned_hero = sorted(set(self.s.get("owned_heroes") or []) | set(self.s.get("deck_heroes") or []))
+        pick_off = deck_pick.choose_offline(lv, current=cur, evo=owned_evo, heroes=owned_hero) if lv else None
         if pick_off and pick_off.get("keep"):
             deck_pick.mark(acc, {"cards": cur, "why": pick_off["why"]})
             self.log.info(f"Clash Royale: keeping your deck — {pick_off['why']}")
@@ -544,6 +545,7 @@ def _pick_deck(self):
         else:
             want = [c for c in (self.s.get("wanted_deck") or []) if c]
         if len(want) != 8: return
+        want = deck_pick.slot_order(want, owned_evo, owned_hero)       # evolutions / hero into their slots
         ids = [card(c).get("id") for c in want]
         if not all(ids):
             self.log.info("Clash Royale: the wanted deck has a card the bot does not know — not copied")
@@ -674,8 +676,29 @@ def _study_cards(self):
         return
     try: self.eyes.set_deck(self.eyes.deck)                 # the new pictures go into the card reader
     except Exception: pass
-    evo = [p["name"] for p in pages.values() if p.get("name") and p["form"] == "evolution"]
-    hero = [p["name"] for p in pages.values() if p.get("name") and p["form"] == "hero"]
+    evo = sorted({p["name"] for p in pages.values() if p.get("name") and p["form"] == "evolution"})
+    hero = sorted({p["name"] for p in pages.values() if p.get("name") and p["form"] == "hero"})
+    deck = []
+    for p in pages.values():
+        if p.get("in_deck") and p.get("name") and p["name"] not in deck: deck.append(p["name"])
+    try:                                    # remembered: the deck in the game now, the evolutions / heroes owned
+        import settings
+        cfg = settings.load(_u().INSTANCE_ID)
+        r = cfg.setdefault("royale", {})
+        r["owned_evo"] = sorted(set(r.get("owned_evo") or []) | set(evo))
+        r["owned_heroes"] = sorted(set(r.get("owned_heroes") or []) | set(hero))
+        if len(deck) == 8: r["deck"] = deck
+        settings.save(_u().INSTANCE_ID, cfg)
+        self.s.update({"owned_evo": r["owned_evo"], "owned_heroes": r["owned_heroes"]})
+        if len(deck) == 8: self.s["deck"] = deck
+    except Exception:
+        self.log.debug("saving the card study failed", exc_info=True)
+    # now everything is known: the deck is chosen right away (and copied in only if clearly better)
+    if self.s.get("auto_deck", True) and len(pages) >= 20:
+        from royale import deck_pick
+        deck_pick.forget(_u().INSTANCE_ID)
+        self._deck_checked = False
+        self._pick_after_learn = False
     try:
         self.notify(f"📸 كلاش رويال: فتحت Info لـ {len(pages)} كارت وصورتهم وبعتهم للتحليل"
                     + (f"\nمتطور: {', '.join(evo)}" if evo else "") + (f"\nهيرو: {', '.join(hero)}" if hero else ""))
