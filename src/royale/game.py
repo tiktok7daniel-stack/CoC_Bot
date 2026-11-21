@@ -91,7 +91,14 @@ class RoyaleBot:
         from royale.brain import Brain
         self.s = settings or {}
         self.log = logger
-        self.notify = notify or (lambda t: None)
+        _send = notify or (lambda t: None)
+
+        def _notify(text):
+            # a phone message goes out on its own thread: Telegram can take up to 11 s, and before 5.71 the
+            # battle stood still meanwhile (worst moments of 5-12 s in the user's reports)
+            import threading
+            threading.Thread(target=lambda: _send(text), daemon=True, name="notify").start()
+        self.notify = _notify
         deck = list(self.s.get("deck") or [])
         self.eyes = Eyes(deck)
         self.brain = Brain(deck)
@@ -158,6 +165,11 @@ class RoyaleBot:
         except Exception:
             pass
         engine_on = False
+        try:
+            from royale import engine as _eng
+            _eng.new_battle()
+        except Exception:
+            pass
         if self.s.get("engine_think", True):                 # the battle engine thinks every move through
             from royale import engine
             engine_on = engine.selftest(log)
@@ -201,6 +213,7 @@ class RoyaleBot:
         self._slot_used = {}                                       # slot -> when it was played (picture lags)
         perf = {"capture": 0.0, "look": 0.0, "decide": 0.0, "engine": 0.0, "tap": 0.0, "loop": 0.0, "n": 0,
                 "worst_loop": 0.0}
+        full_s, t_prev, b_t0, self._engine_drops = 0.0, time.monotonic(), time.monotonic(), 0
         self._perf = perf
         while _u().running():
             t0 = time.monotonic()
@@ -246,6 +259,9 @@ class RoyaleBot:
                 except Exception: pass
             # what was just spent: the picture can lag a moment behind a play ("Not enough Elixir!")
             el = st["elixir"]
+            t_now = time.monotonic()
+            if el >= 9.5: full_s += min(1.0, t_now - t_prev)           # elixir wasted: time spent full
+            t_prev = t_now
             spent = getattr(self, "_spent", None)
             if spent and time.monotonic() - spent[1] < 1.5:
                 el = min(el, max(0.0, spent[2] - spent[0] + (time.monotonic() - spent[1]) / self.brain.seconds_per_elixir()))
@@ -330,7 +346,14 @@ class RoyaleBot:
             rep.update({"moments": perf["n"], "worst_loop_ms": round(perf["worst_loop"]), "plays": plays,
                         "screen_by": (max(src, key=src.get) if src else "?"),
                         "big_model_ms": round(strong_eyes.speed_ms() or 0) if "strong_eyes" in dir() else None,
-                        "engine_on": bool(engine_on), "version": __import__("version").VERSION})
+                        "engine_on": bool(engine_on), "version": __import__("version").VERSION,
+                        "seconds": round(time.monotonic() - b_t0), "full_elixir_s": round(full_s),
+                        "engine_dropped": getattr(self, "_engine_drops", 0)})
+            try:
+                from royale import engine as _eng
+                rep["engine_why"] = _eng.skips()
+            except Exception:
+                pass
             log.info("Clash Royale: time per moment (ms) — " + ", ".join(f"{k} {v}" for k, v in rep.items()))
             import json as _j, learn_sync
             if learn_sync.configured():
@@ -446,6 +469,13 @@ class RoyaleBot:
                     pass
                 continue
             ws = words(fr)
+            # the lobby's menu (the three lines at the top right) left open: Battle Log / Leaderboards / Training
+            # Camp / Settings... -> the same button closes it (stuck picture 20261121_082852)
+            if find_word(ws, "leaderboards") and find_word(ws, "battle log", "settings", "tv royale"):
+                log.info("Clash Royale: the lobby menu is open — closing it")
+                tap(0.91, 0.105)
+                time.sleep(1.0)
+                continue
             b = find_word(ws, "battle", y_min=0.55, y_max=0.9)
             qm = find_word(ws, "quick match", y_min=0.3, y_max=0.8)          # the 2v2 window left open
             if qm and not in_battle(fr):
@@ -954,7 +984,9 @@ def _engine_turn(self, st, d, ready, el):
     res = engine.think(self.brain, st, st["hand"], [(i, st["hand"][i]) for i in ready], el, d, self.log)
     if not res: return d
     if res[0] == "wait":
-        if d: self.brain.undo(d)
+        if d:
+            self.brain.undo(d)
+            self._engine_drops = getattr(self, "_engine_drops", 0) + 1
         if now - getattr(self, "_engine_wait_log", 0) > 5:
             self._engine_wait_log = now
             self.log.info("Clash Royale: " + res[1])

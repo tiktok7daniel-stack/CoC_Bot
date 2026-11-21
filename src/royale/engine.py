@@ -30,7 +30,7 @@ WAIT_MARGIN = 0.4              # a move must beat waiting by this much (elixir)
 VETO_MARGIN = -2.5             # the brain's attack is dropped only when it is clearly worse than waiting (the rollout's
                                # 8 s are short for an attack's full worth, and the opponent there does not answer)
 
-_S = {"mod": None, "ok": None, "why": "", "ids": None, "maxhp": {}, "bodies": {}}
+_S = {"mod": None, "ok": None, "why": "", "ids": None, "maxhp": {}, "bodies": {}, "skips": {}}
 OURS_STANDING = 0.6            # our units still standing are worth this much of their elixir (they may still die)
 
 
@@ -182,8 +182,15 @@ def mirror(brain, st, hand, my_elixir):
     from royale.brain import card, unit_card
     m = module()
     ids = card_ids()
+    # a blank slot (a card just played, the next one sliding in) or a card the engine lacks no longer stops the
+    # thinking (before 5.71 it did, and the engine hardly ever thought: 0.1 ms a moment in the user's reports):
+    # the known cards are thought through, the deck is filled up with the hand and plain filler cards
+    hand = [h if h in ids else None for h in hand]
     deck = [n for n in (brain.deck or []) if n in ids]
-    if len(deck) < 8 or any(h not in ids for h in hand if h): return None, None
+    for h in hand:
+        if h and h not in deck: deck.append(h)
+    if not any(hand): return None, "no card of the hand is known to the engine"
+    deck = deck[:8]
     their = [n for n in list(brain.enemy_seen) + sorted(brain.predicted) if n in ids][:8]
     env = m.ClashRoyaleEnv(_deck_ids(m, deck), _deck_ids(m, their), 3600)
     env.reset()
@@ -226,7 +233,7 @@ def mirror(brain, st, hand, my_elixir):
     env.set_elixir_for_team(1, float(brain.enemy_elixir or 5.0))
     want = [ids[h][0] for h in hand if h]
     slots = {}
-    if len(want) == 4 and env.set_hand_for_team(0, want):
+    if len(want) == 4 and len(hand) == 4 and env.set_hand_for_team(0, want):
         slots = {h: i for i, h in enumerate(hand) if h}
     else:
         got = env.get_hand_for_team(0)
@@ -344,16 +351,32 @@ def candidates(brain, playable, rule_d, defend, first=()):
     return out
 
 
+def _skip(why):
+    """Counted per battle (the perf report says why the engine did not think)."""
+    _S["skips"][why] = _S["skips"].get(why, 0) + 1
+    return None
+
+
+def new_battle():
+    _S["skips"] = {}
+
+
+def skips():
+    return dict(_S["skips"])
+
+
 def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
     """-> ("play", slot, card, tile, why) | ("wait", why) | None (no opinion: the brain's move stands)."""
-    if not ready() or not playable: return None
+    if not ready(): return _skip("engine off")
+    if not playable: return _skip("no card ready")
     t0 = time.perf_counter()
     try:
         env, slots = mirror(brain, st, hand, my_elixir)
     except Exception as ex:
-        if log: log.debug(f"engine mirror failed: {ex}")
-        return None
-    if env is None: return None
+        if log and _S["skips"].get("mirror error", 0) < 3: log.warning(f"Clash Royale: engine mirror failed: {ex!r}")
+        return _skip("mirror error")
+    if env is None: return _skip(slots or "mirror refused")
+    _S["skips"]["thought"] = _S["skips"].get("thought", 0) + 1
     defend = any(y <= 17 for _u, x, y in (brain._stable or []))
     # the bot's own trained AI (royale.engine_ai): its move on this arena, once a second (its memory steps at 1 Hz)
     first, ai_note = [], ""

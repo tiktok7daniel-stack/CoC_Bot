@@ -87,5 +87,17 @@ r = engine.think(b, st, st["hand"], [(i, n) for i, n in enumerate(st["hand"])], 
 print("  defense vs Giant push:", r)
 check("defends a Giant push", r is not None and r[0] == "play")
 
+# 5.71: a blank slot (a card just played) or a card the engine lacks must not stop the thinking
+b = brain([("hog-rider", 3, 14)], {"hog_rider"})
+st3 = {"hand": ["cannon", "blank", "fireball", "the_log"], "ready": [0, 2, 3], "towers": {}, "allies": []}
+engine.new_battle()
+r = engine.think(b, st3, st3["hand"], [(0, "cannon"), (2, "fireball"), (3, "the_log")], 7.0, None, Log())
+print("  defense with a blank slot:", r, engine.skips())
+check("thinks with a blank slot in the hand", engine.skips().get("thought", 0) == 1, str(engine.skips()))
+check("defends the Hog with a blank slot too", r is not None and r[0] == "play")
+b.deck = list(deck)[:5]                                     # the deck only half learned yet
+r = engine.think(b, st, st["hand"], [(i, n) for i, n in enumerate(st["hand"])], 7.0, None, Log())
+check("thinks with the deck half learned", engine.skips().get("thought", 0) == 2, str(engine.skips()))
+
 print(f"\n{'ALL PASSED' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)
