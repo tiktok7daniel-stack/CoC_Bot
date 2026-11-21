@@ -34,7 +34,7 @@ def default_settings():
             "auto_deck": True,       # the bot picks the strongest deck you own (API + the meta) and copies it in
             "safe_play": True,       # never experiments in a battle: the best known way every time (still learns)
             "scan_cards": True,      # weekly: every card's Info page photographed and read (royale.card_scan)
-            "ask_before_battle": True,  # waits in the lobby for the app's "Start a battle" button before each battle
+            "confirm_battles": False,  # True: waits in the lobby for the app's "Start a battle" button before each battle
             # the deck the bot puts in when the official API is not set up (8 cards). Hog 2.6: picked for this account
             # from 252k replays (52% over 14,280 games, side-corrected) and its levels (Hog / Cannon 15, ~13.6 avg)
             "wanted_deck": ["hog_rider", "cannon", "musketeer", "fireball", "ice_golem", "skeletons", "ice_spirit", "the_log"],

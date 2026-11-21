@@ -109,7 +109,7 @@ class RoyaleScreen(Screen):
         play.add(num_row(self.store, "royale_max", "royale.max_battles", "royale_max_sub", lo=0, hi=10000, width=120))
         play.add(toggle_row(self.store, "royale_notify", "royale.notify", "royale_notify_sub"))
         play.add(toggle_row(self.store, "royale_safe", "royale.safe_play", "royale_safe_sub"))
-        play.add(toggle_row(self.store, "royale_ask", "royale.ask_before_battle", "royale_ask_sub"))
+        play.add(toggle_row(self.store, "royale_ask", "royale.confirm_battles", "royale_ask_sub"))
         from ..widgets.controls import IconButton as _IBg
         go = _IBg("play", "royale_go", kind="go", size=16)
         go.clicked.connect(self.go_battle)

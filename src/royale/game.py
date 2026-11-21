@@ -148,6 +148,7 @@ class RoyaleBot:
         self.brain.p = dict(learn.DEFAULT, **self.params)
         if not self.s.get("learned_brain", True): self.brain.p["learned"] = False
         self.brain.reset()
+        self._prev_hand = None
         self._battle_t = time.time()
         if getattr(self, "_api_deck", None) and self.eyes.deck != self._api_deck and \
                 not getattr(self, "_expected_deck", None):           # a fresh copy is checked by the hand first
@@ -206,7 +207,11 @@ class RoyaleBot:
             spent = getattr(self, "_spent", None)
             if spent and time.monotonic() - spent[1] < 1.5:
                 el = min(el, max(0.0, spent[2] - spent[0] + (time.monotonic() - spent[1]) / self.brain.seconds_per_elixir()))
+            # sure of the card before it is played: the same card read in that slot on two looks in a row (a
+            # card half-seen while the hand moves is never played)
+            prev, self._prev_hand = getattr(self, "_prev_hand", None), list(st["hand"])
             ready = [i for i in st["ready"] if i < len(st["hand"]) and
+                     prev is not None and i < len(prev) and prev[i] == st["hand"][i] and st["hand"][i] != "blank" and
                      time.monotonic() - self._slot_used.get(i, 0) > 0.8 and
                      (__import__("royale.brain", fromlist=["card"]).card(st["hand"][i]).get("cost", 11) <= el)]
             try:
@@ -757,9 +762,9 @@ def _say(self, ar, en=None, phone=False):
 
 
 def _go_ok(self):
-    """Ask before each battle (royale.ask_before_battle, on by default): the bot waits in the lobby until the
+    """Ask before each battle (royale.confirm_battles, off by default): the bot waits in the lobby until the
     app's "Start a battle" button is pressed; one press = one battle. Off: it plays battle after battle."""
-    if not self.s.get("ask_before_battle", True): return True
+    if not self.s.get("confirm_battles", False): return True       # off by default: plays by itself
     try:
         import settings
         go = float((settings.load(_u().INSTANCE_ID).get("royale") or {}).get("go_request") or 0)
