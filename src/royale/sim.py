@@ -25,16 +25,43 @@ PRINCESS = {"hp": 1400.0, "dps": 62.0, "range": 7.5}
 KING = {"hp": 2400.0, "dps": 50.0, "range": 7.0}
 
 
+_LEVELS = {"m": None}
+
+
+def level_mult(level):
+    """x the level-1 numbers for a card shown at `level` (the game's own table, cards.json "levels")."""
+    if not level: return 1.0
+    if _LEVELS["m"] is None:
+        try:
+            import json, os
+            from royale.brain import _ROOT
+            with open(os.path.join(_ROOT, "assets", "royale", "cards.json"), encoding="utf-8") as f:
+                _LEVELS["m"] = (json.load(f).get("levels") or {}).get("multiplier") or []
+        except Exception:
+            _LEVELS["m"] = []
+    m = _LEVELS["m"]
+    return float(m[max(0, min(len(m) - 1, int(level) - 1))]) if m else 1.0
+
+
+def tower_mult(level):
+    """Crown towers grow a little slower than cards (level 11 princess tower 3052 hp = 1400 x 2.18)."""
+    return 1.0 + (level_mult(level) - 1.0) * 0.77 if level else 1.0
+
+
 class U:
     __slots__ = ("name", "team", "x", "y", "hp", "hp0", "dmg", "hit", "cd", "rng", "spd", "air", "hits_air",
-                 "bonly", "splash", "building", "value", "wait", "tower", "born")
+                 "bonly", "splash", "building", "value", "wait", "tower", "born", "radius", "sight", "life")
 
-    def __init__(self, name, team, x, y, c, hp_frac=1.0, wait=0.0, per_value=1.0):
+    def __init__(self, name, team, x, y, c, hp_frac=1.0, wait=0.0, per_value=1.0, level=None):
         self.name, self.team, self.x, self.y = name, team, float(x), float(y)
         n = max(1, c.get("count") or 1)
-        self.hp0 = float(c.get("hp") or 300.0)
+        k = level_mult(level)                    # the card's real level (the numbers in cards.json are level 1)
+        self.hp0 = float(c.get("hp") or 300.0) * k
         self.hp = self.hp0 * max(0.05, min(1.0, hp_frac))
-        self.dmg = float(c.get("damage") or 0.0)
+        self.dmg = float(c.get("damage") or 0.0) * k
+        self.radius = float(c.get("radius") or 0.5)
+        self.sight = float(c.get("sight") or SIGHT)
+        self.life = float(c.get("life_s") or 30.0)
         self.hit = max(0.3, (c.get("hit_ms") or 1200) / 1000.0)
         self.cd = 0.0
         self.rng = max(0.6, float(c.get("range") or 1.0))
@@ -53,9 +80,10 @@ class U:
         return (self.hits_air or not o.air) and o.hp > 0
 
 
-def _tower(team, x, y, kind):
-    t = U(kind, team, x, y, {"hp": (KING if kind == "king" else PRINCESS)["hp"], "kind": "building"})
-    t.dmg = (KING if kind == "king" else PRINCESS)["dps"]
+def _tower(team, x, y, kind, level=None):
+    k = tower_mult(level)
+    t = U(kind, team, x, y, {"hp": (KING if kind == "king" else PRINCESS)["hp"] * k, "kind": "building"})
+    t.dmg = (KING if kind == "king" else PRINCESS)["dps"] * k
     t.hit, t.rng, t.hits_air, t.tower, t.spd = 1.0, (KING if kind == "king" else PRINCESS)["range"], True, kind, 0.0
     t.value = 0.0
     return t
@@ -92,7 +120,7 @@ def step(units, dt=DT):
         if u.bonly:
             cands = [o for o in foes if o.building]
         else:
-            cands = [o for o in foes if u.can_hit(o) and (_dist(u, o) <= max(SIGHT, u.rng) or o.building)]
+            cands = [o for o in foes if u.can_hit(o) and (_dist(u, o) <= max(u.sight, u.rng) or o.building)]
         if u.tower or u.building:
             cands = [o for o in cands if _dist(u, o) <= u.rng + 0.5]
         if not cands: continue
@@ -106,7 +134,16 @@ def step(units, dt=DT):
                     tgt.hp -= u.dmg
                 u.cd = u.hit
         elif u.spd > 0:
-            _step_to(u, tgt.x, tgt.y, dt)
+            # body block: an enemy body right in front (between it and its target) holds a ground unit back —
+            # a Skeleton in front of a Hog Rider costs it about half a second
+            slow = 1.0
+            if not u.air:
+                for o in foes:
+                    if o.air or o.building or o.tower: continue
+                    if _dist(u, o) <= u.radius + o.radius + 0.15 and _dist(o, tgt) < _dist(u, tgt):
+                        slow = 0.35
+                        break
+            _step_to(u, tgt.x, tgt.y, dt * slow)
 
 
 def simulate(units, horizon=HORIZON):
@@ -175,7 +212,7 @@ class Arena:
             step(self.units, dt)
             self.t += dt
             for u in self.units:
-                if u.building and not u.tower and self.t - self.born.get(id(u), self.t) > self.LIFETIME: u.hp = 0
+                if u.building and not u.tower and self.t - self.born.get(id(u), self.t) > u.life: u.hp = 0
             self.units = [u for u in self.units if u.hp > 0 or u.tower]
 
     def board(self, me="us"):
@@ -222,21 +259,24 @@ def board(brain, stable, hp=None, allies=None, their_towers=False):
         cn = unit_card(u)
         c = card(cn) if cn else {}
         if not c or c.get("kind") == "spell": continue
-        units.append(U(u, "them", x + 0.5, y + 0.5, c, brain.life(u, x, y), 0.0, c.get("cost", 3)))
+        units.append(U(u, "them", x + 0.5, y + 0.5, c, brain.life(u, x, y), 0.0, c.get("cost", 3),
+                       getattr(brain, "their_level", None)))
     for a in (allies if allies is not None else getattr(brain, "_allies", []) or []):
         cn = unit_card(a[0])
         c = card(cn) if cn else {}
         if not c or c.get("kind") == "spell": continue
-        units.append(U(a[0], "us", a[1] + 0.5, a[2] + 0.5, c, 1.0, 0.0, c.get("cost", 3)))
+        units.append(U(a[0], "us", a[1] + 0.5, a[2] + 0.5, c, 1.0, 0.0, c.get("cost", 3), brain.my_level(cn)))
     for team, towers, pre in (("us", OUR_TOWERS, "our"), ("them", THEIR_TOWERS, "their")):
         if team == "them" and not their_towers: continue
         for side in ("left", "right"):
             life = _tower_life(brain, f"{pre}_{side}")
             if life <= 0: continue
-            t = _tower(team, *towers[side], "princess")
+            lv = getattr(brain, "king_level", None) if team == "us" else getattr(brain, "their_level", None)
+            t = _tower(team, *towers[side], "princess", lv)
             t.hp = t.hp0 * life
             units.append(t)
-        units.append(_tower(team, *towers["king"], "king"))
+        units.append(_tower(team, *towers["king"], "king",
+                            getattr(brain, "king_level", None) if team == "us" else getattr(brain, "their_level", None)))
     return units
 
 
@@ -249,9 +289,9 @@ def score(units, cost):
             # still alive deep on our side: it will keep hitting
             if u.hp > 0 and u.y < 9: s -= 0.6 * u.value * (u.hp / u.hp0)
         elif u.team == "us" and u.tower:
-            s -= (u.hp0 - max(0.0, u.hp)) / 180.0          # ~180 tower hp lost = one elixir lost
+            s -= (u.hp0 - max(0.0, u.hp)) / u.hp0 * 7.8    # a princess tower ~ 8 elixir (180 of 1400 hp = 1)
         elif u.team == "them" and u.tower:
-            s += (u.hp0 - max(0.0, u.hp)) / 180.0          # their tower hp taken (attacks)
+            s += (u.hp0 - max(0.0, u.hp)) / u.hp0 * 7.8    # their tower hp taken (attacks)
         elif u.team == "us" and any(u.can_hit(o) or o.hp <= 0 for o in units if o.team == "them" and not o.tower) \
                 and (u.bonly is False):
             # survivors that could fight what came: a counter-push for free (a building only stands there and decays: worth little)
@@ -282,7 +322,7 @@ def candidate_tiles(name, side, threat):
     return [(max(0, min(17, x)), max(1, min(14, y))) for x, y in tiles]
 
 
-def _with(base, name, c, tx, ty, delay=0.0):
+def _with(base, name, c, tx, ty, delay=0.0, level=None):
     import copy
     units = copy.deepcopy(base)
     n = max(1, c.get("count") or 1)
@@ -290,7 +330,7 @@ def _with(base, name, c, tx, ty, delay=0.0):
         ang = 2 * math.pi * k / n
         ox, oy = (0.6 * math.cos(ang), 0.6 * math.sin(ang)) if n > 1 else (0.0, 0.0)
         units.append(U(name, "us", tx + 0.5 + ox, ty + 0.5 + oy, c, 1.0,
-                       (c.get("deploy_ms") or 1000) / 1000.0 + delay, c.get("cost", 3)))
+                       (c.get("deploy_ms") or 1000) / 1000.0 + delay, c.get("cost", 3), level))
     return units
 
 
@@ -309,7 +349,8 @@ def plan(brain, side, threat, candidates, stable, hp=None, max_cards=3, prior=No
         if not c or c.get("kind") == "spell": continue
         for tx, ty in candidate_tiles(name, side, threat):
             for delay in (0.0, 1.5):
-                sc = score(simulate(_with(base, name, c, tx, ty, delay)), c.get("cost", 3)) + (prior or {}).get(name, 0.0)
+                sc = score(simulate(_with(base, name, c, tx, ty, delay, brain.my_level(name))), c.get("cost", 3)) \
+                    + (prior or {}).get(name, 0.0)
                 if delay: sc -= 0.15                    # a small price for waiting (the picture may change)
                 if best is None or sc > best[3]:
                     best = (slot, name, (tx, ty), sc, f"thought it through: {sc - nothing:+.1f} elixir vs doing nothing",
@@ -335,7 +376,7 @@ def attack_plan(brain, candidates, stable, horizon=12.0):
             if pt: tiles.add(pt)
             for tx, ty in tiles:
                 ty = max(0, min(14, ty))
-                sc = score(_run(_with(base, name, c, tx, ty), horizon), c.get("cost", 3))
+                sc = score(_run(_with(base, name, c, tx, ty, 0.0, brain.my_level(name)), horizon), c.get("cost", 3))
                 if best is None or sc > best[3]:
                     best = (slot, name, (tx, ty), sc, sc - nothing)
     return best

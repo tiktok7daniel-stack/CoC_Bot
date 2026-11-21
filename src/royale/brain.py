@@ -346,14 +346,44 @@ class Brain:
     def crowns(self, towers):
         """(ours, theirs): princess towers that were up and are now down."""
         ours = theirs = 0
+        zeros = self.__dict__.setdefault("_tower_zero", {})
         for k, v in (towers or {}).items():
             if v is None: continue
             hi = max(self.tower_seen.get(k, 0.0), float(v))
             self.tower_seen[k] = hi
-            if hi > 0.3 and float(v) <= 0.0:
+            # down only after 3 looks in a row read it at 0: one covered / misread look is not a lost tower
+            zeros[k] = zeros.get(k, 0) + 1 if float(v) <= 0.0 else 0
+            if hi > 0.3 and zeros[k] >= 3:
                 if k.startswith("their"): ours += 1
                 else: theirs += 1
         return ours, theirs
+
+    def their_tower_down(self, side):
+        return self.__dict__.get("_tower_zero", {}).get(f"their_{side}", 0) >= 3 and \
+            self.tower_seen.get(f"their_{side}", 0) > 0.3
+
+    def legal(self, x, y, name):
+        """Can the game take this card on this tile? (our half, not on a tower, not in the river; the pocket on
+        their side once their tower of that lane is down) — a card dropped on a wrong tile stays selected and the
+        moment is lost."""
+        if card(name).get("anywhere") or "spell" in roles(name): return 0 <= x <= 17 and 0 <= y <= 31
+        if not (0 <= x <= 17 and 0 <= y <= 31): return False
+        if 2 <= x <= 4 and 4 <= y <= 6 or 13 <= x <= 15 and 4 <= y <= 6: return False      # our princess towers
+        if 7 <= x <= 10 and 0 <= y <= 3: return False                                       # our king tower
+        if y <= 14: return True
+        side = lane(x)
+        return self.their_tower_down(side) and 17 <= y <= 20
+
+    def legal_tile(self, x, y, name):
+        """The nearest tile the game accepts for this card."""
+        if self.legal(x, y, name): return x, y
+        best = None
+        for dx in range(-4, 5):
+            for dy in range(-4, 5):
+                tx, ty = x + dx, y + dy
+                if self.legal(tx, ty, name) and (best is None or dx * dx + dy * dy < best[0]):
+                    best = (dx * dx + dy * dy, tx, ty)
+        return (best[1], best[2]) if best else (x, max(0, min(14, y)))
 
     def _counter_score(self, name, threat):
         """How well card `name` answers this lane's threat (0 = useless)."""
@@ -703,6 +733,16 @@ class Brain:
             if c.get("kind") == "building" and not any(d[5] for d in near): v -= 1.5
             s["v"] = round(v, 2)
 
+    # ---------------------------------------------------------------- levels (official API)
+    levels = {}                                # our card -> shown level (royale.game sets it from the API)
+    king_level = None
+    their_level = None                         # the opponent's usual level (learned from past battle logs)
+
+    def my_level(self, name):
+        if not name: return None
+        k = "".join(ch for ch in str(name).lower() if ch.isalnum())
+        return self.levels.get(k) or self.king_level
+
     def _not_ours(self, enemies, allies):
         """A unit of a card WE just played, where we played it (or on its way from there), is ours even when the
         eyes say "theirs" — the side check can miss, and spelling our own troops is the worst mistake there is."""
@@ -840,7 +880,7 @@ class Brain:
                     y = int(max(1, dy_ - rad - 1)) if dy_ - rad - 1 >= 1 else int(min(14, dy_ + rad + 1))
                     break
         if not card(n).get("anywhere"):
-            y = max(0, min(14, y))                                               # our half only (towers up: more)
+            if not self.legal(x, y, n): x, y = self.legal_tile(x, y, n)          # never a tile the game refuses
         self.last_play = now
         self.last_tiles.append((x, y))
         d = {"slot": i, "card": n, "tile": (x, y), "why": why, "t": round(self.elapsed(), 1)}

@@ -18,3 +18,9 @@ scripts/build_royale_pro.py. Only aggregated counts are shipped, no replay data.
 Clash-Royale-Detection-Dataset by wty-yy (https://github.com/wty-yy/Clash-Royale-Detection-Dataset), MIT License,
 Copyright (c) 2024 wty: real labelled arena pictures and cut-out units used by royale.trainer to train the eyes,
 including generated pictures (cut-outs pasted onto arenas, the KataCR "generative dataset" method).
+
+## cards.json: sight, radius, deploy_ms, life_s, mass, levels
+From the game's data tables as published by RoyaleAPI (cr-api-data, https://royaleapi.github.io/cr-api-data/),
+via the copy kept in hastylmao/Hasty-CR (MIT License, Copyright (c) 2026 HastyCR contributors), merged by
+scripts/build_royale_stats.py. Body blocking, tower-reading smoothing and the legal-tile mask follow ideas from
+Hasty-CR and advaynathany/alphaclash (MIT); no code copied.

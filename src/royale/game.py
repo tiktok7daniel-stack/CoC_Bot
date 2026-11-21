@@ -413,7 +413,18 @@ def _api_start(self):
 
     def work():
         try:
-            deck = _api_names(self.eyes, [k for k, *_ in cr_api.my_deck(_u().INSTANCE_ID)])
+            md = cr_api.my_deck(_u().INSTANCE_ID)
+            lv = {k: (int(l) + 16 - int(m)) for k, l, m, _e in md if l and m}       # the levels shown in the game
+            if lv:
+                self.brain.levels = lv
+                self.brain.king_level = round(sum(lv.values()) / len(lv))
+                gaps = [b["levels"][1] - b["levels"][0] for b in (self.brain.mem.d.get("api_battles") or [])[-30:]
+                        if self.brain.mem and b.get("levels")] if self.brain.mem else []
+                gap = (sum(gaps) / len(gaps)) if gaps else 0.0
+                self.brain.their_level = round(self.brain.king_level + gap)
+                self.log.info(f"Clash Royale API: my levels ~{self.brain.king_level}, opponents usually "
+                              f"{'+' if gap >= 0 else ''}{gap:.1f} — the thinking uses the real numbers")
+            deck = _api_names(self.eyes, [k for k, *_ in md])
             if len(deck) == 8:
                 self._api_deck = deck
                 self.log.info("Clash Royale: my deck from the official API = " + ", ".join(deck))
