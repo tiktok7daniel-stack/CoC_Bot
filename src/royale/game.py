@@ -489,22 +489,38 @@ def _pick_deck(self):
     from royale import cr_api, deck_pick
     acc = _u().INSTANCE_ID
     if not cr_api.tag(acc):
-        # no official API: the deck chosen for this account in the settings, copied in once
-        want = [c for c in (self.s.get("wanted_deck") or []) if c]
-        if len(want) != 8 or not deck_pick.due(acc, every=365 * 86400): return
-        from royale.brain import card
+        # no official API: the bot reads the collection from the screen itself (once a week), picks the best deck
+        # for these levels from the replays' win rates; the settings' deck when the reading failed
+        if not deck_pick.due(acc, every=7 * 86400): return
+        from royale import collection
+        from royale.brain import card, cards_db
+        lv = collection.load(acc)
+        if not lv:
+            self.log.info("Clash Royale: reading the card collection (cards and levels)")
+            try: lv = collection.scan(acc, self.log)
+            except Exception: self.log.debug("collection scan failed", exc_info=True); lv = {}
+        names = {cr_api.key_of(n): n for n in cards_db()}
+        pick_off = deck_pick.choose_offline(lv) if lv else None
+        if pick_off:
+            want = [names.get(k, k) for k in pick_off["cards"]]
+            self.log.info(f"Clash Royale: the best deck for this account = {', '.join(want)} — {pick_off['why']}")
+        else:
+            want = [c for c in (self.s.get("wanted_deck") or []) if c]
+        if len(want) != 8: return
         ids = [card(c).get("id") for c in want]
         if not all(ids):
             self.log.info("Clash Royale: the wanted deck has a card the bot does not know — not copied")
             return
-        pick = {"cards": want, "ids": ids, "why": "the deck chosen for this account", "current": []}
+        pick = {"cards": want, "ids": ids, "why": (pick_off or {}).get("why", "the deck chosen for this account"),
+                "current": []}
         self.log.info("Clash Royale: putting in the chosen deck = " + ", ".join(want))
         if deck_pick.apply(acc, pick, self.log, int(self.s.get("deck_slot", 0) or 0)):
             names = _api_names(self.eyes, [cr_api.key_of(c) for c in want])
             if len(names) == 8:
                 self._api_deck = names
                 self.eyes.set_deck(names); self.brain.deck = list(names)
-            try: self.notify("🃏 كلاش رويال: حطيت الديك المختار — " + ", ".join(want))
+            try: self.notify("🃏 كلاش رويال: حللت حسابك وحطيت أحسن ديك — " + ", ".join(want) +
+                             (f"\n({pick_off['why']})" if pick_off else ""))
             except Exception: pass
         return
     if not deck_pick.due(acc): return

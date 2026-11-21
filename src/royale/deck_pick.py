@@ -140,3 +140,32 @@ def due(account, every=12 * 3600):
         return time.time() - d.get("t", 0) > every
     except (OSError, ValueError):
         return True
+
+
+def choose_offline(levels, current=None, min_games=300):
+    """No official API: the collection the bot read from the screen ({card: level}) x every deck of the 252k
+    replays with its real (side-corrected) win rate -> the best deck for THIS account.
+    score = win rate (pulled toward 50% on few games) + 4% per level above 13 on average (a deck you have high
+    levels in wins more for you) + a little for one clear win condition (the bot plays those best)."""
+    from royale import pro
+    key = lambda s: "".join(ch for ch in str(s).lower() if ch.isalnum())
+    lv = {key(k): v for k, v in (levels or {}).items()}
+    if len(lv) < 30: return None                                   # the collection was not read well enough
+    known = sorted(lv.values())
+    default = known[len(known) // 2] - 1                           # a card not read: just under the usual level
+    best = None
+    for d in pro.wins().get("decks") or []:
+        if d["n"] < min_games or len(d["cards"]) != 8: continue
+        cards = d["cards"]
+        win = (d["w"] + 75) / (d["n"] + 150)                     # a few hundred games are not proof: toward 50%
+        avg = sum(lv.get(c, default) for c in cards) / 8.0
+        wcs = sum(1 for c in cards if c in WIN_CONDITIONS)
+        proven = 0.02 * min(1.0, d["n"] / 5000.0)                 # thousands of games: proven, not luck
+        score = win + 0.04 * (avg - 13) + 0.01 * (wcs == 1) + proven + \
+            (0.02 if current and sorted(cards) == sorted(current) else 0)
+        if best is None or score > best["score"]:
+            best = {"cards": cards, "score": round(score, 4), "win": round(d["w"] / d["n"], 3), "n": d["n"],
+                    "level": round(avg, 1)}
+    if best:
+        best["why"] = f"{best['win'] * 100:.0f}% wins over {best['n']} replay games, your levels {best['level']}"
+    return best
