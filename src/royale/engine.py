@@ -318,10 +318,11 @@ def _value(env, brain, before, spent=0.0):
     v = 0.0
     for team, sign in ((1, OFFENSE_DISCOUNT), (0, -1.0)):
         for slot in (0, 1, 2):
-            mx = max(1, env.get_tower_max_hp(team, slot))
+            mx = env.get_tower_max_hp(team, slot)
+            if mx < 100: continue                      # a destroyed tower (max 0): nothing to count (was +72130)
             hp = max(0, env.get_tower_hp(team, slot))
             hp0 = before["towers"][(team, slot)]
-            v += sign * TOWER_ELIXIR[slot] * (hp0 - hp) / mx
+            v += sign * TOWER_ELIXIR[slot] * max(-1.0, min(1.0, (hp0 - hp) / mx))
     army = _army(env)
     v += before["army"][1] - army[1]                        # their units' worth destroyed
     v += OURS_STANDING * (army[0] - before["army"][0])      # ours still standing (a counter-push), or lost

@@ -187,8 +187,9 @@ def _value(cx, env, team, before, spent):
     o = 1 - team
     for t, sign in ((o, E.OFFENSE_DISCOUNT), (team, -1.0)):
         for s in (0, 1, 2):
-            mx = max(1, env.get_tower_max_hp(t, s))
-            v += sign * E.TOWER_ELIXIR[s] * (before["towers"][(t, s)] - max(0, env.get_tower_hp(t, s))) / mx
+            mx = env.get_tower_max_hp(t, s)
+            if mx < 100: continue                      # destroyed (max 0)
+            v += sign * E.TOWER_ELIXIR[s] * max(-1.0, min(1.0, (before["towers"][(t, s)] - max(0, env.get_tower_hp(t, s))) / mx))
     army = E._army(env)
     v += before["army"][o] - army[o]
     v += STAND * (army[team] - before["army"][team])
