@@ -158,6 +158,10 @@ class RoyaleBot:
         # AI mode (on by default since 5.74, the user's choice): the AI model trained on pro games decides, the battle
         # engine simulates its best choices (and the self-play AI's) and keeps the best; the rules only guard it
         self.brain.p["ai"] = bool(self.s.get("ai_play", True)) and self.brain.p.get("learned", True)
+        # the AI model alone plays (5.75, on by default): the rule brain never plays a move of its own
+        self.brain.p["ai_only"] = self.brain.p["ai"] and bool(self.s.get("ai_only", True))
+        if self.brain.p["ai_only"]: log.info("Clash Royale: the AI model plays this battle by itself "
+                                             "(the engine compares its own choices, the guards stop sure mistakes)")
         if self.brain.p["ai"]: log.info("Clash Royale: the local AI model plays this battle (the rules only guard it)")
         self.brain.reset()
         self._prev_hand = None

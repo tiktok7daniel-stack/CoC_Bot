@@ -520,7 +520,9 @@ class Brain:
                 self._pol["play"] = 0.5 * self._pol["play"] + 0.5 * self._board["play"]
         self._ctx = (round(el_t, 2), [round(float(v), 4) for v in self._pol["_x"][0]], list(self._pol["_ids"]),
                      (self._board or {}).get("_in")) if self._pol else None
-        if self.p.get("ai", False) and self._pol and self._pol.get("cards"):
+        if self.p.get("ai_only", False) and self._pol and self._pol.get("cards"):
+            d = self._ai_only_decide(playable, elixir, stable, th, now)     # the AI model alone plays
+        elif self.p.get("ai", False) and self._pol and self._pol.get("cards"):
             d = self._model_decide(playable, elixir, stable, th, now)       # the local AI model plays
         else:
             d = self._decide(hand, ready, elixir, stable, playable, th, towers, now, allies)
@@ -642,6 +644,32 @@ class Brain:
                     side, (x, y) = self._their_target_tower()
                     return self._play((i, n), (int(x), int(y) - 3), f"full elixir: the Log into their {side} tower", now)
             return None
+        return None
+
+    def _ai_only_decide(self, playable, elixir, stable, th, now):
+        """The AI model is the player (5.75, the user's choice): its two networks choose when to play, which card
+        and where; no move of the rule brain is ever played. When something comes at us or the elixir is full it
+        is asked to act now, and its own likeliest cards are offered to the battle engine, which only compares
+        them (royale.engine with brain.p["ai_only"]). The guards still refuse a move that is surely wrong
+        (a spell on our troops, a Goblin Barrel into our half, a tile the game refuses)."""
+        self._ai_cands = []
+        pol = self._pol
+        play = pol.get("play", 0.0)
+        threat = any(v.get("units") and (v.get("urgent") or v["value"] >= self.p.get("defend_min", 1.5))
+                     for v in (th or {}).values())
+        full = elixir >= 9.5
+        if not (play >= 0.5 or threat or full): return None
+        ranked = sorted(((pol["cards"].get(n, 0.0), i, n) for i, n in playable), reverse=True)
+        for pr, i, n in ranked:
+            if pr < 0.03 and not full: break
+            if self._reserved(n) and not threat: continue
+            lt = self._ltile(n, anywhere=bool(card(n).get("anywhere")))
+            if not lt: continue
+            self._ai_cands.append((i, n, tuple(lt[0])))
+        for i, n, tile in self._ai_cands:
+            when = "full elixir" if full and play < 0.5 else ("defending" if threat and play < 0.5 else f"{play:.0%} play now")
+            d = self._play((i, n), tile, f"AI model: {n} ({pol['cards'].get(n, 0):.0%}, {when})", now)
+            if d: return d
         return None
 
     def _model_decide(self, playable, elixir, stable, th, now):

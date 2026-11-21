@@ -71,5 +71,16 @@ for k in range(25):
     if got: break
 check("AI mode defends a Hog", got is not None and got["card"] != "goblin_barrel", str(got))
 
+# 5.75: AI-only — every card played is one the AI model proposed (the rule brain plays nothing of its own)
+b3 = Brain(); b3.deck = list(b.deck); b3.reset(); b3.p["ai"] = True; b3.p["ai_only"] = True
+t0, ok_all, n_pl = time.monotonic(), True, 0
+for k in range(30):
+    d = b3.decide(['witch', 'arrows', 'cannon', 'valkyrie'], [0, 1, 2, 3], 9.0, [("hog_rider", 3, 16 - k * 0.4, 0.9)],
+                  [], {"their_left": 1.0, "their_right": 1.0, "our_left": 1.0, "our_right": 1.0}, now=t0 + k * 0.7)
+    if d:
+        n_pl += 1
+        ok_all = ok_all and d["why"].startswith("AI model") and any(c[1] == d["card"] for c in b3._ai_cands)
+check("AI-only: only the model's own cards are played", n_pl > 0 and ok_all, f"{n_pl} plays")
+
 print(f"\n{'ALL PASSED' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)

@@ -319,6 +319,10 @@ def candidates(brain, playable, rule_d, defend, first=()):
     for i, n, t in first: add(i, n, t)
     if rule_d: add(rule_d["slot"], rule_d["card"], rule_d["tile"])
     cards = [(i, n) for i, n in playable] if defend else ([(rule_d["slot"], rule_d["card"])] if rule_d else [])
+    if brain.p.get("ai_only"):
+        # the AI model is the player: only ITS cards are compared (on its tiles and the spots around them)
+        mine = {(i, n) for i, n, _t in first} | ({(rule_d["slot"], rule_d["card"])} if rule_d else set())
+        cards = [c for c in cards if c in mine] or [c for c in mine]
     enemies = [(x, y) for _u, x, y in (brain._stable or [])]
     for i, n in cards:
         r = roles(n)
@@ -402,9 +406,11 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
         pass
     # the AI model trained on pro games (royale.policy): its 3 likeliest cards on its own tiles are thought through
     # too, and one of them is played when it beats waiting (AI mode: brain.p["ai"])
+    if brain.p.get("ai_only") and getattr(brain, "_ai_cands", None):
+        first = list(first) + [c for c in brain._ai_cands[:3]]
     try:
         pol = getattr(brain, "_pol", None)
-        if pol and pol.get("cards"):
+        if pol and pol.get("cards") and not brain.p.get("ai_only"):
             names = dict((m, i) for i, m in playable)
             for n, pr in sorted(pol["cards"].items(), key=lambda kv: -kv[1])[:3]:
                 if n not in names or pr < 0.08: continue
