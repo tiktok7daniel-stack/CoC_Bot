@@ -131,6 +131,11 @@ class RoyaleScreen(Screen):
         api.add(form_row("royale_dev_pass", None, secret_field(self.store, "royale_dev_password", "••••••••")))
         api.add(toggle_row(self.store, "royale_auto_deck", "royale.auto_deck", "royale_auto_deck_sub"))
         api.add(num_row(self.store, "royale_deck_slot", "royale.deck_slot", "royale_deck_slot_sub", lo=0, hi=10, width=90))
+        api.add(toggle_row(self.store, "royale_scan_cards", "royale.scan_cards", "royale_scan_cards_sub"))
+        from ..widgets.controls import IconButton as _IB
+        sc = _IB("camera", "royale_scan_now", size=14)
+        sc.clicked.connect(self.scan_cards_now)
+        api.add(sc)
         v.addWidget(api)
 
         # ---------- training the eyes on this PC
@@ -216,6 +221,12 @@ class RoyaleScreen(Screen):
         except Exception:
             pass
         self.train_state.setText(txt)
+
+    def scan_cards_now(self):
+        """The bot opens every card's Info page at the next menu and sends the pictures to be studied."""
+        import time as _t
+        self.store.set("royale.card_scan_request", _t.time())
+        self.ctx.banner(tr("royale_scan_started"), "ok", "camera")
 
     def train_now(self):
         try:

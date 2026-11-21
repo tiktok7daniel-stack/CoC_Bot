@@ -343,6 +343,9 @@ class RoyaleBot:
                 continue
             ws = words(fr)
             b = find_word(ws, "battle", y_min=0.55, y_max=0.9)
+            if b and self._cards_study_due():
+                self._study_cards()
+                continue
             if b and self.s.get("auto_deck", True) and not getattr(self, "_deck_checked", False):
                 self._deck_checked = True
                 self._pick_deck()
@@ -647,6 +650,41 @@ def _study_deck(self):
     except Exception: pass
 
 
+def _cards_study_due(self):
+    """Once a week (royale.scan_cards), or when the app's "Study my cards now" button asked."""
+    from royale import card_scan
+    if getattr(self, "_cards_studied_at", 0) and time.time() - self._cards_studied_at < 600: return False
+    try:
+        import settings
+        req = float((settings.load(_u().INSTANCE_ID).get("royale") or {}).get("card_scan_request") or 0)
+    except Exception:
+        req = 0
+    if req > getattr(self, "_cards_studied_at", 0) and time.time() - req < 3600: return True
+    return bool(self.s.get("scan_cards", True)) and card_scan.due(_u().INSTANCE_ID)
+
+
+def _study_cards(self):
+    from royale import card_scan
+    self._cards_studied_at = time.time()
+    self.log.info("Clash Royale: studying every card (Info page of each)")
+    try:
+        pages = card_scan.scan(_u().INSTANCE_ID, self.log, self.brain)
+    except Exception:
+        self.log.debug("card study failed", exc_info=True)
+        return
+    try: self.eyes.set_deck(self.eyes.deck)                 # the new pictures go into the card reader
+    except Exception: pass
+    evo = [p["name"] for p in pages.values() if p.get("name") and p["form"] == "evolution"]
+    hero = [p["name"] for p in pages.values() if p.get("name") and p["form"] == "hero"]
+    try:
+        self.notify(f"📸 كلاش رويال: فتحت Info لـ {len(pages)} كارت وصورتهم وبعتهم للتحليل"
+                    + (f"\nمتطور: {', '.join(evo)}" if evo else "") + (f"\nهيرو: {', '.join(hero)}" if hero else ""))
+    except Exception:
+        pass
+
+
+RoyaleBot._cards_study_due = _cards_study_due
+RoyaleBot._study_cards = _study_cards
 RoyaleBot._study_deck = _study_deck
 RoyaleBot._check_deck = _check_deck
 RoyaleBot._pick_deck = _pick_deck

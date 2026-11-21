@@ -8,6 +8,9 @@ from scipy.optimize import linear_sum_assignment
 from royale.vision.constants import CARD_CONFIG, IMAGES_DIR
 from royale.vision.namespaces.cards import Card, Cards
 
+# the card pictures the bot cut from the player's own Info pages (royale.card_scan)
+USER_DIR = os.path.join(os.path.expanduser("~"), ".CoC_Bot", "learn", "royale_cards")
+
 
 class CardDetector:
     HAND_SIZE = 5
@@ -61,6 +64,9 @@ class CardDetector:
             for i, card in enumerate(self.cards):
                 for v in self.VARIANTS:
                     path = os.path.join(IMAGES_DIR, "cards", f"{card.name}{v}.jpg")
+                    if v.endswith("_user"):                  # the bot's own pictures (royale.card_scan) come first
+                        own = os.path.join(USER_DIR, f"{card.name}{v}.jpg")
+                        if os.path.exists(own): path = own
                     if v and not os.path.exists(path): continue
                     multi_hash = self._calculate_multi_hash(Image.open(path))
                     rows.append(np.tile(np.expand_dims(multi_hash, axis=2), (1, 1, self.HAND_SIZE)))
