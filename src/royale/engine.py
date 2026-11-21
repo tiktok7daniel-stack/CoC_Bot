@@ -329,6 +329,51 @@ def rollout(env, slot, x, y):
     return s
 
 
+REPLY_TICKS = 15               # the opponent answers our card ~1.5 s after it lands
+REPLY_MAX = 3                  # their likeliest answers tried for each of our moves
+
+
+def replies(brain, name, tx, ty):
+    """What the opponent can answer our card with, as the bot counts their hand and elixir: their cards that answer
+    it (royale.knowledge ANSWERS_TO) first, then the rest of their hand — each on the spot it would go (a spell on
+    our unit; a troop / building on their side of that lane). -> [(engine card id, x, y)] (5.84)."""
+    from royale import knowledge as K
+    from royale.brain import card, roles
+    ids = card_ids()
+    el = float(getattr(brain, "enemy_elixir", 0) or 0)
+    known = set(getattr(brain, "enemy_seen", set()) or set()) | set(getattr(brain, "predicted", set()) or set())
+    try: hand = list(brain.their_hand() or [])
+    except Exception: hand = []
+    pool = [c for c in K.ANSWERS_TO.get(name, []) if c in known] + hand + sorted(known)
+    out, seen = [], set()
+    for c in pool:
+        if c in seen or c not in ids: continue
+        seen.add(c)
+        if (card(c) or {}).get("cost", 9) > el + 0.5: continue
+        r = roles(c)
+        if "spell" in r: p = (tx, ty)
+        elif "building" in r: p = (8 if tx < 9 else 9, 22)
+        else: p = (tx, max(17, min(ty + 2, 26)))
+        out.append((ids[c][0], *eng_xy(*p)))
+        if len(out) >= REPLY_MAX: break
+    return out
+
+
+def rollout_reply(env, slot, x, y, reply):
+    """Like rollout(), and the opponent answers with `reply` (card id, x, y) REPLY_TICKS after our card."""
+    s = env.snapshot()
+    s.step_self_play_fast(-1, 0.0, 0.0, -1, 0.0, 0.0, ACTION_DELAY_TICKS)
+    s.step_self_play_fast(slot, x, y, -1, 0.0, 0.0, REPLY_TICKS)
+    try: s.inject(reply[0], reply[1], reply[2], 1, -1.0, 0)
+    except Exception: return None
+    left = ROLLOUT_TICKS - ACTION_DELAY_TICKS - REPLY_TICKS
+    while left > 0:
+        r = s.step_self_play_fast(-1, 0.0, 0.0, -1, 0.0, 0.0, min(20, left))
+        left -= 20
+        if r.done: break
+    return s
+
+
 def candidates(brain, playable, rule_d, defend, first=()):
     """(hand slot, card, our tile) to think through; `first` (the trained AI's move) goes first."""
     from royale.brain import card, roles, THEIR_TOWERS
@@ -464,6 +509,14 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
         cost = float((m.get_card_info(ids[n][0]) or {}).get("cost", 3))
         end = rollout(env, hs, x, y)
         v = _value(end, brain, before, cost) - base
+        # the opponent answers (5.84): a move is only as good as it stays after their likeliest answers — half the
+        # worst case, half the average (they do not always find the best answer)
+        vs = [v]
+        if time.perf_counter() - t0 < THINK_BUDGET * 0.75:
+            for rp in replies(brain, n, tx, ty):
+                e2 = rollout_reply(env, hs, x, y, rp)
+                if e2 is not None: vs.append(_value(e2, brain, before, cost) - base)
+        if len(vs) > 1: v = 0.5 * min(vs) + 0.5 * sum(vs) / len(vs)
         tried += 1
         scored.append({"card": n, "tile": [tx, ty], "v": round(v, 2)})
         if _S.get("debug") is not None:

@@ -125,5 +125,22 @@ for k in range(400):
             print("  MIRROR CRASH:", key, "\n", errs[key][-900:], "\n  stable:", stable[:4], "towers:", towers)
 check("the mirror never crashes on any arena", not errs, f"{len(errs)} kinds of crash")
 
+# 5.84: the opponent answers inside the search — a Musketeer alone at the bridge is worth less when they hold a Fireball
+b = brain([], {"fireball", "hog_rider", "cannon"})
+b.enemy_elixir = 7.0
+rp = engine.replies(b, "musketeer", 3, 13)
+print("  their answers to a Musketeer at the bridge:", rp)
+check("the opponent has answers to try", len(rp) >= 1, str(rp))
+st5 = {"hand": ["musketeer", "cannon", "fireball", "the_log"], "ready": [0, 1, 2, 3], "towers": {}, "allies": []}
+env5, slots5 = engine.mirror(b, st5, st5["hand"], 8.0)
+if env5 is not None:
+    before = engine._snap_state(env5)
+    x5, y5 = engine.eng_xy(3, 13)
+    alone = engine._value(engine.rollout(env5, slots5["musketeer"], x5, y5), b, before, 4.0)
+    worst = min(engine._value(e, b, before, 4.0) for e in
+                (engine.rollout_reply(env5, slots5["musketeer"], x5, y5, r) for r in rp) if e is not None)
+    print(f"  Musketeer at the bridge: {alone:+.2f} if they do nothing, {worst:+.2f} after their best answer")
+    check("their answer makes a lone Musketeer worse", worst < alone, f"{alone:+.2f} vs {worst:+.2f}")
+
 print(f"\n{'ALL PASSED' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)

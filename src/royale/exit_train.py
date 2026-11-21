@@ -206,15 +206,29 @@ def _leak(env, team, spent):
     return max(0.0, el + gain - 10.0)
 
 
-def _rollout(env, team, act):
+REPLY_AFTER = 15            # the opponent answers ~1.5 s after our card lands
+REPLIES = 2                 # their likeliest answers tried for every move (5.84)
+
+
+def _act(s, team, slot, x, y, ticks):
+    if team == 0: return s.step_self_play_fast(slot, x, y, -1, 0.0, 0.0, ticks)
+    return s.step_self_play_fast(-1, 0.0, 0.0, slot, x, y, ticks)
+
+
+def _rollout(env, team, act, reply=None):
+    """`reply`: (slot, x, y) the OTHER side plays REPLY_AFTER ticks after our card."""
     s = env.snapshot()
     left = ROLL
     if act is not None:
         slot, x, y = act
         s.step_self_play_fast(-1, 0.0, 0.0, -1, 0.0, 0.0, DELAY)
-        if team == 0: s.step_self_play_fast(slot, x, y, -1, 0.0, 0.0, 5)
-        else: s.step_self_play_fast(-1, 0.0, 0.0, slot, x, y, 5)
-        left -= DELAY + 5
+        if reply is None:
+            _act(s, team, slot, x, y, 5)
+            left -= DELAY + 5
+        else:
+            _act(s, team, slot, x, y, REPLY_AFTER)
+            _act(s, 1 - team, reply[0], reply[1], reply[2], 5)
+            left -= DELAY + REPLY_AFTER + 5
     while left > 0:
         r = s.step_self_play_fast(-1, 0.0, 0.0, -1, 0.0, 0.0, min(20, left))
         left -= 20
@@ -228,10 +242,25 @@ def search(cx, env, team, cands):
     before = E._snap_state(env)
     base = _value(cx, _rollout(env, team, None), team, before, 0.0) - _leak(env, team, 0.0)
     out = [(0.0, None, None, None)]
+    o = 1 - team
+    their = _playable(cx, env, o, [cx.names.get(c) for c in env.get_hand_for_team(o)])
     for slot, n, tile in cands:
         cost = float((cx.m.get_card_info(cx.ids[n][0]) or {}).get("cost", 3))
-        end = _rollout(env, team, (slot, *eng_point(team, *tile)))
-        out.append((_value(cx, end, team, before, cost) - _leak(env, team, cost) - base, slot, n, tile))
+        pt = eng_point(team, *tile)
+        end = _rollout(env, team, (slot, *pt))
+        v = _value(cx, end, team, before, cost) - _leak(env, team, cost) - base
+        # the opponent answers with the cards really in their hand (5.84): half the worst, half the average
+        vs = [v]
+        otile = (17 - tile[0], 31 - tile[1])                   # our card's tile as THEY see it
+        for oslot, on, _oc in their[:REPLIES]:
+            from royale.brain import roles
+            if "spell" in roles(on): t2 = otile
+            else: t2 = (otile[0], max(1, min(14, otile[1] - 2)))
+            if not _valid(cx, env, o, on, t2): continue
+            e2 = _rollout(env, team, (slot, *pt), (oslot, *eng_point(o, *t2)))
+            vs.append(_value(cx, e2, team, before, cost) - _leak(env, team, cost) - base)
+        if len(vs) > 1: v = 0.5 * min(vs) + 0.5 * sum(vs) / len(vs)
+        out.append((v, slot, n, tile))
     return out
 
 
