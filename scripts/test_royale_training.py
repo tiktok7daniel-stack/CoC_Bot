@@ -42,7 +42,12 @@ if w:
     env = m.ClashRoyaleEnv([int(x) for x in engine_ai.deck_spec(deck).split(",")], [15, 6, 25, 40, 24, 72, 33, 7], 3600)
     env.reset()
     env.set_elixir_for_team(0, 8.0)
-    p = engine_ai.propose(env)
+    engine_ai.new_battle()                                  # loads the network in the background (as in a battle)
+    p = None
+    for _ in range(240):                                    # up to 2 minutes for torch + the weights
+        p = engine_ai.propose(env)
+        if p is not None: break
+        time.sleep(0.5)
     print("trained AI proposes:", p, engine_ai.status()["why"])
     if p is None:
         print("FAIL: the trained network could not propose")
