@@ -165,8 +165,21 @@ def scan(acc, log, brain=None, max_pages=30, on_done=None):
             if (round(cx, 1), round(cy, 1)) in seen: continue
             seen.add((round(cx, 1), round(cy, 1)))
             shoot(cx, cy - 0.06, in_deck=True)
+    log.info(f"Clash Royale: the deck — {len(shots)} card pages photographed; now the collection")
+
+    def report(why):
+        """A screen the study could not go on from: its picture to the learning repo (Claude fixes it)."""
+        try:
+            import learn_sync, utils as _uu
+            fr = game.frame()
+            learn_sync.report_stuck(_uu.INSTANCE_ID, fr, [t for t, _b in game.words(fr)], f"royale_cards:{why}")
+        except Exception:
+            pass
+        log.info(f"Clash Royale: card study — {why} (the picture was sent to be looked at)")
+
     ws = game.words(game.frame())
-    c = game.find_word(ws, "collection", y_max=0.25)
+    c = game.find_word(ws, "collection", y_max=0.3)
+    if not c: report("no Collection tab found")
     if c:
         game.tap(*c); time.sleep(1.0)
         last = None
@@ -174,6 +187,8 @@ def scan(acc, log, brain=None, max_pages=30, on_done=None):
             labels = [((b[1] + b[3]) / 2, (b[2] + b[4]) / 2) for t, b in game.words(game.frame())
                       if re.search(r"level\s*\d{1,2}", t, re.I)]
             sig = tuple(sorted((round(x, 2), round(y, 2)) for x, y in labels))
+            if not labels and _page == 0: report("no card levels on the Collection page")
+            if _page: log.info(f"Clash Royale: collection page {_page + 1} — {len(shots)} cards so far")
             if not labels or sig == last: break            # the end of the collection
             last = sig
             for cx, cy in labels:

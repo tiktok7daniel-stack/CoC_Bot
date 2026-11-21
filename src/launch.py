@@ -56,7 +56,7 @@ def launch_proc(args):
             faulthandler.enable(_fh)
         except Exception:
             pass
-        fails = 0
+        fails = []
         while True:              # an error is logged (and sent) and the loop goes on, the bot is not restarted
             try:
                 _royale.run()
@@ -64,9 +64,10 @@ def launch_proc(args):
             except (KeyboardInterrupt, SystemExit):
                 raise
             except Exception as e:
-                fails += 1
+                now = time.time()
+                fails = [t for t in fails if now - t < 600] + [now]
                 logger.exception(f"Clash Royale: error ({type(e).__name__}: {e}) — going on")
-                if fails >= 5: raise
+                if len(fails) >= 8: raise          # 8 in 10 minutes: something is really broken
                 time.sleep(5)
     try:   # a new version starts with a clean problem list (reports then show only what still happens)
         import stats, version

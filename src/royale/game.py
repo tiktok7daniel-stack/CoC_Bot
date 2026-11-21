@@ -335,7 +335,15 @@ class RoyaleBot:
                 try: self.notify(f"✅ كلاش رويال: خلصت {self.battles} ماتش — {self.wins} فوز / {self.losses} خسارة")
                 except Exception: pass
                 return
-            fr = frame()
+            try:
+                fr = frame()
+                self._frame_fails = 0
+            except Exception as e:
+                # LDPlayer closed / its ADB gone ("device not found"): before, the bot kept failing here and looked
+                # like it was running while doing nothing -> the emulator and the game are brought back
+                self._frame_fails = getattr(self, "_frame_fails", 0) + 1
+                self._recover(e)
+                continue
             if in_battle(fr):
                 self.unknown_since = None
                 last = self.battle()
@@ -353,6 +361,10 @@ class RoyaleBot:
             if b and self.account and self.account.due(self.battles):
                 log.info("Clash Royale: looking after the account (cards, clan, rewards)")
                 self.account.run()
+                continue
+            if b and not self._go_ok():
+                self.unknown_since = None
+                time.sleep(1.0)                              # ready, waiting for the user's Start
                 continue
             if b:
                 self.unknown_since = None
@@ -727,6 +739,61 @@ def _cards_read(self, pages):
         pass
 
 
+def _say(self, ar, en=None, phone=False):
+    """What the bot is doing, in words the user reads (the app's live log; the phone when it matters)."""
+    self.log.info(f"Clash Royale: {en or ar}" if en else ar)
+    if phone:
+        try: self.notify(ar)
+        except Exception: pass
+
+
+def _go_ok(self):
+    """Ask before each battle (royale.ask_before_battle, on by default): the bot waits in the lobby until the
+    app's "Start a battle" button is pressed; one press = one battle. Off: it plays battle after battle."""
+    if not self.s.get("ask_before_battle", True): return True
+    try:
+        import settings
+        go = float((settings.load(_u().INSTANCE_ID).get("royale") or {}).get("go_request") or 0)
+    except Exception:
+        go = 0
+    if go > getattr(self, "_go_used", 0):
+        self._go_used = go
+        self._waiting_told = False
+        self._say("▶️ كلاش رويال: دوست ابدأ — داخل ماتش دلوقتي", "Start pressed — going into a battle")
+        return True
+    if not getattr(self, "_waiting_told", False):
+        self._waiting_told = True
+        self._say("⏸️ كلاش رويال: جاهز ومستنيك — دوس «ابدأ ماتش» في البرنامج عشان أدخل الماتش",
+                  "ready, waiting for the Start button", phone=True)
+    return False
+
+
+def _recover(self, err):
+    """The emulator / ADB is gone: LDPlayer started again (when it is closed), ADB reconnected, the game opened."""
+    n = self._frame_fails
+    if n == 1:
+        self._say(f"⚠️ كلاش رويال: الاتصال بـ LDPlayer اتقطع ({type(err).__name__}) — بحاول أرجّعه",
+                  f"LDPlayer / ADB lost ({err}) — bringing it back", phone=True)
+    try:
+        u = _u()
+        try:
+            if not u.Emulator_Manager.check(): u.Emulator_Manager.start()
+        except Exception:
+            self.log.debug("emulator start failed", exc_info=True)
+        u.ADB_Manager._adbutils_device = None
+        if u.ADB_Manager.connect(timeout=60):
+            start_game(self.log)
+            self._say("✅ كلاش رويال: رجعت اتوصلت باللعبة وبكمّل", "reconnected, going on", phone=n > 1)
+            self._frame_fails = 0
+            return
+    except Exception:
+        self.log.debug("recovering the emulator failed", exc_info=True)
+    time.sleep(min(60, 5 * n))
+
+
+RoyaleBot._say = _say
+RoyaleBot._go_ok = _go_ok
+RoyaleBot._recover = _recover
 RoyaleBot._cards_study_due = _cards_study_due
 RoyaleBot._study_cards = _study_cards
 RoyaleBot._cards_read = _cards_read

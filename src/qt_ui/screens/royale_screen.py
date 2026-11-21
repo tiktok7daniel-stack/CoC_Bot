@@ -109,6 +109,11 @@ class RoyaleScreen(Screen):
         play.add(num_row(self.store, "royale_max", "royale.max_battles", "royale_max_sub", lo=0, hi=10000, width=120))
         play.add(toggle_row(self.store, "royale_notify", "royale.notify", "royale_notify_sub"))
         play.add(toggle_row(self.store, "royale_safe", "royale.safe_play", "royale_safe_sub"))
+        play.add(toggle_row(self.store, "royale_ask", "royale.ask_before_battle", "royale_ask_sub"))
+        from ..widgets.controls import IconButton as _IBg
+        go = _IBg("play", "royale_go", kind="go", size=16)
+        go.clicked.connect(self.go_battle)
+        play.add(go)
         g2.addWidget(play, 0, 0)
         setup = GlassCard("royale_setup", "sliders", "royale_setup_sub")
         for k in ("royale_need_1", "royale_need_2", "royale_need_3", "royale_need_4"):
@@ -221,6 +226,12 @@ class RoyaleScreen(Screen):
         except Exception:
             pass
         self.train_state.setText(txt)
+
+    def go_battle(self):
+        """One battle: the bot waiting in the lobby goes in."""
+        import time as _t
+        self.store.set("royale.go_request", _t.time())
+        self.ctx.banner(tr("royale_go_started"), "ok", "play")
 
     def scan_cards_now(self):
         """The bot opens every card's Info page at the next menu and sends the pictures to be studied."""
