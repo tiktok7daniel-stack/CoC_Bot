@@ -25,6 +25,7 @@ MODELS = HOME / "models"
 HF = "https://huggingface.co"
 REPO = "SudhishNeel/clash-royale-detection"
 BASE_PT_URL = "https://huggingface.co/SudhishNeel/clash-royale-detector/resolve/main/v8/best.pt"
+RECIPE = 2                    # 5.82: honest test, all KataCR, two candidates — a new recipe trains again at once
 DEFAULT_ROBOFLOW = ["yolotrain-c7s7v/clash-royale-ut3g8/4", "clashroyale/clash-royale-of3d3/3",
                     "angelfire/clash-royale-cylln/5", "clash-pxdrz/clash_grid/1", "dampiix/clash-royale-units/1",
                     "nathan-yan/clash-royale-detection-cysig/7"]
@@ -141,7 +142,12 @@ def base_model():
 
 # ------------------------------------------------------------------ 2. data
 def _split(name):
-    return "val" if random.random() < 0.05 else "train"
+    """The test set holds only real pictures labelled by hand (KataCR's real arenas, SudhishNeel's frames), chosen
+    by the picture's name so it never changes between trainings and is never trained on. Generated pictures and the
+    bot's own (labelled by a model) are always for training: a test on them would flatter the model (5.82)."""
+    import zlib
+    if name.startswith(("kcrsyn_", "own_", "rf_")): return "train"
+    return "val" if zlib.crc32(name.encode()) % 100 < 12 else "train"
 
 
 def _write(img_bytes, ext, boxes, iw, ih, stem):
@@ -257,7 +263,7 @@ def take_roboflow(names, key, datasets):
 KATACR_ZIP = "https://codeload.github.com/wty-yy/Clash-Royale-Detection-Dataset/zip/refs/heads/main"
 
 
-def take_katacr(names, n_real=3000, n_synth=3000):
+def take_katacr(names, n_real=8000, n_synth=8000):
     """KataCR's open dataset (wty-yy, MIT): ~7.4k real labelled arena pictures + 4.6k cut-out units of 154 kinds.
     The real ones are used as they are; the cut-outs are pasted onto real arenas in new places and mixes (the
     KataCR 'generative dataset' idea): thousands of new pictures with exact labels, every unit and evolution."""
@@ -277,7 +283,8 @@ def take_katacr(names, n_real=3000, n_synth=3000):
     log(f"KataCR: classes matched {sum(v is not None for v in remap.values())}/{len(remap)}")
     names_set = set(allf)
     jpgs = [f for f in allf if "/images/part2/" in f and f.endswith(".jpg") and (f[:-4] + ".txt") in names_set]
-    random.shuffle(jpgs)
+    jpgs.sort()                                   # a fixed order: the same real pictures are the test every time
+    random.Random(11).shuffle(jpgs)
 
     def load(f):
         data = z.read(f)
@@ -344,7 +351,7 @@ def take_own(names):
             boxes = json.loads(js.read_text(encoding="utf-8")).get("boxes", [])
         except (OSError, ValueError):
             continue
-        rows = [(ids[b[0]], b[2], b[3], b[4], b[5]) for b in boxes if b[0] in ids]
+        rows = [(ids[b[0]], b[2], b[3], b[4], b[5]) for b in boxes if b[0] in ids and float(b[1]) >= 0.6]
         if len(rows) < 3: continue
         _write(img.read_bytes(), ".jpg", rows, 568, 896, f"own_{js.stem}")
         n += 1
@@ -386,28 +393,45 @@ def run(epochs=30, n_bulk=4):
     # memory -> cuDNN EXECUTION_FAILED); on a cuDNN error once more without cuDNN (slower, works)
     import torch
     torch.backends.cudnn.benchmark = False
-    for attempt in range(2):
-        try:
-            m = YOLO(str(base))
-            m.train(data=str(yaml_p), epochs=epochs, imgsz=800, batch=6 if attempt == 0 else 4, device=0, patience=8,
-                    workers=2, project=str(ROOT / "runs"), name="cr", exist_ok=True, plots=False, verbose=False,
-                    amp=attempt == 0)
-            break
-        except RuntimeError as e:
-            if attempt or "cudnn" not in str(e).lower(): raise
-            log(f"cuDNN problem ({e}) — training again without cuDNN")
-            torch.backends.cudnn.enabled = False
-            torch.cuda.empty_cache()
-    best = ROOT / "runs" / "cr" / "weights" / "best.pt"
-    m1 = YOLO(str(best)).val(data=str(yaml_p), imgsz=800, batch=16, device=0, verbose=False, plots=False)
-    new_map = float(m1.box.map50)
-    log(f"Test (same held-out frames): base {base_map:.3f} -> new {new_map:.3f}")
-    used = new_map > base_map + 0.005
+    base_m = float(m0.box.map)                                         # mAP50-95: boxes must also be tight
+    cands = []
+    # two candidates (5.82): the current eyes fine-tuned, and a newer, bigger architecture (YOLO11m, from its COCO
+    # start) at a higher resolution — trained one after the other on the card; the honest test picks
+    plans = [("finetune", str(base), 800, epochs), ("yolo11m", "yolo11m.pt", 960, max(epochs, 60))]
+    for tag, start_w, imgsz, ep in plans:
+        for attempt in range(2):
+            try:
+                m = YOLO(start_w)
+                m.train(data=str(yaml_p), epochs=ep, imgsz=imgsz, batch=(6 if imgsz <= 800 else 4) if attempt == 0 else 2,
+                        device=0, patience=15, cos_lr=True, close_mosaic=10, workers=2, project=str(ROOT / "runs"),
+                        name=tag, exist_ok=True, plots=False, verbose=False, amp=attempt == 0)
+                break
+            except RuntimeError as e:
+                if attempt or not any(k in str(e).lower() for k in ("cudnn", "out of memory")): 
+                    log(f"{tag}: {e}"); break
+                log(f"{tag}: {e} — again, smaller")
+                torch.backends.cudnn.enabled = "cudnn" not in str(e).lower()
+                torch.cuda.empty_cache()
+            except Exception as e:
+                log(f"{tag} skipped: {e}"); break
+        best = ROOT / "runs" / tag / "weights" / "best.pt"
+        if not best.exists(): continue
+        r = YOLO(str(best)).val(data=str(yaml_p), imgsz=imgsz, batch=8, device=0, verbose=False, plots=False)
+        cands.append((float(r.box.map), float(r.box.map50), tag, best, imgsz))
+        log(f"{tag}: mAP50-95 {cands[-1][0]:.3f}, mAP50 {cands[-1][1]:.3f} (imgsz {imgsz})")
+        status(stage="train", note=f"{tag}: {cands[-1][1]:.3f}")
+    if not cands:
+        status(stage="done", used=False, error="no candidate trained", finished=time.time()); return False
+    new_m, new_map, tag, best, imgsz = max(cands)
+    log(f"Honest test (real hand-labelled pictures): base {base_map:.3f} / {base_m:.3f} -> {tag} {new_map:.3f} / {new_m:.3f}")
+    used = new_m > base_m + 0.005
     if used:
-        out = YOLO(str(best)).export(format="onnx", imgsz=800, dynamic=False, simplify=False, opset=12)
+        out = YOLO(str(best)).export(format="onnx", imgsz=imgsz, dynamic=False, simplify=False, opset=12)
         shutil.copy(best, MODELS / "cr_detector_trained.pt")
         os.replace(out, MODELS / "cr_detector_v8.onnx")
         (MODELS / "cr_detector_v8.json").write_text(json.dumps(names), encoding="utf-8")
+        (MODELS / "cr_detector_v8.size").write_text(str(imgsz), encoding="utf-8")
+    status(recipe=RECIPE)
     status(stage="done", base_map50=round(base_map, 4), new_map50=round(new_map, 4), used=used, finished=time.time())
     try:
         import utils
@@ -424,7 +448,7 @@ def due(acc="main"):
     if st.get("stage") not in (None, "done", "error", "no_gpu", "gpu_install") and time.time() - st.get("t", 0) < 3 * 3600:
         return False                                             # one is running
     if st.get("stage") == "no_gpu" and time.time() - st.get("t", 0) < 7 * 86400: return False
-    if st.get("finished") and time.time() - st["finished"] < 7 * 86400: return False
+    if st.get("finished") and time.time() - st["finished"] < 7 * 86400 and st.get("recipe") == RECIPE: return False
     if st.get("stage") == "error" and time.time() - st.get("t", 0) < 3 * 86400: return False   # not on every start
     return True
 

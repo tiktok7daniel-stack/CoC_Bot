@@ -199,11 +199,13 @@ def detect(frame_rgb, conf=0.35):
     crop = frame_rgb[ya:yb, xa:xb]
     if crop.size == 0: return []
     arena = cv2.resize(crop, (W, H), interpolation=cv2.INTER_AREA)
-    # letterbox into the 800x800 input (as the model was exported)
-    k = 800 / max(W, H)
+    # letterbox into the model's square input (800 for the shipped eyes; a model trained on this PC may be 960)
+    try: S = int(s.get_inputs()[0].shape[2])
+    except (TypeError, ValueError, IndexError): S = 800
+    k = S / max(W, H)
     nw, nh = int(round(W * k)), int(round(H * k))
-    img = np.full((800, 800, 3), 114, np.uint8)
-    px, py = (800 - nw) // 2, (800 - nh) // 2
+    img = np.full((S, S, 3), 114, np.uint8)
+    px, py = (S - nw) // 2, (S - nh) // 2
     img[py:py + nh, px:px + nw] = cv2.resize(arena, (nw, nh), interpolation=cv2.INTER_LINEAR)
     x = img.astype(np.float32).transpose(2, 0, 1)[None] / 255.0
     with _LOCK:
@@ -224,7 +226,7 @@ def detect(frame_rgb, conf=0.35):
     names = _S["names"] or {}
     for i in idx:
         a, c, e, f = xyxy[i]
-        a, e = (a - px) / k, (e - px) / k                                  # 800 input -> arena 568x896
+        a, e = (a - px) / k, (e - px) / k                                  # model input -> arena 568x896
         c, f = (c - py) / k, (f - py) / k
         dets.append((names.get(int(cls[i]), str(int(cls[i]))), float(cf[i]),
                      xa + a * sx, ya + c * sy, xa + e * sx, ya + f * sy))

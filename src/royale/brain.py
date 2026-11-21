@@ -240,9 +240,39 @@ class Brain:
         return (x, max(0.0, y + vy * fly))
 
     # -------------------------------------------------------------- tracking
+    def _vote(self, enemies, now):
+        """A unit keeps its name over its life (5.82): each detection joins the nearest track (any name, within 1.6
+        tiles, seen in the last second, one detection per track, the surest first) and the track's names are voted
+        by confidence — a Musketeer read as a Witch in one look stays a Musketeer, so a flicker of the eyes is no
+        longer a new card of theirs (a wrong elixir count and a wrong hand)."""
+        tr = self.__dict__.setdefault("_vtracks", [])
+        tr[:] = [t for t in tr if now - t["last"] < 1.0]
+        used, res = set(), list(enemies)
+        for i in sorted(range(len(enemies)), key=lambda j: -float(enemies[j][3])):
+            u, x, y, c = enemies[i]
+            best = None
+            for k, t in enumerate(tr):
+                if k in used: continue
+                d = dist((t["x"], t["y"]), (x, y))
+                if d <= 1.6 and (best is None or d < best[0]): best = (d, k)
+            if best is None:
+                tr.append({"x": x, "y": y, "v": {u: float(c)}, "last": now})
+                used.add(len(tr) - 1)
+                continue
+            t = tr[best[1]]
+            used.add(best[1])
+            t["v"][u] = t["v"].get(u, 0.0) + float(c)
+            t["x"], t["y"], t["last"] = x, y, now
+            top = max(t["v"], key=t["v"].get)
+            if top != u and t["v"][top] >= 2 * t["v"].get(u, 0.0) and float(c) < 0.75:
+                res[i] = (top, x, y, c)
+        return res
+
     def observe(self, enemies, now=None):
         """enemies: [(unit_name, tile_x, tile_y, conf)] from one look. -> stable enemy list [(unit, x, y)]."""
         now = now or time.monotonic()
+        try: enemies = self._vote(list(enemies or []), now)
+        except Exception: pass
         self._regen_enemy(now)
         cur = [(u, x, y) for u, x, y, c in enemies if c >= 0.35]
         self.seen.append({(u, x // 2, y // 2) for u, x, y in cur})

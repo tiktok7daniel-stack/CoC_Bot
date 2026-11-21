@@ -85,5 +85,14 @@ for k in range(30):
         ok_all = ok_all and good
 check("AI-only: only the model's own cards are played", n_pl > 0 and ok_all, f"{n_pl} plays")
 
+# 5.82: the eyes flicker (a Musketeer read as a Witch in one look): it stays one Musketeer, not a new card of theirs
+b4 = Brain(); b4.deck = list(b.deck); b4.reset()
+t0 = time.monotonic()
+seq = [("musketeer", 0.8), ("musketeer", 0.82), ("witch", 0.45), ("musketeer", 0.8), ("witch", 0.5), ("musketeer", 0.79)]
+for k, (u, c) in enumerate(seq):
+    b4.observe([(u, 4, 22 - k // 2, c)], now=t0 + k * 0.15)
+cards = [h[1] for h in b4.enemy_hist]
+check("a flicker of the eyes is not a new card", cards.count("witch") == 0 and cards.count("musketeer") == 1, str(cards))
+
 print(f"\n{'ALL PASSED' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)
