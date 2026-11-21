@@ -20,7 +20,9 @@ from pathlib import Path
 
 HOME = Path.home() / ".CoC_Bot" / "royale_ai" / "exit"
 DECIDE = 10                 # a decision every second (10 ticks)
-ROLL = 60                   # each move is looked at 6 s ahead
+ROLL = 100                  # each move is looked at 10 s ahead
+STAND = 1.0                 # our army still standing keeps its worth (a card just placed is not a loss)
+PRESSURE = 0.25             # elixir per unit of ours on their half at the end (pressure on their towers)
 DELAY = 3                   # a move lands a moment late, as in the real game
 TAU = 1.0                   # elixir: how sharp the search's answer is
 GATE_WIN = 0.55
@@ -189,8 +191,19 @@ def _value(cx, env, team, before, spent):
             v += sign * E.TOWER_ELIXIR[s] * (before["towers"][(t, s)] - max(0, env.get_tower_hp(t, s))) / mx
     army = E._army(env)
     v += before["army"][o] - army[o]
-    v += E.OURS_STANDING * (army[team] - before["army"][team])
+    v += STAND * (army[team] - before["army"][team])
+    for u in env.get_units():                       # pressure: ours across the river
+        if u.tower or u.team != team: continue
+        if (u.y > 17 if team == 0 else u.y < 16): v += PRESSURE
     return v - spent
+
+
+def _leak(env, team, spent):
+    """Elixir that would overflow (wasted) during the look-ahead after spending `spent`."""
+    el = env.get_elixir_for_team(team) - spent
+    t = env.get_current_tick() / 10.0
+    gain = (ROLL / 10.0) / (1.4 if t >= 120 else 2.8)
+    return max(0.0, el + gain - 10.0)
 
 
 def _rollout(env, team, act):
@@ -213,12 +226,12 @@ def search(cx, env, team, cands):
     """-> [(value vs waiting, slot, card, tile)] (wait = (0, None, None, None) first)."""
     E = cx.E
     before = E._snap_state(env)
-    base = _value(cx, _rollout(env, team, None), team, before, 0.0)
+    base = _value(cx, _rollout(env, team, None), team, before, 0.0) - _leak(env, team, 0.0)
     out = [(0.0, None, None, None)]
     for slot, n, tile in cands:
         cost = float((cx.m.get_card_info(cx.ids[n][0]) or {}).get("cost", 3))
         end = _rollout(env, team, (slot, *eng_point(team, *tile)))
-        out.append((_value(cx, end, team, before, cost) - base, slot, n, tile))
+        out.append((_value(cx, end, team, before, cost) - _leak(env, team, cost) - base, slot, n, tile))
     return out
 
 
