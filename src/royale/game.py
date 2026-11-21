@@ -591,18 +591,25 @@ def _pick_deck(self):
             except Exception: pass
         return
     if not deck_pick.due(acc): return
+    owned_hero = sorted(set(self.s.get("owned_heroes") or []) | set(self.s.get("deck_heroes") or []))
     try:
-        pick = deck_pick.choose(acc)
+        pick = deck_pick.choose(acc, heroes=owned_hero)
     except Exception as e:
         self.log.info(f"Clash Royale: picking a deck — {e}")
         return
     if not pick:
-        self.log.info("Clash Royale: no meta deck you own all 8 cards of yet — keeping your deck")
+        self.log.info("Clash Royale: no proven deck you own all 8 cards of — keeping your deck")
         return
-    if sorted(pick["cards"]) == sorted(pick.get("current") or []):
-        self.log.info(f"Clash Royale: your deck is already the best pick ({pick['why']})")
-        deck_pick._write(acc, pick)
+    if pick.get("keep") or sorted(pick["cards"]) == sorted(pick.get("current") or []):
+        deck_pick.mark(acc, {"cards": pick.get("current") or pick["cards"], "why": pick["why"]})
+        self.log.info(f"Clash Royale: keeping your deck — {pick['why']}")
+        try: self.notify("🃏 كلاش رويال: ديكك الحالي هو الأحسن ليك (بلفلاتك وتطويراتك والهيرو) — مش هغيره\n" + pick["why"])
+        except Exception: pass
         return
+    names_of = {cr_api.key_of(n): n for n in __import__("royale.brain", fromlist=["cards_db"]).cards_db()}
+    order = deck_pick.slot_order(pick["cards"], pick.get("evo") or [], [cr_api.key_of(h) for h in owned_hero])
+    pick["ids"] = [pick["ids"][pick["cards"].index(c)] for c in order]
+    pick["cards"] = order
     self.log.info("Clash Royale: the strongest deck you own now = " + ", ".join(pick["cards"]) + f" — {pick['why']}")
     ok = deck_pick.apply(acc, pick, self.log, int(self.s.get("deck_slot", 0) or 0))
     if ok:
