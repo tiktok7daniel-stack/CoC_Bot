@@ -77,6 +77,11 @@ def activate():
     try:
         if not READY.exists() or str(TARGET) in sys.path: return _S["active"]
         if info().get("mode") not in ("trt", "cuda"): return False
+        import ort_gpu
+        if not ort_gpu.healthy(TARGET):             # 6.9.13: a broken copy is never used; set up clean again later
+            _log("TensorRT onnxruntime is broken — not used; it is installed clean again in the background")
+            ort_gpu.clean_folder(TARGET)
+            return False
         sys.path.insert(0, str(TARGET))
         os.environ["PYTHONPATH"] = str(TARGET) + os.pathsep + os.environ.get("PYTHONPATH", "")
         dirs = [str(p) for p in dll_dirs()]
@@ -123,6 +128,8 @@ def _install(log=None):
             _pip(CUDA_PKGS)
         for ort_v, trt_v in PAIRS:
             if log: log.info(f"Clash Royale: TensorRT setup — onnxruntime-gpu {ort_v} + TensorRT {trt_v} (~1.5 GB, once)")
+            import ort_gpu
+            ort_gpu.clean_folder(TARGET)              # 6.9.13: each pair on a clean folder (they were piled up and mixed)
             if not _pip([f"onnxruntime-gpu=={ort_v}", f"tensorrt-cu12-libs=={trt_v}"]): continue
             chk = subprocess.run([_py(), str(Path(__file__).resolve()), "--check"], capture_output=True, text=True,
                                  timeout=3600, creationflags=NW, cwd=str(Path(__file__).resolve().parent))

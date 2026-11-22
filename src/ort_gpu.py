@@ -16,6 +16,50 @@ LOG = Path.home() / ".CoC_Bot" / "ort_dml_install.log"
 _S = {"busy": False}
 
 
+def healthy(folder):
+    """6.9.13: does the onnxruntime in `folder` import cleanly? Checked in a separate Python (nothing loaded here),
+    remembered until the folder's onnxruntime changes. The user's PC had a BROKEN one in the app's folder ("No module
+    named onnxruntime.capi.onnxruntime_inference_collection": two versions mixed) — and every part of the bot that
+    uses onnxruntime (the eyes, PaddleOCR) loaded it from there."""
+    import json, subprocess
+    folder = Path(folder)
+    init = folder / "onnxruntime" / "__init__.py"
+    if not init.exists(): return False
+    key = init.stat().st_mtime
+    mark = folder / "HEALTH"
+    try:
+        h = json.loads(mark.read_text(encoding="utf-8"))
+        if h.get("mtime") == key: return bool(h.get("ok"))
+    except (OSError, ValueError):
+        pass
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    code = "import sys; sys.path.insert(0, sys.argv[1]); import onnxruntime as o; o.InferenceSession; print(o.__file__)"
+    try:
+        r = subprocess.run([_py(), "-c", code, str(folder)], capture_output=True, text=True, timeout=120, env=env,
+                           creationflags=0x08000000 if os.name == "nt" else 0)
+        ok = r.returncode == 0 and str(folder) in r.stdout
+        _log(f"health of {folder}: {'ok' if ok else 'BROKEN'} {(r.stdout + r.stderr)[-300:]}")
+    except Exception as e:
+        ok = False
+        _log(f"health of {folder}: check failed {e}")
+    try: mark.write_text(json.dumps({"mtime": key, "ok": ok}), encoding="utf-8")
+    except OSError: pass
+    return ok
+
+
+def clean_folder(folder):
+    """Remove every onnxruntime copy from the app's folder (a clean install follows) — nothing else of the PC."""
+    import shutil
+    folder = Path(folder)
+    if not folder.exists(): return
+    for p in list(folder.iterdir()):
+        if p.name.lower().startswith(("onnxruntime", "onnxruntime_")) or p.name in ("READY", "HEALTH"):
+            try:
+                shutil.rmtree(p) if p.is_dir() else p.unlink()
+            except OSError:
+                pass
+
+
 def activate():
     """Use the graphics-card onnxruntime if it is installed and checked (before anything imports onnxruntime).
     6.6: NVIDIA TensorRT / CUDA first (trt_engine) when it was set up and checked on this PC, else DirectML."""
@@ -26,6 +70,10 @@ def activate():
         pass
     try:
         if os.name == "nt" and READY.exists() and str(TARGET) not in sys.path:
+            if not healthy(TARGET):                 # 6.9.13: a broken copy is never used; installed clean again
+                _log("DirectML onnxruntime is broken — not used; it is installed clean again in the background")
+                clean_folder(TARGET)
+                return
             sys.path.insert(0, str(TARGET))
             os.environ["PYTHONPATH"] = str(TARGET) + os.pathsep + os.environ.get("PYTHONPATH", "")
     except Exception:
@@ -70,6 +118,7 @@ def _install(log=None):
     NW = 0x08000000 if os.name == "nt" else 0
     try:
         TARGET.mkdir(parents=True, exist_ok=True)
+        clean_folder(TARGET)                          # 6.9.13: never on top of an older copy
         r = subprocess.run([_py(), "-m", "pip", "install", "--upgrade", "--no-deps", "--target", str(TARGET),
                             "onnxruntime-directml"], capture_output=True, text=True, timeout=1800, creationflags=NW)
         _log(r.stdout[-3000:] + r.stderr[-3000:])
