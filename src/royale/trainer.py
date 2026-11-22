@@ -17,6 +17,10 @@ State: ~/.CoC_Bot/royale_train/status.json
 import io, json, os, random, shutil, sys, time, zipfile
 from pathlib import Path
 
+# 6.9: no page-locked ("pinned") RAM for the picture loaders — on a laptop it ran out ("CUDA error: out of memory" in
+# the pin-memory thread while the card itself used 0.8 GB). Read by ultralytics when it is first imported.
+os.environ["PIN_MEMORY"] = "False"
+
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")   # less fragmented card memory
 HOME = Path.home() / ".CoC_Bot"
 ROOT = HOME / "royale_train"
@@ -655,6 +659,31 @@ def _window_title(t):
         except Exception: pass
 
 
+def no_pin():
+    """6.9: the picture loaders without pinned RAM, whatever ultralytics version (8.4 has no switch for it: its
+    build_dataloader is wrapped where each trainer / tester imported it)."""
+    import importlib
+    try:
+        import ultralytics.data.build as B
+    except Exception:
+        return
+    if getattr(B.build_dataloader, "_no_pin", False): return
+    orig = B.build_dataloader
+
+    def build(*a, **k):
+        k["pin_memory"] = False
+        return orig(*a, **k)
+    build._no_pin = True
+    B.build_dataloader = build
+    for mod in ("ultralytics.data", "ultralytics.models.yolo.classify.train", "ultralytics.models.yolo.classify.val",
+                "ultralytics.models.yolo.detect.train", "ultralytics.models.yolo.detect.val"):
+        try:
+            m = importlib.import_module(mod)
+            if hasattr(m, "build_dataloader"): m.build_dataloader = build
+        except Exception:
+            pass
+
+
 BATTLE_FLAG = Path.home() / ".CoC_Bot" / "royale_battle.flag"     # touched by the bot every few s of a battle
 
 
@@ -703,16 +732,21 @@ def _train(tag, start_w, yaml_p, ep, hours, imgsz, bs, SAFE, extra=None, every=N
     """One training run -> its best weights (tested) or None."""
     from ultralytics import YOLO
     try:
+        no_pin()
         m = YOLO(start_w)
         _sparse_val(m, every or VAL_EVERY)
         battle_pause(m)
         args = dict(data=str(yaml_p), epochs=ep, time=hours, imgsz=imgsz, batch=bs, val=True, patience=12,
                     device=0, cos_lr=True, close_mosaic=max(3, ep // 6),
-                    workers=max(2, min(12, (os.cpu_count() or 4) - 2)), project=str(ROOT / "runs"),
+                    workers=max(2, min(8, (os.cpu_count() or 4) - 2)), project=str(ROOT / "runs"),
                     name=tag, exist_ok=True, plots=False, verbose=True, amp=not SAFE)
         args.update(extra or {})
         m.train(**args)
     except Exception as e:
+        best = ROOT / "runs" / tag / "weights" / "best.pt"
+        if best.exists() and "pin memory" in str(e).lower():
+            log(f"{tag}: stopped by the picture loader ({str(e)[:80]}) — the best tested round is used")
+            return best
         if any(k in str(e).lower() for k in ("cudnn", "cuda error", "illegal memory", "out of memory",
                                                "acceleratorerror", "cublas")):
             _restart_safe(f"{type(e).__name__}: {str(e)[:80]}")

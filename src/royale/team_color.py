@@ -137,7 +137,10 @@ def badge_pixels(frame_rgb, box):
     if xb - xa < 4 or yb - ya < 3: return None
     hsv = cv2.cvtColor(np.ascontiguousarray(frame_rgb[ya:yb, xa:xb]), cv2.COLOR_RGB2HSV)
     H, S, V = hsv[..., 0], hsv[..., 1], hsv[..., 2]
-    m = ((S >= 90) & (V >= 120) & ~((H >= 30) & (H <= 88))).astype(np.uint8)      # saturated, not grass / sand
+    # the red family (crimson / pink / purple-red) or the blue family, saturated and bright — the sand path (H 15-28)
+    # and the grass (H 30-88) flooded the band before (6.9: 0 badges found in 300 pictures)
+    fam = (H <= 10) | (H >= 145) | ((H >= 90) & (H <= 132))
+    m = ((S >= 110) & (V >= 120) & fam).astype(np.uint8)
     n, lab, st, _c = cv2.connectedComponentsWithStats(m, connectivity=8)
     best = None
     for j in range(1, n):

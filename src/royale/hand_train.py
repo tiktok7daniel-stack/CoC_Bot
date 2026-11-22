@@ -18,6 +18,10 @@ test pictures is >= 95% and better than the model in use.
 import json, os, random, shutil, sys, time, zipfile, io
 from pathlib import Path
 
+# 6.9: no page-locked ("pinned") RAM for the picture loaders — on a laptop it ran out ("CUDA error: out of memory" in
+# the pin-memory thread while the card itself used 0.8 GB). Read by ultralytics when it is first imported.
+os.environ["PIN_MEMORY"] = "False"
+
 ROOT = Path.home() / ".CoC_Bot" / "royale_hand"
 DATA = ROOT / "data"
 IMGSZ = 128
@@ -229,12 +233,19 @@ def run(epochs=30, only=None):
     bs = 256
     _status(stage="hand", note=f"hand cards: training ({epochs} rounds)")
     _log(f"training YOLO11n-cls — {epochs} rounds, {IMGSZ}px, {bs} pictures at a time on the graphics card")
+    trainer.no_pin()                              # 6.9: no pinned RAM (it ran out on the laptop)
     m = YOLO("yolo11n-cls.pt")
     trainer.battle_pause(m)                       # the card is the game's during a battle (6.9)
-    m.train(data=str(DATA), epochs=epochs, imgsz=IMGSZ, batch=bs, device=0 if torch.cuda.is_available() else "cpu", workers=max(2, min(12, (os.cpu_count() or 4) - 2)),
-            fliplr=0.0, scale=0.15, erasing=0.1, hsv_v=0.4, patience=8, cos_lr=True, project=str(ROOT / "runs"),
-            amp=torch.cuda.is_available(),
-            name="hand", exist_ok=True, plots=False, verbose=True)
+    try:
+        m.train(data=str(DATA), epochs=epochs, imgsz=IMGSZ, batch=bs, device=0 if torch.cuda.is_available() else "cpu",
+                workers=max(2, min(6, (os.cpu_count() or 4) - 2)),          # 6.9: fewer loaders (the laptop's RAM)
+                fliplr=0.0, scale=0.15, erasing=0.1, hsv_v=0.4, patience=8, cos_lr=True, project=str(ROOT / "runs"),
+                amp=torch.cuda.is_available(),
+                name="hand", exist_ok=True, plots=False, verbose=True)
+    except Exception as e:
+        # 6.9: a crash after some rounds keeps what was reached (best.pt = the best tested round), not nothing
+        if not (ROOT / "runs" / "hand" / "weights" / "best.pt").exists(): raise
+        _log(f"training stopped ({type(e).__name__}: {str(e)[:120]}) — the best round reached so far is used")
     w = ROOT / "runs" / "hand" / "weights" / "best.pt"
     if not w.exists(): w = ROOT / "runs" / "hand" / "weights" / "last.pt"
     model = YOLO(str(w))
