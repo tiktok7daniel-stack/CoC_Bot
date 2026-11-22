@@ -1140,7 +1140,7 @@ def _gate_after_battle(self):
         # Expert Iteration (royale.exit_train): the arena brain learns the engine's best answers on this PC's GPU
         try:
             from royale import exit_train
-            if not engine_ai.missing() and not exit_train.running():
+            if not exit_train.missing() and not exit_train.running():
                 ok, msg = exit_train.start(deck, _u().INSTANCE_ID)
                 self.log.info("Clash Royale AI: " + msg)
             if exit_train.running(): return

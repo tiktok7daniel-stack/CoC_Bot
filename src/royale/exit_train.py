@@ -368,7 +368,10 @@ def _worker(args):
     metas = cx.meta_decks()
     out, stats = [], []
     for g in range(games):
-        mname, mdeck = rnd.choice(metas)
+        if rnd.random() < 0.4:                            # the deck against ITSELF: it meets its own plans and
+            mname, mdeck = "mirror", list(my_deck)        # finds its own weaknesses (the user's idea, 5.93)
+        else:
+            mname, mdeck = rnd.choice(metas)
         d = [cx.deck_ids(my_deck), cx.deck_ids(mdeck)]
         if rnd.random() < 0.5: d = d[::-1]
         s, w, st = battle(cx, d, ["search", "search"], seed=seed * 1000 + g, max_ticks=max_ticks)
@@ -461,7 +464,7 @@ def gate(new_onnx, old_onnx, my_deck, games=20, max_ticks=1800, seed=0):
     rnd = random.Random(seed)
     score = 0.0
     for g in range(games // 2):
-        _n, md = rnd.choice(metas)
+        _n, md = rnd.choice(metas) if g % 3 else ("mirror", list(my_deck))
         d = [cx_new.deck_ids(my_deck), cx_new.deck_ids(md)]
         for flip in (0, 1):
             pilots = [cx_new, cx_old] if not flip else [cx_old, cx_new]
@@ -530,6 +533,12 @@ def run(my_deck, acc="main", hours=8.0, workers=None, games=None, epochs=2, gate
 
 
 # ------------------------------------------------------------------ started by the bot
+def missing():
+    import importlib.util
+    return [m for m in ("torch", "onnxruntime", "numpy") if importlib.util.find_spec(m) is None]
+
+
+
 def _pid():
     return HOME / "exit.pid"
 

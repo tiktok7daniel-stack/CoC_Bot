@@ -162,7 +162,7 @@ class RoyaleHomeScreen(Screen):
     def train(self):
         try:
             from royale import exit_train, engine_ai
-            miss = engine_ai.missing()
+            miss = exit_train.missing()
             if miss:
                 self.ctx.banner(tr("royale_ai_missing") + ", ".join(miss), "bad", "x"); return
             deck = list(self.store.get("royale.deck", []) or [])
