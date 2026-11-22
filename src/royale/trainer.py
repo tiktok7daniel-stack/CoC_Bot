@@ -144,11 +144,13 @@ def fetch_zip(link, key, what):
     with open(tmp, "wb") as f:
         for c in r.iter_content(1 << 20):
             f.write(c); got += len(c)
-            if time.time() - last >= 5:
+            if time.time() - last >= 10:
                 last = time.time()
                 sp = got / 1e6 / max(0.1, time.time() - t0)
-                print(f"   {what}: downloading {got / 1e6:.0f}" + (f" / {total / 1e6:.0f} MB ({100 * got / total:.0f}%)"
-                      if total else " MB") + f" · {sp:.1f} MB/s", flush=True)
+                msg = (f"   {what}: downloading {got / 1e6:.0f}" + (f" / {total / 1e6:.0f} MB ({100 * got / total:.0f}%)"
+                       if total else " MB") + f" · {sp:.1f} MB/s")
+                log(msg)
+                status(note=msg.strip())
     os.replace(tmp, dst)
     log(f"{what}: downloaded {got / 1e6:.0f} MB in {int(time.time() - t0)} s")
     return zipfile.ZipFile(dst)
@@ -157,7 +159,7 @@ def fetch_zip(link, key, what):
 def progress(what, i, n, every=2000):
     """A line every `every` pictures while a big dataset is sorted (it took minutes with nothing printed)."""
     if i and i % every == 0:
-        print(f"   {what}: {i:,} / {n:,} pictures sorted", flush=True)
+        log(f"   {what}: {i:,} / {n:,} files sorted")
 
 
 # ------------------------------------------------------------------ 1. tools + base
@@ -922,8 +924,15 @@ def _gpu_watch():
                 el = int(time.time() - t0)
                 what = st.get("stage") or "-"
                 if st.get("note"): what += f" ({st['note']})"
-                print(f"   [{time.strftime('%H:%M:%S')} working {el // 3600}h{el // 60 % 60:02d}m] {what} · {card()}",
-                      flush=True)
+                line = f"   [{time.strftime('%H:%M:%S')} working {el // 3600}h{el // 60 % 60:02d}m] {what} · {card()}"
+                print(line, flush=True)
+                # 6.9.3: also in the log the "show the window" console follows (it read the log only: silent while a
+                # dataset downloaded) and a heartbeat for the Training page
+                try:
+                    with open(ROOT / "train.log", "a", encoding="utf-8") as f: f.write(line.strip() + "\n")
+                    status(alive=time.time(), card_line=card())
+                except Exception:
+                    pass
                 report()                              # every 10 min to the learning repo (6.9.2)
             except Exception:
                 pass

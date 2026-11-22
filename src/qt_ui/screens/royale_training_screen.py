@@ -141,6 +141,11 @@ class RoyaleTrainingScreen(Screen):
         lines = [f"<b>{tr('rtr_state')}:</b> " + (f"<span style='color:{y}'>● {tr('rtr_running')}</span> — "
                                                   if running else "") + (tr("rt_" + stage) if tr("rt_" + stage) != "rt_" + stage else stage)
                  + (f" — {st['note']}" if st.get("note") else "")]
+        if running and st.get("alive"):                  # 6.9.3: a sign of life every 20 s (the window's heartbeat)
+            ago = int(time.time() - float(st["alive"]))
+            col = g if ago < 60 else (y if ago < 180 else r)
+            lines.append(f"<span style='color:{col}'>💓 {tr('rtr_alive')}: {ago} s</span>"
+                         + (f" · {st['card_line']}" if st.get("card_line") else ""))
         if st.get("base_map50") is not None and st.get("new_map50") is not None:
             used = st.get("used")
             lines.append(f"<b>{tr('rtr_accuracy')}:</b> {100 * st['base_map50']:.1f}% → {100 * st['new_map50']:.1f}% "
