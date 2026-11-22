@@ -646,10 +646,13 @@ def _restart_safe(why):
         report(final=True)
         os._exit(1)
     log(f"graphics-card error #{len(fails)} ({why}) — the card cools 90 s, then a new process goes on from the last "
-        "round (safe mode)")
+        "round at FULL power")
     status(stage="queued", note=f"graphics card failed (#{len(fails)}) — going on from the last round in 90 s")
     report(final=False, every=0)
-    env = dict(os.environ, CF_TRAIN_SAFE="1", CF_TRAIN_WAIT="90", PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True")
+    # 6.9.9: back at full power (AMP, cuDNN, the full batch): "safe mode" failed the same way on this card (cuBLAS) and
+    # only halved the speed — the user wants it done fast; the failures are survived by going on from the last round
+    env = dict(os.environ, CF_TRAIN_WAIT="90", PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True")
+    env.pop("CF_TRAIN_SAFE", None)
     kw = {"creationflags": 0x00000010 | 0x00000020} if sys.platform == "win32" else {}
     subprocess.Popen([sys.executable, "-m", "royale.trainer", *sys.argv[1:]],
                      cwd=str(Path(__file__).resolve().parent.parent), env=env, **kw)
