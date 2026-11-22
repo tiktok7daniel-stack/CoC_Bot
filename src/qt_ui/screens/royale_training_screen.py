@@ -37,8 +37,33 @@ def _ago(t):
     return f"{int(d // 86400)} d"
 
 
-def _watch(log_path, title):
-    """A console window that follows a training log live (works while the training runs on its own)."""
+def _bring(part):
+    """6.9.4: the training's OWN console (its title contains `part`) brought to the front — the real window with every
+    line and every progress bar, not a copy of the log. -> True when found."""
+    if sys.platform != "win32": return False
+    import ctypes
+    from ctypes import wintypes
+    u = ctypes.windll.user32
+    found = []
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def each(hwnd, _l):
+        n = u.GetWindowTextLengthW(hwnd)
+        if n:
+            buf = ctypes.create_unicode_buffer(n + 1)
+            u.GetWindowTextW(hwnd, buf, n + 1)
+            if part in buf.value: found.append(hwnd)
+        return True
+    u.EnumWindows(each, 0)
+    for h in found:
+        u.ShowWindow(h, 9)                      # restore if minimised
+        u.SetForegroundWindow(h)
+    return bool(found)
+
+
+def _watch(log_path, title, own=None):
+    """The training's own console in front when it runs; else a console that follows its log live."""
+    if own and _bring(own): return True
     if sys.platform != "win32" or not Path(log_path).exists(): return False
     cmd = (f"$Host.UI.RawUI.WindowTitle='{title}'; Get-Content -Path '{log_path}' -Wait -Tail 60 -Encoding UTF8")
     subprocess.Popen(["powershell", "-NoExit", "-NoProfile", "-Command", cmd], creationflags=0x00000010)
@@ -91,7 +116,8 @@ class RoyaleTrainingScreen(Screen):
 
     # ------------------------------------------------------------------ buttons
     def watch(self, path, what):
-        if not _watch(path, tr("rtr_eyes") if what == "eyes" else tr("rtr_self")):
+        own = "تدريب عيون كلاش رويال" if what == "eyes" else "الذكاء الاصطناعي بيلعب ضد نفسه"
+        if not _watch(path, tr("rtr_eyes") if what == "eyes" else tr("rtr_self"), own):
             self.ctx.banner(tr("rtr_no_log"), "bad", "x")
 
     def train_eyes(self):
