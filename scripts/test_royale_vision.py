@@ -156,6 +156,21 @@ def test_skins_and_ids():
     check("speed: never faster than the card walks (+30%)", g.speed() <= 1.3 * 45 / 60 + 1e-6, f"{g.speed():.2f} tiles/s")
 
 
+def test_team_birth():
+    """6.9.17: whose a unit is, from where it was born and the bot's own placements — not from one look."""
+    from royale.unit_tracker import UnitTracker, Det
+    tr = UnitTracker(); tr.reset()
+    tr.note_play("knight", (5, 8))
+    out = tr.update([Det("knight", 5.2, 8.4, 0.8, "enemy", 2.3, None)], __import__("time").monotonic())   # a wrong red read
+    check("team: our just-placed Knight is ours despite a wrong colour read", out[0][1].team == "ally", out[0][1].team)
+    out = tr.update([Det("musketeer", 9.0, 24.0, 0.8, "ally", 1.0, None)], __import__("time").monotonic())  # side model wrong
+    check("team: a unit born on their half is theirs despite a wrong side-model read", out[0][1].team == "enemy",
+          out[0][1].team)
+    t2 = UnitTracker(); t2.reset()
+    out = t2.update([Det("goblin", 3.5, 7.0, 0.8, "enemy", 2.3, None)], 0.0)       # a Goblin Barrel at our tower
+    check("team: barrel goblins on our half go by their colour (red = theirs)", out[0][1].team == "enemy", out[0][1].team)
+
+
 def test_path():
     """The aim follows the path: a Hog Rider goes over its bridge then turns to the Cannon pulling it; a unit already
     at our tower stands there (no lead behind it); a building never walks."""
@@ -270,7 +285,7 @@ def test_sessions():
     check("sessions: no TensorRT here = no crash, a working provider", s.kind in ("cpu", "dml", "cuda", "trt"), s.kind)
 
 
-for fn in (test_tracker, test_brain_lead, test_occlusion, test_skins_and_ids, test_path, test_soft_rules, test_team, test_hand, test_sessions):
+for fn in (test_tracker, test_brain_lead, test_occlusion, test_skins_and_ids, test_team_birth, test_path, test_soft_rules, test_team, test_hand, test_sessions):
     try:
         fn()
     except Exception as e:

@@ -260,7 +260,8 @@ class Eyes:
         for (d, tr), evolved in zip(self.tracker.update(dets, now), extra):
             if tr is None: continue            # 6.8: not followed (a doubtful new box, a tower decoration): not a unit
             # the track's side once settled; a new / doubtful one: this look's evidence
-            team = tr.team if (tr is not None and (tr.locked() or d.team is None)) else (d.team or "enemy")
+            # 6.9.17: the track's whole record (where it was born, our own placement, every colour / side-model read)
+            team = tr.team
             tx, ty = int(round(d.x)), int(round(d.y))
             if evolved and team != "ally": self.evo_now.append((d.name, tx, ty))
             (al if team == "ally" else en).append((d.name, tx, ty, d.conf))

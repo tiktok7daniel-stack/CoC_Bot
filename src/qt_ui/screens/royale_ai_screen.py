@@ -52,9 +52,11 @@ class AiPicture(_Base):
         p.setPen(QColor("#4ade80"))
         p.drawText(r, Qt.AlignCenter, tag)
 
-    def set_frame(self, img):
-        """A full-size picture straight from the bot's video (live_shm), up to 60 a second."""
+    def set_frame(self, img, ts=None):
+        """A full-size picture straight from the bot's video; ts = the wall-clock time it arrived (6.9.17: the boxes
+        are placed for THAT moment, so they sit on the units in the picture)."""
         self.img, self.live_t = img, time.monotonic()
+        self.frame_ts = ts
         self._n += 1
         if time.monotonic() - self._n_t >= 1.0:
             self.fps, self._n, self._n_t = self._n / (time.monotonic() - self._n_t), 0, time.monotonic()
@@ -130,10 +132,12 @@ class AiPicture(_Base):
             p.drawEllipse(P(*c["at"]), 9, 9)
         # what the eyes see
         now = time.time()
+        fts = getattr(self, "frame_ts", None)
+        if fts and now - fts < 1.0: now = fts            # 6.9.17: the moment of the picture shown (synced)
         tr = getattr(self, "tracker", None)
-        if tr is not None and tr.active():               # the screen's own eyes, on this very picture (5.96)
+        if tr is not None and tr.active():               # every unit placed for the picture's own moment
             shown = [{"n": n, "m": m, "l": 1.0, "cx": x, "cy": y, "w": bw, "h": bh, "vx": 0.0, "vy": 0.0, "t": now}
-                     for n, m, x, y, bw, bh in tr.visible()]
+                     for n, m, x, y, bw, bh in tr.visible(now)]
         else:
             shown = getattr(self, "_boxes", [])
         for b in shown:
@@ -258,14 +262,23 @@ class RoyaleAiScreen(Screen):
             self.video.stop(); self.tracker.stop()
             return
         self.video.start(); self.tracker.start()
-        r = self.video.take(self._seq)
-        if not r: return
-        self._seq, img = r
+        ts = None
+        delay = self.tracker.sync_delay()
+        if delay and self.video.buf:
+            # 6.9.17: the picture of the moment the bot's eyes looked at (the screen runs `delay` behind, the boxes sit
+            # on their units instead of chasing them)
+            r = self.video.take_at(time.time() - delay, getattr(self, "_skey", None))
+            if not r: return
+            self._skey, img, ts = r
+        else:
+            r = self.video.take(self._seq)
+            if not r: return
+            self._seq, img = r
         self.pic.stream_fps = self.video.fps
-        if self.isVisible(): self.pic.set_frame(img)
+        if self.isVisible(): self.pic.set_frame(img, ts)
         if popped:
             self._pop._pic.stream_fps = self.video.fps
-            self._pop._pic.set_frame(img)
+            self._pop._pic.set_frame(img, ts)
 
     def _path(self):
         acc = self.store.account or "main"

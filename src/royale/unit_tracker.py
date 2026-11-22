@@ -75,6 +75,14 @@ def _timing(spell):
     return w, sp
 
 
+# units that can be BORN on the other side's half (a Goblin Barrel's goblins, a Miner, a Graveyard's skeletons, a
+# Royal Delivery's recruit, a Goblin Drill, a Phoenix egg...): the half they appear on says nothing about whose they are
+SPAWN_ANYWHERE = {"goblin", "miner", "skeleton", "royal_recruit", "goblin_drill", "phoenix_egg", "bat", "spirit",
+                  "fire_spirit", "ice_spirit", "electro_spirit", "heal_spirit", "goblin_brawler", "spear_goblin"}
+BIRTH_WEIGHT = 2.0          # 6.9.17: a unit born on a half belongs to that half's player (cards are only placed at home)
+OUR_PLAY_WEIGHT = 6.0       # 6.9.17: born where the bot just placed that card = ours (certain)
+
+
 class Track:
     _ids = 0
 
@@ -88,8 +96,11 @@ class Track:
         self.life = None                          # 0..1 from its health bar when read (royale.health)
         self.names = {d.name: float(d.conf)}
         self.team_v = {"ally": 0.0, "enemy": 0.0}
-        # a new unit belongs to the half it appeared on until it is seen better (a weak vote, 0.5)
-        self.team_v["ally" if d.y <= RIVER_Y else "enemy"] += 0.5
+        # 6.9.17: where it was BORN — a card is only placed on its player's own half (except the few that land anywhere)
+        if d.name not in SPAWN_ANYWHERE:
+            self.team_v["ally" if d.y <= RIVER_Y else "enemy"] += BIRTH_WEIGHT
+        else:
+            self.team_v["ally" if d.y <= RIVER_Y else "enemy"] += 0.3
         self._vote_team(d)
         self.conf = float(d.conf)
         self.box = d.box
@@ -205,11 +216,31 @@ class UnitTracker:
     def __init__(self):
         self.tracks = []
         self.t = 0.0
+        self.our_plays = []         # (monotonic time, card, (x, y)): the bot's own placements (6.9.17)
         self.down = set()           # towers already down: ("our" | "their", "left" | "right" | "king")
         self.junk_spots = []        # (name, x, y): tower decorations read as units this battle (never a new track)
 
+    def note_play(self, card_name, tile):
+        """The bot placed `card_name` at `tile` now: units of that card born near it in the next 3 s are OURS."""
+        now = time.monotonic()
+        self.our_plays = [p for p in self.our_plays if now - p[0] < 4.0] + [(now, card_name, tuple(tile))]
+
+    def _ours_born(self, d, t):
+        """Was this new detection born from one of the bot's own placements? (the card's unit, near its tile, soon)"""
+        if not self.our_plays: return False
+        try:
+            from royale.brain import unit_card
+            cn = unit_card(d.name)
+        except Exception:
+            cn = None
+        for pt, card_name, (px, py) in self.our_plays:
+            if 0 <= t - pt <= 3.5 and math.hypot(d.x - px, d.y - py) <= 3.5 and (cn is None or cn == card_name):
+                return True
+        return False
+
     def reset(self):
         self.tracks = []
+        self.our_plays = []
         self.junk_spots = []
         Track._ids = 0                                   # ids count from 1 again every battle
 
@@ -254,6 +285,8 @@ class UnitTracker:
             if any(n == d.name and math.hypot(d.x - jx, d.y - jy) <= 1.0 for n, jx, jy in self.junk_spots): continue
             if d.conf >= 0.5:
                 tr = Track(d, t)
+                if self._ours_born(d, t):                  # 6.9.17: our own card just placed there
+                    tr.team_v["ally"] += OUR_PLAY_WEIGHT
                 self.tracks.append(tr)
                 out[i] = tr
         # unseen for KEEP seconds: gone (6.7: by the last time it was SEEN — the filter's own time moves every look)

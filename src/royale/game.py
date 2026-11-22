@@ -396,6 +396,8 @@ class RoyaleBot:
                 self._spent = (__import__("royale.brain", fromlist=["card"]).card(d["card"]).get("cost", 4),
                                time.monotonic(), el)
                 self._slot_used[d["slot"]] = time.monotonic()
+                try: self.eyes.tracker.note_play(d["card"], d["tile"])     # 6.9.17: units born there = OURS
+                except Exception: pass
                 cx, cy = card_xy(d["slot"])
                 tx, ty = tile_xy(*d["tile"])
                 t_tap = time.monotonic()

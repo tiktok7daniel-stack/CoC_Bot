@@ -31,7 +31,8 @@ class Track:
         return max(self.names, key=self.names.get)
 
     def at(self, now):
-        k = max(0.0, min(0.35, now - self.t))
+        # 6.9.17: also BEFORE its last look (the synced screen shows a picture up to ~0.4 s old): moved back on its speed
+        k = max(-0.4, min(0.35, now - self.t))
         return self.x + self.vx * k, self.y + self.vy * k
 
 
@@ -45,6 +46,7 @@ class LiveTracker:
         self._last = 0.0
         self._seen = None
         self.rate, self._n, self._n_t = 0.0, 0, time.time()
+        self.lat = None                    # 6.9.17: how old the bot's looks are when they arrive here (smoothed)
 
     # kept for the screen's calls (no model thread any more)
     def start(self): pass
@@ -59,6 +61,8 @@ class LiveTracker:
         t = float(seen_t or time.time())
         if t == self._seen: return
         self._seen = t
+        lat = max(0.0, time.time() - t)
+        self.lat = lat if self.lat is None else 0.8 * self.lat + 0.2 * lat
         with self._lock:
             free = list(self.tracks)
             for name, mine, x, y, conf in sorted(dets, key=lambda d: -d[4]):
@@ -88,6 +92,12 @@ class LiveTracker:
         self._n += 1
         if time.time() - self._n_t >= 1.0:
             self.rate, self._n, self._n_t = self._n / (time.time() - self._n_t), 0, time.time()
+
+    def sync_delay(self):
+        """How far behind real time the screen shows the game so the boxes sit on their units: the looks' age + 20 ms
+        (0 = not synced: the looks are too old to wait for, > 0.45 s, or none come)."""
+        if not self.active() or self.lat is None or self.lat > 0.45: return 0.0
+        return self.lat + 0.02
 
     def visible(self, now=None):
         """[(name, ours, cx, cy, w, h)] screen fractions where each unit is now."""

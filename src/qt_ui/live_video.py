@@ -6,6 +6,7 @@ CUDA) — so the picture runs at the emulator's own rate (up to 120 a second) an
 Only the newest picture is turned into an image (a slow moment skips pictures instead of falling behind).
 """
 import socket, struct, sys, threading, time
+from collections import deque
 
 PORT = 27199
 
@@ -22,6 +23,10 @@ class LiveVideo:
         self._thread = None
         self._taken = 0
         self.arr, self.arr_seq, self.arr_t, self._arr_taken = None, 0, 0.0, 0
+        # 6.9.17: the last ~0.6 s of decoded pictures with the time each arrived — the screen can show the picture the
+        # bot's eyes looked at, so every box sits on its unit (take_at)
+        self.buf = deque(maxlen=160)
+        self._bseq = 0
 
     def start(self):
         self._want = True
@@ -37,6 +42,24 @@ class LiveVideo:
         if self.seq == last_seq or self.img is None: return None
         self._taken = self.seq
         return self.seq, self.img
+
+    def take_at(self, t, last_key):
+        """The newest picture that arrived at or before wall-clock time t -> (key, QImage, its time) or None when it is
+        the one already shown / none is buffered (hardware decoding keeps no buffer: take() is used then)."""
+        from PySide6.QtGui import QImage
+        pick = None
+        for item in reversed(list(self.buf)):
+            if item[0] <= t:
+                pick = item; break
+        if pick is None: return None
+        ts, key, fr = pick
+        if key == last_key: return None
+        try:
+            arr = fr.to_ndarray(format="rgb24")
+        except Exception:
+            return None
+        h, w = arr.shape[:2]
+        return key, QImage(arr.data, w, h, 3 * w, QImage.Format_RGB888).copy(), ts
 
     def latest_array(self):
         """(seq, RGB array, monotonic time it was decoded) of the newest picture — for the screen's own eyes."""
@@ -102,6 +125,11 @@ class LiveVideo:
                         continue
                     for fr in frames:
                         n += 1
+                        if not self.hw:                     # 6.9.17: kept for the synced screen (software frames only)
+                            now_w = time.time()
+                            self._bseq += 1
+                            self.buf.append((now_w, self._bseq, fr))
+                            while self.buf and now_w - self.buf[0][0] > 0.6: self.buf.popleft()
                         if self._taken != self.seq and self.img is not None:
                             continue                # the screen has not shown the last one yet: skip converting
                         tc = time.perf_counter()
