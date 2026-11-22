@@ -464,6 +464,7 @@ def run(epochs=30, n_bulk=4):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     if not os.environ.get("CF_TRAIN_SAFE"): status(stage="start", started=time.time(), error="", data={})
     status(recipe=RECIPE)
+    _gpu_watch()                                     # the window moves from the first second (6.5)
     if not tools(): return False
     fix_nms()
     from ultralytics import YOLO
@@ -528,7 +529,6 @@ def _after_data(names, epochs, SAFE):
     n_val = sum(1 for _ in open(va_list, encoding="utf-8"))
     log(f"Data ready: {n_all:,} pictures on disk -> {n_train:,} chosen for this training, {n_val:,} for the test")
     status(stage="test_base", pictures=n_train)
-    _gpu_watch()
     log(f"step 1/3: testing the current eyes on {n_val:,} test pictures (a few minutes, a progress bar follows)")
     m0 = YOLO(str(base)).val(data=str(yaml_p), imgsz=800, batch=16, device=0, verbose=True, plots=False)
     log(f"current eyes: mAP50 {float(m0.box.map50):.3f}")
@@ -673,22 +673,40 @@ def _pick(data):
     return tl, vl, n_all
 
 
+_watch_on = [False]
+
+
 def _gpu_watch():
-    """Every 30 s in the training window: how busy the graphics card is and its memory (nvidia-smi) — so the
-    user sees it really works (6.3)."""
+    """A line every 20 s in the training window from its first second to its last (6.5): what it is doing now
+    (the stage + its note), how long it has run, and the graphics card's load / memory / heat (nvidia-smi) — the
+    window never looks frozen, even during a long download or a test with no progress bar."""
     import subprocess, threading
+    if _watch_on[0]: return
+    _watch_on[0] = True
+    t0 = time.time()
+
+    def card():
+        try:
+            r = subprocess.run(["nvidia-smi", "--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu",
+                                "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=10,
+                               creationflags=0x08000000 if sys.platform == "win32" else 0)
+            u, mu, mt, tc = [x.strip() for x in r.stdout.strip().splitlines()[0].split(",")]
+            return f"graphics card busy {u}% · memory {mu}/{mt} MB · {tc}°C"
+        except Exception:
+            return "graphics card: no reading"
 
     def run():
         while True:
+            time.sleep(20)
             try:
-                r = subprocess.run(["nvidia-smi", "--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu",
-                                    "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=10,
-                                   creationflags=0x08000000 if sys.platform == "win32" else 0)
-                u, mu, mt, tc = [x.strip() for x in r.stdout.strip().splitlines()[0].split(",")]
-                print(f"   [graphics card] busy {u}% · memory {mu}/{mt} MB · {tc}°C", flush=True)
+                st = read_status()
+                el = int(time.time() - t0)
+                what = st.get("stage") or "-"
+                if st.get("note"): what += f" ({st['note']})"
+                print(f"   [{time.strftime('%H:%M:%S')} working {el // 3600}h{el // 60 % 60:02d}m] {what} · {card()}",
+                      flush=True)
             except Exception:
-                return
-            time.sleep(30)
+                pass
     threading.Thread(target=run, daemon=True, name="gpu-watch").start()
 
 
