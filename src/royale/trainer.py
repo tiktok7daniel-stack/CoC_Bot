@@ -26,7 +26,7 @@ MODELS = HOME / "models"
 HF = "https://huggingface.co"
 REPO = "SudhishNeel/clash-royale-detection"
 BASE_PT_URL = "https://huggingface.co/SudhishNeel/clash-royale-detector/resolve/main/v8/best.pt"
-RECIPE = 5                    # 5.98: + 2 Roboflow sets, generated pictures layered — a new recipe trains again at once
+RECIPE = 6                    # 5.98: + 2 Roboflow sets, generated pictures layered — a new recipe trains again at once
 DEFAULT_ROBOFLOW = ["yolotrain-c7s7v/clash-royale-ut3g8/4", "clashroyale/clash-royale-of3d3/3",
                     "angelfire/clash-royale-cylln/5", "clash-pxdrz/clash_grid", "dampiix/clash-royale-units",
                     "nathan-yan/clash-royale-detection-cysig/7",
@@ -521,12 +521,17 @@ def _after_data(names, epochs, SAFE):
     from ultralytics import YOLO
     base = base_model()
     yaml_p = ROOT / "data.yaml"
-    yaml_p.write_text(json.dumps({"path": str(DATA), "train": "images/train", "val": "images/val",
+    tr_list, va_list, n_all = _pick(DATA)
+    yaml_p.write_text(json.dumps({"path": str(DATA), "train": str(tr_list), "val": str(va_list),
                                   "names": {k: v for k, v in names.items()}}), encoding="utf-8")
-    n_train = len(list((DATA / "images" / "train").glob("*")))
-    log(f"Data ready: {n_train} training pictures")
+    n_train = sum(1 for _ in open(tr_list, encoding="utf-8"))
+    n_val = sum(1 for _ in open(va_list, encoding="utf-8"))
+    log(f"Data ready: {n_all:,} pictures on disk -> {n_train:,} chosen for this training, {n_val:,} for the test")
     status(stage="test_base", pictures=n_train)
-    m0 = YOLO(str(base)).val(data=str(yaml_p), imgsz=800, batch=8, device=0, verbose=False, plots=False)
+    _gpu_watch()
+    log(f"step 1/3: testing the current eyes on {n_val:,} test pictures (a few minutes, a progress bar follows)")
+    m0 = YOLO(str(base)).val(data=str(yaml_p), imgsz=800, batch=16, device=0, verbose=True, plots=False)
+    log(f"current eyes: mAP50 {float(m0.box.map50):.3f}")
     base_map = float(m0.box.map50)
     status(stage="train", base_map50=round(base_map, 4), note=f"{epochs} rounds on the graphics card")
     # a fixed small batch: the card is shared with LDPlayer and the bot's eyes ("all it can take" ran out of
@@ -535,21 +540,22 @@ def _after_data(names, epochs, SAFE):
     # the card at full speed (6.3): cuDNN picks its fastest kernels (off only in safe mode)
     torch.backends.cudnn.benchmark = not SAFE
     if SAFE: torch.backends.cudnn.enabled = False
-    _gpu_watch()
     base_m = float(m0.box.map)                                         # mAP50-95: boxes must also be tight
     cands = []
     # two candidates (5.82): the current eyes fine-tuned, and a newer, bigger architecture (YOLO11m, from its COCO
     # start) at a higher resolution — trained one after the other on the card; the honest test picks
-    plans = [("finetune", str(base), 800, epochs), ("yolo11m", "yolo11m.pt", 960, max(epochs, 45))]
-    for tag, start_w, imgsz, ep in plans:
+    # a time budget each (6.4): ultralytics fits its rounds into it after the first one
+    plans = [("finetune", str(base), 800, epochs, 1.5), ("yolo11m", "yolo11m.pt", 960, max(epochs, 45), 3.0)]
+    for tag, start_w, imgsz, ep, hours in plans:
         for attempt in range(1):
             try:
                 m = YOLO(start_w)
                 bs = max(2, _gpu_batch(imgsz) // 2) if SAFE else _gpu_batch(imgsz)
-                log(f"{tag}: training — {ep} rounds, pictures {imgsz}px, {bs} at a time on the graphics card")
+                log(f"step {2 if tag == 'finetune' else 3}/3 — {tag}: training for up to {hours} h (about {ep} rounds),"
+                    f" pictures {imgsz}px, {bs} at a time on the graphics card — a progress bar per round follows")
                 # no test after every round (its last step ran on the processor while the card waited): the test runs
                 # once at the end; every processor core but two prepares pictures so the card never waits (6.3)
-                m.train(data=str(yaml_p), epochs=ep, imgsz=imgsz, batch=bs, val=False,
+                m.train(data=str(yaml_p), epochs=ep, time=hours, imgsz=imgsz, batch=bs, val=False,
                         device=0, cos_lr=True, close_mosaic=max(3, ep // 6),
                         workers=max(2, min(12, (os.cpu_count() or 4) - 2)), project=str(ROOT / "runs"),
                         name=tag, exist_ok=True, plots=False, verbose=True, amp=not SAFE)
@@ -621,6 +627,50 @@ def _window_title(t):
     if sys.platform == "win32":
         try: __import__("ctypes").windll.kernel32.SetConsoleTitleW(t)
         except Exception: pass
+
+
+TRAIN_MAX, VAL_MAX = 60000, 3000
+
+
+def _pick(data):
+    """The pictures of this training (6.4): the folder only grows (every source, every run), and 776k pictures a
+    round took the card ~10 h a round and the old test (12% of everything, NMS on the processor) hours with no line
+    printed. Each source gets a fair share of TRAIN_MAX (a small one all of it); the test keeps the real
+    hand-labelled pictures (KataCR) first, at most VAL_MAX. Written as lists of paths — nothing is deleted."""
+    rng = random.Random(7)
+
+    def scan(sp):
+        d = data / "images" / sp
+        groups = {}
+        if d.exists():
+            with os.scandir(d) as it:
+                for e in it:
+                    n = e.name
+                    if not n.lower().endswith((".jpg", ".jpeg", ".png")): continue
+                    if not (data / "labels" / sp / (n.rsplit(".", 1)[0] + ".txt")).exists(): continue
+                    k = n.split("_")[0] if not n.startswith("rf_") else "rf_" + n.split("_")[1]
+                    groups.setdefault(k, []).append(e.path)
+        return groups
+
+    tr, va = scan("train"), scan("val")
+    n_all = sum(map(len, tr.values())) + sum(map(len, va.values()))
+    for k in sorted(tr, key=lambda k: -len(tr[k])):
+        log(f"   on disk: {k}: {len(tr[k]):,} training" + (f", {len(va.get(k, [])):,} test" if va.get(k) else ""))
+    # water-filling: small sources whole, the big ones share what is left
+    out, left, keys = [], TRAIN_MAX, sorted(tr, key=lambda k: len(tr[k]))
+    for i, k in enumerate(keys):
+        share = left // (len(keys) - i)
+        take = tr[k] if len(tr[k]) <= share else rng.sample(tr[k], share)
+        out += take; left -= len(take)
+    vout = list(va.get("kcr", []))
+    rest = [p for k, v in va.items() if k != "kcr" for p in v]
+    rng.shuffle(vout); rng.shuffle(rest)
+    vout = (vout + rest)[:VAL_MAX]
+    rng.shuffle(out)
+    tl, vl = ROOT / "train_list.txt", ROOT / "val_list.txt"
+    tl.write_text("\n".join(out) + "\n", encoding="utf-8")
+    vl.write_text("\n".join(vout) + "\n", encoding="utf-8")
+    return tl, vl, n_all
 
 
 def _gpu_watch():
