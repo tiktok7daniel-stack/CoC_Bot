@@ -25,6 +25,9 @@ on:
       - "src/royale/team_color.py"
       - "src/royale/hand_classifier.py"
       - "src/royale/hand_train.py"
+      - "src/royale/card_use.py"
+      - "src/royale/trainer.py"
+      - "scripts/calibrate_team_color.py"
   workflow_dispatch:
 
 permissions:

@@ -91,8 +91,13 @@ check("defends a Giant push", r is not None and r[0] == "play")
 b = brain([("hog-rider", 3, 14)], {"hog_rider"})
 st3 = {"hand": ["cannon", "blank", "fireball", "the_log"], "ready": [0, 2, 3], "towers": {}, "allies": []}
 engine.new_battle()
+engine._S["debug"] = []
+t0 = time.perf_counter()
 r = engine.think(b, st3, st3["hand"], [(0, "cannon"), (2, "fireball"), (3, "the_log")], 7.0, None, Log())
-print("  defense with a blank slot:", r, engine.skips())
+print("  defense with a blank slot:", r, engine.skips(), f"{(time.perf_counter() - t0) * 1000:.0f} ms")
+for row in engine._S["debug"][:12]: print("   ", row)
+print("    candidates:", engine.candidates(b, [(0, "cannon"), (2, "fireball"), (3, "the_log")], None, True)[:12])
+engine._S["debug"] = None
 check("thinks with a blank slot in the hand", engine.skips().get("thought", 0) == 1, str(engine.skips()))
 check("defends the Hog with a blank slot too", r is not None and r[0] == "play")
 b.deck = list(deck)[:5]                                     # the deck only half learned yet

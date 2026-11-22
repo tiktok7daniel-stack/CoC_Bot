@@ -7,7 +7,7 @@ The Clash Royale eyes: one look at the game (720x1280 portrait, any size scaled)
 The deck is found by itself: in the first seconds of a battle every hand card is compared with all 139 pictures;
 once the 8 are known the comparison is only among them (faster, no mix-up).
 """
-import os, threading, time
+import math, os, threading, time
 
 from royale.vision import constants as C
 
@@ -34,6 +34,11 @@ class Eyes:
         self.colors = TeamColor()                 # ours / theirs from the badge / health-bar colour (6.6)
         self.two_v_two = False                    # 2v2: a unit not in our deck can be our partner's
         self.hand_cls = None                      # the hand-card model (royale.hand_classifier), when trained
+        # 6.7: ONE arena detector a look. The big model (174 kinds: evolutions, heroes, every new card) is the eyes when
+        # it answers for this very picture (on the graphics card); BuildABot's 97-kind model only fills in while it
+        # is not ready / runs on the processor in the background — or always, with royale.dual_eyes (Advanced)
+        self.dual = False
+        self.single_used = 0
         self._card_det = None
         self.set_deck(deck or [])
 
@@ -115,9 +120,21 @@ class Eyes:
         from PIL import Image
         img = Image.fromarray(frame_rgb).convert("RGB").resize((C.SCREENSHOT_WIDTH, C.SCREENSHOT_HEIGHT),
                                                                 Image.Resampling.BILINEAR)
+        big, big_now = [], False
+        try:                                         # the big model first: is it the eyes of this very picture?
+            from royale import strong_eyes
+            if strong_eyes.ready():
+                big = strong_eyes.look_now(frame_rgb)
+                big_now = strong_eyes.same_moment()
+        except Exception:
+            big = []
         with _LOCK:
             cards, ready = self._card_det.run(img)
-            allies, enemies = self.units.run(img)
+            if big_now and not self.dual:
+                allies, enemies = [], []             # one detector this look (the big one, same moment)
+                self.single_used += 1
+            else:
+                allies, enemies = self.units.run(img)
             nums = self.numbers.run(img)
         hand = [c.name for c in cards[1:5]]
         nxt = cards[0].name
@@ -135,17 +152,10 @@ class Eyes:
         raw = [(d.unit.name, float(d.position.conf), tuple(v * k for v, k in zip(d.position.bbox, (kx, ky, kx, ky))),
                 side, "units") for lst, side in ((enemies, "enemy"), (allies, "ally")) for d in lst]
         hp, spells = {}, []
-        big = []
-        try:                                         # the stronger eyes (174 kinds), in the background: never waited for
-            from royale import strong_eyes
-            if strong_eyes.ready():
-                big = strong_eyes.look_now(frame_rgb)
-        except Exception:
-            big = []
-        en, al = self._units(frame_rgb, raw, big, img, now)
         if big:
             try: hp, spells = self._health()
             except Exception: pass
+        en, al = self._units(frame_rgb, raw, big, img, now, hp, spells)
         return {
             "next": nxt, "hand": hand, "ready": list(ready), "hand_look": hand_look,
             "elixir": float(nums.elixir.number),
@@ -180,7 +190,7 @@ class Eyes:
         dx, dy = (x0 + x1) / 2 * 720.0 / w, y1 * 1280.0 / h
         return ((dx - C.TILE_INIT_X) / C.TILE_WIDTH - 0.5, (C.DISPLAY_HEIGHT - C.TILE_INIT_Y - dy) / C.TILE_HEIGHT - 0.5)
 
-    def _units(self, frame, raw, big, small, now):
+    def _units(self, frame, raw, big, small, now, hp=None, spells=None):
         """Both eye models' units -> (enemies, allies) [(unit, tile x, tile y, conf)], every one followed by the
         tracker (6.6). Ours or theirs, from the surest evidence down:
           the colour over its head (its level badge — there even at full health — or its health bar): 2-3 votes
@@ -241,7 +251,32 @@ class Eyes:
             tx, ty = int(round(d.x)), int(round(d.y))
             if evolved and team != "ally": self.evo_now.append((d.name, tx, ty))
             (al if team == "ally" else en).append((d.name, tx, ty, d.conf))
+            if tr is not None and hp:                        # its health bar, for the hidden-for-a-moment rule
+                lf = hp.get((d.name, tx, ty))
+                if lf is not None: tr.life = float(lf)
+        # 6.7: a followed unit hidden for a moment (a spell's flash, behind a tower) stays in the battle state for
+        # 0.4 s, moved on its speed — the engine does not plan as if it died and change its mind when it is back
+        for tr in self.tracker.ghosts(now, dead=lambda t: self._killed(t, spells)):
+            x, y = tr.at(now)
+            (al if tr.team == "ally" else en).append((tr.name, int(round(x)), int(round(y)), max(0.5, 0.9 * tr.conf)))
         return en, al
+
+    @staticmethod
+    def _killed(tr, spells):
+        """A damage spell that landed on it in this look kills it (its life left x its hp <= the spell's damage)."""
+        if not spells: return False
+        try:
+            from royale.brain import card, unit_card, SPELL_DAMAGE_DEFAULT, SPELL_SPLASH_DEFAULT
+            c = card(unit_card(tr.name) or "") or {}
+            hp_left = (c.get("hp") or 300) * (tr.life if tr.life is not None else 1.0)
+            for sp, sx, sy in spells:
+                s = card(sp) or {}
+                rad = s.get("splash") or SPELL_SPLASH_DEFAULT.get(sp, 2.5)
+                dmg = s.get("damage") or SPELL_DAMAGE_DEFAULT.get(sp, 100)
+                if math.hypot(tr.x - sx, tr.y - sy) <= rad + 0.5 and hp_left <= dmg: return True
+        except Exception:
+            return False
+        return False
 
     def _hand_model(self, frame, nxt, hand, looks):
         """The hand-card model's reading where it is sure, else the picture matcher's (royale.hand_classifier)."""

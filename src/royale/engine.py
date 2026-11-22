@@ -566,6 +566,14 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
                 e2 = rollout_reply(env, hs, x, y, rp)
                 if e2 is not None: vs.append(_value(e2, brain, before, cost) - base)
         if len(vs) > 1: v = 0.5 * min(vs) + 0.5 * sum(vs) / len(vs)
+        # the card's preferences as a cost, not a ban (6.7, royale.card_use): the engine may still pick a building
+        # before a push or a Log for small value when the battle clearly says so
+        try:
+            from royale import card_use
+            pen, _why = card_use.penalty(brain, n, (tx, ty))
+            v -= pen
+        except Exception:
+            pass
         tried += 1
         scored.append({"card": n, "tile": [tx, ty], "v": round(v, 2)})
         if _S.get("debug") is not None:

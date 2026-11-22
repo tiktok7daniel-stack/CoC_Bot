@@ -93,6 +93,74 @@ def test_brain_lead():
     check("brain: the lead is shown on the live screen", getattr(b, "_lead_seen", {}).get("card") == "fireball")
 
 
+def test_occlusion():
+    """A Fireball's flash hides a Knight for 3 looks (0.1 s each): it stays in the battle state, moved on its speed;
+    a unit missing longer than 0.4 s is gone; one whose spell killed it is not kept."""
+    from royale.unit_tracker import UnitTracker, Det
+    from royale.eyes import Eyes
+    tr = UnitTracker()
+    t = 0.0
+    for k in range(10):
+        t = k * 0.1
+        tr.update([Det("knight", 4.0, 20.0 - t, 0.9, "enemy", 3.0, None), Det("musketeer", 6.0, 22.0, 0.8, "enemy", 3.0, None)], t)
+    hidden = []
+    for k in range(10, 13):                                         # 3 looks: neither unit seen
+        t = k * 0.1
+        tr.update([], t)
+        hidden.append({g.name for g in tr.ghosts(t)})
+    check("occlusion: both units kept through 3 hidden looks", all(h == {"knight", "musketeer"} for h in hidden), str(hidden))
+    kn = next(g for g in tr.ghosts(t) if g.name == "knight")
+    x, y = kn.at(t)
+    check("occlusion: the hidden Knight keeps walking on its speed", 18.4 < y < 19.2, f"y {y:.2f} (seen last at 19.1)")
+    check("occlusion: gone after 0.4 s unseen", not tr.ghosts(t + 0.5))
+    # the spell that landed on it: a full-health Musketeer survives a Fireball (282 hp > 269, the game's numbers),
+    # one at 60% life (its bar read before the flash) does not
+    keep = lambda: {g.name for g in tr.ghosts(t, dead=lambda g: Eyes._killed(g, [("fireball", 6, 22)]))}
+    full = keep()
+    next(g for g in tr.tracks if g.name == "musketeer").life = 0.6
+    hurt = keep()
+    check("occlusion: a full-health Musketeer survives the Fireball (kept)", "musketeer" in full, str(full))
+    check("occlusion: a hurt one the Fireball kills is not kept", "musketeer" not in hurt and "knight" in hurt, str(hurt))
+
+
+def test_path():
+    """The aim follows the path: a Hog Rider goes over its bridge then turns to the Cannon pulling it; a unit already
+    at our tower stands there (no lead behind it); a building never walks."""
+    from royale.unit_tracker import UnitTracker, Det
+    tr = UnitTracker()
+    for k in range(8):
+        tr.update([Det("hog_rider", 14.5, 24 - 0.2 * k, 0.9, "enemy", 3, None), Det("cannon", 9.0, 9.0, 0.9, "ally", 3, None)], k * 0.1)
+    h = tr.nearest("hog_rider", 14.5, 22.6, team="enemy")
+    x4, y4, _ = tr._walk(h, h.x, h.y, h.vx, h.vy, 4.0)
+    x6, y6, _ = tr._walk(h, h.x, h.y, h.vx, h.vy, 6.0)
+    check("path: the Hog crosses at its bridge (x stays on the lane)", abs(x4 - 14.5) < 1.2 and 14.5 <= y4 <= 17.0,
+          f"({x4:.1f}, {y4:.1f}) at 4 s")
+    check("path: then it turns toward our Cannon, not straight down", x6 < 13.5, f"({x6:.1f}, {y6:.1f}) at 6 s")
+    tr2 = UnitTracker()
+    for k in range(6):
+        tr2.update([Det("giant", 3.5, 7.4, 0.9, "enemy", 3, None)], k * 0.1)       # at our left tower, hitting it
+    g = tr2.tracks[0]
+    p = tr2.predict_position(g.id, "fireball", now=0.5)
+    check("path: a unit at our tower is aimed where it stands", abs(p[1] - 7.4) < 0.4, f"{p}")
+    c = tr.nearest("cannon", 9.0, 9.0, team="ally")
+    check("path: a building never walks", tr._walk(c, 9.0, 9.0, 0.0, 0.0, 5.0)[:2] == (9.0, 9.0))
+
+
+def test_soft_rules():
+    """A defensive building with nothing coming: the rule brain alone does not play it, the engine may (it paid the
+    preference's cost in its comparison); a spell on nothing stays forbidden for everyone."""
+    from royale.brain import Brain
+    from royale import card_use
+    b = Brain(["cannon", "hog_rider", "the_log", "fireball", "musketeer", "ice_spirit", "skeletons", "knight"])
+    b._stable = []
+    pen, why = card_use.penalty(b, "cannon", (8, 9))
+    check("rules: an idle building costs elixir, it is not banned", pen > 0 and why, f"{pen} {why}")
+    check("rules: the rule brain alone still does not play it", card_use.check(b, "cannon", (8, 9), "x") is None)
+    check("rules: the engine-weighed move goes through", card_use.check(b, "cannon", (8, 9), "x", engine_ok=True) is not None)
+    d = b.play_ai(0, "the_log", (9, 12), "engine", __import__("time").monotonic(), engine_ok=True)
+    check("rules: a spell on nothing stays forbidden, even from the engine", d is None)
+
+
 # ------------------------------------------------------------------ team colour
 def test_team():
     import numpy as np
@@ -169,7 +237,7 @@ def test_sessions():
     check("sessions: no TensorRT here = no crash, a working provider", s.kind in ("cpu", "dml", "cuda", "trt"), s.kind)
 
 
-for fn in (test_tracker, test_brain_lead, test_team, test_hand, test_sessions):
+for fn in (test_tracker, test_brain_lead, test_occlusion, test_path, test_soft_rules, test_team, test_hand, test_sessions):
     try:
         fn()
     except Exception as e:

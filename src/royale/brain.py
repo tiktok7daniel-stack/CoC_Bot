@@ -1099,6 +1099,22 @@ class Brain:
                 return True                                            # full elixir / the last seconds: chip
         return False
 
+    def _spell_on_tower(self, name, tile):
+        return any(dist(tile, (x, y)) <= 3.0 for x, y in THEIR_TOWERS.values())
+
+    def _spell_shortfall(self, name, tile):
+        """Elixir a damage spell falls short of paying back here (0 = it pays: card_use.penalty, 6.7)."""
+        if self._small_spell_ok(name, tile): return 0.0
+        hit = self._spell_hits(name, tile)
+        if not hit and not self._spell_on_tower(name, tile): return 9.0          # on nothing: never worth it
+        dmg = card(name).get("damage") or SPELL_DAMAGE_DEFAULT.get(name, 100)
+        cost = card(name).get("cost", 3)
+        val = 0.0
+        for u in hit:
+            c = card(unit_card(u) or u)
+            val += c.get("cost", 3) / max(1, c.get("count") or 1) * (1.0 if (c.get("hp") or 300) <= dmg * 1.1 else 0.1)
+        return max(0.0, 0.75 * cost - val)
+
     def _spell_hits_us(self, name, tile):
         """Would this spell land on our own troops / buildings? (never cast it then)"""
         rad = (card(name).get("splash") or SPELL_SPLASH_DEFAULT.get(name, 2.5)) + 1.0
@@ -1246,11 +1262,12 @@ class Brain:
         del self.steps[ns:]
         self.plays.pop()
 
-    def play_ai(self, slot, n, tile, why, now):
-        """A move the AI player chose: through the same checks and records as the brain's own plays."""
-        return self._play((slot, n), tile, why, now)
+    def play_ai(self, slot, n, tile, why, now, engine_ok=False):
+        """A move the AI player chose: through the same checks and records as the brain's own plays.
+        engine_ok (6.7): the battle engine weighed it with card_use.penalty — the soft preferences do not stop it."""
+        return self._play((slot, n), tile, why, now, engine_ok=engine_ok)
 
-    def _play(self, pick, tile, why, now):
+    def _play(self, pick, tile, why, now, engine_ok=False):
         i, n = pick
         if tile is None: return None
         self._undo_snap = (self.support_due, getattr(self, "support_due_back", False), self.heavy_mine_at,
@@ -1266,10 +1283,11 @@ class Brain:
             why = why if "tower" in why else f"{why} -> on their tower"
         elif __import__("royale.card_use", fromlist=["x"]).DAMAGE_SPELLS.__contains__(n) and \
                 not self._small_spell_ok(n, tile):
-            return None                                  # a damage spell only where it really pays
+            # never on nothing (a rule); for too little value only a preference the engine already weighed (6.7)
+            if not engine_ok or not (self._spell_hits(n, tile) or self._spell_on_tower(n, tile)): return None
         try:                                             # every card in its own right place (royale.card_use)
             from royale import card_use
-            cu = card_use.check(self, n, tile, why)
+            cu = card_use.check(self, n, tile, why, engine_ok=engine_ok)
         except Exception:
             cu = (tile, why)
         if cu is None: return None

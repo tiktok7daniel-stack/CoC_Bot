@@ -52,12 +52,23 @@ def worker(runtime, frame):
             import numpy as np
             from PIL import Image
             from royale.eyes import Eyes
+            from royale import strong_eyes
             im = np.array(Image.open(frame).convert("RGB"))
+            for _ in range(60):                           # the big model loads (it is on this PC after the first start)
+                if strong_eyes.ensure(): break
+                time.sleep(1)
             e = Eyes()
-            for _ in range(5): e.look(im)                 # warm (a TensorRT engine not built yet builds meanwhile)
-            t = time.perf_counter()
-            for _ in range(30): e.look(im)
-            out["look_ms"] = round((time.perf_counter() - t) * 1000 / 30, 1)
+            for dual in (True, False):                    # 6.7: both detectors vs one (the big model alone)
+                e.dual = dual
+                for _ in range(8): e.look(im)             # warm (a TensorRT engine not built yet builds meanwhile)
+                n0 = e.single_used
+                t = time.perf_counter()
+                for _ in range(30): e.look(im)
+                ms = round((time.perf_counter() - t) * 1000 / 30, 1)
+                out["look_ms_both" if dual else "look_ms"] = ms
+                if not dual: out["one_detector"] = e.single_used - n0 == 30
+            out["fps_both"] = round(1000 / max(1e-3, out["look_ms_both"]), 1)
+            out["fps"] = round(1000 / max(1e-3, out["look_ms"]), 1)
             t = time.perf_counter()
             for _ in range(200): e.colors.prepare(im)
             out["team_ms"] = round((time.perf_counter() - t) * 1000 / 200, 2)
@@ -97,7 +108,10 @@ def main():
         print(m.ljust(26) + "".join(str(r.get(c, "—")).rjust(18) for c in cols) + "  " + sp)
     for res in results:
         if "look_ms" in res:
-            print(f"one whole look ({res['runtime']}): {res['look_ms']} ms · team colours {res.get('team_ms')} ms")
+            print(f"one whole look ({res['runtime']}): both detectors {res.get('look_ms_both')} ms ({res.get('fps_both')} looks/s)"
+                  f" -> one detector {res['look_ms']} ms ({res.get('fps')} looks/s)"
+                  + ("" if res.get("one_detector") else " [the big model was not fast enough here: both ran]")
+                  + f" · team colours {res.get('team_ms')} ms")
     # the hand model's accuracy
     hand = None
     try:

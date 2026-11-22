@@ -139,8 +139,47 @@ def _ours_ahead(brain, x):
     return out
 
 
-def check(brain, name, tile, why):
-    """-> (tile, why) to play, the tile moved to the card's right place when needed; None = do not play it."""
+# 6.7: what is a RULE and what is a PREFERENCE
+#   hard (never, whoever proposes it — royale.brain._play): a spell on our own troops, a spell on units that are not
+#        surely theirs, a damage spell that hits nothing, a card in none of the account's decks, a tile the game
+#        refuses, a Goblin Barrel / Miner / Graveyard anywhere but their tower (the user's own rule)
+#   soft (a cost in elixir, `penalty`): a defensive building with nothing coming, two of them within 8 s, Bats sent
+#        alone, a small spell for little value. The battle engine subtracts it from the move's value — a building
+#        before a push in double elixir, or a Log for a small value that the engine finds clearly winning, can be
+#        played; a move NOT checked by the engine (the rule brain alone) still obeys them as before
+SOFT_COST = {"building_idle": 1.2, "building_again": 1.5, "air_alone": 1.0}
+
+
+def penalty(brain, name, tile):
+    """-> (elixir, [reasons]): what the soft preferences charge this move (0 = none)."""
+    k = kind(name)
+    threats = _threats(brain)
+    defending = bool(threats)
+    full = getattr(brain, "_my_el", 0) >= 9.5
+    cost, why = 0.0, []
+    if k == "building_defense":
+        if not defending:
+            cost += SOFT_COST["building_idle"]; why.append("a building with nothing coming")
+        t_now = brain.elapsed()
+        if any(p["card"] == name and t_now - p["t"] < 8 for p in getattr(brain, "plays", [])):
+            cost += SOFT_COST["building_again"]; why.append("the last one still stands")
+    if k == "swarm_air" and not defending and not _ours_ahead(brain, tile[0]) and not full:
+        cost += SOFT_COST["air_alone"]; why.append("alone at their tower")
+    if name in DAMAGE_SPELLS:
+        try:
+            pen = brain._spell_shortfall(name, tuple(tile))
+            if pen > 0: cost += pen; why.append(f"little value ({pen:.1f})")
+        except Exception:
+            pass
+    return cost, why
+
+
+def check(brain, name, tile, why, engine_ok=False):
+    """-> (tile, why) to play, the tile moved to the card's right place when needed; None = do not play it.
+    engine_ok: the battle engine already weighed this move WITH penalty() (6.7): the soft preferences do not stop it."""
+    if not engine_ok:
+        pen, _r = penalty(brain, name, tile)
+        if pen > 0 and kind(name) in ("building_defense", "swarm_air"): return None
     from royale.brain import lane, dist, THEIR_TOWERS
     k = kind(name)
     x, y = tile
@@ -155,11 +194,8 @@ def check(brain, name, tile, why):
         return tile, why
     if k == "building_defense":
         # in the middle to pull (Hog / Giant / Ram go for the nearest building), never at the back or forward
-        # only against something really coming (5.92: 10 Cannons in one battle, two in its first 2 seconds)
-        if not defending: return None
-        t_now = brain.elapsed()
-        if any(p["card"] == name and t_now - p["t"] < 8 for p in getattr(brain, "plays", [])):
-            return None                                      # the last one still stands
+        # only against something really coming (5.92: 10 Cannons in one battle, two in its first 2 seconds) —
+        # 6.7: a preference (penalty), checked above unless the engine weighed it
         tx = x
         if threats:
             near = min(threats, key=lambda t: t[2])
@@ -184,9 +220,7 @@ def check(brain, name, tile, why):
             return nt, f"{why} | {name}: behind our tower (nothing in front of it)"
         return tile, why
     if k == "swarm_air":
-        if not defending and not _ours_ahead(brain, x) and not full:
-            return None                                      # bats alone at their tower do nothing
-        return tile, why
+        return tile, why                                     # alone at their tower: a preference (penalty)
     if k == "win_spell":
         return tile, why                                     # Brain._barrel_tile puts it on their tower
     return tile, why

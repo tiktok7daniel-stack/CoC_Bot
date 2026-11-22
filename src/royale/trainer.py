@@ -26,7 +26,7 @@ MODELS = HOME / "models"
 HF = "https://huggingface.co"
 REPO = "SudhishNeel/clash-royale-detection"
 BASE_PT_URL = "https://huggingface.co/SudhishNeel/clash-royale-detector/resolve/main/v8/best.pt"
-RECIPE = 7                    # 5.98: + 2 Roboflow sets, generated pictures layered — a new recipe trains again at once
+RECIPE = 8                    # 5.98: + 2 Roboflow sets, generated pictures layered — a new recipe trains again at once
 DEFAULT_ROBOFLOW = ["yolotrain-c7s7v/clash-royale-ut3g8/4", "clashroyale/clash-royale-of3d3/3",
                     "angelfire/clash-royale-cylln/5", "clash-pxdrz/clash_grid", "dampiix/clash-royale-units",
                     "nathan-yan/clash-royale-detection-cysig/7",
@@ -488,6 +488,11 @@ def run(epochs=30, n_bulk=4):
             hand_train.run()
         except Exception as e:
             log(f"hand cards skipped: {type(e).__name__}: {e}")
+        try:                                     # 6.7: ours / theirs colours measured on this PC's own battles
+            from royale import team_color
+            team_color.auto_calibrate(log=log)
+        except Exception as e:
+            log(f"team colours skipped: {type(e).__name__}: {e}")
     if SAFE and (DATA / "images" / "train").exists():
         log("safe mode (after a graphics-card error): the data downloaded before is used, no cuDNN, no AMP, "
             "half the pictures a step")
@@ -562,33 +567,36 @@ def _after_data(names, epochs, SAFE):
     # start) at a higher resolution — trained one after the other on the card; the honest test picks
     # a time budget each (6.4): ultralytics fits its rounds into it after the first one
     plans = [("finetune", str(base), 800, epochs, 1.5), ("yolo11m", "yolo11m.pt", 960, max(epochs, 45), 3.0)]
+    real_list = _real_list(DATA)
     for tag, start_w, imgsz, ep, hours in plans:
-        for attempt in range(1):
-            try:
-                m = YOLO(start_w)
-                bs = max(2, _gpu_batch(imgsz) // 2) if SAFE else _gpu_batch(imgsz)
-                log(f"step {2 if tag == 'finetune' else 3}/3 — {tag}: training for up to {hours} h (about {ep} rounds),"
-                    f" pictures {imgsz}px, {bs} at a time on the graphics card — a progress bar per round follows")
-                # no test after every round (its last step ran on the processor while the card waited): the test runs
-                # once at the end; every processor core but two prepares pictures so the card never waits (6.3)
-                m.train(data=str(yaml_p), epochs=ep, time=hours, imgsz=imgsz, batch=bs, val=False,
-                        device=0, cos_lr=True, close_mosaic=max(3, ep // 6),
-                        workers=max(2, min(12, (os.cpu_count() or 4) - 2)), project=str(ROOT / "runs"),
-                        name=tag, exist_ok=True, plots=False, verbose=True, amp=not SAFE)
-                break
-            except Exception as e:
-                if any(k in str(e).lower() for k in ("cudnn", "cuda error", "illegal memory", "out of memory",
-                                                       "acceleratorerror", "cublas")):
-                    _restart_safe(f"{type(e).__name__}: {str(e)[:80]}")
-                log(f"{tag} skipped: {e}"); break
-        best = ROOT / "runs" / tag / "weights" / "best.pt"
-        if not best.exists():
-            best = ROOT / "runs" / tag / "weights" / "last.pt"          # no test while training: the last one
-        if not best.exists(): continue
-        r = YOLO(str(best)).val(data=str(yaml_p), imgsz=imgsz, batch=8, device=0, verbose=False, plots=False)
-        cands.append((float(r.box.map), float(r.box.map50), tag, best, imgsz))
-        log(f"{tag}: mAP50-95 {cands[-1][0]:.3f}, mAP50 {cands[-1][1]:.3f} (imgsz {imgsz})")
-        status(stage="train", note=f"{tag}: {cands[-1][1]:.3f}")
+        step = 2 if tag == "finetune" else 3
+        bs = max(2, _gpu_batch(imgsz) // 2) if SAFE else _gpu_batch(imgsz)
+        # stage 1 (6.7): every picture (the fair 60k), tested every VAL_EVERY rounds on the 3k honest test — the best
+        # round is kept (best.pt), and it stops early when 12 rounds bring nothing better (no learning by heart)
+        log(f"step {step}/3 — {tag}, stage 1: all the data, up to {0.8 * hours:.1f} h (about {ep} rounds), {imgsz}px, "
+            f"{bs} at a time; tested every {VAL_EVERY} rounds, the best round kept")
+        w1 = _train(tag, start_w, yaml_p, ep, 0.8 * hours, imgsz, bs, SAFE)
+        if not w1: continue
+        found = [(w1, "all data")]
+        # stage 2: the last part with a small learning rate on THIS game's real pictures only (KataCR's hand-labelled
+        # screenshots + this PC's battles): the model settles on the real look, the public sets' label mistakes fade
+        if real_list and sum(1 for _ in open(real_list, encoding="utf-8")) >= 300:
+            ft_yaml = ROOT / "data_real.yaml"
+            ft_yaml.write_text(json.dumps({"path": str(DATA), "train": str(real_list), "val": str(ROOT / "val_list.txt"),
+                                           "names": {k: v for k, v in names.items()}}), encoding="utf-8")
+            ep2 = max(3, ep // 6)
+            log(f"step {step}/3 — {tag}, stage 2: fine-tuning on the real pictures only "
+                f"({sum(1 for _ in open(real_list, encoding='utf-8')):,}), {ep2} rounds, small learning rate")
+            w2 = _train(tag + "_real", str(w1), ft_yaml, ep2, 0.2 * hours, imgsz, bs, SAFE,
+                        extra=dict(lr0=0.0005, lrf=0.5, warmup_epochs=0, mosaic=0.0, close_mosaic=0), every=2)
+            if w2: found.append((w2, "fine-tuned on real"))
+        else:
+            log(f"{tag}: stage 2 skipped — fewer than 300 real pictures (KataCR missing?)")
+        for w, what in found:
+            r = YOLO(str(w)).val(data=str(yaml_p), imgsz=imgsz, batch=8, device=0, verbose=False, plots=False)
+            cands.append((float(r.box.map), float(r.box.map50), f"{tag} ({what})", w, imgsz))
+            log(f"{tag} ({what}): mAP50-95 {cands[-1][0]:.3f}, mAP50 {cands[-1][1]:.3f} (imgsz {imgsz})")
+            status(stage="train", note=f"{tag} ({what}): {cands[-1][1]:.3f}")
     if not cands:
         status(stage="done", used=False, error="no candidate trained", finished=time.time()); return False
     new_m, new_map, tag, best, imgsz = max(cands)
@@ -646,6 +654,56 @@ def _window_title(t):
 
 
 TRAIN_MAX, VAL_MAX = 60000, 3000
+VAL_EVERY = 4               # 6.7: the honest test every 4 rounds (3k pictures: ~1 min), the best round kept
+
+
+def _sparse_val(model, every):
+    """Test every `every` rounds (and at the end): ultralytics tests after every round or never; on the rounds in
+    between its fitness is cleared so best.pt is only ever written after a real test."""
+    def start(tr):
+        tr.args.val = (tr.epoch + 1) % every == 0
+
+    def end(tr):
+        if not tr.args.val: tr.fitness = None
+    model.add_callback("on_train_epoch_start", start)
+    model.add_callback("on_train_epoch_end", end)
+
+
+def _train(tag, start_w, yaml_p, ep, hours, imgsz, bs, SAFE, extra=None, every=None):
+    """One training run -> its best weights (tested) or None."""
+    from ultralytics import YOLO
+    try:
+        m = YOLO(start_w)
+        _sparse_val(m, every or VAL_EVERY)
+        args = dict(data=str(yaml_p), epochs=ep, time=hours, imgsz=imgsz, batch=bs, val=True, patience=12,
+                    device=0, cos_lr=True, close_mosaic=max(3, ep // 6),
+                    workers=max(2, min(12, (os.cpu_count() or 4) - 2)), project=str(ROOT / "runs"),
+                    name=tag, exist_ok=True, plots=False, verbose=True, amp=not SAFE)
+        args.update(extra or {})
+        m.train(**args)
+    except Exception as e:
+        if any(k in str(e).lower() for k in ("cudnn", "cuda error", "illegal memory", "out of memory",
+                                               "acceleratorerror", "cublas")):
+            _restart_safe(f"{type(e).__name__}: {str(e)[:80]}")
+        log(f"{tag} skipped: {e}")
+        return None
+    w = ROOT / "runs" / tag / "weights"
+    return next((p for p in (w / "best.pt", w / "last.pt") if p.exists()), None)
+
+
+def _real_list(data):
+    """The real pictures of this game (KataCR's hand-labelled screenshots, this PC's battles) -> a list file."""
+    out = []
+    d = data / "images" / "train"
+    if d.exists():
+        with os.scandir(d) as it:
+            for e in it:
+                if e.name.startswith(("kcr_", "own_")) and (data / "labels" / "train" / (e.name.rsplit(".", 1)[0] + ".txt")).exists():
+                    out.append(e.path)
+    if not out: return None
+    p = ROOT / "real_list.txt"
+    p.write_text("\n".join(out) + "\n", encoding="utf-8")
+    return p
 
 
 def _pick(data):

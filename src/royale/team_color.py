@@ -19,7 +19,12 @@ badge at the bar's left — BLUE for ours, RED for theirs. No model, no training
 
 ~0.4 ms a look for 30 units (numpy over small bands + 4 lookups each).
 """
+import json, time
+from pathlib import Path
+
 import numpy as np
+
+CONF = Path.home() / ".CoC_Bot" / "team_color.json"     # measured ranges (calibrate), when there are some
 
 # OpenCV hue is 0..179
 BLUE_H, BLUE_S, BLUE_V = (95, 125), 110, 150
@@ -27,10 +32,28 @@ RED_H_LO, RED_H_HI, RED_S, RED_V = 8, 160, 110, 150
 WIDTH = 400                                       # the masks are made at this width (a badge stays ~9 px)
 
 
+def default_ranges():
+    """[(h_lo, h_hi, s_min, v_min)] per side (OpenCV hue 0..179)."""
+    return {"ally": [(BLUE_H[0], BLUE_H[1], BLUE_S, BLUE_V)],
+            "enemy": [(0, RED_H_LO, RED_S, RED_V), (RED_H_HI, 179, RED_S, RED_V)]}
+
+
+def load_ranges():
+    """The ranges measured on this PC's own battles (calibrate) — else the defaults."""
+    try:
+        d = json.loads(CONF.read_text(encoding="utf-8"))
+        r = {k: [tuple(int(v) for v in x) for x in d[k]] for k in ("ally", "enemy")}
+        if r["ally"] and r["enemy"]: return r
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    return default_ranges()
+
+
 class TeamColor:
     def __init__(self):
         self._ib = self._ir = None
         self._shape = None
+        self.ranges = load_ranges()
 
     # -------------------------------------------------------------- once a look
     def prepare(self, frame_rgb):
@@ -41,9 +64,13 @@ class TeamColor:
         small = cv2.resize(frame_rgb[:int(h * 0.84)], (WIDTH, max(1, int(round(h * 0.84 * k)))),
                            interpolation=cv2.INTER_LINEAR)              # the arena only (not the hand)
         hsv = cv2.cvtColor(small, cv2.COLOR_RGB2HSV)
-        blue = cv2.inRange(hsv, (BLUE_H[0], BLUE_S, BLUE_V), (BLUE_H[1], 255, 255))
-        red = cv2.bitwise_or(cv2.inRange(hsv, (0, RED_S, RED_V), (RED_H_LO, 255, 255)),
-                             cv2.inRange(hsv, (RED_H_HI, RED_S, RED_V), (179, 255, 255)))
+        def mask(rs):
+            m = None
+            for h0, h1, s0, v0 in rs:
+                k_ = cv2.inRange(hsv, (h0, s0, v0), (h1, 255, 255))
+                m = k_ if m is None else cv2.bitwise_or(m, k_)
+            return m
+        blue, red = mask(self.ranges["ally"]), mask(self.ranges["enemy"])
         cv2.threshold(blue, 0, 1, cv2.THRESH_BINARY, dst=blue)          # 0 / 1: sums are pixel counts
         cv2.threshold(red, 0, 1, cv2.THRESH_BINARY, dst=red)
         self._mb, self._mr = blue, red
@@ -95,3 +122,121 @@ class TeamColor:
         mine = nb if best[0] == "ally" else nr
         if other > 0.6 * mine: return best[0], best[1] * 0.4
         return best
+
+
+# ------------------------------------------------------------------ measuring the colours on real battles (6.7)
+def badge_pixels(frame_rgb, box):
+    """HSV of the coloured badge / bar over one unit (the largest compact saturated blob in its head band that is not
+    the grass) -> array (n, 3) or None."""
+    import cv2
+    h, w = frame_rgb.shape[:2]
+    x0, y0, x1, y1 = box
+    bw, bh = max(2.0, x1 - x0), max(2.0, y1 - y0)
+    xa, xb = int(max(0, x0 - 0.25 * bw)), int(min(w - 1, x1 + 0.25 * bw))
+    ya, yb = int(max(0, y0 - 0.55 * bh - 2)), int(min(h - 1, y0 + 0.15 * bh))
+    if xb - xa < 4 or yb - ya < 3: return None
+    hsv = cv2.cvtColor(np.ascontiguousarray(frame_rgb[ya:yb, xa:xb]), cv2.COLOR_RGB2HSV)
+    H, S, V = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+    m = ((S >= 90) & (V >= 120) & ~((H >= 30) & (H <= 88))).astype(np.uint8)      # saturated, not grass / sand
+    n, lab, st, _c = cv2.connectedComponentsWithStats(m, connectivity=8)
+    best = None
+    for j in range(1, n):
+        x, y, ww, hh, a = st[j]
+        if a < 12 or hh > 0.7 * (yb - ya) and ww > 0.9 * (xb - xa): continue
+        if a < 0.35 * ww * hh: continue                                       # not compact: a body / a roof edge
+        if best is None or a > best[1]: best = (j, a)
+    if best is None: return None
+    return hsv[lab == best[0]].reshape(-1, 3)
+
+
+def ranges_from(pixels):
+    """HSV pixels of one side's badges -> [(h_lo, h_hi, s_min, v_min)]: the hue bins holding the colour (red wraps
+    around 0 / 179), widened by 3, saturation / brightness from their 5th percentile minus a margin."""
+    if pixels is None or len(pixels) < 50: return None
+    hist = np.bincount(pixels[:, 0].astype(int), minlength=180).astype(float)
+    hist /= hist.sum()
+    on = hist >= 0.03                               # a hue holding 3%+ of the badge pixels (stray pixels left out)
+    out = []
+    k = 0
+    while k < 180:
+        if on[k]:
+            a = k
+            while k + 1 < 180 and on[k + 1]: k += 1
+            lo, hi = max(0, a - 3), min(179, k + 3)
+            if out and lo <= out[-1][1] + 1: out[-1][1] = max(out[-1][1], hi)      # touching ranges: one
+            else: out.append([lo, hi])
+        k += 1
+    s_min = int(max(60, np.percentile(pixels[:, 1], 5) - 20))
+    v_min = int(max(90, np.percentile(pixels[:, 2], 5) - 20))
+    return [(a, b, s_min, v_min) for a, b in out]
+
+
+def calibrate(samples, save=True):
+    """samples: [(frame_rgb, box, "ally" | "enemy")] whose side is known WITHOUT the colours (the deck rule, the side
+    model on the right half) -> {"ally": ranges, "enemy": ranges, "n": {...}} saved to CONF (the eyes use it from
+    the next battle). A side with too few badges keeps the default ranges."""
+    px = {"ally": [], "enemy": []}
+    for fr, box, team in samples:
+        p = badge_pixels(fr, box)
+        if p is not None: px[team].append(p)
+    res = {"n": {k: len(v) for k, v in px.items()}}
+    d = default_ranges()
+    for team in ("ally", "enemy"):
+        r = ranges_from(np.concatenate(px[team])) if len(px[team]) >= 5 else None
+        if r:                                       # one side's colour must not swallow the other's: overlap removed
+            res[team] = r
+        else:
+            res[team] = d[team]
+    a = {h for lo, hi, *_ in res["ally"] for h in range(lo, hi + 1)}
+    e = {h for lo, hi, *_ in res["enemy"] for h in range(lo, hi + 1)}
+    res["overlap"] = sorted(a & e)
+    if res["overlap"]:                              # unsure where they meet: the defaults stay
+        res.update(d)
+    res["t"] = time.time()
+    if save:
+        CONF.parent.mkdir(parents=True, exist_ok=True)
+        CONF.write_text(json.dumps(res), encoding="utf-8")
+    return res
+
+
+def auto_calibrate(limit=300, log=print):
+    """From this PC's saved battle pictures (royale.frames: the arena + the big model's boxes): each unit's side from
+    the deck rule (a unit of none of the account's cards is theirs) and the small side model (ours only on our half,
+    theirs only on theirs) — never from the colour itself — then calibrate()."""
+    import cv2
+    from PIL import Image
+    from royale import frames, strong_eyes
+    from royale.eyes import Eyes
+    pics = sorted(frames.DIR.glob("*.jpg"))[-limit:] if frames.DIR.exists() else []
+    if not pics:
+        log("team colours: no saved battle pictures yet — the default colours stay"); return None
+    mine = {c for d in Eyes.known_decks() for c in d}
+    from royale.brain import unit_card
+    from royale.vision import constants as C
+    from royale.vision.detectors.side_detector import SideDetector
+    import os
+    side = SideDetector(os.path.join(C.MODELS_DIR, "side.onnx"))
+    samples = []
+    for p in pics:
+        try:
+            meta = json.loads(p.with_suffix(".json").read_text(encoding="utf-8"))
+            fr = cv2.cvtColor(cv2.imread(str(p)), cv2.COLOR_BGR2RGB)
+        except Exception:
+            continue
+        h = fr.shape[0]
+        pil = Image.fromarray(fr)
+        for name, cf, x0, y0, x1, y1 in meta.get("boxes", []):
+            u = strong_eyes.unit_name(name)
+            if not u or cf < 0.6: continue
+            cn = unit_card(u)
+            if mine and cn and cn not in mine:
+                samples.append((fr, (x0, y0, x1, y1), "enemy")); continue
+            try: sd = side.run(pil.crop((int(x0), int(y0), int(x1) + 1, int(y1) + 1)))
+            except Exception: continue
+            low = (y0 + y1) / 2 > h / 2                           # our half is the bottom of the arena picture
+            if sd == "ally" and low: samples.append((fr, (x0, y0, x1, y1), "ally"))
+            elif sd == "enemy" and not low: samples.append((fr, (x0, y0, x1, y1), "enemy"))
+    res = calibrate(samples)
+    log(f"team colours measured on {len(pics)} battle pictures: ours {res['n']['ally']} badges -> {res['ally']}, "
+        f"theirs {res['n']['enemy']} -> {res['enemy']}" + (" — they overlapped, the defaults stay" if res.get("overlap") else ""))
+    return res

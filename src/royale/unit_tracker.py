@@ -14,9 +14,12 @@ Every unit in the arena followed over its life (6.6): a persistent track id, its
            three times, a flickering side model can no longer turn it into one of ours (the bot never spells its
            own troops); a brand new track takes the side of the half it appeared on until a colour is read
   predict  predict_position(track_id, spell): where the unit will be when the spell lands — the look's age + the
-           tap until the card is down + the spell's own delay + its flight from our king tower — moving on its
-           speed, stopped at the tower it will hit, kept inside the arena
-  eta      seconds until a unit reaches hitting range of the nearest tower of the other side
+           tap until the card is down + the spell's own delay + its flight from our king tower — walked along its
+           PATH (6.7): over its lane's bridge, then to the tower / building it goes for, stopped where its range
+           reaches it; a unit whose heading is far from that path (chasing a troop) keeps its measured line
+  eta      seconds until a unit is hitting the tower / building it walks to (the same path)
+  ghosts   a followed unit missing from a look for up to 0.4 s (a spell's flash covered it) stays in the battle
+           state, moved on its speed — unless its health bar was at the end or the spell that landed kills it
 
 Pure numpy + scipy (already used by the card reader): ~0.2 ms a look for 30 units.
 """
@@ -80,8 +83,9 @@ class Track:
         self.id = Track._ids
         self.s = np.array([d.x, d.y, 0.0, 0.0])          # x, y, vx, vy (tiles, tiles / s)
         self.P = np.diag([0.35 ** 2, 0.35 ** 2, 1.5 ** 2, 1.5 ** 2])
-        self.t = self.born = t
+        self.t = self.born = self.seen = t        # t: the filter's time; seen: the last look it was really seen
         self.hits, self.miss = 1, 0
+        self.life = None                          # 0..1 from its health bar when read (royale.health)
         self.names = {d.name: float(d.conf)}
         self.team_v = {"ally": 0.0, "enemy": 0.0}
         # a new unit belongs to the half it appeared on until it is seen better (a weak vote, 0.5)
@@ -154,6 +158,7 @@ class Track:
             self.s[2:] *= 3.5 / sp
         self.hits += 1
         self.miss = 0
+        self.seen = self.t
         self.names[d.name] = self.names.get(d.name, 0.0) + float(d.conf)
         self._vote_team(d)
         self.conf = 0.7 * self.conf + 0.3 * float(d.conf)
@@ -178,6 +183,7 @@ class UnitTracker:
     def __init__(self):
         self.tracks = []
         self.t = 0.0
+        self.down = set()           # towers already down: ("our" | "their", "left" | "right" | "king")
 
     def reset(self):
         self.tracks = []
@@ -225,7 +231,8 @@ class UnitTracker:
                 tr = Track(d, t)
                 self.tracks.append(tr)
                 out[i] = tr
-        self.tracks = [tr for tr in self.tracks if t - tr.t <= self.KEEP or tr.miss == 0]
+        # unseen for KEEP seconds: gone (6.7: by the last time it was SEEN — the filter's own time moves every look)
+        self.tracks = [tr for tr in self.tracks if t - tr.seen <= self.KEEP]
         return [(d, tr) for d, tr in zip(dets, out)]
 
     # -------------------------------------------------------------- what the brain asks
@@ -244,32 +251,87 @@ class UnitTracker:
             if d <= within and (best is None or d < best[0]): best = (d, tr)
         return best[1] if best else None
 
-    def _stop_at(self, tr, x, y, vx, vy, T):
-        """A unit walking for T seconds, stopped where it reaches hitting range of the tower in its way."""
-        towers = OUR_TOWERS if tr.team == "enemy" else THEIR_TOWERS
-        rng = 1.0
+    # -------------------------------------------------------------- where a unit walks (6.7: by its path)
+    def _card(self, tr):
         try:
             from royale.brain import card, unit_card
-            rng = float(card(unit_card(tr.name) or "").get("range") or 1.0)
+            return card(unit_card(tr.name) or "") or {}
         except Exception:
-            pass
+            return {}
+
+    def _targets(self, tr, c):
+        """What this unit walks to: the other side's towers still up (+ their half size) and, for a ground unit,
+        the other side's buildings it sees (a Hog Rider pulled by a Cannon); a building-only unit (Hog, Giant,
+        Balloon, Ram) only these. -> [(x, y, half size)]"""
+        side = "our" if tr.team == "enemy" else "their"
+        towers = OUR_TOWERS if tr.team == "enemy" else THEIR_TOWERS
+        out = [(x, y, 2.0 if k == "king" else 1.5) for k, (x, y) in towers.items() if (side, k) not in self.down]
+        for o in self.tracks:
+            if o.team == tr.team or o.miss > 2: continue
+            oc = self._card(o)
+            if oc.get("kind") == "building" or oc.get("type") == "building":
+                out.append((o.x, o.y, 1.0))
+        return out
+
+    def _walk(self, tr, x, y, vx, vy, T, dt=0.05):
+        """The unit's place after T seconds along its PATH: to the bridge of its lane first when the river is between
+        it and its target (ground units), then to the nearest target (a tower / a building it is drawn to), stopping
+        where its range reaches it. A unit whose measured heading is far from that path is chasing a troop: it
+        keeps its measured line (and stops at a tower if it meets one). -> (x, y, seconds until it stopped or T)."""
+        c = self._card(tr)
+        if c.get("kind") == "building": return x, y, 0.0        # buildings never walk
+        rng = float(c.get("range") or 1.0)
+        air = bool(c.get("air"))
+        bonly = bool(c.get("buildings_only"))
+        sp = math.hypot(vx, vy)
+        walk = (c.get("speed") or 60) / 60.0
+        speed = sp if sp >= 0.15 else walk                 # just placed / waiting: its own walking speed
+        targets = self._targets(tr, c)
+        if not targets: return x, y, T
+        down_side = tr.team == "enemy"                      # theirs walk toward y = 0
+        px, py, t, first = x, y, 0.0, None
+        while t < T:
+            # the target: the nearest one (a building-only unit: buildings and towers alike; others: the towers,
+            # or a building within its sight range ~5.5 tiles)
+            cand = [(math.hypot(px - tx, py - ty), tx, ty, hs) for tx, ty, hs in targets
+                    if bonly or hs >= 1.5 or math.hypot(px - tx, py - ty) <= 5.5]
+            if not cand: return px, py, T
+            d, tx, ty, hs = min(cand)
+            if d <= rng + hs: return px, py, t              # in range: it stands and hits
+            wx, wy = tx, ty
+            if not air:
+                across = (py > RIVER_Y + 1.0 and ty < RIVER_Y) if down_side else (py < RIVER_Y and ty > RIVER_Y + 1.0)
+                if across:                                  # the river: over its lane's bridge first
+                    wx = 3.5 if px < 9 else 14.5
+                    wy = RIVER_Y + 0.5
+            hx, hy = wx - px, wy - py
+            n = math.hypot(hx, hy) or 1.0
+            if first is None:
+                first = (hx / n, hy / n)
+                if sp >= 0.4 and (vx * first[0] + vy * first[1]) / sp < 0.26:     # > 75 degrees off its path
+                    return self._line(tr, x, y, vx, vy, T, targets, rng)
+            step = min(speed * dt, n)
+            px, py = px + hx / n * step, py + hy / n * step
+            t += dt
+        return px, py, T
+
+    @staticmethod
+    def _line(tr, x, y, vx, vy, T, targets, rng):
+        """Its measured line, stopped where it first gets a target in range."""
         stop = T
-        for tx, ty in towers.values():
-            # the first moment its distance to the tower is within (range + the tower's half size)
-            reach = rng + 1.5
+        a = vx * vx + vy * vy
+        for tx, ty, hs in targets:
+            reach = rng + hs
             fx, fy = x - tx, y - ty
-            a = vx * vx + vy * vy
-            if a < 1e-6:
-                continue
-            b = 2 * (fx * vx + fy * vy)
             c = fx * fx + fy * fy - reach * reach
-            if c <= 0:
-                stop = 0.0; break                         # it is already hitting it: it stands
+            if c <= 0: return x, y, 0.0
+            if a < 1e-6: continue
+            b = 2 * (fx * vx + fy * vy)
             disc = b * b - 4 * a * c
             if disc < 0: continue
             t1 = (-b - math.sqrt(disc)) / (2 * a)
             if 0 <= t1 < stop: stop = t1
-        return x + vx * stop, y + vy * stop
+        return x + vx * stop, y + vy * stop, stop
 
     def predict_position(self, track_id, spell, now=None, from_xy=None):
         """Where track `track_id` will be when `spell` takes effect, if cast now -> (x, y) tiles, or None."""
@@ -282,42 +344,38 @@ class UnitTracker:
         wait, sp = _timing(spell)
         fx, fy = from_xy or (OUR_TOWERS["king"] if tr.team == "enemy" else THEIR_TOWERS["king"])
         T = TAP_DELAY + wait
-        if sp:                                            # its flight: solved twice (the target moves meanwhile)
+        px, py, _ = self._walk(tr, x, y, vx, vy, T)
+        if sp:                                            # its flight: solved again for where it will then be
             for _ in range(2):
-                px, py = x + vx * T, y + vy * T
                 T = TAP_DELAY + wait + math.hypot(px - fx, py - fy) / sp
-        px, py = self._stop_at(tr, x, y, vx, vy, T)
+                px, py, _ = self._walk(tr, x, y, vx, vy, T)
         return (min(ARENA_W - 0.5, max(0.0, px)), min(ARENA_H - 0.5, max(0.0, py)))
 
     def eta(self, track_id, now=None):
-        """Seconds until the unit reaches hitting range of the nearest tower of the other side (inf: never)."""
+        """Seconds until the unit is hitting the tower / building it walks to (inf: not within 20 s)."""
         tr = self.get(track_id)
         if tr is None: return math.inf
         now = time.monotonic() if now is None else now
         x, y = tr.at(now)
-        vx, vy = tr.vx, tr.vy
-        sp = math.hypot(vx, vy)
-        towers = OUR_TOWERS if tr.team == "enemy" else THEIR_TOWERS
-        rng = 1.0
-        try:
-            from royale.brain import card, unit_card
-            c = card(unit_card(tr.name) or "")
-            rng = float(c.get("range") or 1.0)
-            walk = (c.get("speed") or 60) / 60.0
-        except Exception:
-            walk = 1.0
-        best = math.inf
-        for tx, ty in towers.values():
-            d = max(0.0, math.hypot(x - tx, y - ty) - rng - 1.5)
-            if d == 0: return 0.0
-            # its own walking speed toward it when it is not moving yet (just placed)
-            v = sp if sp >= 0.15 else walk
-            if sp >= 0.15:
-                toward = ((tx - x) * vx + (ty - y) * vy) / max(1e-6, math.hypot(tx - x, ty - y))
-                if toward <= 0.1: continue                # walking away from this one
-                v = toward
-            best = min(best, d / max(0.1, v))
-        return best
+        _x, _y, t = self._walk(tr, x, y, tr.vx, tr.vy, 20.0, dt=0.1)
+        return math.inf if t >= 20.0 else t
+
+    # -------------------------------------------------------------- hidden for a moment (6.7)
+    GHOST = 0.4
+
+    def ghosts(self, now=None, dead=None):
+        """Followed units NOT seen in this look but seen within GHOST seconds (a Fireball / Lightning flash, a unit
+        behind another): still there, moved on their speed — so the battle engine does not plan as if they died
+        and change its mind when they come back. Not when its health bar was at the end or `dead(track)` says a
+        spell that landed on it kills it."""
+        now = time.monotonic() if now is None else now
+        out = []
+        for tr in self.tracks:
+            if tr.miss == 0 or tr.hits < 3 or now - tr.seen > self.GHOST: continue
+            if tr.life is not None and tr.life <= 0.1: continue
+            if dead is not None and dead(tr): continue
+            out.append(tr)
+        return out
 
     def snapshot(self, now=None):
         now = time.monotonic() if now is None else now
@@ -325,6 +383,7 @@ class UnitTracker:
         for tr in self.tracks:
             if tr.hits < self.CONFIRM and now - tr.born < 0.3: continue
             d = tr.as_dict(now)
+            d["ghost"] = tr.miss > 0
             e = self.eta(tr.id, now)
             d["eta"] = None if math.isinf(e) else round(e, 1)
             out.append(d)

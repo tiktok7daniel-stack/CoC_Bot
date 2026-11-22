@@ -176,6 +176,7 @@ class RoyaleBot:
         try:
             self.eyes.tracker.reset()
             self.eyes.two_v_two = bool(self.brain.p.get("2v2"))
+            self.eyes.dual = bool(self.s.get("dual_eyes", False))     # 6.7: one detector unless asked for both
             self.brain.tracker = self.eyes.tracker
         except Exception:
             pass
@@ -418,6 +419,7 @@ class RoyaleBot:
                 from royale import strong_eyes as _se
                 rep["eyes_gpu"] = ort_gpu.on_gpu()
                 rep["eyes_same_moment"] = _se.same_moment()
+                rep["one_detector_looks"] = int(getattr(self.eyes, "single_used", 0))
             except Exception:
                 pass
             try:
@@ -1106,7 +1108,7 @@ def _engine_turn(self, st, d, ready, el):
         d["why"] = f"{d['why']} | {why}"
         return d
     if d: self.brain.undo(d)
-    return self.brain.play_ai(i, n, tile, why, time.monotonic())
+    return self.brain.play_ai(i, n, tile, why, time.monotonic(), engine_ok=True)   # weighed with card_use.penalty
 
 
 RoyaleBot._engine_turn = _engine_turn
