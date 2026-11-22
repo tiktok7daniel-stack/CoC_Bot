@@ -21,6 +21,9 @@ from pathlib import Path
 # 6.9: no page-locked ("pinned") RAM for the picture loaders — on a laptop it ran out ("CUDA error: out of memory" in
 # the pin-memory thread while the card itself used 0.8 GB). Read by ultralytics when it is first imported.
 os.environ["PIN_MEMORY"] = "False"
+# 6.9.10: ultralytics must not pip-install packages in the middle of a training (its ONNX export installed
+# onnxruntime-gpu over the onnxruntime already loaded: "No module named onnxruntime.capi..." in the same process)
+os.environ["YOLO_AUTOINSTALL"] = "False"
 
 ROOT = Path.home() / ".CoC_Bot" / "royale_hand"
 DATA = ROOT / "data"
@@ -167,6 +170,21 @@ def take_roboflow(key, known):
 
 
 def evaluate(onnx_path, classes, only=None):
+    """In this process, or — when its onnxruntime is broken (a package changed under it) — in a fresh one."""
+    try:
+        return _evaluate(onnx_path, classes, only)
+    except (ImportError, ModuleNotFoundError, AttributeError) as e:
+        import subprocess
+        _log(f"testing in a fresh process ({type(e).__name__})")
+        r = subprocess.run([sys.executable, "-m", "royale.hand_train", "--eval", str(onnx_path), json.dumps(classes),
+                            only or ""], capture_output=True, text=True, timeout=1800,
+                           cwd=str(Path(__file__).resolve().parent.parent))
+        line = next((l for l in r.stdout.splitlines() if l.startswith("EVAL ")), None)
+        if not line: raise RuntimeError(f"the test failed: {(r.stdout + r.stderr)[-300:]}")
+        return json.loads(line[5:])
+
+
+def _evaluate(onnx_path, classes, only=None):
     """Top-1 (card AND look, and the card alone) of the exported model on the test pictures, read exactly the way the
     bot reads the hand (royale.hand_classifier squashing, the same session). only: "rf" / "syn" / None."""
     import cv2, numpy as np
@@ -276,4 +294,9 @@ def run(epochs=30, only=None):
 
 if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    run()
+    if "--eval" in sys.argv:
+        i = sys.argv.index("--eval")
+        res = _evaluate(sys.argv[i + 1], json.loads(sys.argv[i + 2]), (sys.argv[i + 3] if len(sys.argv) > i + 3 else "") or None)
+        print("EVAL " + json.dumps(res), flush=True)
+    else:
+        run()

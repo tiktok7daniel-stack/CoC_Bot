@@ -20,6 +20,9 @@ from pathlib import Path
 # 6.9: no page-locked ("pinned") RAM for the picture loaders — on a laptop it ran out ("CUDA error: out of memory" in
 # the pin-memory thread while the card itself used 0.8 GB). Read by ultralytics when it is first imported.
 os.environ["PIN_MEMORY"] = "False"
+# 6.9.10: ultralytics must not pip-install packages in the middle of a training (its ONNX export installed
+# onnxruntime-gpu over the onnxruntime already loaded: "No module named onnxruntime.capi..." in the same process)
+os.environ["YOLO_AUTOINSTALL"] = "False"
 
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")   # less fragmented card memory
 HOME = Path.home() / ".CoC_Bot"
