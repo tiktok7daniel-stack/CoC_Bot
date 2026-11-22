@@ -559,11 +559,11 @@ def start(deck, acc="main", log=None):
     except OSError: pass
     kw = {}
     if os.name == "nt":
-        kw["creationflags"] = 0x00004000 | 0x08000000                    # below normal, no window
-    out = open(HOME / "train.log", "a", encoding="utf-8")
+        kw["creationflags"] = 0x00000010 | 0x00000020                    # its own window, normal priority (6.02)
     py = sys.executable
+    if py.lower().endswith("pythonw.exe"): py = py[:-len("pythonw.exe")] + "python.exe"
     p = subprocess.Popen([py, "-u", "-m", "royale.exit_train", "--deck", ",".join(deck), "--acc", str(acc)],
-                         cwd=str(_root() / "src"), stdout=out, stderr=subprocess.STDOUT, **kw)
+                         cwd=str(_root() / "src"), **kw)
     _pid().write_text(str(p.pid))
     return True, "the AI trains with the engine's answers (Expert Iteration)"
 
@@ -586,4 +586,22 @@ if __name__ == "__main__":
     ap.add_argument("--ticks", type=int, default=1800)
     a = ap.parse_args()
     sys.path.insert(0, str(_root() / "src"))
+
+    class _Tee:                                     # what the window shows is also kept in train.log
+        def __init__(self, s):
+            self.s = s
+            HOME.mkdir(parents=True, exist_ok=True)
+            self.f = open(HOME / "train.log", "a", encoding="utf-8")
+        def write(self, x):
+            try: self.s.write(x)
+            except Exception: pass
+            self.f.write(x); self.f.flush()
+        def flush(self):
+            try: self.s.flush()
+            except Exception: pass
+    sys.stdout = _Tee(sys.stdout)
+    if os.name == "nt":
+        try: __import__("ctypes").windll.kernel32.SetConsoleTitleW("Clash Farmer — الذكاء الاصطناعي بيلعب ضد نفسه ويتعلم")
+        except Exception: pass
+    print("=" * 70 + "\n  Clash Farmer: the AI plays itself in the battle engine and learns what wins\n" + "=" * 70)
     run(a.deck.split(","), a.acc, a.hours, a.workers or None, a.games or None, a.epochs, a.gate, a.ticks)

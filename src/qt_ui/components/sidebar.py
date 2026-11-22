@@ -13,13 +13,13 @@ from ..i18n import on_lang, tr
 from ..theme import TOKENS, color, ui_font
 
 NAV = [
-    ("royale_home", "nv_royale_home", "home"), ("royale_ai", "nv_royale_ai", "eye"), ("royale", "nv_royale", "sliders"),
+    ("royale_home", "nv_royale_home", "home"), ("royale_ai", "nv_royale_ai", "eye"), ("royale_training", "nv_royale_training", "school"), ("royale", "nv_royale", "sliders"),
     ("dash", "nv_home", "trophy"), ("deck", "nv_deck", "bolt"), ("acc", "nv_acc", "id"), ("atk", "nv_atk", "swords"), ("bb", "nv_bb", "moon"),
     ("res", "nv_stats", "chart"), ("upg", "nv_village", "home"), ("teach", "nv_manager", "hammer"), ("learn", "nv_learn", "school"),
     ("log", "nv_log", "scroll"), ("set", "nv_bot", "bot"), 
 ]
 # Clash Royale mode: only its own screen (+ the general ones: accounts, the bot's settings / Telegram)
-ROYALE_KEYS = {"royale_home", "royale_ai", "royale", "acc", "set"}
+ROYALE_KEYS = {"royale_home", "royale_ai", "royale_training", "royale", "acc", "set"}
 SOON = []   # clan capital / clan war / chat removed: not part of the farming bot
 
 
@@ -201,7 +201,7 @@ class Sidebar(QFrame):
     def set_mode(self, royale):
         """Clash Royale: its screen only (+ accounts, settings); Clash of Clans: everything but the Royale screen."""
         for k, b in self.buttons.items():
-            b.setVisible((k in ROYALE_KEYS) if royale else (k not in ("royale", "royale_live", "royale_home", "royale_ai")))
+            b.setVisible((k in ROYALE_KEYS) if royale else (k not in ("royale", "royale_live", "royale_home", "royale_ai", "royale_training")))
 
     def set_active(self, key):
         for k, b in self.buttons.items(): b.setChecked(k == key)

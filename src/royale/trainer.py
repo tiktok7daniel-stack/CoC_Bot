@@ -489,9 +489,12 @@ def run(epochs=30, n_bulk=4):
         for attempt in range(2):
             try:
                 m = YOLO(start_w)
-                m.train(data=str(yaml_p), epochs=ep, imgsz=imgsz, batch=(6 if imgsz <= 800 else 4) if attempt == 0 else 2,
-                        device=0, patience=15, cos_lr=True, close_mosaic=10, workers=2, project=str(ROOT / "runs"),
-                        name=tag, exist_ok=True, plots=False, verbose=False, amp=attempt == 0)
+                bs = _gpu_batch(imgsz) if attempt == 0 else max(2, _gpu_batch(imgsz) // 2)
+                log(f"{tag}: training — {ep} rounds, pictures {imgsz}px, {bs} at a time on the graphics card")
+                m.train(data=str(yaml_p), epochs=ep, imgsz=imgsz, batch=bs,
+                        device=0, patience=15, cos_lr=True, close_mosaic=10,
+                        workers=max(2, min(8, (os.cpu_count() or 4) // 2)), project=str(ROOT / "runs"),
+                        name=tag, exist_ok=True, plots=False, verbose=True, amp=attempt == 0)
                 break
             except RuntimeError as e:
                 if attempt or not any(k in str(e).lower() for k in ("cudnn", "out of memory")): 
@@ -544,7 +547,10 @@ def start(acc="main"):
     """Its own low-priority process (the bot keeps playing)."""
     import subprocess
     kw = {}
-    if sys.platform == "win32": kw["creationflags"] = 0x08000000 | 0x00004000          # no window, below normal
+    if sys.platform == "win32":
+        # its own window you can watch (every download, every round, the score) and full speed (6.02); the bot
+        # keeps playing beside it
+        kw["creationflags"] = 0x00000010 | 0x00000020          # a new console, normal priority
     py = sys.executable
     if py.lower().endswith("pythonw.exe"): py = py[:-len("pythonw.exe")] + "python.exe"
     here = Path(__file__).resolve().parent.parent
@@ -553,11 +559,40 @@ def start(acc="main"):
     return True
 
 
+def _window_title(t):
+    if sys.platform == "win32":
+        try: __import__("ctypes").windll.kernel32.SetConsoleTitleW(t)
+        except Exception: pass
+
+
+def _gpu_batch(imgsz):
+    """As many pictures a step as the graphics card's free memory holds (6.02: was a fixed 6 / 4)."""
+    try:
+        import torch
+        free, _total = torch.cuda.mem_get_info()
+        per = 0.55 if imgsz <= 800 else 0.8               # GB a picture needs, about (YOLO m / l at that size)
+        return int(max(4, min(32, (free / 1e9 - 1.2) / per)))
+    except Exception:
+        return 6 if imgsz <= 800 else 4
+
+
 if __name__ == "__main__":
     if "--run" in sys.argv:
+        _window_title("Clash Farmer — تدريب عيون كلاش رويال (اقفل الشباك ده = يوقف التدريب)")
+        print("=" * 70)
+        print("  Clash Farmer: training the Clash Royale eyes on this PC's graphics card")
+        print("  every data source is downloaded, then two models train and the better one is kept")
+        print("=" * 70, flush=True)
         try:
             run()
         except Exception as e:
             import traceback
             log(traceback.format_exc())
             status(stage="error", error=f"{type(e).__name__}: {e}"[:300])
+        st = read_status()
+        print("\n" + "=" * 70)
+        print(f"  finished: {st.get('stage')} — accuracy {st.get('base_map50')} -> {st.get('new_map50')}"
+              f" — {'NEW EYES IN USE' if st.get('used') else 'the old eyes stay'}")
+        print("=" * 70, flush=True)
+        try: input("  Enter = close this window")
+        except Exception: pass

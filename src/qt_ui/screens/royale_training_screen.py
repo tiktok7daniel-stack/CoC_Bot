@@ -1,0 +1,190 @@
+"""
+Training — every learning part of the Clash Royale AI in one place (6.02, the user's request: "what is trained,
+what is being done, I want to see it"):
+
+  eyes          the arena detector (YOLO): what data it downloaded, its stage, its accuracy before -> after
+  self-play     the AI plays itself in the battle engine (Expert Iteration): rounds, versions that passed its test
+  play brains   the networks that choose the moves (learned from 252k pro games): their accuracy
+  own pictures  pictures of this PC's battles kept for the next training
+
+Each part says in one line what it is for, whether it is trained / training now, and has its buttons: start it, and
+"show the window" (a console that follows its log live).
+"""
+import json, os, subprocess, sys, time
+from pathlib import Path
+
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import QHBoxLayout, QWidget
+
+from ..i18n import on_lang, tr
+from ..theme import TOKENS
+from ..widgets.controls import GlassCard, IconButton, label
+from .base import Screen, page
+
+HOME = Path.home() / ".CoC_Bot"
+
+
+def _read(p):
+    try: return json.loads(Path(p).read_text(encoding="utf-8"))
+    except (OSError, ValueError): return {}
+
+
+def _ago(t):
+    if not t: return "—"
+    d = time.time() - float(t)
+    if d < 3600: return f"{int(d // 60)} min"
+    if d < 86400: return f"{int(d // 3600)} h"
+    return f"{int(d // 86400)} d"
+
+
+def _watch(log_path, title):
+    """A console window that follows a training log live (works while the training runs on its own)."""
+    if sys.platform != "win32" or not Path(log_path).exists(): return False
+    cmd = (f"$Host.UI.RawUI.WindowTitle='{title}'; Get-Content -Path '{log_path}' -Wait -Tail 60 -Encoding UTF8")
+    subprocess.Popen(["powershell", "-NoExit", "-NoProfile", "-Command", cmd], creationflags=0x00000010)
+    return True
+
+
+class RoyaleTrainingScreen(Screen):
+    key, title_key, icon_name = "royale_training", "rtr_title", "school"
+
+    def __init__(self, ctx):
+        super().__init__(ctx)
+        sa, v = page(14)
+        from PySide6.QtWidgets import QLayout
+        v.setSizeConstraint(QLayout.SetMinimumSize)      # the page grows with its text (and scrolls)
+        self.root.addWidget(sa)
+        intro = label(key="rtr_intro", wrap=True)
+        intro.setProperty("role", "sub")
+        v.addWidget(intro)
+
+        def card(title, icon, sub, buttons):
+            c = GlassCard(title, icon, sub, pad=16)
+            txt = label("", wrap=True)
+            txt.setTextFormat(Qt.RichText)
+            c.add(txt)
+            row = QHBoxLayout()
+            for key, ic, kind, fn in buttons:
+                b = IconButton(ic, key, kind=kind, size=14)
+                b.setMinimumHeight(38); b.setMinimumWidth(170)
+                b.clicked.connect(fn)
+                row.addWidget(b)
+            row.addStretch(1)
+            hold = QWidget(); hold.setLayout(row)
+            c.add(hold)
+            v.addWidget(c)
+            return txt
+
+        self.t_eyes = card("rtr_eyes", "eye", "rtr_eyes_sub", [
+            ("rtr_train_eyes", "play", "go", self.train_eyes),
+            ("rtr_watch", "terminal", None, lambda: self.watch(HOME / "royale_train" / "train.log", "eyes"))])
+        self.t_self = card("rtr_self", "bolt", "rtr_self_sub", [
+            ("rtr_train_self", "play", "go", self.train_self),
+            ("rtr_stop", "stop", None, self.stop_self),
+            ("rtr_watch", "terminal", None, lambda: self.watch(HOME / "royale_ai" / "exit" / "train.log", "self"))])
+        self.t_brain = card("rtr_brain", "school", "rtr_brain_sub", [])
+        v.addStretch(1)
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.refresh)
+        self.timer.start(2000)
+        on_lang(self.refresh)
+
+    # ------------------------------------------------------------------ buttons
+    def watch(self, path, what):
+        if not _watch(path, tr("rtr_eyes") if what == "eyes" else tr("rtr_self")):
+            self.ctx.banner(tr("rtr_no_log"), "bad", "x")
+
+    def train_eyes(self):
+        try:
+            from royale import trainer
+            st = trainer.read_status()
+            if st.get("stage") not in (None, "done", "error", "none", "no_gpu") and time.time() - st.get("t", 0) < 3 * 3600:
+                self.ctx.banner(tr("rtr_already"), "ok", "school"); return
+            trainer.start(self.store.account or "main")
+            self.ctx.banner(tr("rtr_started_eyes"), "ok", "school")
+        except Exception as e:
+            self.ctx.banner(str(e), "bad", "x")
+
+    def train_self(self):
+        try:
+            from royale import exit_train
+            miss = exit_train.missing()
+            if miss:
+                self.ctx.banner(tr("royale_ai_missing") + ", ".join(miss), "bad", "x"); return
+            deck = list(self.store.get("royale.deck", []) or [])
+            if len(deck) != 8:
+                self.ctx.banner(tr("rh_need_deck"), "bad", "x"); return
+            ok, msg = exit_train.start(deck, self.store.account or "main")
+            self.ctx.banner(tr("rh_train_started") if ok else msg, "ok" if ok else "bad", "bolt")
+        except Exception as e:
+            self.ctx.banner(str(e), "bad", "x")
+
+    def stop_self(self):
+        try:
+            from royale import exit_train
+            exit_train.stop()
+            self.ctx.banner(tr("rh_train_stopping"), "ok", "stop")
+        except Exception as e:
+            self.ctx.banner(str(e), "bad", "x")
+
+    def on_show(self):
+        self.refresh()
+
+    # ------------------------------------------------------------------ what each part shows
+    def refresh(self):
+        if not self.isVisible(): return
+        g, r, y = "#4ade80", "#f87171", TOKENS.get("gold", "#f5b740")
+        # the eyes
+        st = _read(HOME / "royale_train" / "status.json")
+        stage = st.get("stage") or "none"
+        running = stage not in ("none", "done", "error", "no_gpu") and time.time() - float(st.get("t", 0)) < 3 * 3600
+        lines = [f"<b>{tr('rtr_state')}:</b> " + (f"<span style='color:{y}'>● {tr('rtr_running')}</span> — "
+                                                  if running else "") + (tr("rt_" + stage) if tr("rt_" + stage) != "rt_" + stage else stage)
+                 + (f" — {st['note']}" if st.get("note") else "")]
+        if st.get("base_map50") is not None and st.get("new_map50") is not None:
+            used = st.get("used")
+            lines.append(f"<b>{tr('rtr_accuracy')}:</b> {100 * st['base_map50']:.1f}% → {100 * st['new_map50']:.1f}% "
+                         + (f"<span style='color:{g}'>✅ {tr('rt_used')}</span>" if used else f"({tr('rtr_kept_old')})"))
+        if st.get("finished"): lines.append(f"<b>{tr('rtr_last')}:</b> {_ago(st['finished'])}")
+        data = st.get("data") or {}
+        if data:
+            tot = sum(int(d.get("n", 0)) for d in data.values())
+            lines.append(f"<br><b>📦 {tr('rt_data_list')} — {tot:,}</b>")
+            for name, d in data.items():
+                n = int(d.get("n", 0))
+                lines.append(f"{'✅' if n else '⚠'} {name}: <b>{n:,}</b>" + (f" <small>({d['note']})</small>" if d.get("note") else ""))
+        if st.get("pictures"): lines.append(f"🖼 {tr('rt_pictures')}: <b>{int(st['pictures']):,}</b>")
+        if st.get("error"): lines.append(f"<span style='color:{r}'>⚠ {st['error']}</span>")
+        self._set(self.t_eyes, lines)
+        # self-play
+        pr = _read(HOME / "royale_ai" / "exit" / "progress.json")
+        try:
+            from royale import exit_train
+            on = exit_train.running()
+        except Exception:
+            on = False
+        sl = [f"<b>{tr('rtr_state')}:</b> " + (f"<span style='color:{y}'>● {tr('rtr_running')}</span>" if on else tr("rh_train_off"))]
+        if pr:
+            sl.append(f"<b>{tr('rh_round')}:</b> {pr.get('iteration', 0)} · <b>{tr('rtr_answers')}:</b> {int(pr.get('answers', 0)):,}"
+                      f" · <b>{tr('rh_versions')}:</b> {pr.get('accepted', 0)}"
+                      + (f" · <b>{tr('rh_last')}:</b> {int(100 * float(pr.get('last_score', 0)))}%" if pr.get('last_score') is not None else ""))
+            sl.append(f"<b>{tr('rtr_last')}:</b> {_ago(pr.get('t'))}")
+        else:
+            sl.append(tr("rh_train_never"))
+        self._set(self.t_self, sl)
+        # the play brains + own pictures
+        bl = []
+        try:
+            from royale import policy, board as _bb, frames
+            ti, bi = policy.info(), _bb.info()
+            if ti: bl.append(f"🧠 {tr('rt_policy')}: <b>{100 * ti.get('card_in_hand', 0):.0f}% / {100 * ti.get('play', 0):.0f}%</b>")
+            if bi: bl.append(f"🧩 {tr('rt_board')}: <b>{100 * bi.get('card_in_hand', 0):.0f}% / {100 * bi.get('tile_within1', 0):.0f}%</b>")
+            bl.append(f"📷 {tr('rt_frames')}: <b>{frames.count():,}</b>")
+        except Exception:
+            pass
+        self._set(self.t_brain, bl or ["—"])
+
+    @staticmethod
+    def _set(lab, lines):
+        lab.setText("<br>".join(lines))
+        lab.setMinimumHeight(24 * sum(1 + l.count("<br>") for l in lines) + 6)   # every line shows
