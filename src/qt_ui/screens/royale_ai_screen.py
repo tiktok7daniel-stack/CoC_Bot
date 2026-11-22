@@ -191,15 +191,13 @@ class RoyaleAiScreen(Screen):
             self._pop.raise_(); self._pop.activateWindow(); return
         w = QWidget(None, Qt.Window | Qt.WindowStaysOnTopHint)
         w.setWindowTitle(tr("ra_title"))
-        w.setStyleSheet(f"background: {TOKENS['void']}; color: {TOKENS['text']};")
-        lay = QHBoxLayout(w)
-        lay.setContentsMargins(6, 6, 6, 6)
-        pic = AiPicture()
-        info = QLabel(); info.setWordWrap(True); info.setTextFormat(Qt.RichText); info.setAlignment(Qt.AlignTop)
-        info.setFont(ui_font(9.5)); info.setMinimumWidth(260)
-        lay.addWidget(pic, 3); lay.addWidget(info, 2)
-        w.resize(820, 860)
-        w._pic, w._info = pic, info
+        w.setStyleSheet(f"background: {TOKENS['void']};")
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(0, 0, 0, 0)
+        pic = AiPicture()                            # only the game, live (the user's wish: no map, no panel)
+        lay.addWidget(pic, 1)
+        w.resize(460, 820)
+        w._pic, w._info = pic, None
         self._pop = w
         w.show()
         self.refresh(force=True)
@@ -224,7 +222,6 @@ class RoyaleAiScreen(Screen):
         self.panel.setText(txt)
         if popped:
             self._pop._pic.set_data(d, p.with_suffix(".jpg"))
-            self._pop._info.setText(txt)
 
     def text(self, d):
         if d.get("phase") != "battle": return tr("ra_none")

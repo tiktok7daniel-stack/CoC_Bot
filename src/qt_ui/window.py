@@ -287,6 +287,7 @@ class MainWindow(QMainWindow):
 
     # ---------------------------------------------------------------- navigation
     def show_screen(self, key, sub=None):
+        if key == "royale_live": key = "royale_ai"           # the old map view: replaced by the live game screen
         if key == "switch_game":
             self.choose_game(force=True)
             return

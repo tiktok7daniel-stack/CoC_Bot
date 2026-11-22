@@ -84,9 +84,14 @@ class LiveVideo:
                     if config: data, config = config + data, b""
                     try:
                         frames = codec.decode(av.Packet(data))
+                        bad = 0
                     except Exception:
-                        if not self.hw: raise
-                        codec = av.CodecContext.create("h264", "r"); self.hw = False
+                        # joined in the middle of the video: pictures before the next key picture (at most 1 s)
+                        # cannot be decoded — skipped, not a reason to drop the connection (5.94)
+                        bad = locals().get("bad", 0) + 1
+                        if bad > 400: raise
+                        if self.hw and bad > 200:
+                            codec = av.CodecContext.create("h264", "r"); self.hw = False
                         continue
                     for fr in frames:
                         n += 1

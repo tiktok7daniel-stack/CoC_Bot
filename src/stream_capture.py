@@ -216,7 +216,7 @@ class Stream:
                 data = self._recv(size)
                 _relay(head + data, bool(pts & (1 << 63)))   # the app's own screen (compressed, as it came)
                 if pts & (1 << 63):              # SPS/PPS: goes in front of the next picture
-                    config = data
+                    config = self._last_config = data
                     continue
                 if config:
                     data, config = config + data, b""
@@ -228,6 +228,7 @@ class Stream:
                     if not self.hw: raise
                     codec, self.hw = av.CodecContext.create("h264", "r"), False     # the card refused: processor
                     frs = []
+                    config = getattr(self, "_last_config", b"")    # the new decoder needs the setup again
                 for fr in frs:
                     self.frame, self.frame_t = fr, time.monotonic()
                     self.frames += 1
