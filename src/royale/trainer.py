@@ -25,10 +25,11 @@ MODELS = HOME / "models"
 HF = "https://huggingface.co"
 REPO = "SudhishNeel/clash-royale-detection"
 BASE_PT_URL = "https://huggingface.co/SudhishNeel/clash-royale-detector/resolve/main/v8/best.pt"
-RECIPE = 2                    # 5.82: honest test, all KataCR, two candidates — a new recipe trains again at once
+RECIPE = 3                    # 5.98: + 2 Roboflow sets, generated pictures layered — a new recipe trains again at once
 DEFAULT_ROBOFLOW = ["yolotrain-c7s7v/clash-royale-ut3g8/4", "clashroyale/clash-royale-of3d3/3",
                     "angelfire/clash-royale-cylln/5", "clash-pxdrz/clash_grid/1", "dampiix/clash-royale-units/1",
-                    "nathan-yan/clash-royale-detection-cysig/7"]
+                    "nathan-yan/clash-royale-detection-cysig/7",
+                    "test-0hg7f/clash-royal-cujfo", "cla-09vin/clash-royale-cylln-pb9jx/5"]   # the user's finds (5.98)
 
 
 def status(**kw):
@@ -218,8 +219,16 @@ def take_roboflow(names, key, datasets):
     total = 0
     for ds in datasets:
         try:
-            ws, proj, ver = ds.strip("/").split("/")[:3]
-            status(stage="data_roboflow", note=ds)
+            parts = ds.strip("/").split("/")
+            ws, proj = parts[0], parts[1]
+            ver = parts[2] if len(parts) > 2 else None
+            if not ver:                                   # no version given: the project's newest one
+                pj = requests.get(f"https://api.roboflow.com/{ws}/{proj}", params={"api_key": key}, timeout=60).json()
+                vs = [str(v.get("id", "")).rsplit("/", 1)[-1] for v in (pj.get("versions") or [])]
+                vs = [v for v in vs if v.isdigit()]
+                if not vs: log(f"Roboflow {ds}: no version ({str(pj)[:120]})"); continue
+                ver = str(max(map(int, vs)))
+            status(stage="data_roboflow", note=f"{ws}/{proj}/{ver}")
             info = requests.get(f"https://api.roboflow.com/{ws}/{proj}/{ver}/yolov8", params={"api_key": key},
                                 timeout=120).json()
             link = (info.get("export") or {}).get("link")
@@ -244,10 +253,10 @@ def take_roboflow(names, key, datasets):
                     if len(p) == 5 and remap.get(int(float(p[0]))) is not None:
                         rows.append((remap[int(float(p[0]))], *map(float, p[1:])))
                 if not rows: continue
-                sp = _split(stem)
+                tag = f"rf_{proj}_{stem}"
+                sp = _split(tag)
                 (DATA / "images" / sp).mkdir(parents=True, exist_ok=True)
                 (DATA / "labels" / sp).mkdir(parents=True, exist_ok=True)
-                tag = f"rf_{proj}_{stem}"
                 (DATA / "images" / sp / f"{tag}{Path(img_name).suffix}").write_bytes(z.read(img_name))
                 (DATA / "labels" / sp / f"{tag}.txt").write_text(
                     "\n".join(f"{c} {x:.6f} {y:.6f} {w:.6f} {h:.6f}" for c, x, y, w, h in rows), encoding="utf-8")
@@ -318,14 +327,25 @@ def take_katacr(names, n_real=8000, n_synth=8000):
         if img is None: continue
         h, w = img.shape[:2]
         boxes = list(boxes)
-        for _ in range(random.randint(4, 12)):
+        plan = []
+        for _ in range(random.randint(4, 14)):
             c = random.choice(list(sprites))
             sp = cv2.imdecode(np.frombuffer(z.read(random.choice(sprites[c])), np.uint8), cv2.IMREAD_UNCHANGED)
             if sp is None or sp.ndim != 3 or sp.shape[2] != 4: continue
             if random.random() < 0.5: sp = sp[:, ::-1]
             sh, sw = sp.shape[:2]
             if sw >= w * 0.6 or sh >= h * 0.4: continue
-            x0 = random.randint(0, w - sw); y0 = random.randint(int(h * 0.05), max(int(h * 0.05) + 1, h - sh - int(h * 0.05)))
+            for _try in range(6):                     # not on top of another unit (a hidden unit is a wrong label)
+                x0 = random.randint(0, w - sw); y0 = random.randint(int(h * 0.05), max(int(h * 0.05) + 1, h - sh - int(h * 0.05)))
+                if all(x0 + sw * 0.7 < bx0 or bx1 < x0 + sw * 0.3 or y0 + sh * 0.7 < by0 or by1 < y0 + sh * 0.3
+                       for _c, bx0, by0, bx1, by1 in boxes): break
+            else:
+                continue
+            boxes.append((c, x0, y0, x0 + sw, y0 + sh))
+            plan.append((y0 + sh, c, sp, x0, y0))
+        boxes = boxes[:len(boxes) - len(plan)]
+        for _bottom, c, sp, x0, y0 in sorted(plan, key=lambda q: q[0]):   # back to front, as the game draws
+            sh, sw = sp.shape[:2]
             a = sp[:, :, 3:4].astype(np.float32) / 255.0
             roi = img[y0:y0 + sh, x0:x0 + sw].astype(np.float32)
             img[y0:y0 + sh, x0:x0 + sw] = (roi * (1 - a) + sp[:, :, :3].astype(np.float32) * a).astype(np.uint8)
@@ -374,7 +394,8 @@ def run(epochs=30, n_bulk=4):
     acc_cfg = {}
     try: acc_cfg = (settings.load(sys.argv[2] if len(sys.argv) > 2 else "main") or {}).get("royale", {})
     except Exception: pass
-    take_roboflow(names, (app.get("roboflow_api_key") or "").strip(), acc_cfg.get("roboflow_datasets") or DEFAULT_ROBOFLOW)
+    sets = list(dict.fromkeys(list(acc_cfg.get("roboflow_datasets") or []) + DEFAULT_ROBOFLOW))
+    take_roboflow(names, (app.get("roboflow_api_key") or "").strip(), sets)
     for take in (take_katacr, take_own):
         try:
             take(names)
