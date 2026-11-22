@@ -143,9 +143,12 @@ def take_roboflow(key, known):
         try:
             link, ws, proj, ver = rf_export(ds, key, "folder")
             if not link: continue
-            z = zipfile.ZipFile(io.BytesIO(_get(link).content))
+            from royale.trainer import fetch_zip, progress
+            z = fetch_zip(link, f"rf_{ws}_{proj}_{ver}_folder", f"hand cards {ws}/{proj}/{ver}")
             n = 0
-            for name in z.namelist():
+            names_all = z.namelist()
+            for k_, name in enumerate(names_all):
+                progress(f"hand cards {proj}", k_, len(names_all), 10000)
                 parts = name.split("/")
                 if len(parts) < 3 or not name.lower().endswith((".jpg", ".jpeg", ".png")): continue
                 split, cls = parts[-3].lower(), parts[-2]

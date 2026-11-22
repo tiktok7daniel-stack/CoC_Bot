@@ -14,7 +14,7 @@ Clash Royale eyes, trained on this PC by themselves (its NVIDIA card), from ever
 Runs in its own process (python -m royale.trainer), low priority, once a week at most (royale.auto_train).
 State: ~/.CoC_Bot/royale_train/status.json
 """
-import io, json, os, random, shutil, sys, time, zipfile
+import io, json, os, random, re, shutil, sys, time, zipfile
 from pathlib import Path
 
 # 6.9: no page-locked ("pinned") RAM for the picture loaders — on a laptop it ran out ("CUDA error: out of memory" in
@@ -117,6 +117,47 @@ def _get(url, dst=None, **kw):
         for c in r.iter_content(1 << 20): f.write(c)
     os.replace(tmp, dst)
     return dst
+
+
+DOWNLOADS = ROOT / "downloads"
+
+
+def fetch_zip(link, key, what):
+    """6.9.2: a dataset zip ON DISK (~/.CoC_Bot/royale_train/downloads/<key>.zip), downloaded once and reused by every
+    later training (before, every training downloaded all ~76k pictures again, into RAM, with no line printed).
+    A line every 5 s while it downloads: MB / total, speed. -> zipfile.ZipFile"""
+    DOWNLOADS.mkdir(parents=True, exist_ok=True)
+    dst = DOWNLOADS / (re.sub(r"[^A-Za-z0-9_.-]+", "_", key) + ".zip")
+    if dst.exists() and dst.stat().st_size > 0:
+        try:
+            z = zipfile.ZipFile(dst)
+            log(f"{what}: on disk already ({dst.stat().st_size / 1e6:.0f} MB) — not downloaded again")
+            return z
+        except zipfile.BadZipFile:
+            dst.unlink(missing_ok=True)
+    import requests
+    r = requests.get(link, stream=True, timeout=120)
+    r.raise_for_status()
+    total = int(r.headers.get("content-length") or 0)
+    tmp = Path(str(dst) + ".part")
+    got, t0, last = 0, time.time(), 0.0
+    with open(tmp, "wb") as f:
+        for c in r.iter_content(1 << 20):
+            f.write(c); got += len(c)
+            if time.time() - last >= 5:
+                last = time.time()
+                sp = got / 1e6 / max(0.1, time.time() - t0)
+                print(f"   {what}: downloading {got / 1e6:.0f}" + (f" / {total / 1e6:.0f} MB ({100 * got / total:.0f}%)"
+                      if total else " MB") + f" · {sp:.1f} MB/s", flush=True)
+    os.replace(tmp, dst)
+    log(f"{what}: downloaded {got / 1e6:.0f} MB in {int(time.time() - t0)} s")
+    return zipfile.ZipFile(dst)
+
+
+def progress(what, i, n, every=2000):
+    """A line every `every` pictures while a big dataset is sorted (it took minutes with nothing printed)."""
+    if i and i % every == 0:
+        print(f"   {what}: {i:,} / {n:,} pictures sorted", flush=True)
 
 
 # ------------------------------------------------------------------ 1. tools + base
@@ -319,14 +360,16 @@ def take_roboflow(names, key, datasets):
         try:
             link, ws, proj, ver = rf_export(ds, key, "yolov8")
             if not link: continue
-            z = zipfile.ZipFile(io.BytesIO(_get(link).content))
+            z = fetch_zip(link, f"rf_{ws}_{proj}_{ver}_yolov8", f"Roboflow {ws}/{proj}/{ver}")
             import yaml
             yml = next((n for n in z.namelist() if n.endswith("data.yaml")), None)
             rf_names = yaml.safe_load(z.read(yml))["names"] if yml else []
             if isinstance(rf_names, dict): rf_names = [rf_names[k] for k in sorted(rf_names)]
             remap = {i: idx.get(norm(n), idx.get(norm_rf(n))) for i, n in enumerate(rf_names)}
             n = 0
-            for name in z.namelist():
+            names_all = z.namelist()
+            for k_, name in enumerate(names_all):
+                progress(f"Roboflow {proj}", k_, len(names_all), 5000)
                 if "/labels/" not in name or not name.endswith(".txt"): continue
                 stem = Path(name).stem
                 img_name = next((c for c in (name.replace("/labels/", "/images/")[:-4] + e for e in (".jpg", ".png", ".jpeg"))
@@ -815,6 +858,43 @@ def _pick(data):
 _watch_on = [False]
 
 
+_rep = {"t": 0.0}
+
+
+def report(final=False, every=600):
+    """6.9.2: the training's progress to the learning repo (inbox/training/<account>.json, overwritten): its stage
+    and status, the last 80 lines of its window and the graphics card now — so it can be followed from outside the
+    PC. Every 10 minutes, and at once when it ends or fails. Nothing when the learning repo is not set up."""
+    if not final and time.time() - _rep["t"] < every: return
+    _rep["t"] = time.time()
+    try:
+        import learn_sync
+        if not learn_sync.configured(): return
+        acc = sys.argv[2] if len(sys.argv) > 2 else "main"
+        try: tail = (ROOT / "train.log").read_text(encoding="utf-8", errors="replace").splitlines()[-80:]
+        except OSError: tail = []
+        body = {"account": acc, "t": time.time(), "time": time.strftime("%Y-%m-%d %H:%M:%S"), "final": final,
+                "status": read_status(), "card": _card_now(), "log": tail}
+        from version import VERSION
+        body["bot_version"] = VERSION
+        learn_sync._put(f"inbox/training/{acc}.json", json.dumps(body, ensure_ascii=False, indent=1).encode("utf-8"),
+                        f"training: {body['status'].get('stage', '?')}" + (" (end)" if final else ""))
+    except Exception as e:
+        print(f"   (progress not sent: {type(e).__name__}: {str(e)[:80]})", flush=True)
+
+
+def _card_now():
+    import subprocess
+    try:
+        r = subprocess.run(["nvidia-smi", "--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu",
+                            "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=10,
+                           creationflags=0x08000000 if sys.platform == "win32" else 0)
+        u, mu, mt, tc = [x.strip() for x in r.stdout.strip().splitlines()[0].split(",")]
+        return {"busy": int(u), "mem_mb": int(mu), "mem_total_mb": int(mt), "temp_c": int(tc)}
+    except Exception:
+        return None
+
+
 def _gpu_watch():
     """A line every 20 s in the training window from its first second to its last (6.5): what it is doing now
     (the stage + its note), how long it has run, and the graphics card's load / memory / heat (nvidia-smi) — the
@@ -844,6 +924,7 @@ def _gpu_watch():
                 if st.get("note"): what += f" ({st['note']})"
                 print(f"   [{time.strftime('%H:%M:%S')} working {el // 3600}h{el // 60 % 60:02d}m] {what} · {card()}",
                       flush=True)
+                report()                              # every 10 min to the learning repo (6.9.2)
             except Exception:
                 pass
     threading.Thread(target=run, daemon=True, name="gpu-watch").start()
@@ -874,6 +955,7 @@ if __name__ == "__main__":
             import traceback
             log(traceback.format_exc())
             status(stage="error", error=f"{type(e).__name__}: {e}"[:300])
+        report(final=True)
         st = read_status()
         print("\n" + "=" * 70)
         print(f"  finished: {st.get('stage')} — accuracy {st.get('base_map50')} -> {st.get('new_map50')}"
