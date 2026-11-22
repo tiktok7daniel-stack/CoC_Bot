@@ -21,6 +21,7 @@ class LiveVideo:
         self._want = False
         self._thread = None
         self._taken = 0
+        self.arr, self.arr_seq, self.arr_t, self._arr_taken = None, 0, 0.0, 0
 
     def start(self):
         self._want = True
@@ -36,6 +37,12 @@ class LiveVideo:
         if self.seq == last_seq or self.img is None: return None
         self._taken = self.seq
         return self.seq, self.img
+
+    def latest_array(self):
+        """(seq, RGB array, monotonic time it was decoded) of the newest picture — for the screen's own eyes."""
+        if self.arr is None: return None
+        self._arr_taken = self.arr_seq
+        return self.arr_seq, self.arr, self.arr_t
 
     def _codec(self):
         import av
@@ -95,8 +102,8 @@ class LiveVideo:
                         continue
                     for fr in frames:
                         n += 1
-                        if self._taken != self.seq and self.img is not None:
-                            continue                # the screen has not shown the last one yet: skip converting
+                        if self._taken != self.seq and self.img is not None and self._arr_taken != self.arr_seq:
+                            continue                # nobody took the last one yet: skip converting
                         tc = time.perf_counter()
                         arr = fr.to_ndarray(format="rgb24")
                         if self.hw:              # bringing a picture back from the card can cost more than
@@ -109,6 +116,8 @@ class LiveVideo:
                                 except Exception: pass
                                 self.hw = False
                         h, w = arr.shape[:2]
+                        self.arr, self.arr_t = arr, time.monotonic()
+                        self.arr_seq += 1
                         self.img = QImage(arr.data, w, h, 3 * w, QImage.Format_RGB888).copy()
                         self.size = (w, h)
                         self.seq += 1

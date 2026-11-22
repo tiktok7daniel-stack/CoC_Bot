@@ -130,7 +130,13 @@ class AiPicture(_Base):
             p.drawEllipse(P(*c["at"]), 9, 9)
         # what the eyes see
         now = time.time()
-        for b in getattr(self, "_boxes", []):
+        tr = getattr(self, "tracker", None)
+        if tr is not None and tr.active():               # the screen's own eyes, on this very picture (5.96)
+            shown = [{"n": n, "m": m, "l": 1.0, "cx": x, "cy": y, "w": bw, "h": bh, "vx": 0.0, "vy": 0.0, "t": now}
+                     for n, m, x, y, bw, bh in tr.visible()]
+        else:
+            shown = getattr(self, "_boxes", [])
+        for b in shown:
             k = min(0.25, now - b["t"])                  # where the unit is now (its speed since the update)
             cx, cy = b["cx"] + b["vx"] * k, b["cy"] + b["vy"] * k
             x0, y0, x1, y1 = cx - b["w"] / 2, cy - b["h"] / 2, cx + b["w"] / 2, cy + b["h"] / 2
@@ -196,7 +202,11 @@ class RoyaleAiScreen(Screen):
         self.timer.timeout.connect(self.refresh)
         self.timer.start(100)                        # what it sees / thinks: 10 times a second
         from ..live_video import LiveVideo
+        from ..live_tracker import LiveTracker
         self.video = LiveVideo()                    # the app's own copy of the game screen (5.91)
+        self.tracker = LiveTracker(self.video)      # its own eyes + tracker on the pictures it shows (5.96)
+        self.pic.tracker = self.tracker
+        self._txt = ""
         self.ftimer = QTimer(self)
         self.ftimer.setTimerType(Qt.PreciseTimer)
         self.ftimer.timeout.connect(self.frame_tick)
@@ -206,9 +216,9 @@ class RoyaleAiScreen(Screen):
     def frame_tick(self):
         popped = getattr(self, "_pop", None) is not None and self._pop.isVisible()
         if not self.isVisible() and not popped:
-            self.video.stop()
+            self.video.stop(); self.tracker.stop()
             return
-        self.video.start()
+        self.video.start(); self.tracker.start()
         r = self.video.take(self._seq)
         if not r: return
         self._seq, img = r
@@ -233,8 +243,23 @@ class RoyaleAiScreen(Screen):
         lay = QVBoxLayout(w)
         lay.setContentsMargins(0, 0, 0, 0)
         pic = AiPicture()                            # only the game, live (the user's wish: no map, no panel)
+        pic.tracker = self.tracker
         lay.addWidget(pic, 1)
-        w.resize(460, 820)
+        from PySide6.QtGui import QGuiApplication
+        scr = QGuiApplication.primaryScreen().availableGeometry()
+        hh = int(scr.height() * 0.92)
+        w.resize(int(hh * 9 / 16), hh)                # the whole game, tall, no black bars
+
+        def _resized(e, w=w):                        # keeps the game's shape when resized
+            if w.isFullScreen() or getattr(w, "_fixing", False): return
+            want = int(w.width() * 16 / 9)
+            if abs(want - w.height()) > 2:
+                w._fixing = True; w.resize(w.width(), want); w._fixing = False
+        w.resizeEvent = _resized
+
+        def _dbl(e, w=w):                            # double-click: full screen / back
+            w.showNormal() if w.isFullScreen() else w.showFullScreen()
+        pic.mouseDoubleClickEvent = _dbl
         w._pic, w._info = pic, None
         self._pop = w
         w.show()
@@ -255,9 +280,14 @@ class RoyaleAiScreen(Screen):
         try: d = json.loads(p.read_text(encoding="utf-8"))
         except (OSError, ValueError): return
         if d.get("phase") == "battle" and time.time() - d.get("t", 0) > 8: d["phase"] = "stale"
-        txt = self.text(d)
+        self.tracker.bot_boxes = d.get("boxes") or []
         self.pic.set_data(d, p.with_suffix(".jpg"))
-        self.panel.setText(txt)
+        if self.isVisible() and time.monotonic() - getattr(self, "_txt_t", 0) > 0.25:
+            self._txt_t = time.monotonic()
+            txt = self.text(d)
+            if txt != self._txt:                      # re-laying out the text held the picture up a moment
+                self._txt = txt
+                self.panel.setText(txt)
         if popped:
             self._pop._pic.set_data(d, p.with_suffix(".jpg"))
 
