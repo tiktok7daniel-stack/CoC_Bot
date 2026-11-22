@@ -689,7 +689,14 @@ def _after_data(names, epochs, SAFE, pg=None):
     # two candidates (5.82): the current eyes fine-tuned, and a newer, bigger architecture (YOLO11m, from its COCO
     # start) at a higher resolution — trained one after the other on the card; the honest test picks
     # a time budget each (6.4): ultralytics fits its rounds into it after the first one
-    plans = [("finetune", str(base), 800, epochs, 1.5), ("yolo11m", "yolo11m.pt", 960, max(epochs, 45), 3.0)]
+    plans = [("finetune", str(base), 800, epochs, 1.5)]
+    # 6.9.8: YOLO11m (a new network from its COCO start) only when asked (CF_TRAIN_BIG=1): on this laptop's card it
+    # got ~1 round in its 2.4 h (safe mode: 4 pictures a step, 15,000 steps a round) while the eyes in use, trained
+    # further, went 0.58 -> 0.92 in 1.5 h — the big one cannot catch up in a night and only heats the card
+    if os.environ.get("CF_TRAIN_BIG") == "1" and not SAFE:
+        plans.append(("yolo11m", "yolo11m.pt", 960, max(epochs, 45), 3.0))
+    else:
+        log("step 3/3 — the bigger network (YOLO11m): left out (it needs days on this card; CF_TRAIN_BIG=1 to try it)")
     real_list = _real_list(DATA)
     for tag, start_w, imgsz, ep, hours in plans:
         step = 2 if tag == "finetune" else 3
@@ -1141,7 +1148,7 @@ if __name__ == "__main__":
         _window_title("Clash Farmer — تدريب عيون كلاش رويال (اقفل الشباك ده = يوقف التدريب)")
         print("=" * 70)
         print("  Clash Farmer: training the Clash Royale eyes on this PC's graphics card")
-        print("  every data source is downloaded, then two models train and the better one is kept")
+        print("  every data source is downloaded, the eyes in use train further, merged mixes are tried, the best is kept")
         print("=" * 70, flush=True)
         try:
             run()
