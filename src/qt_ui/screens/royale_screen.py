@@ -150,6 +150,9 @@ class RoyaleScreen(Screen):
         self.train_state = label("", "sub", wrap=True)
         train.add(self.train_state)
         train.add(toggle_row(self.store, "royale_auto_train", "royale.auto_train", "royale_auto_train_sub"))
+        # the Roboflow key right where the eyes' training is (it was only under Bot -> Notifications, 6.00)
+        from .bot_settings_screen import secret_field
+        train.add(form_row("roboflow_key", "roboflow_key_sub", secret_field(self.store, "roboflow_api_key", "rf_…")))
         from ..widgets.controls import IconButton
         b = IconButton("play", "royale_train_now", size=14)
         b.clicked.connect(self.train_now)
