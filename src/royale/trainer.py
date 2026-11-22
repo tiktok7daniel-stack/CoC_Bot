@@ -25,11 +25,16 @@ MODELS = HOME / "models"
 HF = "https://huggingface.co"
 REPO = "SudhishNeel/clash-royale-detection"
 BASE_PT_URL = "https://huggingface.co/SudhishNeel/clash-royale-detector/resolve/main/v8/best.pt"
-RECIPE = 3                    # 5.98: + 2 Roboflow sets, generated pictures layered — a new recipe trains again at once
+RECIPE = 4                    # 5.98: + 2 Roboflow sets, generated pictures layered — a new recipe trains again at once
 DEFAULT_ROBOFLOW = ["yolotrain-c7s7v/clash-royale-ut3g8/4", "clashroyale/clash-royale-of3d3/3",
                     "angelfire/clash-royale-cylln/5", "clash-pxdrz/clash_grid/1", "dampiix/clash-royale-units/1",
                     "nathan-yan/clash-royale-detection-cysig/7",
-                    "test-0hg7f/clash-royal-cujfo", "cla-09vin/clash-royale-cylln-pb9jx/5"]   # the user's finds (5.98)
+                    "test-0hg7f/clash-royal-cujfo", "cla-09vin/clash-royale-cylln-pb9jx/5",   # the user's finds (5.98)
+                    # the biggest Clash Royale arena sets on Roboflow Universe (all CC BY 4.0, 5.99)
+                    "clash-royale-swwaz/cr-ai/2", "clashiqcarddeployments/clashiq-arena-tvanj/1",
+                    "clashiqcarddeployments/clashiq-detection-lh8rf/1", "bruce-zheng/clash-royale-recognition/1",
+                    "clash-royale-data-collection/clash-royale-bhjq1/2", "autoclashroyale/clashroyalechardetector/7",
+                    "roham-n24-gmail-com/clash-royale-object-detection-jg666/1"]
 
 
 def status(**kw):
@@ -55,6 +60,39 @@ def log(msg):
 
 def norm(name):
     return str(name).strip().lower().replace("_", "-").replace(" ", "-").replace("--", "-")
+
+
+def norm_rf(name):
+    """A Roboflow set's class name -> the base model's spelling: the side some sets put in the name ("Ally Goblin",
+    "Enemy Goblin", "archer0" / "archer1") and their numbering ("-evolution1") are dropped (5.99)."""
+    import re
+    n = norm(name)
+    n = re.sub(r"^(ally|enemy|friendly|opponent|blue|red)-", "", n)
+    n = re.sub(r"(?<=[a-z])[01]$", "", n)                 # archer0 / archer1 -> archer
+    n = re.sub(r"(-evolution|-evo|-hero)\d+$", r"\1", n)
+    n = n.replace("-evo", "-evolution") if n.endswith("-evo") else n
+    return n
+
+
+def _dhash(img_bytes):
+    """64-bit picture fingerprint (a Roboflow copy of a test picture is recognised and left out)."""
+    import cv2, numpy as np
+    im = cv2.imdecode(np.frombuffer(img_bytes, np.uint8), cv2.IMREAD_GRAYSCALE)
+    if im is None: return None
+    s = cv2.resize(im, (9, 8), interpolation=cv2.INTER_AREA)
+    bits = (s[:, 1:] > s[:, :-1]).flatten()
+    return int("".join("1" if b else "0" for b in bits), 2)
+
+
+def _test_hashes():
+    out = []
+    for f in (DATA / "images" / "val").glob("*"):
+        try:
+            h = _dhash(f.read_bytes())
+            if h is not None: out.append(h)
+        except OSError:
+            pass
+    return out
 
 
 def _get(url, dst=None, **kw):
@@ -216,7 +254,8 @@ def take_roboflow(names, key, datasets):
     if not key: return 0
     import requests
     idx = {norm(v): k for k, v in names.items()}
-    total = 0
+    total, skipped = 0, 0
+    test_h = _test_hashes()                                    # KataCR's test pictures are in place first
     for ds in datasets:
         try:
             parts = ds.strip("/").split("/")
@@ -239,7 +278,7 @@ def take_roboflow(names, key, datasets):
             yml = next((n for n in z.namelist() if n.endswith("data.yaml")), None)
             rf_names = yaml.safe_load(z.read(yml))["names"] if yml else []
             if isinstance(rf_names, dict): rf_names = [rf_names[k] for k in sorted(rf_names)]
-            remap = {i: idx.get(norm(n)) for i, n in enumerate(rf_names)}
+            remap = {i: idx.get(norm(n), idx.get(norm_rf(n))) for i, n in enumerate(rf_names)}
             n = 0
             for name in z.namelist():
                 if "/labels/" not in name or not name.endswith(".txt"): continue
@@ -253,6 +292,10 @@ def take_roboflow(names, key, datasets):
                     if len(p) == 5 and remap.get(int(float(p[0]))) is not None:
                         rows.append((remap[int(float(p[0]))], *map(float, p[1:])))
                 if not rows: continue
+                hv = _dhash(z.read(img_name))
+                if hv is not None and any(bin(hv ^ t).count("1") <= 4 for t in test_h):
+                    skipped += 1
+                    continue                                   # a copy of a test picture: never trained on
                 tag = f"rf_{proj}_{stem}"
                 sp = _split(tag)
                 (DATA / "images" / sp).mkdir(parents=True, exist_ok=True)
@@ -262,7 +305,8 @@ def take_roboflow(names, key, datasets):
                     "\n".join(f"{c} {x:.6f} {y:.6f} {w:.6f} {h:.6f}" for c, x, y, w, h in rows), encoding="utf-8")
                 n += 1
             total += n
-            log(f"Roboflow {ds}: {n} pictures kept (classes matched: {sum(v is not None for v in remap.values())}/{len(remap)})")
+            log(f"Roboflow {ds}: {n} pictures kept (classes matched: {sum(v is not None for v in remap.values())}/{len(remap)}"
+                f"; copies of test pictures left out so far: {skipped})")
         except Exception as e:
             log(f"Roboflow {ds}: {type(e).__name__}: {e}")
     return total
@@ -394,9 +438,13 @@ def run(epochs=30, n_bulk=4):
     acc_cfg = {}
     try: acc_cfg = (settings.load(sys.argv[2] if len(sys.argv) > 2 else "main") or {}).get("royale", {})
     except Exception: pass
+    try:
+        take_katacr(names)                                     # first: its real pictures make the honest test
+    except Exception as e:
+        log(f"take_katacr skipped: {e}")
     sets = list(dict.fromkeys(list(acc_cfg.get("roboflow_datasets") or []) + DEFAULT_ROBOFLOW))
     take_roboflow(names, (app.get("roboflow_api_key") or "").strip(), sets)
-    for take in (take_katacr, take_own):
+    for take in (take_own,):
         try:
             take(names)
         except Exception as e:
