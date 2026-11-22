@@ -102,8 +102,8 @@ class LiveVideo:
                         continue
                     for fr in frames:
                         n += 1
-                        if self._taken != self.seq and self.img is not None and self._arr_taken != self.arr_seq:
-                            continue                # nobody took the last one yet: skip converting
+                        if self._taken != self.seq and self.img is not None:
+                            continue                # the screen has not shown the last one yet: skip converting
                         tc = time.perf_counter()
                         arr = fr.to_ndarray(format="rgb24")
                         if self.hw:              # bringing a picture back from the card can cost more than

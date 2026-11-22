@@ -230,7 +230,8 @@ class RoyaleBot:
         self._perf = perf
         while _u().running():
             t0 = time.monotonic()
-            fr = frame()
+            seen_t = time.time()                                # when the picture was taken (the live screen's
+            fr = frame()                                         # tracker makes up the delay from it, 5.97)
             t_cap = time.monotonic()
             if not in_battle(fr):
                 out_since = out_since or time.monotonic()
@@ -330,6 +331,7 @@ class RoyaleBot:
             try:
                 from royale import live_view
                 if d: live_view.event("us", d["card"], d["tile"], d.get("why", ""))
+                st["_seen_t"] = seen_t
                 live_view.battle(_u().INSTANCE_ID, self.brain, st, d, force=bool(d), frame=fr)
             except Exception:
                 pass

@@ -91,6 +91,21 @@ def _model(brain):
             "tiles": cands, "ai_only": bool(getattr(brain, "p", {}).get("ai_only"))}
 
 
+def _dets(st):
+    """Everything the eyes found in this look, unfiltered (both models): [name, ours, x, y, confidence] with the
+    unit's place as screen fractions — the live screen's tracker follows each one (5.97)."""
+    from royale.eyes import tile_xy
+    out = []
+    for lst, mine in ((st.get("enemies") or [], False), (st.get("allies") or [], True)):
+        for e in lst[:60]:
+            try:
+                x, y = tile_xy(e[1], e[2])
+                out.append([str(e[0]), mine, round(x, 4), round(y, 4), round(float(e[3]) if len(e) > 3 else 0.6, 2)])
+            except Exception:
+                pass
+    return out
+
+
 def _save_frame(acc, frame):
     """A small copy of the screen (360 px wide) for the app's "the bot's eyes" panel, twice a second."""
     if frame is None or time.time() - _S.get("ft", 0) < 0.5: return False
@@ -119,7 +134,7 @@ def battle(acc, brain, st, d, force=False, frame=None):
     for _t, name, x, y in hist[_S["eh"]:]:                 # their plays the bot noticed since the last write
         event("them", name, (int(x), int(y)))
     _S["eh"] = len(hist)
-    if not force and now - _S["t"] < 0.1: return             # 10 times a second (the Live AI screen)
+    if not force and now - _S["t"] < 0.05: return            # every look (the live screen's tracker)
     _S["t"] = now
     try:
         from royale import engine
@@ -165,6 +180,8 @@ def battle(acc, brain, st, d, force=False, frame=None):
         "frame_t": _S.get("frame_t", 0.0),
         "model": _model(brain),
         "boxes": _boxes(brain, st),
+        "dets": _dets(st),
+        "seen_t": st.get("_seen_t") or now,
         "target": (list(__import__("royale.eyes", fromlist=["tile_xy"]).tile_xy(*d["tile"])) if d else None),
         "slot": (d.get("slot") if d else None),
         "card_at": (list(__import__("royale.eyes", fromlist=["card_xy"]).card_xy(d["slot"])) if d and

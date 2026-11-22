@@ -1,139 +1,101 @@
 """
-The live screen's own eyes and tracker (5.96): the boxes are found on the very pictures the screen shows, not taken
-from the bot (whose answer was 100-200 ms old — the box arrived late, then caught up with its unit).
+The live screen's tracker (5.97): every unit the bot's eyes find, followed smoothly on every displayed picture.
 
-  detect   the big arena model (royale.strong_eyes, on the graphics card when DirectML is set up) runs on its own
-           thread on the newest decoded picture, as often as it can (a graphics card: dozens of times a second)
-  track    every detection joins the track of the same unit (same name, nearest); an alpha-beta filter keeps each
-           unit's place and speed, measured with the picture's own time
-  show     on every displayed picture (up to 240 a second) each track is drawn where its unit is NOW: its filtered
-           place moved by its speed for the time since that picture — the box sits on its unit and moves with it
-  side     ours / theirs from the bot's boxes (its side model), the nearest one of the same name; theirs by default
+  in       each look of the bot: everything both eye models found (unfiltered: name, ours / theirs, place, confidence)
+           with the time its picture was TAKEN (royale.live_view "dets" / "seen_t")
+  track    each detection joins the track of the same unit (same name and nearest; a nearby track of another name
+           too when the eyes flicker between two names — its name is then voted by confidence); an alpha-beta filter
+           keeps each unit's place and speed in the picture's own time
+  show     on every picture (up to 240 a second) each track is drawn where its unit is NOW: its place moved by its
+           speed for the time since that picture was taken — the bot's delay is made up, the box sits on its unit;
+           a unit missed for a look or two keeps its box (coasting, 0.5 s) instead of blinking out
+
+No second model runs in the app (in 5.96 it did: twice the heavy work, everything slower).
 """
 import threading, time
 
+BOX_W, BOX_H, BOX_UP = 0.057, 0.042, 0.011      # a unit's box in screen fractions (as royale.live_view draws them)
+
 
 class Track:
-    __slots__ = ("name", "x", "y", "w", "h", "vx", "vy", "t", "hits", "miss", "conf", "mine")
+    __slots__ = ("names", "mine", "x", "y", "vx", "vy", "t", "hits", "conf")
 
-    def __init__(self, name, x, y, w, h, t, conf):
-        self.name, self.x, self.y, self.w, self.h, self.t, self.conf = name, x, y, w, h, t, conf
+    def __init__(self, name, mine, x, y, t, conf):
+        self.names, self.mine = {name: conf}, mine
+        self.x, self.y, self.t, self.conf = x, y, t, conf
         self.vx = self.vy = 0.0
-        self.hits, self.miss, self.mine = 1, 0, False
+        self.hits = 1
+
+    @property
+    def name(self):
+        return max(self.names, key=self.names.get)
 
     def at(self, now):
-        k = max(0.0, min(0.3, now - self.t))
+        k = max(0.0, min(0.35, now - self.t))
         return self.x + self.vx * k, self.y + self.vy * k
 
 
 class LiveTracker:
-    A, B = 0.65, 0.25                   # alpha-beta filter: how much a new detection corrects place / speed
+    A, B = 0.7, 0.3                       # alpha-beta: how much a new detection corrects the place / the speed
+    COAST = 0.5                           # seconds a unit keeps its box without being seen
 
-    def __init__(self, video):
-        self.video = video
+    def __init__(self, video=None):
         self.tracks = []
-        self.rate = 0.0
-        self.ms = 0.0
-        self.ok = False
-        self.error = ""
-        self._want = False
-        self._thread = None
         self._lock = threading.Lock()
-        self.bot_boxes = []             # the bot's last boxes (for ours / theirs)
+        self._last = 0.0
+        self._seen = None
+        self.rate, self._n, self._n_t = 0.0, 0, time.time()
 
-    def start(self):
-        self._want = True
-        if self._thread is None or not self._thread.is_alive():
-            self._thread = threading.Thread(target=self._run, daemon=True, name="live-tracker")
-            self._thread.start()
-
-    def stop(self):
-        self._want = False
+    # kept for the screen's calls (no model thread any more)
+    def start(self): pass
+    def stop(self): pass
 
     def active(self):
-        return self.ok and time.monotonic() - getattr(self, "_last", 0) < 0.6
+        return time.time() - self._last < 1.0
 
-    def visible(self, now=None):
-        """[(name, mine, cx, cy, w, h)] screen fractions where each unit is now."""
-        now = now or time.monotonic()
-        with self._lock:
-            out = []
-            for t in self.tracks:
-                if t.hits < 2 and t.conf < 0.6: continue              # one look and unsure: not shown yet
-                x, y = t.at(now)
-                out.append((t.name, t.mine, x, y, t.w, t.h))
-            return out
-
-    def _side(self, name, x, y):
-        best, bd = False, 0.12
-        for b in self.bot_boxes:
-            if b.get("n") != name: continue
-            x0, y0, x1, y1 = b["b"]
-            d = abs((x0 + x1) / 2 - x) + abs((y0 + y1) / 2 - y)
-            if d < bd: best, bd = bool(b.get("m")), d
-        return best
-
-    def _update(self, dets, t):
+    def feed(self, dets, seen_t):
+        """One look of the bot: [[name, ours, x, y, conf]] found in the picture taken at seen_t (wall clock)."""
+        if not dets and dets != []: return
+        t = float(seen_t or time.time())
+        if t == self._seen: return
+        self._seen = t
         with self._lock:
             free = list(self.tracks)
-            for name, conf, x, y, w, h in sorted(dets, key=lambda d: -d[1]):
-                best, bd = None, 0.09
+            for name, mine, x, y, conf in sorted(dets, key=lambda d: -d[4]):
+                best, bd = None, 0.08
                 for tr in free:
-                    if tr.name != name: continue
+                    if tr.mine != mine: continue
                     px, py = tr.at(t)
                     d = abs(px - x) + abs(py - y)
+                    if tr.name != name: d += 0.05            # another name: only when really close (a flicker)
                     if d < bd: best, bd = tr, d
                 if best is None:
-                    nt = Track(name, x, y, w, h, t, conf)
-                    nt.mine = self._side(name, x, y)
-                    self.tracks.append(nt)
+                    self.tracks.append(Track(name, mine, x, y, t, conf))
                     continue
                 free.remove(best)
                 dt = max(1e-3, t - best.t)
                 px, py = best.x + best.vx * dt, best.y + best.vy * dt
                 rx, ry = x - px, y - py
                 best.x, best.y = px + self.A * rx, py + self.A * ry
-                best.vx = max(-0.5, min(0.5, best.vx + self.B * rx / dt))
-                best.vy = max(-0.5, min(0.5, best.vy + self.B * ry / dt))
-                best.w, best.h = 0.7 * best.w + 0.3 * w, 0.7 * best.h + 0.3 * h
-                best.t, best.conf, best.miss = t, max(conf, 0.8 * best.conf), 0
+                if dt < 0.6:
+                    best.vx = max(-0.4, min(0.4, best.vx + self.B * rx / dt))
+                    best.vy = max(-0.4, min(0.4, best.vy + self.B * ry / dt))
+                best.t, best.conf = t, conf
+                best.names[name] = best.names.get(name, 0.0) + conf
                 best.hits += 1
-                if best.hits % 10 == 2: best.mine = self._side(name, best.x, best.y)
-            for tr in free:
-                tr.miss += 1
-            self.tracks = [tr for tr in self.tracks if tr.miss <= 3 and t - tr.t < 0.6]
+            self.tracks = [tr for tr in self.tracks if t - tr.t <= self.COAST]
+        self._last = time.time()
+        self._n += 1
+        if time.time() - self._n_t >= 1.0:
+            self.rate, self._n, self._n_t = self._n / (time.time() - self._n_t), 0, time.time()
 
-    def _run(self):
-        try:
-            from royale import strong_eyes as se
-            if se._S.get("sess") is None and se.ONNX.exists(): se._load()
-            self.ok = se._S.get("sess") is not None
-        except Exception as e:
-            self.error, self.ok = f"{type(e).__name__}: {e}"[:120], False
-        if not self.ok: return
-        last, n, t0 = 0, 0, time.monotonic()
-        while self._want:
-            fr = self.video.latest_array()
-            if fr is None or fr[0] == last:
-                time.sleep(0.002)
-                continue
-            last, arr, ft = fr
-            h, w = arr.shape[:2]
-            tc = time.perf_counter()
-            try:
-                raw = se.detect(arr, conf=0.4)
-            except Exception as e:
-                self.error = f"{type(e).__name__}: {e}"[:120]
-                time.sleep(0.05)
-                continue
-            self.ms = 0.8 * self.ms + 0.2 * (time.perf_counter() - tc) * 1000
-            dets = []
-            for name, conf, x0, y0, x1, y1 in raw:
-                u = se.unit_name(name)
-                if not u: continue
-                dets.append((u, conf, (x0 + x1) / 2 / w, (y0 + y1) / 2 / h, (x1 - x0) / w, (y1 - y0) / h))
-            self._update(dets, ft)
-            self._last = time.monotonic()
-            n += 1
-            if time.monotonic() - t0 >= 1.0:
-                self.rate, n, t0 = n / (time.monotonic() - t0), 0, time.monotonic()
+    def visible(self, now=None):
+        """[(name, ours, cx, cy, w, h)] screen fractions where each unit is now."""
+        now = now or time.time()
+        with self._lock:
+            out = []
+            for tr in self.tracks:
+                if tr.conf < 0.3 and tr.hits < 2: continue
+                x, y = tr.at(now)
+                out.append((tr.name, tr.mine, x, y - BOX_UP, BOX_W, BOX_H))
+            return out

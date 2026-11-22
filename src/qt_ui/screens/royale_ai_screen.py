@@ -200,7 +200,7 @@ class RoyaleAiScreen(Screen):
         self._mtime = 0.0
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.refresh)
-        self.timer.start(100)                        # what it sees / thinks: 10 times a second
+        self.timer.start(40)                         # every look of the bot (its tracker data)
         from ..live_video import LiveVideo
         from ..live_tracker import LiveTracker
         self.video = LiveVideo()                    # the app's own copy of the game screen (5.91)
@@ -280,7 +280,7 @@ class RoyaleAiScreen(Screen):
         try: d = json.loads(p.read_text(encoding="utf-8"))
         except (OSError, ValueError): return
         if d.get("phase") == "battle" and time.time() - d.get("t", 0) > 8: d["phase"] = "stale"
-        self.tracker.bot_boxes = d.get("boxes") or []
+        self.tracker.feed(d.get("dets"), d.get("seen_t"))   # every unit the bot's eyes found, timed (5.97)
         self.pic.set_data(d, p.with_suffix(".jpg"))
         if self.isVisible() and time.monotonic() - getattr(self, "_txt_t", 0) > 0.25:
             self._txt_t = time.monotonic()
