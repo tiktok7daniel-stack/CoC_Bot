@@ -230,6 +230,7 @@ def run(epochs=30, only=None):
     _status(stage="hand", note=f"hand cards: training ({epochs} rounds)")
     _log(f"training YOLO11n-cls — {epochs} rounds, {IMGSZ}px, {bs} pictures at a time on the graphics card")
     m = YOLO("yolo11n-cls.pt")
+    trainer.battle_pause(m)                       # the card is the game's during a battle (6.9)
     m.train(data=str(DATA), epochs=epochs, imgsz=IMGSZ, batch=bs, device=0 if torch.cuda.is_available() else "cpu", workers=max(2, min(12, (os.cpu_count() or 4) - 2)),
             fliplr=0.0, scale=0.15, erasing=0.1, hsv_v=0.4, patience=8, cos_lr=True, project=str(ROOT / "runs"),
             amp=torch.cuda.is_available(),

@@ -253,6 +253,13 @@ class RoyaleBot:
                 time.sleep(0.2)
                 continue
             out_since = None
+            if time.monotonic() - getattr(self, "_flag_t", 0) > 2.0:    # 6.9: the eyes training waits while this is fresh
+                self._flag_t = time.monotonic()
+                try:
+                    from royale.trainer import BATTLE_FLAG
+                    BATTLE_FLAG.parent.mkdir(parents=True, exist_ok=True); BATTLE_FLAG.touch()
+                except Exception:
+                    pass
             try:
                 tl = time.monotonic()
                 st = self.eyes.look(fr)

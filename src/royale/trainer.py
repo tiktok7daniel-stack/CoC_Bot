@@ -655,6 +655,34 @@ def _window_title(t):
         except Exception: pass
 
 
+BATTLE_FLAG = Path.home() / ".CoC_Bot" / "royale_battle.flag"     # touched by the bot every few s of a battle
+
+
+def in_battle():
+    """The bot is playing a battle right now (its flag is fresh)."""
+    try: return time.time() - BATTLE_FLAG.stat().st_mtime < 8
+    except OSError: return False
+
+
+def battle_pause(model):
+    """6.9: the graphics card belongs to the game during a battle. The training waits between two steps while the bot
+    plays (and gives the card's spare memory back), then goes on where it was — before, the training, LDPlayer and the
+    bot's eyes fought over the same 8 GB and the card's driver reset (CUDA 'unknown error' + LDPlayer lost at once)."""
+    def wait(_tr=None):
+        if not in_battle(): return
+        log("   paused — the bot is playing a battle (the graphics card is the game's); going on after it")
+        try:
+            import torch
+            torch.cuda.synchronize(); torch.cuda.empty_cache()
+        except Exception:
+            pass
+        t0 = time.time()
+        while in_battle(): time.sleep(1.0)
+        log(f"   going on (paused {int(time.time() - t0)} s)")
+    model.add_callback("on_train_batch_start", wait)
+    model.add_callback("on_val_start", wait)
+
+
 TRAIN_MAX, VAL_MAX = 60000, 3000
 VAL_EVERY = 4               # 6.7: the honest test every 4 rounds (3k pictures: ~1 min), the best round kept
 
@@ -677,6 +705,7 @@ def _train(tag, start_w, yaml_p, ep, hours, imgsz, bs, SAFE, extra=None, every=N
     try:
         m = YOLO(start_w)
         _sparse_val(m, every or VAL_EVERY)
+        battle_pause(m)
         args = dict(data=str(yaml_p), epochs=ep, time=hours, imgsz=imgsz, batch=bs, val=True, patience=12,
                     device=0, cos_lr=True, close_mosaic=max(3, ep // 6),
                     workers=max(2, min(12, (os.cpu_count() or 4) - 2)), project=str(ROOT / "runs"),
@@ -792,7 +821,8 @@ def _gpu_batch(imgsz):
         import torch
         free, _total = torch.cuda.mem_get_info()
         per = 0.45 if imgsz <= 800 else 0.7               # GB a picture needs with AMP, about (YOLO m at that size)
-        return int(max(4, min(48, (free / 1e9 - 0.8) / per)))
+        # 1.5 GB left for LDPlayer and the bot's eyes (6.9: 0.8 left too little — the driver reset)
+        return int(max(4, min(32, (free / 1e9 - 1.5) / per)))
     except Exception:
         return 6 if imgsz <= 800 else 4
 
