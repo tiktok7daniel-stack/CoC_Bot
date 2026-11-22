@@ -550,6 +550,10 @@ def take_own(names):
 def run(epochs=30, n_bulk=4):
     random.seed(7)
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    wait = int(os.environ.pop("CF_TRAIN_WAIT", "0") or 0)
+    if wait:
+        log(f"letting the graphics card cool {wait} s before going on")
+        time.sleep(wait)
     pg = prog()
     fresh = ("--fresh" in sys.argv or pg.get("recipe") != RECIPE or time.time() - float(pg.get("t0", 0)) > 7 * 86400
              or read_status().get("stage") == "done")
@@ -570,7 +574,8 @@ def run(epochs=30, n_bulk=4):
     base = base_model()
     names = {int(k): v for k, v in YOLO(str(base)).names.items()}
     SAFE = bool(os.environ.get("CF_TRAIN_SAFE"))
-    if not SAFE and not pg.get("hand"):
+    defer_hand = not fresh and not pg.get("hand")    # 6.9.7: going on — the eyes first, the hand model after them
+    if not SAFE and not pg.get("hand") and not defer_hand:
         try:                                     # step 0 (6.6): the hand-card model — small, ~15 min, the biggest win
             from royale import hand_train
             hand_train.run()
@@ -592,7 +597,16 @@ def run(epochs=30, n_bulk=4):
     else:
         _prepare_data(names, n_bulk)
         pg["data"] = time.time(); save_prog(pg)
-    _after_data(names, epochs, SAFE, pg)
+    used = _after_data(names, epochs, SAFE, pg)
+    if defer_hand and not SAFE:
+        try:
+            log("the hand-card model (it did not finish last time)")
+            from royale import hand_train
+            hand_train.run()
+            pg = prog(); pg["hand"] = time.time(); save_prog(pg)
+        except Exception as e:
+            log(f"hand cards skipped: {type(e).__name__}: {e}")
+    return used
 
 
 def _prepare_data(names, n_bulk):
@@ -619,14 +633,23 @@ def _restart_safe(why):
     """A graphics-card error (cuDNN EXECUTION_FAILED, an illegal memory access) breaks the whole CUDA context of
     this process: nothing more can run on the card here. A fresh process takes over in safe mode (6.2)."""
     import subprocess
-    if os.environ.get("CF_TRAIN_SAFE"):
-        log(f"the graphics card failed again in safe mode ({why}) — stopped; close other programs using the card "
-            "(LDPlayer) and train again")
-        status(stage="error", error=f"graphics card: {why}"[:300])
+    # 6.9.7: the card failed on this laptop in every library after minutes of full load (cuDNN, cuBLAS, "unknown") —
+    # not one bug, the card under long load. Each failure: a fresh process after the card cooled 90 s, going on from
+    # the LAST ROUND reached (nothing done again), up to 6 times in 3 hours; then it stops (and keeps everything)
+    now = time.time()
+    fails = [t for t in (read_status().get("card_fails") or []) if now - t < 3 * 3600] + [now]
+    status(card_fails=fails)
+    if len(fails) > 6:
+        log(f"the graphics card failed {len(fails)} times in 3 hours ({why}) — stopped; everything done is kept: "
+            "press Train again later (laptop: on the charger, cooler, newest NVIDIA driver)")
+        status(stage="error", error=f"graphics card: {why}"[:300], pid=None)
+        report(final=True)
         os._exit(1)
-    log(f"graphics-card error ({why}) — starting again in a new process, in safe mode")
-    status(stage="queued", note="restarting in safe mode")
-    env = dict(os.environ, CF_TRAIN_SAFE="1", PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True")
+    log(f"graphics-card error #{len(fails)} ({why}) — the card cools 90 s, then a new process goes on from the last "
+        "round (safe mode)")
+    status(stage="queued", note=f"graphics card failed (#{len(fails)}) — going on from the last round in 90 s")
+    report(final=False, every=0)
+    env = dict(os.environ, CF_TRAIN_SAFE="1", CF_TRAIN_WAIT="90", PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True")
     kw = {"creationflags": 0x00000010 | 0x00000020} if sys.platform == "win32" else {}
     subprocess.Popen([sys.executable, "-m", "royale.trainer", *sys.argv[1:]],
                      cwd=str(Path(__file__).resolve().parent.parent), env=env, **kw)
@@ -779,7 +802,7 @@ def start(acc="main"):
     if py.lower().endswith("pythonw.exe"): py = py[:-len("pythonw.exe")] + "python.exe"
     here = Path(__file__).resolve().parent.parent
     subprocess.Popen([py, "-m", "royale.trainer", "--run", acc], cwd=str(here), **kw)
-    status(stage="queued")
+    status(stage="queued", card_fails=[], error="")          # a start by the user: the failure count from 0
     return True
 
 
@@ -823,11 +846,32 @@ def in_battle():
     except OSError: return False
 
 
+_heat = {"t": 0}
+HOT, COOL = 84, 72               # °C: a step waits at HOT until the card is back at COOL (6.9.7)
+
+
+def _temp():
+    import subprocess
+    try:
+        r = subprocess.run(["nvidia-smi", "--query-gpu=temperature.gpu", "--format=csv,noheader,nounits"],
+                           capture_output=True, text=True, timeout=10,
+                           creationflags=0x08000000 if sys.platform == "win32" else 0)
+        _heat["t"] = int(r.stdout.strip().splitlines()[0])
+    except Exception:
+        pass
+    return _heat["t"]
+
+
 def battle_pause(model):
-    """6.9: the graphics card belongs to the game during a battle. The training waits between two steps while the bot
+    """6.9: the graphics card belongs to the game during a battle (6.9.7: and it takes a break when too hot). The training waits between two steps while the bot
     plays (and gives the card's spare memory back), then goes on where it was — before, the training, LDPlayer and the
     bot's eyes fought over the same 8 GB and the card's driver reset (CUDA 'unknown error' + LDPlayer lost at once)."""
     def wait(_tr=None):
+        if _heat["t"] >= HOT:                    # 6.9.7: too hot (the 20-s reading): a break until it cooled down
+            log(f"   the graphics card is at {_heat['t']}°C — a break until {COOL}°C (a laptop card fails when hot)")
+            t0 = time.time()
+            while _temp() > COOL and time.time() - t0 < 600: time.sleep(5)
+            log(f"   cooled to {_heat['t']}°C in {int(time.time() - t0)} s — going on")
         if not in_battle(): return
         log("   paused — the bot is playing a battle (the graphics card is the game's); going on after it")
         try:
@@ -1052,6 +1096,7 @@ def _gpu_watch():
                                 "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=10,
                                creationflags=0x08000000 if sys.platform == "win32" else 0)
             u, mu, mt, tc = [x.strip() for x in r.stdout.strip().splitlines()[0].split(",")]
+            _heat["t"] = int(tc)
             return f"graphics card busy {u}% · memory {mu}/{mt} MB · {tc}°C"
         except Exception:
             return "graphics card: no reading"
