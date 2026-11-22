@@ -130,7 +130,7 @@ def _relay(packet, is_config):
 class Stream:
     """One running scrcpy video stream; .latest() -> newest RGB picture."""
 
-    def __init__(self, device, bitrate=16_000_000, max_fps=120):  # up to 120 a second (the emulator's own rate)
+    def __init__(self, device, bitrate=24_000_000, max_fps=240):  # up to 240 a second (LDPlayer's High FPS mode)
         self.device, self.bitrate, self.max_fps = device, bitrate, max_fps
         self.sock, self.shell = None, None
         self.alive = False

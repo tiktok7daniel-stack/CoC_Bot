@@ -43,6 +43,15 @@ class AiPicture(_Base):
         self.img, self.img_t, self.d = None, 0.0, {}
         self.live_t, self.seq, self.fps, self._n, self._n_t = 0.0, 0, 0.0, 0, time.monotonic()
 
+    def _badge(self, p, ox, oy, w, h, iw, ih):
+        if time.monotonic() - self.live_t >= 0.5: return
+        p.setFont(ui_font(8, QFont.Bold))
+        tag = f"● LIVE · {getattr(self, 'stream_fps', 0) or self.fps:.0f} fps · {iw}x{ih}"
+        r = QRectF(ox + 6, oy + h * 0.78, p.fontMetrics().horizontalAdvance(tag) + 10, 16)
+        p.fillRect(r, QColor(0, 0, 0, 170))
+        p.setPen(QColor("#4ade80"))
+        p.drawText(r, Qt.AlignCenter, tag)
+
     def set_frame(self, img):
         """A full-size picture straight from the bot's video (live_shm), up to 60 a second."""
         self.img, self.live_t = img, time.monotonic()
@@ -51,7 +60,33 @@ class AiPicture(_Base):
             self.fps, self._n, self._n_t = self._n / (time.monotonic() - self._n_t), 0, time.monotonic()
         self.update()
 
+    def _track(self, d):
+        """Smooth tracking (5.95): each box is matched with the same unit in the last update (same name, nearest)
+        and given a speed; between the bot's updates (10 a second) it keeps moving with its unit on every picture
+        (up to 240 a second) instead of jumping."""
+        now = time.time()
+        old = getattr(self, "_boxes", [])
+        new = []
+        for b in d.get("boxes") or []:
+            x0, y0, x1, y1 = b["b"]
+            cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+            best, bd = None, 0.06
+            for o in old:
+                if o["n"] != b.get("n") or o["m"] != b.get("m"): continue
+                dd = abs(o["cx"] - cx) + abs(o["cy"] - cy)
+                if dd < bd: best, bd = o, dd
+            vx = vy = 0.0
+            if best is not None and now - best["t"] > 0.02:
+                dt = now - best["t"]
+                vx = 0.6 * (cx - best["cx"]) / dt + 0.4 * best["vx"]       # smoothed speed (screen fractions / s)
+                vy = 0.6 * (cy - best["cy"]) / dt + 0.4 * best["vy"]
+                if abs(vx) > 0.6 or abs(vy) > 0.6: vx = vy = 0.0             # a jump, not a walk
+            new.append({"n": b.get("n"), "m": b.get("m"), "l": b.get("l", 1.0), "cx": cx, "cy": cy,
+                        "w": x1 - x0, "h": y1 - y0, "vx": vx, "vy": vy, "t": now})
+        self._boxes = new
+
     def set_data(self, d, img_path):
+        if (d or {}).get("t") != self.d.get("t"): self._track(d or {})
         self.d = d or {}
         ft = float(self.d.get("frame_t") or 0)
         if time.monotonic() - self.live_t > 0.5 and ft and ft != self.img_t:   # no live video: the small picture
@@ -62,8 +97,9 @@ class AiPicture(_Base):
     def paintEvent(self, _e):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
+        p.setRenderHint(QPainter.SmoothPixmapTransform)  # the sharpest scaling (done by the graphics card)
         p.fillRect(self.rect(), QColor(TOKENS["void"]))
-        if self.img is None or self.d.get("phase") != "battle":
+        if self.img is None:
             p.setPen(QColor(TOKENS["text"])); p.setFont(ui_font(11))
             p.drawText(self.rect(), Qt.AlignCenter | Qt.TextWordWrap, tr("ra_none"))
             return
@@ -73,6 +109,10 @@ class AiPicture(_Base):
         ox, oy = (self.width() - w) / 2, (self.height() - h) / 2
         P = lambda x, y: QPointF(ox + x * w, oy + y * h)
         p.drawImage(QRectF(ox, oy, w, h), self.img)
+        battle = self.d.get("phase") == "battle" and time.time() - float(self.d.get("t", 0)) < 8
+        if not battle:                                   # the game as it is (lobby, menus): the picture alone
+            self._badge(p, ox, oy, w, h, iw, ih)
+            return
         f = ui_font(8, QFont.Bold)
         p.setFont(f)
         fm = p.fontMetrics()
@@ -89,8 +129,11 @@ class AiPicture(_Base):
             p.setPen(QPen(QColor(255, 255, 255, 200), 2)); p.setBrush(Qt.NoBrush)
             p.drawEllipse(P(*c["at"]), 9, 9)
         # what the eyes see
-        for b in self.d.get("boxes") or []:
-            x0, y0, x1, y1 = b["b"]
+        now = time.time()
+        for b in getattr(self, "_boxes", []):
+            k = min(0.25, now - b["t"])                  # where the unit is now (its speed since the update)
+            cx, cy = b["cx"] + b["vx"] * k, b["cy"] + b["vy"] * k
+            x0, y0, x1, y1 = cx - b["w"] / 2, cy - b["h"] / 2, cx + b["w"] / 2, cy + b["h"] / 2
             col = QColor("#3fa9ff") if b.get("m") else QColor("#ff4d4d")
             r = QRectF(P(x0, y0), P(x1, y1))
             p.setPen(QPen(col, 2)); p.setBrush(Qt.NoBrush)
@@ -105,12 +148,7 @@ class AiPicture(_Base):
                 bar = QRectF(r.left(), r.bottom() + 1, r.width(), 3)
                 p.fillRect(bar, QColor(0, 0, 0, 160))
                 p.fillRect(QRectF(bar.left(), bar.top(), bar.width() * max(0.0, life), 3), QColor("#ffd24d"))
-        if time.monotonic() - self.live_t < 0.5:
-            p.setPen(QColor("#4ade80"))
-            tag = f"● LIVE · {getattr(self, 'stream_fps', 0) or self.fps:.0f} fps · {iw}x{ih}"
-            r = QRectF(ox + 6, oy + h * 0.78, fm.horizontalAdvance(tag) + 10, 16)
-            p.fillRect(r, QColor(0, 0, 0, 170))
-            p.drawText(r, Qt.AlignCenter, tag)
+        self._badge(p, ox, oy, w, h, iw, ih)
         # the move: a gold arrow from the card in the hand to its tile
         t, c0 = self.d.get("target"), self.d.get("card_at")
         if t:
@@ -162,7 +200,7 @@ class RoyaleAiScreen(Screen):
         self.ftimer = QTimer(self)
         self.ftimer.setTimerType(Qt.PreciseTimer)
         self.ftimer.timeout.connect(self.frame_tick)
-        self.ftimer.start(8)                         # up to 120 pictures a second
+        self.ftimer.start(4)                         # up to 240 pictures a second
         self._seq = 0
 
     def frame_tick(self):
