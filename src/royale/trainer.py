@@ -30,7 +30,7 @@ MODELS = HOME / "models"
 HF = "https://huggingface.co"
 REPO = "SudhishNeel/clash-royale-detection"
 BASE_PT_URL = "https://huggingface.co/SudhishNeel/clash-royale-detector/resolve/main/v8/best.pt"
-RECIPE = 9                    # 5.98: + 2 Roboflow sets, generated pictures layered — a new recipe trains again at once
+RECIPE = 10                    # 5.98: + 2 Roboflow sets, generated pictures layered — a new recipe trains again at once
 DEFAULT_ROBOFLOW = ["yolotrain-c7s7v/clash-royale-ut3g8/4", "clashroyale/clash-royale-of3d3/3",
                     "angelfire/clash-royale-cylln/5", "clash-pxdrz/clash_grid", "dampiix/clash-royale-units",
                     "nathan-yan/clash-royale-detection-cysig/7",
@@ -232,6 +232,33 @@ def base_model():
     if not pt.exists():
         _get(BASE_PT_URL, pt)
     return pt
+
+
+def current_model():
+    """The eyes IN USE now (6.9.6): the last ones this PC trained and installed, else the downloaded base — every
+    training starts from (and is merged with) what the bot already knows, so its knowledge adds up."""
+    t = MODELS / "cr_detector_trained.pt"
+    return t if t.exists() else base_model()
+
+
+def soup(old_w, new_w, alpha, out):
+    """6.9.6: ONE model holding both — every weight = alpha x the new one + (1 - alpha) x the old one (a "model soup":
+    two fine-tunings of the same network averaged keep what each learned; the new eyes do not forget what the old
+    ones knew). Same architecture and the same kinds only. -> the merged weights' path, or None."""
+    from ultralytics import YOLO
+    a, b = YOLO(str(old_w)), YOLO(str(new_w))
+    sa, sb = a.model.state_dict(), b.model.state_dict()
+    if sa.keys() != sb.keys() or any(sa[k].shape != sb[k].shape for k in sa): return None
+    if dict(a.names) != dict(b.names): return None
+    mixed = {}
+    for k, v in sb.items():
+        if v.dtype.is_floating_point:
+            mixed[k] = (alpha * v.float() + (1 - alpha) * sa[k].float()).to(v.dtype)
+        else:
+            mixed[k] = v                                   # counters (BatchNorm's batches seen): the new one's
+    b.model.load_state_dict(mixed)
+    b.save(str(out))
+    return out
 
 
 # ------------------------------------------------------------------ 2. data
@@ -610,7 +637,7 @@ def _after_data(names, epochs, SAFE, pg=None):
     pg = pg if pg is not None else {"done": {}}
     pg.setdefault("done", {})
     from ultralytics import YOLO
-    base = base_model()
+    base = current_model()                       # 6.9.6: the eyes in use (trained before), not the downloaded copy
     yaml_p = ROOT / "data.yaml"
     tr_list, va_list, n_all = _pick(DATA)
     yaml_p.write_text(json.dumps({"path": str(DATA), "train": str(tr_list), "val": str(va_list),
@@ -687,6 +714,22 @@ def _after_data(names, epochs, SAFE, pg=None):
             res.append([cands[-1][0], cands[-1][1], cands[-1][2], str(w), imgsz])
             log(f"{tag} ({what}): mAP50-95 {cands[-1][0]:.3f}, mAP50 {cands[-1][1]:.3f} (imgsz {imgsz})")
             status(stage="train", note=f"{tag} ({what}): {cands[-1][1]:.3f}")
+        # 6.9.6: the old eyes and the new ones MERGED into one model (same network: the weights mixed 25 / 50 / 75 %)
+        # — each mix tested like the others; the honest test then picks among old, new and the mixes
+        if tag == "finetune":
+            for w, what in found:
+                for alpha in (0.25, 0.5, 0.75):
+                    try:
+                        out = ROOT / "runs" / tag / "weights" / f"merged_{'real' if 'real' in what else 'all'}_{int(alpha * 100)}.pt"
+                        if not soup(base, w, alpha, out):
+                            log(f"{tag}: cannot be merged with the old eyes (another network)"); break
+                        r = YOLO(str(out)).val(data=str(yaml_p), imgsz=imgsz, batch=8, device=0, verbose=False, plots=False)
+                        label = f"old + new merged ({int(alpha * 100)}% new, {what})"
+                        cands.append((float(r.box.map), float(r.box.map50), label, out, imgsz))
+                        res.append([cands[-1][0], cands[-1][1], label, str(out), imgsz])
+                        log(f"{label}: mAP50-95 {cands[-1][0]:.3f}, mAP50 {cands[-1][1]:.3f}")
+                    except Exception as e:
+                        log(f"{tag}: merging failed ({type(e).__name__}: {str(e)[:100]})"); break
         pg["done"][tag] = res; pg["cur"] = None; save_prog(pg)
     if not cands:
         status(stage="done", used=False, error="no candidate trained", finished=time.time()); return False
