@@ -523,8 +523,18 @@ def take_own(names):
 def run(epochs=30, n_bulk=4):
     random.seed(7)
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    if not os.environ.get("CF_TRAIN_SAFE"): status(stage="start", started=time.time(), error="", data={})
-    status(recipe=RECIPE)
+    pg = prog()
+    fresh = ("--fresh" in sys.argv or pg.get("recipe") != RECIPE or time.time() - float(pg.get("t0", 0)) > 7 * 86400
+             or read_status().get("stage") == "done")
+    if fresh:
+        pg = {"recipe": RECIPE, "t0": time.time(), "done": {}}
+        if not os.environ.get("CF_TRAIN_SAFE"): status(stage="start", started=time.time(), error="", data={})
+    else:
+        log(f"going on from where it stopped — already done: "
+            f"{', '.join([k for k in ('hand', 'data', 'base') if pg.get(k)] + list(pg.get('done', {})) ) or 'nothing'}")
+        status(stage="start", error="")
+    save_prog(pg)
+    status(recipe=RECIPE, pid=os.getpid())
     _gpu_watch()                                     # the window moves from the first second (6.5)
     if not tools(): return False
     fix_nms()
@@ -533,12 +543,15 @@ def run(epochs=30, n_bulk=4):
     base = base_model()
     names = {int(k): v for k, v in YOLO(str(base)).names.items()}
     SAFE = bool(os.environ.get("CF_TRAIN_SAFE"))
-    if not SAFE:
+    if not SAFE and not pg.get("hand"):
         try:                                     # step 0 (6.6): the hand-card model — small, ~15 min, the biggest win
             from royale import hand_train
             hand_train.run()
+            pg["hand"] = time.time(); save_prog(pg)
         except Exception as e:
             log(f"hand cards skipped: {type(e).__name__}: {e}")
+    elif pg.get("hand"):
+        log("step 0 — the hand-card model: done before (not again)")
         try:                                     # 6.7: ours / theirs colours measured on this PC's own battles
             from royale import team_color
             team_color.auto_calibrate(log=log)
@@ -547,9 +560,12 @@ def run(epochs=30, n_bulk=4):
     if SAFE and (DATA / "images" / "train").exists():
         log("safe mode (after a graphics-card error): the data downloaded before is used, no cuDNN, no AMP, "
             "half the pictures a step")
+    elif pg.get("data") and (DATA / "images" / "train").exists():
+        log("the data: ready from before (not downloaded / sorted again)")
     else:
         _prepare_data(names, n_bulk)
-    _after_data(names, epochs, SAFE)
+        pg["data"] = time.time(); save_prog(pg)
+    _after_data(names, epochs, SAFE, pg)
 
 
 def _prepare_data(names, n_bulk):
@@ -590,7 +606,9 @@ def _restart_safe(why):
     os._exit(0)
 
 
-def _after_data(names, epochs, SAFE):
+def _after_data(names, epochs, SAFE, pg=None):
+    pg = pg if pg is not None else {"done": {}}
+    pg.setdefault("done", {})
     from ultralytics import YOLO
     base = base_model()
     yaml_p = ROOT / "data.yaml"
@@ -601,10 +619,15 @@ def _after_data(names, epochs, SAFE):
     n_val = sum(1 for _ in open(va_list, encoding="utf-8"))
     log(f"Data ready: {n_all:,} pictures on disk -> {n_train:,} chosen for this training, {n_val:,} for the test")
     status(stage="test_base", pictures=n_train)
-    log(f"step 1/3: testing the current eyes on {n_val:,} test pictures (a few minutes, a progress bar follows)")
-    m0 = YOLO(str(base)).val(data=str(yaml_p), imgsz=800, batch=16, device=0, verbose=True, plots=False)
-    log(f"current eyes: mAP50 {float(m0.box.map50):.3f}")
-    base_map = float(m0.box.map50)
+    if pg.get("base"):
+        base_map, base_m = pg["base"]
+        log(f"step 1/3: the current eyes were tested before: mAP50 {base_map:.3f}")
+    else:
+        log(f"step 1/3: testing the current eyes on {n_val:,} test pictures (a few minutes, a progress bar follows)")
+        m0 = YOLO(str(base)).val(data=str(yaml_p), imgsz=800, batch=16, device=0, verbose=True, plots=False)
+        log(f"current eyes: mAP50 {float(m0.box.map50):.3f}")
+        base_map, base_m = float(m0.box.map50), float(m0.box.map)
+        pg["base"] = [base_map, base_m]; save_prog(pg)
     status(stage="train", base_map50=round(base_map, 4), note=f"{epochs} rounds on the graphics card")
     # a fixed small batch: the card is shared with LDPlayer and the bot's eyes ("all it can take" ran out of
     # memory -> cuDNN EXECUTION_FAILED); on a cuDNN error once more without cuDNN (slower, works)
@@ -612,7 +635,6 @@ def _after_data(names, epochs, SAFE):
     # the card at full speed (6.3): cuDNN picks its fastest kernels (off only in safe mode)
     torch.backends.cudnn.benchmark = not SAFE
     if SAFE: torch.backends.cudnn.enabled = False
-    base_m = float(m0.box.map)                                         # mAP50-95: boxes must also be tight
     cands = []
     # two candidates (5.82): the current eyes fine-tuned, and a newer, bigger architecture (YOLO11m, from its COCO
     # start) at a higher resolution — trained one after the other on the card; the honest test picks
@@ -621,12 +643,26 @@ def _after_data(names, epochs, SAFE):
     real_list = _real_list(DATA)
     for tag, start_w, imgsz, ep, hours in plans:
         step = 2 if tag == "finetune" else 3
+        if tag in pg["done"]:                                         # finished in an earlier run: its results
+            for m_, m50, label, w, isz in pg["done"][tag]:
+                if Path(w).exists(): cands.append((m_, m50, label, Path(w), isz))
+            log(f"step {step}/3 — {tag}: done before (not again)")
+            continue
+        pg["cur"] = tag; save_prog(pg)
         bs = max(2, _gpu_batch(imgsz) // 2) if SAFE else _gpu_batch(imgsz)
         # stage 1 (6.7): every picture (the fair 60k), tested every VAL_EVERY rounds on the 3k honest test — the best
         # round is kept (best.pt), and it stops early when 12 rounds bring nothing better (no learning by heart)
         log(f"step {step}/3 — {tag}, stage 1: all the data, up to {0.8 * hours:.1f} h (about {ep} rounds), {imgsz}px, "
             f"{bs} at a time; tested every {VAL_EVERY} rounds, the best round kept")
-        w1 = _train(tag, start_w, yaml_p, ep, 0.8 * hours, imgsz, bs, SAFE)
+        w1p = (pg.get("w1") or {}).get(tag)
+        if w1p and Path(w1p).exists():                                # stage 1 finished before a stop in stage 2
+            w1 = Path(w1p)
+            log(f"step {step}/3 — {tag}, stage 1: done before (not again)")
+        else:
+            w1 = _train(tag, start_w, yaml_p, ep, 0.8 * hours, imgsz, bs, SAFE, resume=pg.get("cur1") == tag)
+            if w1: pg.setdefault("w1", {})[tag] = str(w1)
+        resume2 = pg.get("cur1") == tag + "_real"
+        pg["cur1"] = None; save_prog(pg)
         if not w1: continue
         found = [(w1, "all data")]
         # stage 2: the last part with a small learning rate on THIS game's real pictures only (KataCR's hand-labelled
@@ -639,15 +675,19 @@ def _after_data(names, epochs, SAFE):
             log(f"step {step}/3 — {tag}, stage 2: fine-tuning on the real pictures only "
                 f"({sum(1 for _ in open(real_list, encoding='utf-8')):,}), {ep2} rounds, small learning rate")
             w2 = _train(tag + "_real", str(w1), ft_yaml, ep2, 0.2 * hours, imgsz, bs, SAFE,
-                        extra=dict(lr0=0.0005, lrf=0.5, warmup_epochs=0, mosaic=0.0, close_mosaic=0), every=2)
+                        extra=dict(lr0=0.0005, lrf=0.5, warmup_epochs=0, mosaic=0.0, close_mosaic=0), every=2,
+                        resume=resume2)
             if w2: found.append((w2, "fine-tuned on real"))
         else:
             log(f"{tag}: stage 2 skipped — fewer than 300 real pictures (KataCR missing?)")
+        res = []
         for w, what in found:
             r = YOLO(str(w)).val(data=str(yaml_p), imgsz=imgsz, batch=8, device=0, verbose=False, plots=False)
             cands.append((float(r.box.map), float(r.box.map50), f"{tag} ({what})", w, imgsz))
+            res.append([cands[-1][0], cands[-1][1], cands[-1][2], str(w), imgsz])
             log(f"{tag} ({what}): mAP50-95 {cands[-1][0]:.3f}, mAP50 {cands[-1][1]:.3f} (imgsz {imgsz})")
             status(stage="train", note=f"{tag} ({what}): {cands[-1][1]:.3f}")
+        pg["done"][tag] = res; pg["cur"] = None; save_prog(pg)
     if not cands:
         status(stage="done", used=False, error="no candidate trained", finished=time.time()); return False
     new_m, new_map, tag, best, imgsz = max(cands)
@@ -673,6 +713,8 @@ def _after_data(names, epochs, SAFE):
 def due(acc="main"):
     """Train now? (auto_train on, not running, not done in the last 7 days, not given up today)."""
     st = read_status()
+    if st.get("stage") == "stopped": return False                # the user stopped it: started again by the user only
+    if running(): return False                                    # one is running
     if st.get("stage") not in (None, "done", "error", "no_gpu", "gpu_install") and time.time() - st.get("t", 0) < 3 * 3600:
         return False                                             # one is running
     if st.get("stage") == "no_gpu" and time.time() - st.get("t", 0) < 7 * 86400: return False
@@ -773,9 +815,24 @@ def _sparse_val(model, every):
     model.add_callback("on_train_epoch_end", end)
 
 
-def _train(tag, start_w, yaml_p, ep, hours, imgsz, bs, SAFE, extra=None, every=None):
-    """One training run -> its best weights (tested) or None."""
+def _train(tag, start_w, yaml_p, ep, hours, imgsz, bs, SAFE, extra=None, every=None, resume=False):
+    """One training run -> its best weights (tested) or None. resume: a run stopped in the middle goes on from its
+    last round (ultralytics resume from last.pt) instead of starting again."""
     from ultralytics import YOLO
+    last = ROOT / "runs" / tag / "weights" / "last.pt"
+    pg = prog(); pg["cur1"] = tag; save_prog(pg)                 # a stop now resumes THIS run
+    if resume and last.exists():
+        try:
+            no_pin()
+            m = YOLO(str(last))
+            _sparse_val(m, every or VAL_EVERY)
+            battle_pause(m)
+            log(f"{tag}: going on from its last round (it was stopped)")
+            m.train(resume=True)
+            w = ROOT / "runs" / tag / "weights"
+            return next((p for p in (w / "best.pt", w / "last.pt") if p.exists()), None)
+        except Exception as e:
+            log(f"{tag}: could not go on ({type(e).__name__}: {str(e)[:100]}) — this step starts again")
     try:
         no_pin()
         m = YOLO(start_w)
@@ -895,6 +952,46 @@ def _card_now():
         return {"busy": int(u), "mem_mb": int(mu), "mem_total_mb": int(mt), "temp_c": int(tc)}
     except Exception:
         return None
+
+
+# ------------------------------------------------------------------ resume (6.9.5)
+def prog():
+    """What this training already finished: {"recipe", "t0", "hand", "data", "base": [map50, map], "done": {step:
+    [[map, map50, label, weights, imgsz], ...]}, "cur": the step running}. A new start goes on from there."""
+    return read_status().get("prog") or {}
+
+
+def save_prog(p):
+    status(prog=p)
+
+
+def running():
+    """The training process is alive (its pid, and it is really royale.trainer)."""
+    pid = read_status().get("pid")
+    if not pid: return False
+    try:
+        import psutil
+        pr = psutil.Process(int(pid))
+        return pr.is_running() and "royale.trainer" in " ".join(pr.cmdline())
+    except Exception:
+        return False
+
+
+def stop():
+    """Stop the training and everything it started (its loaders) — what was finished is kept for the next start."""
+    pid = read_status().get("pid")
+    if pid:
+        try:
+            import psutil
+            pr = psutil.Process(int(pid))
+            for c in pr.children(recursive=True) + [pr]:
+                try: c.kill()
+                except Exception: pass
+        except Exception:
+            pass
+    status(stage="stopped", note="stopped by the user — the next start goes on from here", pid=None)
+    log("stopped by the user — the next start goes on from where it was")
+    return True
 
 
 def _gpu_watch():

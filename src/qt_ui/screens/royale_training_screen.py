@@ -102,6 +102,7 @@ class RoyaleTrainingScreen(Screen):
 
         self.t_eyes = card("rtr_eyes", "eye", "rtr_eyes_sub", [
             ("rtr_train_eyes", "play", "go", self.train_eyes),
+            ("rtr_stop", "stop", None, self.stop_eyes),
             ("rtr_watch", "terminal", None, lambda: self.watch(HOME / "royale_train" / "train.log", "eyes"))])
         self.t_self = card("rtr_self", "bolt", "rtr_self_sub", [
             ("rtr_train_self", "play", "go", self.train_self),
@@ -123,11 +124,21 @@ class RoyaleTrainingScreen(Screen):
     def train_eyes(self):
         try:
             from royale import trainer
-            st = trainer.read_status()
-            if st.get("stage") not in (None, "done", "error", "none", "no_gpu") and time.time() - st.get("t", 0) < 3 * 3600:
+            if trainer.running():                       # 6.9.5: really running (its process), not an old status
+                _bring("تدريب عيون كلاش رويال")
                 self.ctx.banner(tr("rtr_already"), "ok", "school"); return
             trainer.start(self.store.account or "main")
             self.ctx.banner(tr("rtr_started_eyes"), "ok", "school")
+            QTimer.singleShot(2500, lambda: _bring("تدريب عيون كلاش رويال"))   # its window in front of you
+        except Exception as e:
+            self.ctx.banner(str(e), "bad", "x")
+
+    def stop_eyes(self):
+        try:
+            from royale import trainer
+            trainer.stop()
+            self.ctx.banner(tr("rtr_stopped_eyes"), "ok", "stop")
+            self.refresh()
         except Exception as e:
             self.ctx.banner(str(e), "bad", "x")
 
@@ -163,7 +174,13 @@ class RoyaleTrainingScreen(Screen):
         # the eyes
         st = _read(HOME / "royale_train" / "status.json")
         stage = st.get("stage") or "none"
-        running = stage not in ("none", "done", "error", "no_gpu") and time.time() - float(st.get("t", 0)) < 3 * 3600
+        try:
+            from royale import trainer as _tr
+            running = _tr.running()                     # 6.9.5: its process is alive (not an old status)
+        except Exception:
+            running = False
+        if not running and stage not in ("none", "done", "error", "no_gpu", "stopped"):
+            stage = "stopped"                           # it was closed: what is done is kept
         lines = [f"<b>{tr('rtr_state')}:</b> " + (f"<span style='color:{y}'>● {tr('rtr_running')}</span> — "
                                                   if running else "") + (tr("rt_" + stage) if tr("rt_" + stage) != "rt_" + stage else stage)
                  + (f" — {st['note']}" if st.get("note") else "")]
@@ -181,6 +198,11 @@ class RoyaleTrainingScreen(Screen):
             lines.append(f"<b>{tr('rtr_hand')}:</b> {100 * float(hd['score']):.1f}% "
                          + (f"<span style='color:{g}'>✅ {tr('rt_used')}</span>" if hd.get("used") else f"({tr('rtr_kept_old')})"))
         if st.get("finished"): lines.append(f"<b>{tr('rtr_last')}:</b> {_ago(st['finished'])}")
+        pg = st.get("prog") or {}
+        if pg and stage != "done":                      # what the next start does not do again
+            done = (["🃏"] if pg.get("hand") else []) + (["📦"] if pg.get("data") else []) + \
+                (["1/3"] if pg.get("base") else []) + [f"✔ {k}" for k in (pg.get("done") or {})]
+            if done: lines.append(f"<b>{tr('rtr_kept')}:</b> " + " · ".join(done))
         data = st.get("data") or {}
         if data:
             tot = sum(int(d.get("n", 0)) for d in data.values())
