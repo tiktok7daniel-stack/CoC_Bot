@@ -155,11 +155,11 @@ def check(brain, name, tile, why):
         return tile, why
     if k == "building_defense":
         # in the middle to pull (Hog / Giant / Ram go for the nearest building), never at the back or forward
-        if not defending and not full:
-            their = getattr(brain, "enemy_seen", set()) | getattr(brain, "predicted", set())
-            from royale.brain import roles
-            if not any("win" in roles(n) and n not in ("goblin_barrel", "graveyard", "miner") for n in their):
-                return None                                  # nothing to pull: a building now is wasted
+        # only against something really coming (5.92: 10 Cannons in one battle, two in its first 2 seconds)
+        if not defending: return None
+        t_now = brain.elapsed()
+        if any(p["card"] == name and t_now - p["t"] < 8 for p in getattr(brain, "plays", [])):
+            return None                                      # the last one still stands
         tx = x
         if threats:
             near = min(threats, key=lambda t: t[2])

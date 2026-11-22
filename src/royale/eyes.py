@@ -61,6 +61,7 @@ class Eyes:
                     out.append(list(cards))
         except (OSError, ValueError, AttributeError):
             pass
+        if out: return out                          # the account's decks written down: they are the truth (5.92)
         try:
             import settings, utils
             dk = ((settings.load(utils.INSTANCE_ID) or {}).get("royale") or {}).get("deck") or []
@@ -73,9 +74,14 @@ class Eyes:
         """5+ of the cards read are one of the account's real decks -> that deck exactly (a card misread — Goblin
         Barrel read as Goblin Gang, both with a goblin face — is put right, before it is locked in for the battle)."""
         best = None
-        for k in self.known_decks():
+        decks = self.known_decks()
+        anywhere = {c for k in decks for c in k}
+        for k in decks:
             ov = len(set(sure) & set(k))
-            if ov >= 5 and (best is None or ov > best[0]): best = (ov, k)
+            odd = [c for c in sure if c not in k]
+            # 5+ in common; or 4 when the rest (at most 2) are in none of the decks: misreads (5.92: Goblin Gang)
+            ok = ov >= 5 or (ov >= 4 and len(odd) <= 2 and not any(c in anywhere for c in odd))
+            if ok and (best is None or ov > best[0]): best = (ov, k)
         return best[1] if best else None
 
     def learn_deck(self, hand):

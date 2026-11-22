@@ -497,6 +497,11 @@ class RoyaleBot:
         start_game(log)
         max_b = int(self.s.get("max_battles", 0) or 0)
         self._status("now")                                  # the app shows "running", not "starting…"
+        try:                                                 # the account's real decks before the first battle
+            import learn_sync, threading as _th
+            if learn_sync.configured(): _th.Thread(target=learn_sync.fetch_knowledge, daemon=True).start()
+        except Exception:
+            pass
         try:                                                 # the eyes on the graphics card (once, in the background)
             import ort_gpu
             ort_gpu.install_in_background(log)
@@ -1184,6 +1189,14 @@ RoyaleBot._api_after_battle = _api_after_battle
 
 
 def _save_deck(deck):
+    """The deck seen in battle -> the settings, unless the account's real decks are written down and this is none
+    of them (a misread deck saved there confirmed itself, 5.92)."""
+    try:
+        from royale.eyes import Eyes
+        known = Eyes.known_decks()
+        if known and not any(sorted(deck) == sorted(k) for k in known): return
+    except Exception:
+        pass
     import settings
     s = settings.load(_u().INSTANCE_ID)
     r = s.setdefault("royale", {})
