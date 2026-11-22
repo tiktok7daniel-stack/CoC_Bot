@@ -186,6 +186,20 @@ class AiPicture(_Base):
             gold = QColor(TOKENS["gold"])
             p.setPen(QPen(gold, 3)); p.setBrush(Qt.NoBrush)
             p.drawEllipse(P(*t), 13, 13)
+            dec = self.d.get("decision") or {}
+            if dec.get("card"):                          # 6.8: what it played, where, and why in one line
+                import re
+                m = re.search(r"([+-]\d+(?:\.\d+)?) (?:elixir )?vs waiting", dec.get("why", ""))
+                txt = f"AI PLAYED: {_nice(dec['card']).upper()} {list(dec.get('tile') or [])}" + (f"  {m.group(1)}" if m else "")
+                fb = ui_font(9, QFont.Bold); p.setFont(fb)
+                tw = p.fontMetrics().horizontalAdvance(txt) + 16
+                at = P(*t)
+                box = QRectF(max(ox + 4, min(ox + w - tw - 4, at.x() - tw / 2)), at.y() - 44, tw, 24)
+                p.setPen(QPen(QColor("#3fe0b0"), 2)); p.setBrush(QColor(10, 20, 30, 215))
+                p.drawRoundedRect(box, 5, 5)
+                p.setPen(QColor("#ffffff")); p.drawText(box, Qt.AlignCenter, txt)
+                p.setFont(f)
+                p.setPen(QPen(gold, 3)); p.setBrush(Qt.NoBrush)
             if c0:
                 a, bpt = P(*c0), P(*t)
                 p.drawLine(a, bpt)

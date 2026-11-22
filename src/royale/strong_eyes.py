@@ -210,7 +210,7 @@ def speed_ms():
 
 
 # ------------------------------------------------------------------ one look
-def detect(frame_rgb, conf=0.35):
+def detect(frame_rgb, conf=0.45):      # 6.8: 0.35 let skins / sparks through
     """-> [(model_name, conf, x0, y0, x1, y1)] in the game picture's pixels, or [] when not ready."""
     import cv2, numpy as np
     s = _S["sess"]

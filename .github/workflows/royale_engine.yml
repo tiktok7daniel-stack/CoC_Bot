@@ -28,6 +28,7 @@ on:
       - "src/royale/card_use.py"
       - "src/royale/trainer.py"
       - "scripts/calibrate_team_color.py"
+      - "src/royale/frames.py"
   workflow_dispatch:
 
 permissions:

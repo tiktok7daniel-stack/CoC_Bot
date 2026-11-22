@@ -112,7 +112,7 @@ def test_occlusion():
     kn = next(g for g in tr.ghosts(t) if g.name == "knight")
     x, y = kn.at(t)
     check("occlusion: the hidden Knight keeps walking on its speed", 18.4 < y < 19.2, f"y {y:.2f} (seen last at 19.1)")
-    check("occlusion: gone after 0.4 s unseen", not tr.ghosts(t + 0.5))
+    check("occlusion: gone after 0.35 s unseen", not tr.ghosts(t + 0.5))
     # the spell that landed on it: a full-health Musketeer survives a Fireball (282 hp > 269, the game's numbers),
     # one at 60% life (its bar read before the flash) does not
     keep = lambda: {g.name for g in tr.ghosts(t, dead=lambda g: Eyes._killed(g, [("fireball", 6, 22)]))}
@@ -121,6 +121,39 @@ def test_occlusion():
     hurt = keep()
     check("occlusion: a full-health Musketeer survives the Fireball (kept)", "musketeer" in full, str(full))
     check("occlusion: a hurt one the Fireball kills is not kept", "musketeer" not in hurt and "knight" in hurt, str(hurt))
+
+
+def test_skins_and_ids():
+    """6.8: a tower skin read as an Archer never becomes a unit; flickering doubtful boxes (sparks, spell flashes) do
+    not open new tracks (the ids stay small); ids start from 1 every battle; an arrow never runs past the unit's
+    own speed."""
+    import random
+    from royale.unit_tracker import UnitTracker, Det
+    random.seed(3)
+    tr = UnitTracker(); tr.reset()
+    seen_skin = []
+    for k in range(87 * 10 // 10):                       # 8.7 s at 10 looks a second
+        t = k * 0.1
+        dets = [Det("archer", 3.5, 26.0, 0.7, "enemy", 2.0, None, True),        # the skull skin on their tower
+                Det("knight", 9.0, 20.0 - 0.9 * t, 0.85, "enemy", 3.0, None, False)]
+        # sparks / explosions: 4 doubtful boxes a look in random places
+        dets += [Det(random.choice(["spirit", "skeleton", "archer"]), random.uniform(0, 17), random.uniform(0, 31),
+                     random.uniform(0.3, 0.49), None, 0.0, None, False) for _ in range(4)]
+        out = tr.update(dets, t)
+        seen_skin.append(out[0][1] is not None)
+    snap = tr.snapshot(t)
+    check("skins: the tower skin is not a unit after 0.8 s", not any(seen_skin[10:]) and
+          not any(d["unit"] == "archer" and abs(d["x"] - 3.5) < 1 for d in snap), f"{sum(seen_skin[10:])} looks")
+    from royale.unit_tracker import Track
+    check("ids: doubtful sparks open no tracks (ids stay small)", Track._ids <= 3, f"last id #{Track._ids}")
+    tr.reset()
+    tr.update([Det("knight", 5.0, 20.0, 0.9, "enemy", 3.0, None, False)], 0.0)
+    check("ids: count from #1 every battle", tr.tracks[0].id == 1, f"#{tr.tracks[0].id}")
+    t2 = UnitTracker(); t2.reset()
+    for k in range(10):                                  # the eyes jump 2 tiles a look: not a walk
+        t2.update([Det("giant", 9.0, 20.0 - 2.0 * k, 0.9, "enemy", 3.0, None, False)], k * 0.1)
+    g = t2.tracks[0]
+    check("speed: never faster than the card walks (+30%)", g.speed() <= 1.3 * 45 / 60 + 1e-6, f"{g.speed():.2f} tiles/s")
 
 
 def test_path():
@@ -237,7 +270,7 @@ def test_sessions():
     check("sessions: no TensorRT here = no crash, a working provider", s.kind in ("cpu", "dml", "cuda", "trt"), s.kind)
 
 
-for fn in (test_tracker, test_brain_lead, test_occlusion, test_path, test_soft_rules, test_team, test_hand, test_sessions):
+for fn in (test_tracker, test_brain_lead, test_occlusion, test_skins_and_ids, test_path, test_soft_rules, test_team, test_hand, test_sessions):
     try:
         fn()
     except Exception as e:

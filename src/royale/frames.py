@@ -13,15 +13,38 @@ SURE = 0.7
 _S = {"t": 0.0, "n": 0}
 
 
-def keep(every=4.0):
-    """Called from the battle loop: the big model's last picture + its detections, every `every` seconds."""
-    if time.monotonic() - _S["t"] < every: return False
+def clean(dets):
+    """6.8: what is kept as a label: no "unit" whose middle sits inside a tower (a tower skin / decoration the model
+    misread — self-training on it would teach the mistake again)."""
+    towers = []
+    for n, c, x0, y0, x1, y1 in dets:
+        if n.endswith("-tower") and c >= 0.4:
+            mx, my = 0.15 * (x1 - x0), 0.15 * (y1 - y0)
+            towers.append((x0 + mx, y0 + my, x1 - mx, y1 - my))
+    out = []
+    for d in dets:
+        n, c, x0, y0, x1, y1 = d
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        if not n.endswith("-tower") and any(a <= cx <= e and b <= cy <= f for a, b, e, f in towers): continue
+        out.append(d)
+    return out
+
+
+def keep(every=4.0, empty=False):
+    """Called from the battle loop: the big model's last picture + its detections, every `every` seconds.
+    empty=True (6.8): the arena at the very start of a battle, before any card is down — the towers are its only
+    labels, so the skins / decorations of THIS account's arena are learned as "nothing" (negative pictures)."""
+    if not empty and time.monotonic() - _S["t"] < every: return False
     from royale import strong_eyes
     seen = strong_eyes.last_seen()
     if not seen: return False
     fr, dets = seen
-    sure = [d for d in dets if d[1] >= SURE and d[0] not in ("elixir", "clock")]
-    if len(sure) < 3: return False                                    # an empty arena teaches little
+    if empty:
+        sure = [d for d in dets if d[0].endswith("-tower") and d[1] >= 0.5]
+        if len(sure) < 4: return False                                # the towers must be seen to be the labels
+    else:
+        sure = clean([d for d in dets if d[1] >= SURE and d[0] not in ("elixir", "clock")])
+        if len(sure) < 3: return False                                # an empty arena teaches little
     import cv2
     x0, y0, x1, y1 = strong_eyes.arena_box(fr.shape)
     h, w = fr.shape[:2]
@@ -32,7 +55,7 @@ def keep(every=4.0):
     sx, sy = strong_eyes.W / max(1, xb - xa), strong_eyes.H / max(1, yb - ya)
     boxes = [[n, round(c, 3), (a - xa) * sx, (b - ya) * sy, (e - xa) * sx, (f - ya) * sy] for n, c, a, b, e, f in sure]
     DIR.mkdir(parents=True, exist_ok=True)
-    stem = time.strftime("%Y%m%d_%H%M%S") + f"_{_S['n'] % 1000:03d}"
+    stem = time.strftime("%Y%m%d_%H%M%S") + f"_{_S['n'] % 1000:03d}" + ("_empty" if empty else "")
     cv2.imwrite(str(DIR / f"{stem}.jpg"), cv2.cvtColor(arena, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 88])
     (DIR / f"{stem}.json").write_text(json.dumps({"boxes": boxes}), encoding="utf-8")
     _S["t"], _S["n"] = time.monotonic(), _S["n"] + 1

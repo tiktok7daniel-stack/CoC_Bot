@@ -232,8 +232,20 @@ class Eyes:
                 same[2] = box
                 same[3] = side or same[3]
                 same[4] = same[4] or name.endswith("-evolution")
+        # the towers the big model sees this look: a "unit" whose middle sits INSIDE one is a tower skin / decoration
+        # until it moves (6.8: skulls / Christmas decorations were read as Archers and Wall Breakers)
+        towers = []
+        for name, cf, x0, y0, x1, y1 in big or []:
+            if name.endswith("-tower") and cf >= 0.4:
+                mx, my = 0.15 * (x1 - x0), 0.15 * (y1 - y0)
+                towers.append((x0 + mx, y0 + my, x1 - mx, y1 - my))
         dets, extra = [], []
         for u, cf, box, side, evolved in cand:
+            fx0, fy0 = self._tile_f(box, w, h)
+            if not (-0.5 <= fx0 <= 17.5 and -0.5 <= fy0 <= 31.5): continue     # the arena's edge / the buttons below
+            cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+            on_tower = any(a <= cx <= c and b <= cy <= d for a, b, c, d in towers)
+            if on_tower and cf < 0.6: continue                                 # a doubtful one on a tower: never
             votes = {"ally": 0.0, "enemy": 0.0}
             try: col, sure = self.colors.team(box)
             except Exception: col, sure = None, 0.0
@@ -242,10 +254,11 @@ class Eyes:
             if u not in self.units.possible_ally_names and not self.two_v_two: votes["enemy"] += 1.5
             team = max(votes, key=votes.get) if any(votes.values()) else None
             fx, fy = self._tile_f(box, w, h)
-            dets.append(Det(u, fx, fy, float(cf), team, abs(votes["ally"] - votes["enemy"]), box))
+            dets.append(Det(u, fx, fy, float(cf), team, abs(votes["ally"] - votes["enemy"]), box, on_tower))
             extra.append(evolved)
         en, al = [], []
         for (d, tr), evolved in zip(self.tracker.update(dets, now), extra):
+            if tr is None: continue            # 6.8: not followed (a doubtful new box, a tower decoration): not a unit
             # the track's side once settled; a new / doubtful one: this look's evidence
             team = tr.team if (tr is not None and (tr.locked() or d.team is None)) else (d.team or "enemy")
             tx, ty = int(round(d.x)), int(round(d.y))

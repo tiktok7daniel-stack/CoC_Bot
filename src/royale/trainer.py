@@ -26,7 +26,7 @@ MODELS = HOME / "models"
 HF = "https://huggingface.co"
 REPO = "SudhishNeel/clash-royale-detection"
 BASE_PT_URL = "https://huggingface.co/SudhishNeel/clash-royale-detector/resolve/main/v8/best.pt"
-RECIPE = 8                    # 5.98: + 2 Roboflow sets, generated pictures layered — a new recipe trains again at once
+RECIPE = 9                    # 5.98: + 2 Roboflow sets, generated pictures layered — a new recipe trains again at once
 DEFAULT_ROBOFLOW = ["yolotrain-c7s7v/clash-royale-ut3g8/4", "clashroyale/clash-royale-of3d3/3",
                     "angelfire/clash-royale-cylln/5", "clash-pxdrz/clash_grid", "dampiix/clash-royale-units",
                     "nathan-yan/clash-royale-detection-cysig/7",
@@ -460,8 +460,10 @@ def take_own(names):
             boxes = json.loads(js.read_text(encoding="utf-8")).get("boxes", [])
         except (OSError, ValueError):
             continue
+        from royale.frames import clean
+        boxes = clean([tuple(b) for b in boxes])               # 6.8: no "unit" inside a tower (a skin) as a label
         rows = [(ids[b[0]], b[2], b[3], b[4], b[5]) for b in boxes if b[0] in ids and float(b[1]) >= 0.6]
-        if len(rows) < 3: continue
+        if len(rows) < 3 and not js.stem.endswith("_empty"): continue
         _write(img.read_bytes(), ".jpg", rows, 568, 896, f"own_{js.stem}")
         n += 1
     log(f"This PC's own battles: {n} pictures")

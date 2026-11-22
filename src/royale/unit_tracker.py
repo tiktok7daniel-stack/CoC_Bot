@@ -18,7 +18,7 @@ Every unit in the arena followed over its life (6.6): a persistent track id, its
            PATH (6.7): over its lane's bridge, then to the tower / building it goes for, stopped where its range
            reaches it; a unit whose heading is far from that path (chasing a troop) keeps its measured line
   eta      seconds until a unit is hitting the tower / building it walks to (the same path)
-  ghosts   a followed unit missing from a look for up to 0.4 s (a spell's flash covered it) stays in the battle
+  ghosts   a followed unit (seen 5+ times) missing from a look for up to 0.35 s (a spell's flash covered it) stays in the battle
            state, moved on its speed — unless its health bar was at the end or the spell that landed kills it
 
 Pure numpy + scipy (already used by the card reader): ~0.2 ms a look for 30 units.
@@ -28,8 +28,8 @@ from collections import namedtuple
 
 import numpy as np
 
-Det = namedtuple("Det", "name x y conf team team_conf box")
-Det.__new__.__defaults__ = (None, 0.0, None)
+Det = namedtuple("Det", "name x y conf team team_conf box on_tower")
+Det.__new__.__defaults__ = (None, 0.0, None, False)
 
 ARENA_W, ARENA_H = 18, 32
 RIVER_Y = 15                                     # y <= 15: our half (as royale.brain; y grows toward their side)
@@ -93,6 +93,9 @@ class Track:
         self._vote_team(d)
         self.conf = float(d.conf)
         self.box = d.box
+        self.x0, self.y0 = d.x, d.y               # where it was born (a unit that never moves from a tower = a skin)
+        self.on_tower = bool(d.on_tower)
+        self.max_move = 0.0
 
     # -------------------------------------------------------------- what it is
     @property
@@ -131,6 +134,22 @@ class Track:
     def speed(self):
         return math.hypot(self.s[2], self.s[3])
 
+    def max_speed(self):
+        """Its card's walking speed + 30% (tiles / s); 3.5 when unknown. A building: 0."""
+        try:
+            from royale.brain import card, unit_card
+            c = card(unit_card(self.name) or "") or {}
+            if c.get("kind") == "building": return 0.0
+            if c.get("speed"): return 1.3 * c["speed"] / 60.0
+        except Exception:
+            pass
+        return 3.5
+
+    def junk(self, now):
+        """A "unit" painted on a tower: inside a tower's box and never moving for 0.8 s — a tower skin / decoration
+        the eyes misread (a real unit walks, or stands NEXT to the tower it hits, not inside it)."""
+        return self.on_tower and now - self.born >= 0.8 and self.max_move < 0.6
+
     def at(self, t):
         """Where the filter puts it at time t (no update)."""
         dt = max(0.0, t - self.t)
@@ -154,13 +173,16 @@ class Track:
         self.s = self.s + K @ (z - H @ self.s)
         self.P = (np.eye(4) - K @ H) @ self.P
         sp = math.hypot(self.s[2], self.s[3])
-        if sp > 3.5:                                    # no unit walks faster (a jump of the eyes, not a walk)
-            self.s[2:] *= 3.5 / sp
+        cap = self.max_speed()
+        if sp > cap:                                    # no faster than this unit walks (a jump of the eyes, not a walk)
+            self.s[2:] *= cap / sp
         self.hits += 1
         self.miss = 0
         self.seen = self.t
         self.names[d.name] = self.names.get(d.name, 0.0) + float(d.conf)
         self._vote_team(d)
+        self.on_tower = bool(d.on_tower)
+        self.max_move = max(self.max_move, math.hypot(d.x - self.x0, d.y - self.y0))
         self.conf = 0.7 * self.conf + 0.3 * float(d.conf)
         self.box = d.box or self.box
 
@@ -184,9 +206,12 @@ class UnitTracker:
         self.tracks = []
         self.t = 0.0
         self.down = set()           # towers already down: ("our" | "their", "left" | "right" | "king")
+        self.junk_spots = []        # (name, x, y): tower decorations read as units this battle (never a new track)
 
     def reset(self):
         self.tracks = []
+        self.junk_spots = []
+        Track._ids = 0                                   # ids count from 1 again every battle
 
     # -------------------------------------------------------------- one look
     def update(self, dets, t=None):
@@ -224,15 +249,19 @@ class UnitTracker:
         for k in free: self.tracks[k].miss += 1
         for i, d in enumerate(dets):                     # what matched no track
             if out[i] is not None: continue
-            near = min((math.hypot(d.x - tr.s[0], d.y - tr.s[1]) for tr in self.tracks
-                        if tr.name == d.name or d.name in tr.names), default=99.0)
-            # a new unit — unless it is a doubtful second box right on a unit already followed (the same unit twice)
-            if d.conf >= 0.45 or (d.conf >= 0.3 and near > 1.2):
+            # a new unit only when the eyes are sure (6.8: doubtful boxes opened a new track every few looks, the ids
+            # ran into the hundreds) and not on a spot already found to be a tower's decoration
+            if any(n == d.name and math.hypot(d.x - jx, d.y - jy) <= 1.0 for n, jx, jy in self.junk_spots): continue
+            if d.conf >= 0.5:
                 tr = Track(d, t)
                 self.tracks.append(tr)
                 out[i] = tr
         # unseen for KEEP seconds: gone (6.7: by the last time it was SEEN — the filter's own time moves every look)
         self.tracks = [tr for tr in self.tracks if t - tr.seen <= self.KEEP]
+        for tr in self.tracks:                           # tower decorations: dropped, their spot remembered
+            if tr.junk(t):
+                self.junk_spots.append((tr.name, tr.x0, tr.y0))
+        self.tracks = [tr for tr in self.tracks if not tr.junk(t)]
         return [(d, tr) for d, tr in zip(dets, out)]
 
     # -------------------------------------------------------------- what the brain asks
@@ -361,17 +390,17 @@ class UnitTracker:
         return math.inf if t >= 20.0 else t
 
     # -------------------------------------------------------------- hidden for a moment (6.7)
-    GHOST = 0.4
+    GHOST = 0.35                # 3 looks at ~10 a second
 
     def ghosts(self, now=None, dead=None):
-        """Followed units NOT seen in this look but seen within GHOST seconds (a Fireball / Lightning flash, a unit
+        """Followed units (seen 5+ times) NOT seen in this look but seen within GHOST seconds (a Fireball / Lightning flash, a unit
         behind another): still there, moved on their speed — so the battle engine does not plan as if they died
         and change its mind when they come back. Not when its health bar was at the end or `dead(track)` says a
         spell that landed on it kills it."""
         now = time.monotonic() if now is None else now
         out = []
         for tr in self.tracks:
-            if tr.miss == 0 or tr.hits < 3 or now - tr.seen > self.GHOST: continue
+            if tr.miss == 0 or tr.hits < 5 or now - tr.seen > self.GHOST: continue
             if tr.life is not None and tr.life <= 0.1: continue
             if dead is not None and dead(tr): continue
             out.append(tr)
@@ -381,7 +410,7 @@ class UnitTracker:
         now = time.monotonic() if now is None else now
         out = []
         for tr in self.tracks:
-            if tr.hits < self.CONFIRM and now - tr.born < 0.3: continue
+            if tr.hits < 3: continue                     # only units seen 3 times are drawn / given to the brain
             d = tr.as_dict(now)
             d["ghost"] = tr.miss > 0
             e = self.eta(tr.id, now)

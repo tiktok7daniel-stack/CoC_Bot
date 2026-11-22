@@ -392,6 +392,10 @@ class RoyaleBot:
             if self.s.get("keep_frames", True):
                 try:
                     from royale import frames
+                    # 6.8: once a battle, the arena before any card is down = a negative picture (skins are nothing)
+                    if not getattr(self, "_empty_kept", None) == id(self.brain.plays) and 0.5 < self.brain.elapsed() < 4 \
+                            and not self.brain.plays and not self.brain.enemy_hist and not self.brain._stable:
+                        if frames.keep(empty=True): self._empty_kept = id(self.brain.plays)
                     frames.keep()
                 except Exception:
                     pass
