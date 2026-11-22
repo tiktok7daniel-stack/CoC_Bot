@@ -574,6 +574,12 @@ def stop():
 
 
 if __name__ == "__main__":
+    try:                                  # 6.9.14: no broken app-folder onnxruntime inherited from the app
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        import ort_gpu
+        ort_gpu.sanitize()
+    except Exception:
+        pass
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("--deck", required=True)

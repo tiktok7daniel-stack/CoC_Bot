@@ -60,9 +60,37 @@ def clean_folder(folder):
                 pass
 
 
+def sanitize():
+    """6.9.14: every process of the bot runs this FIRST (the app, the bot, the trainings): an app-folder onnxruntime it
+    inherited (PYTHONPATH from a parent started before a fix) is checked; a broken one is taken off the path — this
+    process and every child — and its onnxruntime removed (installed clean again later). -> folders taken off."""
+    folders = [TARGET]
+    try:
+        import trt_engine
+        folders.insert(0, trt_engine.TARGET)
+    except Exception:
+        pass
+    off = []
+    pp = [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p]
+    for f in folders:
+        fs = str(f)
+        if (fs in sys.path or fs in pp) and not healthy(f):
+            sys.path[:] = [p for p in sys.path if p != fs]
+            pp = [p for p in pp if p != fs]
+            clean_folder(f)
+            off.append(fs)
+            _log(f"{fs}: a broken onnxruntime — taken off the path and removed (installed clean again later)")
+    if off:
+        if pp: os.environ["PYTHONPATH"] = os.pathsep.join(pp)
+        else: os.environ.pop("PYTHONPATH", None)
+    return off
+
+
 def activate():
     """Use the graphics-card onnxruntime if it is installed and checked (before anything imports onnxruntime).
     6.6: NVIDIA TensorRT / CUDA first (trt_engine) when it was set up and checked on this PC, else DirectML."""
+    try: sanitize()
+    except Exception: pass
     try:
         import trt_engine
         if trt_engine.activate(): return

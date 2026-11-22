@@ -1170,6 +1170,12 @@ def _gpu_batch(imgsz):
 
 
 if __name__ == "__main__":
+    try:                                  # 6.9.14: no broken app-folder onnxruntime inherited from the app
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        import ort_gpu
+        ort_gpu.sanitize()
+    except Exception:
+        pass
     if "--run" in sys.argv:
         _window_title("Clash Farmer — تدريب عيون كلاش رويال (اقفل الشباك ده = يوقف التدريب)")
         print("=" * 70)
