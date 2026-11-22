@@ -17,6 +17,7 @@ State: ~/.CoC_Bot/royale_train/status.json
 import io, json, os, random, shutil, sys, time, zipfile
 from pathlib import Path
 
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")   # less fragmented card memory
 HOME = Path.home() / ".CoC_Bot"
 ROOT = HOME / "royale_train"
 DATA = ROOT / "data"
@@ -25,9 +26,9 @@ MODELS = HOME / "models"
 HF = "https://huggingface.co"
 REPO = "SudhishNeel/clash-royale-detection"
 BASE_PT_URL = "https://huggingface.co/SudhishNeel/clash-royale-detector/resolve/main/v8/best.pt"
-RECIPE = 4                    # 5.98: + 2 Roboflow sets, generated pictures layered — a new recipe trains again at once
+RECIPE = 5                    # 5.98: + 2 Roboflow sets, generated pictures layered — a new recipe trains again at once
 DEFAULT_ROBOFLOW = ["yolotrain-c7s7v/clash-royale-ut3g8/4", "clashroyale/clash-royale-of3d3/3",
-                    "angelfire/clash-royale-cylln/5", "clash-pxdrz/clash_grid/1", "dampiix/clash-royale-units/1",
+                    "angelfire/clash-royale-cylln/5", "clash-pxdrz/clash_grid", "dampiix/clash-royale-units",
                     "nathan-yan/clash-royale-detection-cysig/7",
                     "test-0hg7f/clash-royal-cujfo", "cla-09vin/clash-royale-cylln-pb9jx/5",   # the user's finds (5.98)
                     # the biggest Clash Royale arena sets on Roboflow Universe (all CC BY 4.0, 5.99)
@@ -277,13 +278,30 @@ def take_roboflow(names, key, datasets):
             ver = parts[2] if len(parts) > 2 else None
             if not ver:                                   # no version given: the project's newest one
                 pj = requests.get(f"https://api.roboflow.com/{ws}/{proj}", params={"api_key": key}, timeout=60).json()
-                vs = [str(v.get("id", "")).rsplit("/", 1)[-1] for v in (pj.get("versions") or [])]
+                vs = [str(v.get("id", "")).rsplit("/", 1)[-1] for v in (pj.get("versions") or []) if isinstance(v, dict)]
                 vs = [v for v in vs if v.isdigit()]
+                pv = (pj.get("project") or {}).get("versions")
+                if not vs and isinstance(pv, int) and pv > 0: vs = [str(pv)]      # the project says how many
                 if not vs: log(f"Roboflow {ds}: no version ({str(pj)[:120]})"); continue
                 ver = str(max(map(int, vs)))
             status(stage="data_roboflow", note=f"{ws}/{proj}/{ver}")
             info = requests.get(f"https://api.roboflow.com/{ws}/{proj}/{ver}/yolov8", params={"api_key": key},
                                 timeout=120).json()
+            if isinstance(info.get("error"), dict):                # that version is gone: the project's newest
+                pj = requests.get(f"https://api.roboflow.com/{ws}/{proj}", params={"api_key": key}, timeout=60).json()
+                pv = (pj.get("project") or {}).get("versions")
+                vs = [str(v.get("id", "")).rsplit("/", 1)[-1] for v in (pj.get("versions") or []) if isinstance(v, dict)]
+                vs = [int(v) for v in vs if v.isdigit()] or ([pv] if isinstance(pv, int) and pv > 0 else [])
+                if vs and str(max(vs)) != ver:
+                    ver = str(max(vs))
+                    info = requests.get(f"https://api.roboflow.com/{ws}/{proj}/{ver}/yolov8", params={"api_key": key},
+                                        timeout=120).json()
+            for _w in range(40):                                   # Roboflow may still be making the file (~10 min)
+                if (info.get("export") or {}).get("link") or "progress" not in info: break
+                status(stage="data_roboflow", note=f"{ws}/{proj}/{ver}: Roboflow prepares it ({info.get('progress')})")
+                time.sleep(15)
+                info = requests.get(f"https://api.roboflow.com/{ws}/{proj}/{ver}/yolov8", params={"api_key": key},
+                                    timeout=120).json()
             link = (info.get("export") or {}).get("link")
             if not link:
                 log(f"Roboflow {ds}: no export ({str(info)[:160]})"); continue
@@ -329,7 +347,7 @@ def take_roboflow(names, key, datasets):
 
 
 # ------------------------------------------------------------------ 3-5. train, test, use
-KATACR_ZIP = "https://codeload.github.com/wty-yy/Clash-Royale-Detection-Dataset/zip/refs/heads/main"
+KATACR_ZIP = "https://codeload.github.com/wty-yy/Clash-Royale-Detection-Dataset/zip/refs/heads/master"   # (6.2: was main -> 404)
 
 
 def take_katacr(names, n_real=8000, n_synth=8000):
@@ -444,13 +462,25 @@ def take_own(names):
 def run(epochs=30, n_bulk=4):
     random.seed(7)
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    status(stage="start", started=time.time(), error="", data={})
+    if not os.environ.get("CF_TRAIN_SAFE"): status(stage="start", started=time.time(), error="", data={})
+    status(recipe=RECIPE)
     if not tools(): return False
     fix_nms()
     from ultralytics import YOLO
     import settings
     base = base_model()
     names = {int(k): v for k, v in YOLO(str(base)).names.items()}
+    SAFE = bool(os.environ.get("CF_TRAIN_SAFE"))
+    if SAFE and (DATA / "images" / "train").exists():
+        log("safe mode (after a graphics-card error): the data downloaded before is used, no cuDNN, no AMP, "
+            "half the pictures a step")
+    else:
+        _prepare_data(names, n_bulk)
+    _after_data(names, epochs, SAFE)
+
+
+def _prepare_data(names, n_bulk):
+    import settings
     take_hf(names, n_bulk)
     app = settings.load_app()
     acc_cfg = {}
@@ -467,42 +497,63 @@ def run(epochs=30, n_bulk=4):
             take(names)
         except Exception as e:
             log(f"{take.__name__} skipped: {e}")
+
+
+def _restart_safe(why):
+    """A graphics-card error (cuDNN EXECUTION_FAILED, an illegal memory access) breaks the whole CUDA context of
+    this process: nothing more can run on the card here. A fresh process takes over in safe mode (6.2)."""
+    import subprocess
+    if os.environ.get("CF_TRAIN_SAFE"):
+        log(f"the graphics card failed again in safe mode ({why}) — stopped; close other programs using the card "
+            "(LDPlayer) and train again")
+        status(stage="error", error=f"graphics card: {why}"[:300])
+        os._exit(1)
+    log(f"graphics-card error ({why}) — starting again in a new process, in safe mode")
+    status(stage="queued", note="restarting in safe mode")
+    env = dict(os.environ, CF_TRAIN_SAFE="1", PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True")
+    kw = {"creationflags": 0x00000010 | 0x00000020} if sys.platform == "win32" else {}
+    subprocess.Popen([sys.executable, "-m", "royale.trainer", *sys.argv[1:]],
+                     cwd=str(Path(__file__).resolve().parent.parent), env=env, **kw)
+    os._exit(0)
+
+
+def _after_data(names, epochs, SAFE):
+    from ultralytics import YOLO
+    base = base_model()
     yaml_p = ROOT / "data.yaml"
     yaml_p.write_text(json.dumps({"path": str(DATA), "train": "images/train", "val": "images/val",
                                   "names": {k: v for k, v in names.items()}}), encoding="utf-8")
     n_train = len(list((DATA / "images" / "train").glob("*")))
     log(f"Data ready: {n_train} training pictures")
     status(stage="test_base", pictures=n_train)
-    m0 = YOLO(str(base)).val(data=str(yaml_p), imgsz=800, batch=16, device=0, verbose=False, plots=False)
+    m0 = YOLO(str(base)).val(data=str(yaml_p), imgsz=800, batch=8, device=0, verbose=False, plots=False)
     base_map = float(m0.box.map50)
     status(stage="train", base_map50=round(base_map, 4), note=f"{epochs} rounds on the graphics card")
     # a fixed small batch: the card is shared with LDPlayer and the bot's eyes ("all it can take" ran out of
     # memory -> cuDNN EXECUTION_FAILED); on a cuDNN error once more without cuDNN (slower, works)
     import torch
     torch.backends.cudnn.benchmark = False
+    if SAFE: torch.backends.cudnn.enabled = False
     base_m = float(m0.box.map)                                         # mAP50-95: boxes must also be tight
     cands = []
     # two candidates (5.82): the current eyes fine-tuned, and a newer, bigger architecture (YOLO11m, from its COCO
     # start) at a higher resolution — trained one after the other on the card; the honest test picks
     plans = [("finetune", str(base), 800, epochs), ("yolo11m", "yolo11m.pt", 960, max(epochs, 60))]
     for tag, start_w, imgsz, ep in plans:
-        for attempt in range(2):
+        for attempt in range(1):
             try:
                 m = YOLO(start_w)
-                bs = _gpu_batch(imgsz) if attempt == 0 else max(2, _gpu_batch(imgsz) // 2)
+                bs = max(2, _gpu_batch(imgsz) // 2) if SAFE else _gpu_batch(imgsz)
                 log(f"{tag}: training — {ep} rounds, pictures {imgsz}px, {bs} at a time on the graphics card")
                 m.train(data=str(yaml_p), epochs=ep, imgsz=imgsz, batch=bs,
                         device=0, patience=15, cos_lr=True, close_mosaic=10,
                         workers=max(2, min(8, (os.cpu_count() or 4) // 2)), project=str(ROOT / "runs"),
-                        name=tag, exist_ok=True, plots=False, verbose=True, amp=attempt == 0)
+                        name=tag, exist_ok=True, plots=False, verbose=True, amp=not SAFE)
                 break
-            except RuntimeError as e:
-                if attempt or not any(k in str(e).lower() for k in ("cudnn", "out of memory")): 
-                    log(f"{tag}: {e}"); break
-                log(f"{tag}: {e} — again, smaller")
-                torch.backends.cudnn.enabled = "cudnn" not in str(e).lower()
-                torch.cuda.empty_cache()
             except Exception as e:
+                if any(k in str(e).lower() for k in ("cudnn", "cuda error", "illegal memory", "out of memory",
+                                                       "acceleratorerror", "cublas")):
+                    _restart_safe(f"{type(e).__name__}: {str(e)[:80]}")
                 log(f"{tag} skipped: {e}"); break
         best = ROOT / "runs" / tag / "weights" / "best.pt"
         if not best.exists(): continue
@@ -539,7 +590,8 @@ def due(acc="main"):
         return False                                             # one is running
     if st.get("stage") == "no_gpu" and time.time() - st.get("t", 0) < 7 * 86400: return False
     if st.get("finished") and time.time() - st["finished"] < 7 * 86400 and st.get("recipe") == RECIPE: return False
-    if st.get("stage") == "error" and time.time() - st.get("t", 0) < 3 * 86400: return False   # not on every start
+    if st.get("stage") == "error" and time.time() - st.get("t", 0) < 3 * 86400 and st.get("recipe") == RECIPE:
+        return False                                             # not on every start (a new recipe tries at once)
     return True
 
 
