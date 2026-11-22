@@ -18,7 +18,22 @@ RECHECK = 60              # seconds between checks against a real screenshot
 REST = 90
 STALE = 1.5               # seconds without a new stream picture -> use a real screenshot
 
-_S = {"client": None, "ok_until": 0.0, "off_until": 0.0, "logged": None, "setting_t": 0.0, "setting": True, "starts": 0}
+_S = {"client": None, "ok_until": 0.0, "off_until": 0.0, "logged": None, "setting_t": 0.0, "setting": True, "starts": 0,
+      "max_fps": 120}
+
+
+def set_max_fps(n):
+    """6.9.16: the stream's pictures a second (120 normally, 60 when the eyes run on the processor). Every picture is
+    decoded by the bot AND the app's live screen: at 240 the decoding took the processor the eyes needed (the user's
+    big model: 1203 ms a look on an i7-13700HX). A change restarts the stream with the new rate."""
+    n = int(max(30, min(240, n)))
+    if _S.get("max_fps") == n: return
+    _S["max_fps"] = n
+    c = _S.get("client")
+    if c is not None:
+        try: c.close()
+        except Exception: pass
+        _S["client"] = None
 _LOCK = threading.Lock()
 
 
@@ -276,7 +291,7 @@ def _client(device):
 
     _S["client"] = None
     _S["starts"] += 1
-    c = Stream(device).start()
+    c = Stream(device, max_fps=_S.get("max_fps", 120)).start()
     for _ in range(80):                       # the first picture comes within ~1 s
         if c.frame is not None or not c.alive: break
         time.sleep(0.05)

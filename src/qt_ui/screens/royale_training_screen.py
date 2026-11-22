@@ -108,6 +108,8 @@ class RoyaleTrainingScreen(Screen):
             ("rtr_train_self", "play", "go", self.train_self),
             ("rtr_stop", "stop", None, self.stop_self),
             ("rtr_watch", "terminal", None, lambda: self.watch(HOME / "royale_ai" / "exit" / "train.log", "self"))])
+        self.t_health = card("rtr_health", "check", "rtr_health_sub", [
+            ("rtr_health_run", "play", "go", self.run_health)])          # 6.9.16: every part checked and measured
         self.t_brain = card("rtr_brain", "school", "rtr_brain_sub", [])
         v.addStretch(1)
         self.timer = QTimer(self)
@@ -130,6 +132,19 @@ class RoyaleTrainingScreen(Screen):
             trainer.start(self.store.account or "main")
             self.ctx.banner(tr("rtr_started_eyes"), "ok", "school")
             QTimer.singleShot(2500, lambda: _bring("تدريب عيون كلاش رويال"))   # its window in front of you
+        except Exception as e:
+            self.ctx.banner(str(e), "bad", "x")
+
+    def run_health(self):
+        """The full check in its own process (the same onnxruntime / models the bot uses); the card shows the result."""
+        try:
+            py = sys.executable
+            if py.lower().endswith("pythonw.exe"): py = py[:-len("pythonw.exe")] + "python.exe"
+            here = Path(__file__).resolve().parents[2]
+            kw = {"creationflags": 0x08000000} if sys.platform == "win32" else {}
+            self._health_p = subprocess.Popen([py, "-m", "royale.health_check"], cwd=str(here), **kw)
+            self._health_t = time.time()
+            self.ctx.banner(tr("rtr_health_started"), "ok", "check")
         except Exception as e:
             self.ctx.banner(str(e), "bad", "x")
 
@@ -213,6 +228,23 @@ class RoyaleTrainingScreen(Screen):
         if st.get("pictures"): lines.append(f"🖼 {tr('rt_pictures')}: <b>{int(st['pictures']):,}</b>")
         if st.get("error"): lines.append(f"<span style='color:{r}'>⚠ {st['error']}</span>")
         self._set(self.t_eyes, lines)
+        # the full check
+        hc = _read(HOME / "health.json")
+        hl = []
+        p = getattr(self, "_health_p", None)
+        if p is not None and p.poll() is None:
+            hl.append(f"<span style='color:{y}'>● {tr('rtr_health_running')} ({int(time.time() - self._health_t)} s)</span>")
+        if hc:
+            col = g if hc.get("ok") else r
+            hl.append(f"<b style='color:{col}'>{hc.get('summary_ar', '')}</b>")
+            for it in hc.get("items") or []:
+                ic = {"ok": "✅", "warn": "⚠", "bad": "❌"}.get(it.get("state"), "•")
+                hl.append(f"{ic} <b>{it.get('name')}</b>: {it.get('value')}"
+                          + (f"<br>&nbsp;&nbsp;&nbsp;<small style='color:{y}'>{it['fix_ar']}</small>" if it.get("fix_ar") else ""))
+            hl.append(f"<small>{tr('rtr_last')}: {_ago(hc.get('t'))} · v{hc.get('bot_version', '?')}</small>")
+        elif not hl:
+            hl.append(tr("rtr_health_never"))
+        self._set(self.t_health, hl)
         # self-play
         pr = _read(HOME / "royale_ai" / "exit" / "progress.json")
         try:
@@ -254,4 +286,8 @@ class RoyaleTrainingScreen(Screen):
     @staticmethod
     def _set(lab, lines):
         lab.setText("<br>".join(lines))
-        lab.setMinimumHeight(24 * sum(1 + l.count("<br>") for l in lines) + 6)   # every line shows
+        # every line shows, wrapped ones too (6.9.16: the check's long lines were cut off)
+        est = 24 * sum(1 + l.count("<br>") for l in lines) + 6
+        try: h = lab.heightForWidth(max(300, lab.width())) + 8
+        except Exception: h = 0
+        lab.setMinimumHeight(max(est, h))

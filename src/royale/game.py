@@ -113,6 +113,22 @@ class RoyaleBot:
             strong_eyes.ensure(logger)
         except Exception:
             pass
+        try:                                         # 6.9.16: the screen stream's rate from where the eyes run
+            import ort_gpu, stream_capture
+            stream_capture.set_max_fps(120 if ort_gpu.on_gpu() else 60)
+        except Exception:
+            pass
+        try:                                         # 6.9.16: every part checked and measured before the first battle
+            from royale import health_check
+            import stream_capture as _sc
+            hc = health_check.run(frame_fn=frame, stream=_sc._S.get("client"), log=logger)
+            self.health = hc
+            if not hc.get("ok"):
+                self.notify("🩺 " + hc.get("summary_ar", ""))
+            if (hc.get("look_ms") or 0) > 200:               # slow eyes: the stream gives the processor back
+                _sc.set_max_fps(60)
+        except Exception:
+            logger.debug("Clash Royale: the check failed", exc_info=True)
         try:                                         # and trained on this PC's graphics card, by themselves
             from royale import trainer
             if self.s.get("auto_train", True) and trainer.due():
