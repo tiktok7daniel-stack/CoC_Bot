@@ -201,23 +201,22 @@ def tools():
 
 
 def repair_onnxruntime():
-    """6.9.11: an earlier training's ONNX export let ultralytics pip-install onnxruntime-gpu over onnxruntime in this
-    Python — both write the same folder, the files got mixed ("No module named onnxruntime.capi...", even in a fresh
-    process). Checked in a fresh process; when broken, both are removed and onnxruntime is installed clean again."""
+    """6.9.12: DIAGNOSE only (nothing is uninstalled): can onnxruntime be imported — here (with the app's PYTHONPATH)
+    and in a clean environment? The log says which one is broken and where it was loaded from, so the cause is known.
+    The training does not need onnxruntime any more (the hand model is tested with PyTorch)."""
     import subprocess
     kw = {"creationflags": 0x08000000} if sys.platform == "win32" else {}
-    ok = subprocess.run([sys.executable, "-c", "import onnxruntime as o; o.InferenceSession"], capture_output=True,
-                        text=True, **kw).returncode == 0
-    if ok: return True
-    log("onnxruntime of this Python is broken (two versions mixed) — installing it clean again (~1 min)")
-    subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "onnxruntime-gpu", "onnxruntime"],
-                   capture_output=True, **kw)
-    r = subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--force-reinstall", "--no-deps", "onnxruntime"],
-                       capture_output=True, text=True, **kw)
-    ok = subprocess.run([sys.executable, "-c", "import onnxruntime as o; o.InferenceSession"], capture_output=True,
-                        **kw).returncode == 0
-    log("onnxruntime repaired" if ok else f"onnxruntime could not be repaired: {(r.stdout + r.stderr)[-200:]}")
-    return ok
+    code = "import onnxruntime as o; print(o.__file__); o.InferenceSession"
+    res = {}
+    for name, env in (("with the app's folders", dict(os.environ)),
+                      ("clean", {k: v for k, v in os.environ.items() if k != "PYTHONPATH"})):
+        r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env, **kw)
+        res[name] = (r.returncode == 0, (r.stdout.strip() or r.stderr.strip().splitlines()[-1:] or [""])[-1] if r.returncode else r.stdout.strip())
+    for name, (ok, info) in res.items():
+        log(f"onnxruntime {name}: {'ok' if ok else 'BROKEN'} — {str(info)[:200]}")
+    if not res["with the app's folders"][0] and res["clean"][0]:
+        log("  -> the app's TensorRT / DirectML folder (~/.CoC_Bot/ort_trt or ort_dml) is the broken one, Python's own is fine")
+    return res["clean"][0]
 
 
 def fix_nms():

@@ -169,19 +169,39 @@ def take_roboflow(key, known):
     return res
 
 
-def evaluate(onnx_path, classes, only=None):
-    """In this process, or — when its onnxruntime is broken (a package changed under it) — in a fresh one."""
-    try:
-        return _evaluate(onnx_path, classes, only)
-    except (ImportError, ModuleNotFoundError, AttributeError) as e:
-        import subprocess
-        _log(f"testing in a fresh process ({type(e).__name__})")
-        r = subprocess.run([sys.executable, "-m", "royale.hand_train", "--eval", str(onnx_path), json.dumps(classes),
-                            only or ""], capture_output=True, text=True, timeout=1800,
-                           cwd=str(Path(__file__).resolve().parent.parent))
-        line = next((l for l in r.stdout.splitlines() if l.startswith("EVAL ")), None)
-        if not line: raise RuntimeError(f"the test failed: {(r.stdout + r.stderr)[-300:]}")
-        return json.loads(line[5:])
+def evaluate(onnx_path, classes, only=None, weights=None):
+    """The honest test. 6.9.12: with PyTorch on the processor (the trained .pt, the same picture squashing as the bot)
+    — it needs no onnxruntime, which was broken on the user's PC and failed this test three times. The ONNX file is
+    exported with the same weights."""
+    if weights is not None:
+        return _evaluate_torch(weights, classes, only)
+    return _evaluate(onnx_path, classes, only)
+
+
+def _evaluate_torch(weights, classes, only=None):
+    import cv2, numpy as np, torch
+    from ultralytics import YOLO
+    from royale.hand_classifier import split
+    net = YOLO(str(weights)).model.float().cpu().eval()
+    idx = {c: i for i, c in enumerate(classes)}
+    xs, ys = [], []
+    for d in sorted((DATA / "val").iterdir()):
+        if d.name not in idx: continue
+        for p in d.glob("*.jpg"):
+            if only and not p.name.startswith(only + "_"): continue
+            img = cv2.cvtColor(cv2.imread(str(p)), cv2.COLOR_BGR2RGB)
+            xs.append(_squash(img).transpose(2, 0, 1).astype(np.float32) / 255.0); ys.append(idx[d.name])
+    if not xs: return None
+    ok = ok_card = 0
+    with torch.no_grad():
+        for i in range(0, len(xs), 128):
+            out = net(torch.from_numpy(np.stack(xs[i:i + 128])))
+            out = out[0] if isinstance(out, (list, tuple)) else out
+            for j, pj in enumerate(out.argmax(1).tolist()):
+                t = ys[i + j]
+                ok += int(pj == t)
+                ok_card += int(split(classes[pj])[0] == split(classes[t])[0])
+    return {"n": len(xs), "top1": ok / len(xs), "card": ok_card / len(xs)}
 
 
 def _evaluate(onnx_path, classes, only=None):
@@ -289,12 +309,16 @@ def _finish(w, t0):
     from ultralytics import YOLO
     from royale.hand_classifier import ONNX, META, DIR
     from royale import trainer
-    trainer.repair_onnxruntime()
+    try:
+        from royale import trainer
+        trainer.repair_onnxruntime()                # 6.9.12: only says which onnxruntime is broken, if any
+    except Exception:
+        pass
     model = YOLO(str(w))
     classes = [model.names[i] for i in range(len(model.names))]
     out = Path(model.export(format="onnx", imgsz=IMGSZ, batch=5, opset=12, simplify=False, dynamic=False))
-    real = evaluate(out, classes, "rf")
-    syn = evaluate(out, classes, "syn")
+    real = evaluate(out, classes, "rf", weights=w)
+    syn = evaluate(out, classes, "syn", weights=w)
     _log(f"test — real hand pictures: {real and f'{100 * real['top1']:.1f}% exact, {100 * real['card']:.1f}% right card'}"
          f" ({real and real['n']}); made here: {syn and f'{100 * syn['top1']:.1f}% / {100 * syn['card']:.1f}%'}")
     score = (real or syn or {}).get("card", 0.0)
