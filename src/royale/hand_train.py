@@ -221,6 +221,17 @@ def run(epochs=30, only=None):
     import settings
     t0 = time.time()
     _status(stage="hand", note="hand cards: pictures")
+    done = ROOT / "trained.json"          # 6.9.11: trained before (its test failed / it was stopped): test it, no retraining
+    try:
+        tw = Path(json.loads(done.read_text(encoding="utf-8"))["w"])
+    except (OSError, ValueError, KeyError):
+        tw = None
+    last_best = ROOT / "runs" / "hand" / "weights" / "best.pt"
+    if tw is None and last_best.exists() and time.time() - last_best.stat().st_mtime < 86400:
+        tw = last_best                    # a training of the last day that stopped before this marker existed
+    if tw and tw.exists() and (DATA / "val").exists() and not only:
+        _log(f"the hand-card model was trained before ({tw.parent.parent.name}) — testing and installing it, not training again")
+        return _finish(tw, t0)
     _log("step 0 — the hand-card model: making the pictures")
     if DATA.exists(): shutil.rmtree(DATA, ignore_errors=True)
     cards = bot_cards()
@@ -269,6 +280,16 @@ def run(epochs=30, only=None):
         _log(f"training stopped ({type(e).__name__}: {str(e)[:120]}) — the best round reached so far is used")
     w = ROOT / "runs" / "hand" / "weights" / "best.pt"
     if not w.exists(): w = ROOT / "runs" / "hand" / "weights" / "last.pt"
+    (ROOT / "trained.json").write_text(json.dumps({"w": str(w), "t": time.time()}), encoding="utf-8")
+    return _finish(w, t0)
+
+
+def _finish(w, t0):
+    """The trained hand model -> ONNX (5 slots), its honest test, installed when good enough."""
+    from ultralytics import YOLO
+    from royale.hand_classifier import ONNX, META, DIR
+    from royale import trainer
+    trainer.repair_onnxruntime()
     model = YOLO(str(w))
     classes = [model.names[i] for i in range(len(model.names))]
     out = Path(model.export(format="onnx", imgsz=IMGSZ, batch=5, opset=12, simplify=False, dynamic=False))
@@ -289,6 +310,7 @@ def run(epochs=30, only=None):
     _log(f"hand-card model {'IN USE' if used else 'not used'} — card accuracy {100 * score:.1f}%"
          f" (needs {100 * need:.0f}% and >= the one in use {100 * old:.1f}%) · {int(time.time() - t0)} s")
     _status(hand={"score": round(score, 4), "used": used, "real": real, "made": syn})
+    (ROOT / "trained.json").unlink(missing_ok=True)          # tested: the next training trains a new one
     return used
 
 

@@ -196,7 +196,28 @@ def tools():
     except ImportError:
         import subprocess
         subprocess.run([sys.executable, "-m", "pip", "install", "-q", "pyarrow"])
+    repair_onnxruntime()
     return True
+
+
+def repair_onnxruntime():
+    """6.9.11: an earlier training's ONNX export let ultralytics pip-install onnxruntime-gpu over onnxruntime in this
+    Python — both write the same folder, the files got mixed ("No module named onnxruntime.capi...", even in a fresh
+    process). Checked in a fresh process; when broken, both are removed and onnxruntime is installed clean again."""
+    import subprocess
+    kw = {"creationflags": 0x08000000} if sys.platform == "win32" else {}
+    ok = subprocess.run([sys.executable, "-c", "import onnxruntime as o; o.InferenceSession"], capture_output=True,
+                        text=True, **kw).returncode == 0
+    if ok: return True
+    log("onnxruntime of this Python is broken (two versions mixed) — installing it clean again (~1 min)")
+    subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "onnxruntime-gpu", "onnxruntime"],
+                   capture_output=True, **kw)
+    r = subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--force-reinstall", "--no-deps", "onnxruntime"],
+                       capture_output=True, text=True, **kw)
+    ok = subprocess.run([sys.executable, "-c", "import onnxruntime as o; o.InferenceSession"], capture_output=True,
+                        **kw).returncode == 0
+    log("onnxruntime repaired" if ok else f"onnxruntime could not be repaired: {(r.stdout + r.stderr)[-200:]}")
+    return ok
 
 
 def fix_nms():
