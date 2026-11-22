@@ -28,6 +28,12 @@ class Eyes:
         self.units = UnitDetector(os.path.join(C.MODELS_DIR, "units_M_480x352.onnx"), [])
         self.seen_counts = {}
         self.deck = []
+        from royale.unit_tracker import UnitTracker
+        from royale.team_color import TeamColor
+        self.tracker = UnitTracker()              # every unit followed: id, speed, its side kept (6.6)
+        self.colors = TeamColor()                 # ours / theirs from the badge / health-bar colour (6.6)
+        self.two_v_two = False                    # 2v2: a unit not in our deck can be our partner's
+        self.hand_cls = None                      # the hand-card model (royale.hand_classifier), when trained
         self._card_det = None
         self.set_deck(deck or [])
 
@@ -114,28 +120,42 @@ class Eyes:
             allies, enemies = self.units.run(img)
             nums = self.numbers.run(img)
         hand = [c.name for c in cards[1:5]]
+        nxt = cards[0].name
         # the picture each hand card shows: "_ev1" = its evolution is charged (this play comes out evolved),
         # "_hero" = a hero card (its ability button comes up when it is on the field)
         hand_look = list(getattr(self._card_det, "last_variants", [""] * 5))[1:5]
-        en = [(d.unit.name, d.position.tile_x, d.position.tile_y, float(d.position.conf)) for d in enemies]
-        al = [(d.unit.name, d.position.tile_x, d.position.tile_y, float(d.position.conf)) for d in allies]
+        try:                                         # the hand-card model (6.6): sure where the pictures mix up
+            nxt, hand, hand_look = self._hand_model(frame_rgb, nxt, hand, hand_look)
+        except Exception:
+            pass
+        now = time.monotonic()
+        h, w = frame_rgb.shape[:2]
+        kx, ky = w / float(C.SCREENSHOT_WIDTH), h / float(C.SCREENSHOT_HEIGHT)
+        # every unit found, with its box on the real picture and what the small side model said
+        raw = [(d.unit.name, float(d.position.conf), tuple(v * k for v, k in zip(d.position.bbox, (kx, ky, kx, ky))),
+                side, "units") for lst, side in ((enemies, "enemy"), (allies, "ally")) for d in lst]
         hp, spells = {}, []
+        big = []
         try:                                         # the stronger eyes (174 kinds), in the background: never waited for
             from royale import strong_eyes
             if strong_eyes.ready():
-                self._merge(strong_eyes.look_now(frame_rgb), frame_rgb.shape, img, en, al)
-                hp, spells = self._health()
+                big = strong_eyes.look_now(frame_rgb)
         except Exception:
-            pass
+            big = []
+        en, al = self._units(frame_rgb, raw, big, img, now)
+        if big:
+            try: hp, spells = self._health()
+            except Exception: pass
         return {
-            "next": cards[0].name, "hand": hand, "ready": list(ready), "hand_look": hand_look,
+            "next": nxt, "hand": hand, "ready": list(ready), "hand_look": hand_look,
             "elixir": float(nums.elixir.number),
             "enemies": en,
             "allies": al,
             "towers": {"their_left": nums.left_enemy_princess_hp.number, "their_right": nums.right_enemy_princess_hp.number,
                        "our_left": nums.left_ally_princess_hp.number, "our_right": nums.right_ally_princess_hp.number},
             "hp": hp, "spells": spells, "evo": list(getattr(self, "evo_now", []) or []),
-            "t": time.monotonic(),
+            "tracks": self.tracker.snapshot(now),
+            "t": now,
         }
 
     def _health(self):
@@ -153,35 +173,91 @@ class Eyes:
         return health.read(fr, dets, tile_of, lambda u, box: True)
 
 
-    def _merge(self, dets, shape, small, en, al):
-        """The stronger eyes' units added to the lists (same unit on the same tile: kept once, best confidence).
-        Ours or theirs: our deck's units asked to the ally / enemy model, every other unit is theirs."""
+    @staticmethod
+    def _tile_f(box, w, h):
+        """A box on the picture -> the unit's feet in tiles (floats; the int tile is round())."""
+        x0, y0, x1, y1 = box
+        dx, dy = (x0 + x1) / 2 * 720.0 / w, y1 * 1280.0 / h
+        return ((dx - C.TILE_INIT_X) / C.TILE_WIDTH - 0.5, (C.DISPLAY_HEIGHT - C.TILE_INIT_Y - dy) / C.TILE_HEIGHT - 0.5)
+
+    def _units(self, frame, raw, big, small, now):
+        """Both eye models' units -> (enemies, allies) [(unit, tile x, tile y, conf)], every one followed by the
+        tracker (6.6). Ours or theirs, from the surest evidence down:
+          the colour over its head (its level badge — there even at full health — or its health bar): 2-3 votes
+          the small side model (only asked for units of our deck): 1 vote
+          not a unit of our deck (so it can only be theirs; not in 2v2, where the partner's are ours too): 1.5
+          the track's own history: once 3 votes ahead it keeps its side (a doubtful look can not flip it)
+        The same unit seen by both models on the same tile is kept once (the big model's finer box, surer)."""
         from royale import strong_eyes
-        h, w = shape[:2]
+        from royale.unit_tracker import Det
+        h, w = frame.shape[:2]
+        try: self.colors.prepare(frame)
+        except Exception: pass
         sw, sh = small.width / w, small.height / h
+        cand = []                                          # (unit, conf, box, side_model or None, evolved)
+        for u, cf, box, side, _src in raw:
+            cand.append([u, cf, box, side if u in self.units.possible_ally_names else None, False])
         self.evo_now = []
-        for name, cf, x0, y0, x1, y1 in dets:
+        for name, cf, x0, y0, x1, y1 in big or []:
             u = strong_eyes.unit_name(name)
             if not u: continue
-            evolved = name.endswith("-evolution")
-            dx, dy = (x0 + x1) / 2 * 720.0 / w, y1 * 1280.0 / h               # the 720x1280 game, bottom-centre
-            tx = int(round((dx - C.TILE_INIT_X) / C.TILE_WIDTH - 0.5))
-            ty = int(round((C.DISPLAY_HEIGHT - C.TILE_INIT_Y - dy) / C.TILE_HEIGHT - 0.5))
-            side = "enemy"
+            side = None
             if u in self.units.possible_ally_names:
                 try:
                     side = self.units.side_detector.run(small.crop((int(x0 * sw), int(y0 * sh), int(x1 * sw) + 1, int(y1 * sh) + 1)))
                 except Exception:
-                    pass
-            lst = al if side == "ally" else en
-            if evolved and side != "ally": self.evo_now.append((u, tx, ty))
-            same = next((k for k, d in enumerate(lst) if d[0] == u and abs(d[1] - tx) <= 1 and abs(d[2] - ty) <= 1), None)
-            if same is None: lst.append((u, tx, ty, cf))
+                    side = None
+            box = (x0, y0, x1, y1)
+            fx, fy = self._tile_f(box, w, h)
+            same = None
+            for c in cand:
+                if c[0] != u: continue
+                gx, gy = self._tile_f(c[2], w, h)
+                if abs(gx - fx) <= 1.2 and abs(gy - fy) <= 1.2: same = c; break
+            if same is None:
+                cand.append([u, cf, box, side, name.endswith("-evolution")])
             else:
-                # both eyes see the same unit on the same tile: surer than either alone (5.83); the big model's
-                # place (finer boxes) is kept
-                a = lst[same][3]
-                lst[same] = (u, tx, ty, min(0.99, 1 - (1 - float(a)) * (1 - float(cf))))
+                # both eyes see it on the same tile: surer than either alone (5.83); the big model's box is finer
+                same[1] = min(0.99, 1 - (1 - float(same[1])) * (1 - float(cf)))
+                same[2] = box
+                same[3] = side or same[3]
+                same[4] = same[4] or name.endswith("-evolution")
+        dets, extra = [], []
+        for u, cf, box, side, evolved in cand:
+            votes = {"ally": 0.0, "enemy": 0.0}
+            try: col, sure = self.colors.team(box)
+            except Exception: col, sure = None, 0.0
+            if col: votes[col] += sure
+            if side in ("ally", "enemy"): votes[side] += 1.0
+            if u not in self.units.possible_ally_names and not self.two_v_two: votes["enemy"] += 1.5
+            team = max(votes, key=votes.get) if any(votes.values()) else None
+            fx, fy = self._tile_f(box, w, h)
+            dets.append(Det(u, fx, fy, float(cf), team, abs(votes["ally"] - votes["enemy"]), box))
+            extra.append(evolved)
+        en, al = [], []
+        for (d, tr), evolved in zip(self.tracker.update(dets, now), extra):
+            # the track's side once settled; a new / doubtful one: this look's evidence
+            team = tr.team if (tr is not None and (tr.locked() or d.team is None)) else (d.team or "enemy")
+            tx, ty = int(round(d.x)), int(round(d.y))
+            if evolved and team != "ally": self.evo_now.append((d.name, tx, ty))
+            (al if team == "ally" else en).append((d.name, tx, ty, d.conf))
+        return en, al
+
+    def _hand_model(self, frame, nxt, hand, looks):
+        """The hand-card model's reading where it is sure, else the picture matcher's (royale.hand_classifier)."""
+        from royale import hand_classifier
+        if self.hand_cls is None:
+            self.hand_cls = hand_classifier.HandClassifier.load()
+            if self.hand_cls is None: return nxt, hand, looks
+        allowed = set(self.deck) if len(self.deck) == 8 else None
+        out = self.hand_cls.read(frame, allowed=allowed, known=set(self.by_name))
+        if not out: return nxt, hand, looks
+        names = [nxt] + list(hand)
+        looks5 = [""] + list(looks)
+        for k, r in enumerate(out[:5]):
+            if r is None: continue
+            names[k], looks5[k] = r
+        return names[0], names[1:5], looks5[1:5]
 
 
 # ------------------------------------------------------------------ where to tap (fractions of the screen)

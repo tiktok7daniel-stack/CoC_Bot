@@ -17,7 +17,13 @@ _S = {"busy": False}
 
 
 def activate():
-    """Use the graphics-card onnxruntime if it is installed and checked (before anything imports onnxruntime)."""
+    """Use the graphics-card onnxruntime if it is installed and checked (before anything imports onnxruntime).
+    6.6: NVIDIA TensorRT / CUDA first (trt_engine) when it was set up and checked on this PC, else DirectML."""
+    try:
+        import trt_engine
+        if trt_engine.activate(): return
+    except Exception:
+        pass
     try:
         if os.name == "nt" and READY.exists() and str(TARGET) not in sys.path:
             sys.path.insert(0, str(TARGET))
@@ -35,6 +41,11 @@ def on_gpu():
 
 
 def needed():
+    try:
+        import trt_engine
+        if trt_engine.active(): return False              # TensorRT / CUDA already runs the eyes
+    except Exception:
+        pass
     return os.name == "nt" and not READY.exists() and not on_gpu()
 
 
@@ -84,6 +95,14 @@ def install_in_background(log=None):
     if log: log.info("Clash Royale: setting up the eyes on the graphics card (DirectML) in the background")
     threading.Thread(target=_install, args=(log,), daemon=True, name="ort-dml").start()
     return True
+
+
+def providers():
+    """Every provider this onnxruntime has, fastest first."""
+    import onnxruntime as ort
+    av = ort.get_available_providers()
+    return [p for p in ("TensorrtExecutionProvider", "CUDAExecutionProvider", "DmlExecutionProvider") if p in av] + \
+        ["CPUExecutionProvider"]
 
 
 def session_options(ort, providers):

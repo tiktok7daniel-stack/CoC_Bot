@@ -171,6 +171,14 @@ class RoyaleBot:
             self.brain.enemy_elixir *= 2.0                         # both start with their own elixir
             log.info("Clash Royale: a 2v2 battle — two opponents counted")
         self._prev_hand = None
+        # every unit followed from the battle's first look (6.6): new ids, the side of each, the brain leads its
+        # spells on them; in 2v2 a unit of none of our cards can be our partner's (the colour decides)
+        try:
+            self.eyes.tracker.reset()
+            self.eyes.two_v_two = bool(self.brain.p.get("2v2"))
+            self.brain.tracker = self.eyes.tracker
+        except Exception:
+            pass
         try:
             from royale import live_view
             live_view.new_battle()
@@ -507,6 +515,11 @@ class RoyaleBot:
         try:                                                 # the eyes on the graphics card (once, in the background)
             import ort_gpu
             ort_gpu.install_in_background(log)
+        except Exception:
+            pass
+        try:                                                 # NVIDIA: TensorRT for the eyes (6.6, once, in the background)
+            import trt_engine
+            trt_engine.install_in_background(log)
         except Exception:
             pass
         self._say("✅ كلاش رويال: البوت شغال ومتوصل باللعبة", "the bot is running and connected to the game", phone=True)

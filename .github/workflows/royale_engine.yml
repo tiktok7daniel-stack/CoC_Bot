@@ -19,6 +19,12 @@ on:
       - "src/royale/strong_eyes.py"
       - "scripts/test_royale_exit.py"
       - "scripts/test_royale_training.py"
+      - "scripts/test_royale_vision.py"
+      - "src/trt_engine.py"
+      - "src/royale/unit_tracker.py"
+      - "src/royale/team_color.py"
+      - "src/royale/hand_classifier.py"
+      - "src/royale/hand_train.py"
   workflow_dispatch:
 
 permissions:
@@ -67,6 +73,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           python scripts/test_royale_spells.py
           if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: The 6.6 eyes (tracker, team colours, hand model reader, sessions)
+        run: |
+          python -m pip install scipy opencv-python-headless pillow
+          python scripts/test_royale_vision.py
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: TensorRT for NVIDIA cards (onnxruntime-gpu + TensorRT 10 install into their folder and load)
+        run: python -c "import sys, os; sys.path.insert(0, 'src'); import trt_engine as t; ok = t._pip(['onnxruntime-gpu==' + t.PAIRS[0][0], 'tensorrt-cu12-libs==' + t.PAIRS[0][1]]); sys.path.insert(0, str(t.TARGET)); import onnxruntime as o; av = o.get_available_providers(); print(o.__version__, av); print(sorted(os.listdir(t.TARGET / 'tensorrt_libs'))[:12]); sys.exit(0 if ok and 'TensorrtExecutionProvider' in av and any(n.startswith('nvinfer') for n in os.listdir(t.TARGET / 'tensorrt_libs')) else 1)"
       - name: The eyes on the graphics card (DirectML onnxruntime installs and loads)
         run: python -c "import sys; sys.path.insert(0, 'src'); import ort_gpu; ort_gpu._install(); print(open(ort_gpu.LOG, encoding='utf-8').read()[-600:]); sys.exit(0 if ort_gpu.READY.exists() else 1)"
 

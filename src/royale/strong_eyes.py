@@ -89,13 +89,8 @@ def ensure(logger=None):
 
 def _load():
     try:
-        import onnxruntime as ort
-        av = ort.get_available_providers()
-        prov = [p for p in ("CUDAExecutionProvider", "DmlExecutionProvider") if p in av] + ["CPUExecutionProvider"]
-        import ort_gpu
-        so = ort_gpu.session_options(ort, prov)
-        so.intra_op_num_threads = 2
-        _S["sess"] = ort.InferenceSession(str(ONNX), sess_options=so, providers=prov)
+        import trt_engine                     # TensorRT FP16 -> CUDA -> DirectML -> processor (6.6)
+        _S["sess"] = trt_engine.make_session(ONNX, threads=2)
         _S["mtime"] = ONNX.stat().st_mtime
         _S["names"] = {int(k): v for k, v in json.loads(NAMES.read_text(encoding="utf-8")).items()}
         return True

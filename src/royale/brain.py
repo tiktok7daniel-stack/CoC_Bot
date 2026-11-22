@@ -225,8 +225,23 @@ class Brain:
 
     def lead(self, name, x, y, unit=None):
         """Where an enemy unit at (x, y) will be when spell `name` lands: its flight from our king tower (speed from
-        the game data) + cast delay, times how fast the unit walks toward us."""
+        the game data) + cast delay, times how fast the unit walks toward us.
+        6.6: the unit's own track (royale.unit_tracker: Kalman speed in x AND y, the look's age, the tap, the
+        spell's wait and flight, stopped at the tower it will hit) when the eyes follow it."""
         c = card(name)
+        tr = getattr(self, "tracker", None)
+        if tr is not None:
+            try:
+                t = tr.nearest(unit, x, y, team="enemy")
+                if t is not None:
+                    p = tr.predict_position(t.id, name)
+                    if p is not None:
+                        if name in ROLLING:                # rolls forward from its drop: just behind where they will be
+                            p = (p[0], max(0.0, p[1] - 1.0))
+                        self._lead_seen = {"id": t.id, "from": (t.x, t.y), "to": p, "card": name, "t": time.monotonic()}
+                        return p
+            except Exception:
+                pass
         if name in ROLLING:                       # it rolls forward from where it is dropped: drop it just behind them
             return (x, max(0.0, y - 1.0))
         ps = c.get("projectile_speed")
@@ -363,7 +378,23 @@ class Brain:
                 pool = known or cards_here
                 s["main"] = max(pool, key=lambda c: card(c).get("cost", 0)) if pool else None
                 s["urgent"] = any(K.counter(c, card(c)).get("urgent") for c in cards_here)
+                # 6.6: seconds until the first of them is hitting our tower (its tracked speed and heading)
+                s["eta"] = self._lane_eta(s["units"])
         return out
+
+    def _lane_eta(self, units):
+        tr = getattr(self, "tracker", None)
+        if tr is None: return None
+        best = None
+        for u, x, y in units:
+            try:
+                t = tr.nearest(u, x, y, team="enemy")
+                if t is None: continue
+                e = tr.eta(t.id)
+                if e != float("inf") and (best is None or e < best): best = e
+            except Exception:
+                pass
+        return best
 
     # -------------------------------------------------------------- choosing
     def duel(self, name, threat):
@@ -394,7 +425,8 @@ class Brain:
             # it walks past troops to the tower: the defender has until it gets there (~ its distance / speed)
             far = min(dist(u2[1:], OUR_TOWERS[lane(u2[1])]) for u2 in units)
             spd = max(0.5, (card(unit_card(units[0][0]) or "").get("speed") or 60) / 60.0)
-            t_die = far / spd + 2.0                              # + the tower shooting it too
+            eta = threat.get("eta")                              # 6.6: its tracked arrival when the eyes follow it
+            t_die = (eta if eta is not None else far / spd) + 2.0   # + the tower shooting it too
         else:
             t_die = my_hp / max(1.0, t_dps)
         return t_die / max(0.1, t_kill)

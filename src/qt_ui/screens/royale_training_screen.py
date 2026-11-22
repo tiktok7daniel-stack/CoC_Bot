@@ -145,6 +145,10 @@ class RoyaleTrainingScreen(Screen):
             used = st.get("used")
             lines.append(f"<b>{tr('rtr_accuracy')}:</b> {100 * st['base_map50']:.1f}% → {100 * st['new_map50']:.1f}% "
                          + (f"<span style='color:{g}'>✅ {tr('rt_used')}</span>" if used else f"({tr('rtr_kept_old')})"))
+        hd = st.get("hand") or {}
+        if hd.get("score") is not None:                  # the hand-card model (6.6)
+            lines.append(f"<b>{tr('rtr_hand')}:</b> {100 * float(hd['score']):.1f}% "
+                         + (f"<span style='color:{g}'>✅ {tr('rt_used')}</span>" if hd.get("used") else f"({tr('rtr_kept_old')})"))
         if st.get("finished"): lines.append(f"<b>{tr('rtr_last')}:</b> {_ago(st['finished'])}")
         data = st.get("data") or {}
         if data:
@@ -180,6 +184,16 @@ class RoyaleTrainingScreen(Screen):
             if ti: bl.append(f"🧠 {tr('rt_policy')}: <b>{100 * ti.get('card_in_hand', 0):.0f}% / {100 * ti.get('play', 0):.0f}%</b>")
             if bi: bl.append(f"🧩 {tr('rt_board')}: <b>{100 * bi.get('card_in_hand', 0):.0f}% / {100 * bi.get('tile_within1', 0):.0f}%</b>")
             bl.append(f"📷 {tr('rt_frames')}: <b>{frames.count():,}</b>")
+            # the eyes' runtime (6.6): TensorRT FP16 / CUDA / DirectML, with its measured ms
+            import trt_engine
+            ti = trt_engine.info()
+            if ti.get("mode"):
+                ms = ", ".join(f"{k.replace('.onnx', '')} {v.get('trt_ms', v.get('cuda_ms'))} ms"
+                               for k, v in (ti.get("bench") or {}).items())
+                bl.append(f"⚡ {tr('rtr_runtime')}: <b>{'TensorRT FP16' if ti['mode'] == 'trt' else 'CUDA'}</b>"
+                          + (f" <small>({ms})</small>" if ms else ""))
+            elif trt_engine.LOG.exists() and time.time() - trt_engine.LOG.stat().st_mtime < 900:   # the bot sets it up
+                bl.append(f"⚡ {tr('rtr_runtime')}: <span style='color:{y}'>{tr('rtr_trt_setup')}</span>")
         except Exception:
             pass
         self._set(self.t_brain, bl or ["—"])

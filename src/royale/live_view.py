@@ -106,6 +106,30 @@ def _dets(st):
     return out
 
 
+def _tracks(brain, st):
+    """The tracker's units (6.6) as screen fractions: id, side, place, speed (fractions / s) and where the last
+    spell aimed was led to — the live screen draws the id, an arrow for the speed and the predicted impact."""
+    from royale.eyes import tile_xy
+    out = []
+    for t in (st.get("tracks") or [])[:60]:
+        try:
+            x, y = tile_xy(t["x"], t["y"])
+            x2, y2 = tile_xy(t["x"] + t["vx"], t["y"] + t["vy"])
+            out.append({"id": t["id"], "n": t["unit"], "m": t["team"] == "ally", "x": round(x, 4), "y": round(y, 4),
+                        "vx": round(x2 - x, 4), "vy": round(y2 - y, 4), "lock": bool(t.get("locked")),
+                        "eta": t.get("eta")})
+        except Exception:
+            pass
+    lead = None
+    ls = getattr(brain, "_lead_seen", None)
+    if ls and time.monotonic() - ls.get("t", 0) < 2.0:
+        try:
+            lead = {"id": ls["id"], "card": ls["card"], "from": list(tile_xy(*ls["from"])), "to": list(tile_xy(*ls["to"]))}
+        except Exception:
+            lead = None
+    return out, lead
+
+
 def _save_frame(acc, frame):
     """A small copy of the screen (360 px wide) for the app's "the bot's eyes" panel, twice a second."""
     if frame is None or time.time() - _S.get("ft", 0) < 0.5: return False
@@ -151,6 +175,7 @@ def battle(acc, brain, st, d, force=False, frame=None):
         try: return round(float(brain.life(u, x, y)), 2)
         except Exception: return 1.0
     looks = st.get("hand_look") or [""] * 4
+    trk = _tracks(brain, st)
     data = {
         "t": now, "phase": "battle",
         "time_s": round(brain.elapsed(), 1),
@@ -181,6 +206,8 @@ def battle(acc, brain, st, d, force=False, frame=None):
         "model": _model(brain),
         "boxes": _boxes(brain, st),
         "dets": _dets(st),
+        "tracks": trk[0],
+        "lead": trk[1],
         "seen_t": st.get("_seen_t") or now,
         "target": (list(__import__("royale.eyes", fromlist=["tile_xy"]).tile_xy(*d["tile"])) if d else None),
         "slot": (d.get("slot") if d else None),

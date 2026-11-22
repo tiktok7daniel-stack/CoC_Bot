@@ -26,7 +26,7 @@ MODELS = HOME / "models"
 HF = "https://huggingface.co"
 REPO = "SudhishNeel/clash-royale-detection"
 BASE_PT_URL = "https://huggingface.co/SudhishNeel/clash-royale-detector/resolve/main/v8/best.pt"
-RECIPE = 6                    # 5.98: + 2 Roboflow sets, generated pictures layered — a new recipe trains again at once
+RECIPE = 7                    # 5.98: + 2 Roboflow sets, generated pictures layered — a new recipe trains again at once
 DEFAULT_ROBOFLOW = ["yolotrain-c7s7v/clash-royale-ut3g8/4", "clashroyale/clash-royale-of3d3/3",
                     "angelfire/clash-royale-cylln/5", "clash-pxdrz/clash_grid", "dampiix/clash-royale-units",
                     "nathan-yan/clash-royale-detection-cysig/7",
@@ -262,6 +262,46 @@ def take_hf(names, n_bulk=4):
         data_note("SudhishNeel (HuggingFace)", _hf_total[0])
 
 
+def rf_export(ds, key, fmt="yolov8"):
+    """A Roboflow dataset ("workspace/project[/version]") -> (download link, ws, project, version) in format `fmt`
+    ("yolov8" boxes, "folder" a picture per class folder): the newest version when none is given / it is gone, and
+    waiting while Roboflow is still making the file. No link -> (None, ...) and the reason in the log."""
+    import requests
+    parts = ds.strip("/").split("/")
+    ws, proj = parts[0], parts[1]
+    ver = parts[2] if len(parts) > 2 else None
+    if not ver:                                   # no version given: the project's newest one
+        pj = requests.get(f"https://api.roboflow.com/{ws}/{proj}", params={"api_key": key}, timeout=60).json()
+        vs = [str(v.get("id", "")).rsplit("/", 1)[-1] for v in (pj.get("versions") or []) if isinstance(v, dict)]
+        vs = [v for v in vs if v.isdigit()]
+        pv = (pj.get("project") or {}).get("versions")
+        if not vs and isinstance(pv, int) and pv > 0: vs = [str(pv)]      # the project says how many
+        if not vs: log(f"Roboflow {ds}: no version ({str(pj)[:120]})"); return None, ws, proj, None
+        ver = str(max(map(int, vs)))
+    status(stage="data_roboflow", note=f"{ws}/{proj}/{ver}")
+    info = requests.get(f"https://api.roboflow.com/{ws}/{proj}/{ver}/{fmt}", params={"api_key": key},
+                        timeout=120).json()
+    if isinstance(info.get("error"), dict):                # that version is gone: the project's newest
+        pj = requests.get(f"https://api.roboflow.com/{ws}/{proj}", params={"api_key": key}, timeout=60).json()
+        pv = (pj.get("project") or {}).get("versions")
+        vs = [str(v.get("id", "")).rsplit("/", 1)[-1] for v in (pj.get("versions") or []) if isinstance(v, dict)]
+        vs = [int(v) for v in vs if v.isdigit()] or ([pv] if isinstance(pv, int) and pv > 0 else [])
+        if vs and str(max(vs)) != ver:
+            ver = str(max(vs))
+            info = requests.get(f"https://api.roboflow.com/{ws}/{proj}/{ver}/{fmt}", params={"api_key": key},
+                                timeout=120).json()
+    for _w in range(40):                                   # Roboflow may still be making the file (~10 min)
+        if (info.get("export") or {}).get("link") or "progress" not in info: break
+        status(stage="data_roboflow", note=f"{ws}/{proj}/{ver}: Roboflow prepares it ({info.get('progress')})")
+        time.sleep(15)
+        info = requests.get(f"https://api.roboflow.com/{ws}/{proj}/{ver}/{fmt}", params={"api_key": key},
+                            timeout=120).json()
+    link = (info.get("export") or {}).get("link")
+    if not link:
+        log(f"Roboflow {ds}: no export ({str(info)[:160]})"); return None, ws, proj, ver
+    return link, ws, proj, ver
+
+
 def take_roboflow(names, key, datasets):
     """Every Roboflow dataset ("workspace/project/version") in YOLOv8 format, names mapped to the base's."""
     if not key:
@@ -273,38 +313,8 @@ def take_roboflow(names, key, datasets):
     test_h = _test_hashes()                                    # KataCR's test pictures are in place first
     for ds in datasets:
         try:
-            parts = ds.strip("/").split("/")
-            ws, proj = parts[0], parts[1]
-            ver = parts[2] if len(parts) > 2 else None
-            if not ver:                                   # no version given: the project's newest one
-                pj = requests.get(f"https://api.roboflow.com/{ws}/{proj}", params={"api_key": key}, timeout=60).json()
-                vs = [str(v.get("id", "")).rsplit("/", 1)[-1] for v in (pj.get("versions") or []) if isinstance(v, dict)]
-                vs = [v for v in vs if v.isdigit()]
-                pv = (pj.get("project") or {}).get("versions")
-                if not vs and isinstance(pv, int) and pv > 0: vs = [str(pv)]      # the project says how many
-                if not vs: log(f"Roboflow {ds}: no version ({str(pj)[:120]})"); continue
-                ver = str(max(map(int, vs)))
-            status(stage="data_roboflow", note=f"{ws}/{proj}/{ver}")
-            info = requests.get(f"https://api.roboflow.com/{ws}/{proj}/{ver}/yolov8", params={"api_key": key},
-                                timeout=120).json()
-            if isinstance(info.get("error"), dict):                # that version is gone: the project's newest
-                pj = requests.get(f"https://api.roboflow.com/{ws}/{proj}", params={"api_key": key}, timeout=60).json()
-                pv = (pj.get("project") or {}).get("versions")
-                vs = [str(v.get("id", "")).rsplit("/", 1)[-1] for v in (pj.get("versions") or []) if isinstance(v, dict)]
-                vs = [int(v) for v in vs if v.isdigit()] or ([pv] if isinstance(pv, int) and pv > 0 else [])
-                if vs and str(max(vs)) != ver:
-                    ver = str(max(vs))
-                    info = requests.get(f"https://api.roboflow.com/{ws}/{proj}/{ver}/yolov8", params={"api_key": key},
-                                        timeout=120).json()
-            for _w in range(40):                                   # Roboflow may still be making the file (~10 min)
-                if (info.get("export") or {}).get("link") or "progress" not in info: break
-                status(stage="data_roboflow", note=f"{ws}/{proj}/{ver}: Roboflow prepares it ({info.get('progress')})")
-                time.sleep(15)
-                info = requests.get(f"https://api.roboflow.com/{ws}/{proj}/{ver}/yolov8", params={"api_key": key},
-                                    timeout=120).json()
-            link = (info.get("export") or {}).get("link")
-            if not link:
-                log(f"Roboflow {ds}: no export ({str(info)[:160]})"); continue
+            link, ws, proj, ver = rf_export(ds, key, "yolov8")
+            if not link: continue
             z = zipfile.ZipFile(io.BytesIO(_get(link).content))
             import yaml
             yml = next((n for n in z.namelist() if n.endswith("data.yaml")), None)
@@ -472,6 +482,12 @@ def run(epochs=30, n_bulk=4):
     base = base_model()
     names = {int(k): v for k, v in YOLO(str(base)).names.items()}
     SAFE = bool(os.environ.get("CF_TRAIN_SAFE"))
+    if not SAFE:
+        try:                                     # step 0 (6.6): the hand-card model — small, ~15 min, the biggest win
+            from royale import hand_train
+            hand_train.run()
+        except Exception as e:
+            log(f"hand cards skipped: {type(e).__name__}: {e}")
     if SAFE and (DATA / "images" / "train").exists():
         log("safe mode (after a graphics-card error): the data downloaded before is used, no cuDNN, no AMP, "
             "half the pictures a step")

@@ -11,21 +11,20 @@ GPU_LOCK = threading.RLock()
 
 def providers():
     av = ort.get_available_providers()
-    return [p for p in ("CUDAExecutionProvider", "DmlExecutionProvider") if p in av] + ["CPUExecutionProvider"]
+    return [p for p in ("TensorrtExecutionProvider", "CUDAExecutionProvider", "DmlExecutionProvider") if p in av] + \
+        ["CPUExecutionProvider"]
 
 
 class OnnxDetector:
     def __init__(self, model_path):
         self.model_path = model_path
 
-        so = ort.SessionOptions()
-        so.intra_op_num_threads = max(2, (os.cpu_count() or 4) // 2)
-        if "DmlExecutionProvider" in providers():                # DirectML: sequential, no memory patterns
-            so.enable_mem_pattern = False
-            so.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
-        try:
-            self.sess = ort.InferenceSession(self.model_path, sess_options=so, providers=providers())
+        try:                                   # TensorRT FP16 -> CUDA -> DirectML -> processor (6.6, trt_engine)
+            import trt_engine
+            self.sess = trt_engine.make_session(self.model_path, threads=max(2, (os.cpu_count() or 4) // 2))
         except Exception:
+            so = ort.SessionOptions()
+            so.intra_op_num_threads = max(2, (os.cpu_count() or 4) // 2)
             self.sess = ort.InferenceSession(self.model_path, sess_options=so, providers=["CPUExecutionProvider"])
         self.gpu = self.sess.get_providers()[0] != "CPUExecutionProvider"
         self.output_name = self.sess.get_outputs()[0].name

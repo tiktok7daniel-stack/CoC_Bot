@@ -154,6 +154,31 @@ class AiPicture(_Base):
                 bar = QRectF(r.left(), r.bottom() + 1, r.width(), 3)
                 p.fillRect(bar, QColor(0, 0, 0, 160))
                 p.fillRect(QRectF(bar.left(), bar.top(), bar.width() * max(0.0, life), 3), QColor("#ffd24d"))
+        # 6.6: every tracked unit — its id, an arrow for where it walks (1 s ahead), and the spell's predicted impact
+        import math
+        for t in self.d.get("tracks") or []:
+            col = QColor("#3fa9ff") if t.get("m") else QColor("#ff4d4d")
+            a = P(t["x"], t["y"])
+            p.setPen(QColor("#ffffff"))
+            p.drawText(a + QPointF(-6, 14), f"#{t['id']}" + ("🔒" if t.get("lock") else ""))
+            vx, vy = float(t.get("vx") or 0), float(t.get("vy") or 0)
+            if abs(vx) + abs(vy) > 0.004:
+                bpt = P(t["x"] + vx, t["y"] + vy)
+                p.setPen(QPen(col, 2)); p.drawLine(a, bpt)
+                ang = math.atan2(bpt.y() - a.y(), bpt.x() - a.x())
+                p.setBrush(col)
+                p.drawPolygon(QPolygonF([bpt, bpt - QPointF(7 * math.cos(ang - 0.5), 7 * math.sin(ang - 0.5)),
+                                         bpt - QPointF(7 * math.cos(ang + 0.5), 7 * math.sin(ang + 0.5))]))
+            if t.get("eta") is not None and not t.get("m") and t["eta"] < 6:
+                p.setPen(QColor("#ffd24d")); p.drawText(a + QPointF(10, 2), f"{t['eta']:.1f}s")
+        ld = self.d.get("lead")
+        if ld:
+            a, bpt = P(*ld["from"]), P(*ld["to"])
+            pen = QPen(QColor("#ffd24d"), 2, Qt.DashLine)
+            p.setPen(pen); p.setBrush(Qt.NoBrush)
+            p.drawLine(a, bpt)
+            p.drawEllipse(bpt, 10, 10)
+            p.drawLine(bpt + QPointF(-14, 0), bpt + QPointF(14, 0)); p.drawLine(bpt + QPointF(0, -14), bpt + QPointF(0, 14))
         self._badge(p, ox, oy, w, h, iw, ih)
         # the move: a gold arrow from the card in the hand to its tile
         t, c0 = self.d.get("target"), self.d.get("card_at")
