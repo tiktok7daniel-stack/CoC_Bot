@@ -532,22 +532,26 @@ def _after_data(names, epochs, SAFE):
     # a fixed small batch: the card is shared with LDPlayer and the bot's eyes ("all it can take" ran out of
     # memory -> cuDNN EXECUTION_FAILED); on a cuDNN error once more without cuDNN (slower, works)
     import torch
-    torch.backends.cudnn.benchmark = False
+    # the card at full speed (6.3): cuDNN picks its fastest kernels (off only in safe mode)
+    torch.backends.cudnn.benchmark = not SAFE
     if SAFE: torch.backends.cudnn.enabled = False
+    _gpu_watch()
     base_m = float(m0.box.map)                                         # mAP50-95: boxes must also be tight
     cands = []
     # two candidates (5.82): the current eyes fine-tuned, and a newer, bigger architecture (YOLO11m, from its COCO
     # start) at a higher resolution — trained one after the other on the card; the honest test picks
-    plans = [("finetune", str(base), 800, epochs), ("yolo11m", "yolo11m.pt", 960, max(epochs, 60))]
+    plans = [("finetune", str(base), 800, epochs), ("yolo11m", "yolo11m.pt", 960, max(epochs, 45))]
     for tag, start_w, imgsz, ep in plans:
         for attempt in range(1):
             try:
                 m = YOLO(start_w)
                 bs = max(2, _gpu_batch(imgsz) // 2) if SAFE else _gpu_batch(imgsz)
                 log(f"{tag}: training — {ep} rounds, pictures {imgsz}px, {bs} at a time on the graphics card")
-                m.train(data=str(yaml_p), epochs=ep, imgsz=imgsz, batch=bs,
-                        device=0, patience=15, cos_lr=True, close_mosaic=10,
-                        workers=max(2, min(8, (os.cpu_count() or 4) // 2)), project=str(ROOT / "runs"),
+                # no test after every round (its last step ran on the processor while the card waited): the test runs
+                # once at the end; every processor core but two prepares pictures so the card never waits (6.3)
+                m.train(data=str(yaml_p), epochs=ep, imgsz=imgsz, batch=bs, val=False,
+                        device=0, cos_lr=True, close_mosaic=max(3, ep // 6),
+                        workers=max(2, min(12, (os.cpu_count() or 4) - 2)), project=str(ROOT / "runs"),
                         name=tag, exist_ok=True, plots=False, verbose=True, amp=not SAFE)
                 break
             except Exception as e:
@@ -556,6 +560,8 @@ def _after_data(names, epochs, SAFE):
                     _restart_safe(f"{type(e).__name__}: {str(e)[:80]}")
                 log(f"{tag} skipped: {e}"); break
         best = ROOT / "runs" / tag / "weights" / "best.pt"
+        if not best.exists():
+            best = ROOT / "runs" / tag / "weights" / "last.pt"          # no test while training: the last one
         if not best.exists(): continue
         r = YOLO(str(best)).val(data=str(yaml_p), imgsz=imgsz, batch=8, device=0, verbose=False, plots=False)
         cands.append((float(r.box.map), float(r.box.map50), tag, best, imgsz))
@@ -617,13 +623,32 @@ def _window_title(t):
         except Exception: pass
 
 
+def _gpu_watch():
+    """Every 30 s in the training window: how busy the graphics card is and its memory (nvidia-smi) — so the
+    user sees it really works (6.3)."""
+    import subprocess, threading
+
+    def run():
+        while True:
+            try:
+                r = subprocess.run(["nvidia-smi", "--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu",
+                                    "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=10,
+                                   creationflags=0x08000000 if sys.platform == "win32" else 0)
+                u, mu, mt, tc = [x.strip() for x in r.stdout.strip().splitlines()[0].split(",")]
+                print(f"   [graphics card] busy {u}% · memory {mu}/{mt} MB · {tc}°C", flush=True)
+            except Exception:
+                return
+            time.sleep(30)
+    threading.Thread(target=run, daemon=True, name="gpu-watch").start()
+
+
 def _gpu_batch(imgsz):
     """As many pictures a step as the graphics card's free memory holds (6.02: was a fixed 6 / 4)."""
     try:
         import torch
         free, _total = torch.cuda.mem_get_info()
-        per = 0.55 if imgsz <= 800 else 0.8               # GB a picture needs, about (YOLO m / l at that size)
-        return int(max(4, min(32, (free / 1e9 - 1.2) / per)))
+        per = 0.45 if imgsz <= 800 else 0.7               # GB a picture needs with AMP, about (YOLO m at that size)
+        return int(max(4, min(48, (free / 1e9 - 0.8) / per)))
     except Exception:
         return 6 if imgsz <= 800 else 4
 
