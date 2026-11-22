@@ -107,7 +107,7 @@ class AiPicture(_Base):
                 p.fillRect(QRectF(bar.left(), bar.top(), bar.width() * max(0.0, life), 3), QColor("#ffd24d"))
         if time.monotonic() - self.live_t < 0.5:
             p.setPen(QColor("#4ade80"))
-            tag = f"● LIVE · {self.fps:.0f} fps · {iw}x{ih}"
+            tag = f"● LIVE · {getattr(self, 'stream_fps', 0) or self.fps:.0f} fps · {iw}x{ih}"
             r = QRectF(ox + 6, oy + h * 0.78, fm.horizontalAdvance(tag) + 10, 16)
             p.fillRect(r, QColor(0, 0, 0, 170))
             p.drawText(r, Qt.AlignCenter, tag)
@@ -157,29 +157,28 @@ class RoyaleAiScreen(Screen):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.refresh)
         self.timer.start(100)                        # what it sees / thinks: 10 times a second
+        from ..live_video import LiveVideo
+        self.video = LiveVideo()                    # the app's own copy of the game screen (5.91)
         self.ftimer = QTimer(self)
         self.ftimer.setTimerType(Qt.PreciseTimer)
         self.ftimer.timeout.connect(self.frame_tick)
-        self.ftimer.start(16)                        # the picture: up to 60 a second, straight from memory
-        self._seq, self._touch_t = 0, 0.0
+        self.ftimer.start(8)                         # up to 120 pictures a second
+        self._seq = 0
 
     def frame_tick(self):
         popped = getattr(self, "_pop", None) is not None and self._pop.isVisible()
-        if not self.isVisible() and not popped: return
-        try:
-            import live_shm
-        except Exception:
+        if not self.isVisible() and not popped:
+            self.video.stop()
             return
-        if time.monotonic() - self._touch_t > 1.0:   # tell the bot someone is watching (it only sends then)
-            self._touch_t = time.monotonic()
-            live_shm.touch()
-        r = live_shm.read(self._seq)
+        self.video.start()
+        r = self.video.take(self._seq)
         if not r: return
-        self._seq, w, h, data = r
-        img = QImage(data, w, h, 3 * w, QImage.Format_RGB888).copy()
+        self._seq, img = r
+        self.pic.stream_fps = self.video.fps
         if self.isVisible(): self.pic.set_frame(img)
-        if popped: self._pop._pic.set_frame(img)
-        on_lang(lambda: self.refresh(force=True))
+        if popped:
+            self._pop._pic.stream_fps = self.video.fps
+            self._pop._pic.set_frame(img)
 
     def _path(self):
         acc = self.store.account or "main"

@@ -83,10 +83,54 @@ def _enabled():
     return _S["setting"]
 
 
+RELAY_PORT = 27199
+_R = {"srv": None, "subs": [], "config": b"", "lock": threading.Lock()}
+
+
+def _relay_start():
+    """A local socket (127.0.0.1 only) the app's Live AI screen connects to: it gets the emulator's compressed video
+    as it arrives and decodes it itself on its own threads — a true second screen, never slowed by the bot (5.91)."""
+    if _R["srv"] is not None: return
+    try:
+        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        srv.bind(("127.0.0.1", RELAY_PORT))
+        srv.listen(4)
+    except OSError:
+        return
+    _R["srv"] = srv
+
+    def accept():
+        while True:
+            try:
+                c, _a = srv.accept()
+                c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                c.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 8 << 20)
+                c.settimeout(0.05)                 # a viewer that cannot keep up is dropped, never waited for
+                with _R["lock"]:
+                    if _R["config"]: c.sendall(_R["config"])       # the stream's setup first
+                    _R["subs"].append(c)
+            except Exception:
+                time.sleep(0.5)
+    threading.Thread(target=accept, daemon=True, name="live-relay").start()
+
+
+def _relay(packet, is_config):
+    if is_config: _R["config"] = packet
+    if not _R["subs"]: return
+    with _R["lock"]:
+        for c in list(_R["subs"]):
+            try: c.sendall(packet)
+            except Exception:
+                _R["subs"].remove(c)
+                try: c.close()
+                except Exception: pass
+
+
 class Stream:
     """One running scrcpy video stream; .latest() -> newest RGB picture."""
 
-    def __init__(self, device, bitrate=12_000_000, max_fps=60):  # 60 a second: the Live AI screen shows every one
+    def __init__(self, device, bitrate=16_000_000, max_fps=120):  # up to 120 a second (the emulator's own rate)
         self.device, self.bitrate, self.max_fps = device, bitrate, max_fps
         self.sock, self.shell = None, None
         self.alive = False
@@ -114,7 +158,7 @@ class Stream:
                f"bit_rate={self.bitrate} max_size=0 max_fps={self.max_fps} lock_video_orientation=-1 tunnel_forward=true "
                "control=false display_id=0 show_touches=false stay_awake=false clipboard_autosync=false "
                "power_off_on_close=false downsize_on_error=true cleanup=true send_device_meta=true send_frame_meta=true "
-               "send_dummy_byte=true")
+               "send_dummy_byte=true codec_options=i-frame-interval=1")
         self.shell = self.device.shell(cmd, stream=True)
         deadline = time.time() + timeout
         while True:
@@ -131,6 +175,7 @@ class Stream:
         self.size = (w, h)
         self.sock.settimeout(1.0)
         self.alive = True
+        _relay_start()
         threading.Thread(target=self._loop, daemon=True, name="live-screen").start()
         return self
 
@@ -162,7 +207,6 @@ class Stream:
             codec = av.CodecContext.create("h264", "r")
             try: codec.thread_type = "SLICE"     # slice threads add no delay (frame threads hold pictures back)
             except Exception: pass
-        import live_shm
         config = b""
         self.sock.settimeout(None)
         while self.alive:
@@ -170,6 +214,7 @@ class Stream:
                 head = self._recv(12)
                 pts, size = struct.unpack(">QI", head)
                 data = self._recv(size)
+                _relay(head + data, bool(pts & (1 << 63)))   # the app's own screen (compressed, as it came)
                 if pts & (1 << 63):              # SPS/PPS: goes in front of the next picture
                     config = data
                     continue
@@ -186,9 +231,7 @@ class Stream:
                 for fr in frs:
                     self.frame, self.frame_t = fr, time.monotonic()
                     self.frames += 1
-                    if live_shm.watching():        # the app's Live AI screen is open: every picture, full size
-                        try: live_shm.publish(fr.to_ndarray(format="rgb24"))
-                        except Exception: pass
+
             except Exception as e:
                 self.error = f"{type(e).__name__}: {e}"
                 self.alive = False
@@ -200,7 +243,13 @@ class Stream:
         if fr is None: return None
         if self._arr_of is not fr:
             try:
+                tc = time.perf_counter()
                 self._arr, self._arr_of = fr.to_ndarray(format="rgb24"), fr
+                if getattr(self, "hw", False):   # the card's picture costs more to bring back than to decode here?
+                    ms = (time.perf_counter() - tc) * 1000
+                    self._ema = 0.9 * getattr(self, "_ema", ms) + 0.1 * ms
+                    self._hw_n = getattr(self, "_hw_n", 0) + 1
+                    if self._hw_n > 30 and self._ema > 4.0: self._hw_bad = True
             except Exception:
                 if not getattr(self, "hw", False): raise
                 self._hw_bad = True                # a picture on the card we cannot read: decode on the processor
