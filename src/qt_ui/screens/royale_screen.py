@@ -222,6 +222,14 @@ class RoyaleScreen(Screen):
         if st.get("base_map50") is not None and st.get("new_map50") is not None:
             txt += f"\n{tr('rt_score')}: {st['base_map50']:.2f} → {st['new_map50']:.2f}" + (f" ✅ {tr('rt_used')}" if st.get("used") else "")
         if st.get("error"): txt += "\n⚠ " + str(st["error"])
+        data = st.get("data") or {}
+        if data:                                   # every data source: how many pictures it gave, or why none (6.01)
+            tot = sum(int(v.get("n", 0)) for v in data.values())
+            txt += f"\n\n📦 {tr('rt_data_list')} — {tot:,}"
+            for name, v in data.items():
+                n = int(v.get("n", 0))
+                txt += f"\n{'✅' if n else '⚠'} {name}: {n:,}" + (f"  ({v['note']})" if v.get("note") else "")
+        if st.get("pictures"): txt += f"\n🖼 {tr('rt_pictures')}: {int(st['pictures']):,}"
         try:                                   # the other two brains: the learned network and the own pictures
             from royale import policy, frames
             ti = policy.info()

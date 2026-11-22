@@ -46,6 +46,13 @@ def status(**kw):
     return d
 
 
+def data_note(name, n, note=""):
+    """One data source's result for the app (6.01): how many pictures it gave, or why none."""
+    d = read_status().get("data") or {}
+    d[name] = {"n": int(n), "note": str(note)[:120]}
+    status(data=d)
+
+
 def read_status():
     try: return json.loads(STATUS.read_text(encoding="utf-8"))
     except (OSError, ValueError): return {}
@@ -213,6 +220,9 @@ def hf_parts(n_bulk=4):
     return rare + first + bulk
 
 
+_hf_total = [0]
+
+
 def take_hf(names, n_bulk=4):
     import pyarrow.parquet as pq
     idx = {norm(v): k for k, v in names.items()}
@@ -247,11 +257,15 @@ def take_hf(names, n_bulk=4):
         done.add(part)
         status(hf_done=sorted(done))
         log(f"SudhishNeel {part}: {n} frames")
+        _hf_total[0] += n
+        data_note("SudhishNeel (HuggingFace)", _hf_total[0])
 
 
 def take_roboflow(names, key, datasets):
     """Every Roboflow dataset ("workspace/project/version") in YOLOv8 format, names mapped to the base's."""
-    if not key: return 0
+    if not key:
+        data_note("Roboflow", 0, "no Roboflow key (Advanced settings / Bot)")
+        return 0
     import requests
     idx = {norm(v): k for k, v in names.items()}
     total, skipped = 0, 0
@@ -307,8 +321,10 @@ def take_roboflow(names, key, datasets):
             total += n
             log(f"Roboflow {ds}: {n} pictures kept (classes matched: {sum(v is not None for v in remap.values())}/{len(remap)}"
                 f"; copies of test pictures left out so far: {skipped})")
+            data_note(f"Roboflow {ws}/{proj}", n, f"{sum(v is not None for v in remap.values())}/{len(remap)} kinds")
         except Exception as e:
             log(f"Roboflow {ds}: {type(e).__name__}: {e}")
+            data_note(f"Roboflow {ds}", 0, f"{type(e).__name__}: {e}")
     return total
 
 
@@ -399,6 +415,7 @@ def take_katacr(names, n_real=8000, n_synth=8000):
             _write(enc.tobytes(), ".jpg", boxes, w, h, f"kcrsyn_{i}")
             made += 1
     log(f"KataCR: {n} real labelled pictures + {made} generated ones")
+    data_note("KataCR", n + made, f"{n} real + {made} generated")
     return n + made
 
 
@@ -420,13 +437,14 @@ def take_own(names):
         _write(img.read_bytes(), ".jpg", rows, 568, 896, f"own_{js.stem}")
         n += 1
     log(f"This PC's own battles: {n} pictures")
+    data_note("My battles", n)
     return n
 
 
 def run(epochs=30, n_bulk=4):
     random.seed(7)
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    status(stage="start", started=time.time(), error="")
+    status(stage="start", started=time.time(), error="", data={})
     if not tools(): return False
     fix_nms()
     from ultralytics import YOLO
