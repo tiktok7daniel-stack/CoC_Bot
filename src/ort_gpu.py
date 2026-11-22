@@ -97,10 +97,15 @@ def activate():
     except Exception:
         pass
     try:
+        if os.name == "nt" and not READY.exists():
+            # 6.9.15: no graphics-card onnxruntime at all (TensorRT broken / not set up): the DirectML one (~25 MB) is set up
+            # at once in the background — the eyes on the processor took 1.2 s a look and drew no boxes
+            install_in_background()
         if os.name == "nt" and READY.exists() and str(TARGET) not in sys.path:
             if not healthy(TARGET):                 # 6.9.13: a broken copy is never used; installed clean again
                 _log("DirectML onnxruntime is broken — not used; it is installed clean again in the background")
                 clean_folder(TARGET)
+                install_in_background()
                 return
             sys.path.insert(0, str(TARGET))
             os.environ["PYTHONPATH"] = str(TARGET) + os.pathsep + os.environ.get("PYTHONPATH", "")
@@ -122,7 +127,9 @@ def needed():
         if trt_engine.active(): return False              # TensorRT / CUDA already runs the eyes
     except Exception:
         pass
-    return os.name == "nt" and not READY.exists() and not on_gpu()
+    # 6.9.15: always kept as the backup of TensorRT (its folder broke once and nothing was left on the card);
+    # not decided by importing onnxruntime here (that would load it before the GPU copy is chosen)
+    return os.name == "nt" and not READY.exists()
 
 
 def _py():

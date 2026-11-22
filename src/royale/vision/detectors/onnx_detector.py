@@ -80,7 +80,7 @@ class OnnxDetector:
         return x
 
     def _infer(self, x):
-        if not self.gpu:
+        if not self.gpu or getattr(self.sess, "kind", "dml") != "dml":     # 6.9.15: the lock is for DirectML only
             return self.sess.run([self.output_name], {self.input_name: x})[0]
         try:
             with GPU_LOCK:

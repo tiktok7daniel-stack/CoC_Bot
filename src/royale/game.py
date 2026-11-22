@@ -528,6 +528,9 @@ class RoyaleBot:
         try:                                                 # the eyes on the graphics card (once, in the background)
             import ort_gpu
             ort_gpu.install_in_background(log)
+            if __import__("os").name == "nt" and not ort_gpu.on_gpu():
+                log.warning("Clash Royale: the eyes run on the PROCESSOR now (slow: boxes late / missing) — the "
+                            "graphics-card version is being set up in the background; restart the app when it is ready")
         except Exception:
             pass
         try:                                                 # NVIDIA: TensorRT for the eyes (6.6, once, in the background)

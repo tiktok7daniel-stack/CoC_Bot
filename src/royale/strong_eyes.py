@@ -188,7 +188,9 @@ def look_now(frame_rgb):
         return d
     _A["sync"] = False
     submit(frame_rgb)
-    return latest(0.35)
+    # 6.9.15: on a slow card / the processor its answer is older than 0.35 s every time — it was thrown away and no
+    # box was drawn; an answer up to 1.5x its own time old is used (the tracker moves each unit on its speed)
+    return latest(max(0.35, min(1.6, 1.5 * (ms or 0) / 1000.0)))
 
 
 def same_moment():
@@ -230,8 +232,11 @@ def detect(frame_rgb, conf=0.45):      # 6.8: 0.35 let skins / sparks through
     px, py = (S - nw) // 2, (S - nh) // 2
     img[py:py + nh, px:px + nw] = cv2.resize(arena, (nw, nh), interpolation=cv2.INTER_LINEAR)
     x = img.astype(np.float32).transpose(2, 0, 1)[None] / 255.0
-    with _LOCK:
-        out = s.run(None, {s.get_inputs()[0].name: x})[0][0]           # (4 + classes, N)
+    if getattr(s, "kind", "dml") == "dml":
+        with _LOCK:
+            out = s.run(None, {s.get_inputs()[0].name: x})[0][0]       # (4 + classes, N)
+    else:                       # 6.9.15: the processor / CUDA / TensorRT need no lock (it made the small eyes wait 1 s)
+        out = s.run(None, {s.get_inputs()[0].name: x})[0][0]
     out = out.T
     scores = out[:, 4:]
     cls = scores.argmax(1)

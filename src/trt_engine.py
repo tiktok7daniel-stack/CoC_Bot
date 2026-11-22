@@ -27,7 +27,11 @@ import hashlib, json, os, subprocess, sys, threading, time
 from pathlib import Path
 
 HOME = Path.home() / ".CoC_Bot"
-TARGET = HOME / "ort_trt"
+# 6.9.15: a new setup goes into ort_trt.new (never into the folder the running bot has loaded: Windows cannot replace
+# a file in use, the user's folder ended up half old / half new) and is moved in place at the next start
+LIVE = HOME / "ort_trt"
+STAGE = HOME / "ort_trt.new"
+TARGET = Path(os.environ.get("CF_TRT_TARGET") or LIVE)
 READY = TARGET / "READY"
 CACHE = HOME / "trt_cache"
 LOG = HOME / "ort_trt_install.log"
@@ -72,9 +76,25 @@ def dll_dirs():
     return [p for p in out if p.exists()]
 
 
+def _swap_in():
+    """At a start (nothing loaded yet): a finished, checked setup in ort_trt.new replaces ort_trt."""
+    import shutil
+    if not (STAGE / "READY").exists() or TARGET != LIVE: return False
+    try:
+        if LIVE.exists(): shutil.rmtree(LIVE, ignore_errors=True)
+        if LIVE.exists(): return False                     # still in use (another bot running): next start
+        os.replace(STAGE, LIVE)
+        _log("the new TensorRT setup moved in place")
+        return True
+    except OSError as e:
+        _log(f"moving the new setup in place failed: {e}")
+        return False
+
+
 def activate():
     """Before anything imports onnxruntime (main.py): this onnxruntime first, its DLL folders known. -> True when on."""
     try:
+        _swap_in()
         if not READY.exists() or str(TARGET) in sys.path: return _S["active"]
         if info().get("mode") not in ("trt", "cuda"): return False
         import ort_gpu
@@ -101,7 +121,7 @@ def active():
 
 # ------------------------------------------------------------------ install + check (background, once)
 def needed():
-    return os.name == "nt" and not READY.exists() and nvidia()
+    return os.name == "nt" and not READY.exists() and not (STAGE / "READY").exists() and nvidia()
 
 
 def _pip(args, timeout=3600):
@@ -120,6 +140,27 @@ def _py():
 
 
 def _install(log=None):
+    """6.9.15: the whole setup runs in its own process aimed at ort_trt.new (the running bot's folder is never
+    touched); it is moved in place at the next start."""
+    try:
+        import shutil
+        shutil.rmtree(STAGE, ignore_errors=True)
+        env = dict(os.environ, CF_TRT_TARGET=str(STAGE))
+        env.pop("PYTHONPATH", None)
+        r = subprocess.run([_py(), str(Path(__file__).resolve()), "--install"], capture_output=True, text=True,
+                           timeout=4 * 3600, creationflags=NW, env=env, cwd=str(Path(__file__).resolve().parent))
+        _log("setup: " + r.stdout[-2000:] + r.stderr[-1500:])
+        if (STAGE / "READY").exists():
+            if log: log.info("Clash Royale: TensorRT is ready — restart the app to use it (the eyes on the graphics card)")
+        elif log:
+            log.info("Clash Royale: TensorRT could not be set up (see ort_trt_install.log)")
+    except Exception as e:
+        _log(f"failed: {e}")
+    finally:
+        _S["busy"] = False
+
+
+def _install_here(log=None):
     try:
         TARGET.mkdir(parents=True, exist_ok=True)
         torch_cuda = (TORCH_LIB / "cudnn64_9.dll").exists() and any(TORCH_LIB.glob("cublas64_12*.dll"))
@@ -369,5 +410,7 @@ def check():
 
 
 if __name__ == "__main__":
-    if "--check" in sys.argv or "--build" in sys.argv:
+    if "--install" in sys.argv:
+        _install_here()
+    elif "--check" in sys.argv or "--build" in sys.argv:
         check()

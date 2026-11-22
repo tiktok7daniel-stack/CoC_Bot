@@ -84,7 +84,8 @@ class HandClassifier:
         name = self.sess.get_inputs()[0].name
         t0 = time.perf_counter()
         outs = []
-        with GPU_LOCK:
+        import contextlib
+        with (GPU_LOCK if getattr(self.sess, "kind", "dml") == "dml" else contextlib.nullcontext()):
             for i in range(0, 5, self.batch):
                 part = x[i:i + self.batch]
                 if len(part) < self.batch:                       # a fixed-batch model: padded
