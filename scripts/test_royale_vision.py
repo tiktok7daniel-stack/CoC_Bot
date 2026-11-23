@@ -352,7 +352,30 @@ def test_sessions():
     check("sessions: no TensorRT here = no crash, a working provider", s.kind in ("cpu", "dml", "cuda", "trt"), s.kind)
 
 
-for fn in (test_tracker, test_brain_lead, test_occlusion, test_skins_and_ids, test_team_birth, test_fast_eyes, test_double_drop, test_replay_heat, test_path, test_soft_rules, test_team, test_hand, test_sessions):
+def test_tactics():
+    """6.9.20: the Goblin Barrel is hit as it lands (not while far), the King Tower is woken once, never twice."""
+    import time
+    from royale.brain import Brain
+    deck = ["the_log", "arrows", "knight", "musketeer", "hog_rider", "skeletons", "tornado", "fireball"]
+    now = time.monotonic()
+    b = Brain(deck); b.reset(); b._stable, b._towers_now = [], {}
+    b._barrels = [(now - 0.1, 4.0, 18.0), (now, 3.9, 16.0)]
+    check("barrel: still far = wait (elixir kept)", b._intercept_barrel([(0, "the_log")], now) is None)
+    b._barrels = [(now - 0.1, 3.6, 8.5), (now, 3.5, 7.5)]
+    d = b._intercept_barrel([(0, "the_log")], now)
+    check("barrel: about to land = the Log at the landing tile", d is not None and d["card"] == "the_log"
+          and d["tile"] == (4, 6), str(d and d["tile"]))
+    k = Brain(deck); k.reset(); k.t0 = now - 30; k._towers_now = {"our_left": 1.0, "our_right": 1.0}
+    k._stable, k._allies = [("mega_knight", 6, 9)], []
+    d1 = k._king_activation([(1, "skeletons")], k._stable, {}, now)
+    check("king: splash on our side = cheap bait on the king", d1 is not None and d1["card"] == "skeletons", str(d1))
+    check("king: only once a battle", k._king_activation([(1, "skeletons")], k._stable, {}, now) is None)
+    k2 = Brain(deck); k2.reset(); k2.t0 = now - 30; k2._towers_now = {"our_left": 0.0, "our_right": 1.0}
+    k2._stable = [("mega_knight", 6, 9)]
+    check("king: a princess tower down (king awake) = nothing", k2._king_activation([(1, "skeletons")], k2._stable, {}, now) is None)
+
+
+for fn in (test_tracker, test_brain_lead, test_occlusion, test_skins_and_ids, test_team_birth, test_fast_eyes, test_double_drop, test_replay_heat, test_path, test_soft_rules, test_team, test_hand, test_sessions, test_tactics):
     try:
         fn()
     except Exception as e:

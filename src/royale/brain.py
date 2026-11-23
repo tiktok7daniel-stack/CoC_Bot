@@ -24,7 +24,7 @@ How it plays, every look (~4 a second):
   5. SPELLS    on a group worth more elixir than the spell, or to finish a tower that low
   Double elixir (the last minute and overtime): more pressure, both lanes.
 """
-import json, os, sys, time
+import json, math, os, sys, time
 from collections import deque
 
 from royale import knowledge as K
@@ -81,7 +81,7 @@ _EXIT = {"t": 0.0, "v": False}
 
 def _exit_trained():
     """Has Expert Iteration put a brain in use on this PC? (checked once a minute)"""
-    import time as _t
+    import math, time as _t
     if _t.monotonic() - _EXIT["t"] > 60:
         _EXIT["t"] = _t.monotonic()
         try:
@@ -219,6 +219,7 @@ class Brain:
         self._my_el = 5.0
         self.tower_log = []                    # (second, towers) once a second: how each moment turned out
         self._ctx, self._last_wait = None, -9.0
+        self._king_tried, self._barrels, self._stable = False, [], []     # 6.9.20: once a battle / the barrel in the air
         self._pol = None
         self.predicted = set()                 # their whole deck guessed from the cards seen (252k decks)
         if getattr(self, "mem", None): self.mem.start()
@@ -629,7 +630,17 @@ class Brain:
         playable = [(i, hand[i]) for i in ready if i < len(hand) and hand[i] and card(hand[i])
                     and card(hand[i]).get("cost", 11) <= elixir]
         if not playable: return None
+        try:                                    # 6.9.20: a Goblin Barrel in the air, met as it lands
+            d = self._intercept_barrel(playable, now)
+            if d: return d
+        except Exception:
+            pass
         th = self.threats(stable)
+        try:                                    # 6.9.20: our King Tower woken up for free
+            d = self._king_activation(playable, stable, towers, now)
+            if d: return d
+        except Exception:
+            pass
         self._pol = None
         if self.p.get("learned", True):
             try:
@@ -884,7 +895,10 @@ class Brain:
                     hp = towers.get(f"their_{s}")
                     if hp is not None and 0 < hp <= 0.12:
                         x, y = THEIR_TOWERS[s]
-                        return self._play((i, n), (int(x), int(y)), f"finishing their {s} tower", now)
+                        # 6.9.20: aimed at the tower's near corner (toward our king): the spell still covers the
+                        # tower, its flight is ~1 tile shorter — the finish lands a moment sooner
+                        x = x + 0.5 if x < 8.5 else x - 0.5
+                        return self._play((i, n), (int(round(x)), int(y) - 1), f"finishing their {s} tower", now)
         advantage = elixir - self.enemy_elixir
         # a counter-push = what survived our defense is crossing the river with real value (2+ units or a sturdy
         # one), and only with elixir to spare; a lone archer at the bridge is not worth a card every second
@@ -1238,6 +1252,11 @@ class Brain:
         """Spells the big model saw landing: theirs (on our half) are cards they played — their elixir, their deck —
         and their area is kept free of our troops for a moment."""
         self.danger = [d for d in getattr(self, "danger", []) if d[3] > now]
+        # 6.9.20: a Goblin Barrel seen anywhere (in the air over the arena): its places, to meet it as it lands
+        bar = self.__dict__.setdefault("_barrels", [])
+        bar[:] = [b for b in bar if now - b[0] < 1.5]
+        for name, tx, ty in spells:
+            if name == "goblin_barrel": bar.append((now, float(tx), float(ty)))
         for name, tx, ty in spells:
             if ty > RIVER_Y: continue                                  # on their half: ours
             c = card(name)
@@ -1252,6 +1271,81 @@ class Brain:
             self._predict()
             rad = (c.get("splash") or SPELL_SPLASH_DEFAULT.get(name, 2.5))
             self.danger.append((tx, ty, rad + 1.0, now + 2.5, name))
+
+    # -------------------------------------------------------------- 6.9.20: barrel interception, king activation
+    BARREL_SPEED = 400 / 60.0                   # tiles a second (the game data's projectile speed)
+    INTERCEPT = {"the_log": (0.40, None), "barbarian_barrel": (0.40, None), "zap": (0.0, None),
+                 "arrows": (0.0, 1100 / 60.0), "giant_snowball": (0.0, 800 / 60.0), "fireball": (0.0, 600 / 60.0)}
+
+    def _intercept_barrel(self, playable, now):
+        """A Goblin Barrel flying at one of our towers: the small spell goes off as the goblins land (the moment they
+        appear, before they hit once) — its tap timed by the barrel's distance left, the spell's own wait and its
+        flight from our king tower. Not when it is still far (the elixir is kept: nothing else is played)."""
+        bar = [b for b in getattr(self, "_barrels", []) if now - b[0] < 0.6]
+        if not bar: return None
+        _t, bx, by = bar[-1]
+        if by > RIVER_Y + 8: return None                          # just thrown: where it goes is not clear yet
+        # where it lands: the tower of ours it flies at (the nearest standing one along its way)
+        towers = [(k, xy) for k, xy in OUR_TOWERS.items() if k == "king" or not self._our_tower_down(k)]
+        if len(bar) >= 2:
+            (_t0, x0, y0), (_t1, x1, y1) = bar[-2], bar[-1]
+            vx, vy = x1 - x0, y1 - y0
+            n = math.hypot(vx, vy) or 1.0
+            key = lambda kv: abs((kv[1][0] - bx) * vy / n - (kv[1][1] - by) * vx / n)    # distance off its line
+        else:
+            key = lambda kv: dist((bx, by), kv[1])
+        side, (tx, ty) = min(towers, key=key)
+        land = (tx, ty + 1.5)                                        # the goblins appear in front of the tower
+        left = dist((bx, by), land) / self.BARREL_SPEED
+        for i, n in playable:
+            if n not in self.INTERCEPT: continue
+            wait, speed = self.INTERCEPT[n]
+            flight = dist(OUR_TOWERS["king"], land) / speed if speed else 0.0
+            need = 0.15 + wait + flight                              # the tap + the spell's wait + its flight
+            if left > need + 0.25:
+                self._hold_until = now + 0.3                         # keep it (and the elixir) for the landing
+                return None
+            tile = (int(round(land[0])), int(round(land[1] - (1 if n in ROLLING else 0))))
+            self._barrels = []
+            return self._play((i, n), tile, f"intercept: {n} as their Goblin Barrel lands at our {side} tower", now)
+        return None
+
+    def _our_tower_down(self, side):
+        v = (getattr(self, "_towers_now", None) or {}).get(f"our_{side}")
+        try: return float(v) <= 0
+        except (TypeError, ValueError): return False
+
+    KING_SPLASH = {"mega_knight", "executioner", "bowler", "valkyrie", "firecracker", "dark_prince", "giant_skeleton",
+                   "baby_dragon", "wizard", "ice_wizard", "magic_archer"}
+    KING_BAIT = {"skeletons", "ice_spirit", "fire_spirit", "electro_spirit", "heal_spirit", "goblins", "spear_goblins"}
+
+    def _king_activation(self, playable, stable, towers, now):
+        """Once a battle, while both our princess towers stand (the king is still asleep): wake the King Tower up for
+        (almost) free — the classic plays:
+          Tornado   an enemy ground troop within reach of the king's front: pulled onto it
+          bait      a splash troop (Mega Knight, Executioner, Bowler, Valkyrie, Firecracker...) coming down: a 1-2
+                    elixir troop in front of the king, so its splash hits the King Tower too
+        An awake king shoots for the rest of the battle (a third tower on defence)."""
+        if getattr(self, "_king_tried", False) or self.elapsed() < 5: return None
+        if self._our_tower_down("left") or self._our_tower_down("right"): return None   # it is awake already
+        kx, ky = OUR_TOWERS["king"]
+        ground = [(u, x, y) for u, x, y in stable if not (card(unit_card(u) or "") or {}).get("air")]
+        for i, n in playable:
+            if n == "tornado":
+                near = [(u, x, y) for u, x, y in ground if 3.0 <= dist((x, y), (kx, ky)) <= 7.5]
+                if near:
+                    u, x, y = near[0]
+                    self._king_tried = True
+                    return self._play((i, n), (8 if x < kx else 9, 4), f"king activation: Tornado pulls their {u} "
+                                      "onto our King Tower", now)
+        for u, x, y in stable:
+            if unit_card(u) not in self.KING_SPLASH or y > RIVER_Y or dist((x, y), (kx, ky)) > 10: continue
+            for i, n in playable:
+                if n in self.KING_BAIT and (card(n) or {}).get("cost", 9) <= 2:
+                    self._king_tried = True
+                    return self._play((i, n), (8 if x < kx else 9, 4), f"king activation: {n} in front of the king — "
+                                      f"their {u}'s splash wakes it up", now)
+        return None
 
     def _their_answer(self, cn, x, y, now):
         """6.9.18: they played `cn` on their half right after one of our attacks in that lane: their answer, judged on
@@ -1334,14 +1428,15 @@ class Brain:
                            self.last_play, len(self.last_tiles), len(self.steps), getattr(self, "_ctx", None))
         if "spell" in roles(n) and self._spell_hits_us(n, tile):
             return None                                  # never a spell on our own troops
-        if "spell" in roles(n) and n not in WIN_SPELLS and not self._spell_sure(n, tile):
+        intercept = why.startswith("intercept")         # 6.9.20: a Goblin Barrel in the air: nothing on the ground yet
+        if "spell" in roles(n) and n not in WIN_SPELLS and not intercept and not self._spell_sure(n, tile):
             return None                                  # only on units that are surely THEIRS
         # each card's own way of being used (the user's correction, 5.72): checked here so every source of a move
         # (rules, the engine, the trained AI, the learned brain) obeys it
         if n in ("goblin_barrel", "miner", "graveyard", "goblin_drill"):
             tile = self._barrel_tile(tile)               # always straight onto their tower, never at home
             why = why if "tower" in why else f"{why} -> on their tower"
-        elif __import__("royale.card_use", fromlist=["x"]).DAMAGE_SPELLS.__contains__(n) and \
+        elif not intercept and __import__("royale.card_use", fromlist=["x"]).DAMAGE_SPELLS.__contains__(n) and \
                 not self._small_spell_ok(n, tile):
             # never on nothing (a rule); for too little value only a preference the engine already weighed (6.7)
             if not engine_ok or not (self._spell_hits(n, tile) or self._spell_on_tower(n, tile)): return None
