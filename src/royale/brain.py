@@ -147,9 +147,30 @@ def dist(a, b):
     return ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5
 
 
-def pull_spot(side):
-    """A building here pulls a building-targeting troop off the princess tower (the classic middle spot)."""
-    return (7, 5) if side == "left" else (10, 5)
+def pull_spot(side, threat=None, their_spells=()):
+    """Where a defensive building pulls a building-targeting troop off the princess tower (6.9.18: by the threat,
+    not one fixed tile; always inside royale.card_use's building rows 6-11, the middle columns):
+      fast ones (Hog Rider, Ram Rider, Battle Ram: speed >= 90)  -> further up (row 9): pulled before the tower is hit
+      slow tanks (Giant, Golem, Electro Giant: speed <= 45)       -> deeper (row 7): time for the tower to shoot too
+      air building-only (Balloon, Lava Hound)                     -> beside the tower (column 5 / 12, row 7): the
+                                                                   tower shoots it the whole way
+      anything else                                               -> the classic middle spot (row 8)
+    Not within 3.5 tiles of the tower when they have shown a Fireball / Rocket / Lightning / Poison (one spell
+    would hit both): moved a tile toward the middle."""
+    left = side == "left"
+    x, y = (7, 8) if left else (10, 8)
+    c = card(threat or "") if threat else {}
+    spd = c.get("speed") or 60
+    if c.get("air") and c.get("buildings_only"):
+        x, y = (5, 7) if left else (12, 7)
+    elif spd >= 90:
+        x, y = (7, 9) if left else (10, 9)
+    elif spd <= 45:
+        x, y = (8, 7) if left else (9, 7)
+    tx, ty = OUR_TOWERS[side]
+    if their_spells and set(their_spells) & {"fireball", "rocket", "lightning", "poison"} and dist((x, y), (tx, ty)) < 3.5:
+        x = x + 1 if left else x - 1
+    return (x, y)
 
 
 def behind_tower(side):
@@ -319,6 +340,8 @@ class Brain:
                 again = cn and any(p[1] == cn and self.elapsed() - p[0] < 6.0 for p in self.enemy_hist[-4:])
                 if cn and not group_recent and not again and u not in SPAWNED:   # one card, even 3 skeletons
                     self._learn_opponent(cn, x, y)                    # their move: a lesson too
+                    try: self._their_answer(cn, x, y, now)            # their answer to our attack (6.9.18)
+                    except Exception: pass
                     self.enemy_elixir = max(0.0, self.enemy_elixir - card(cn).get("cost", 3))
                     self.enemy_cycle.append(cn)
                     self.enemy_plays.append((round(self.elapsed()), cn, lane(x)))
@@ -381,6 +404,20 @@ class Brain:
                 # 6.6: seconds until the first of them is hitting our tower (its tracked speed and heading)
                 s["eta"] = self._lane_eta(s["units"])
         return out
+
+    def _urgent_defence(self, stable):
+        """A threat that will be hitting one of our towers within 3 s (its tracked ETA), or a building-only unit
+        already over the river on our half: worth a second card right away."""
+        try:
+            th = self.threats(stable)
+        except Exception:
+            return False
+        for s in th.values():
+            if not s.get("units"): continue
+            eta = s.get("eta")
+            if eta is not None and eta <= 3.0: return True
+            if s.get("bonly") and any(y <= RIVER_Y - 1 for _u, _x, y in s["units"]): return True
+        return False
 
     def _lane_eta(self, units):
         tr = getattr(self, "tracker", None)
@@ -529,6 +566,12 @@ class Brain:
         cx, cy = threat["center"] or OUR_TOWERS[side]
         where = K.counter(threat.get("main"), card(threat.get("main") or "")).get("where")
         tx, ty = OUR_TOWERS[side]
+        if getattr(self, "mem", None) and threat.get("main"):                    # 6.9.18: where it HELD before
+            try:
+                bt = self.mem.best_tiles(threat["main"], name, side, k=1, min_n=3)
+                if bt and bt[0][1] >= 0.6: return tuple(int(v) for v in bt[0][0])
+            except Exception:
+                pass
         if self.p.get("learned", True) and "spell" not in r and self._pol:
             lt = self._ltile(name)                                               # the learned brains, this moment
             if lt and lt[1] >= 0.25 and lt[0][1] <= 14 and lane(lt[0][0]) == side: return lt[0]
@@ -537,7 +580,7 @@ class Brain:
             if pt and pt[1] <= 14: return pt
         if where == "tower" and "spell" in r: return (int(tx), int(ty))                # on the tower it hits
         if where == "tower": return (int(tx) + (1 if side == "left" else -1), int(ty) + 1)
-        if where == "pull" and "building" in r: return pull_spot(side)
+        if where == "pull" and "building" in r: return pull_spot(side, threat.get("main"), self.enemy_seen)
         if where == "late" and "spell" not in r and "building" not in r:            # at the tower: it helps
             return (int(tx) + (2 if side == "left" else -2), int(ty) + 2)
         if where == "behind" and "spell" not in r: return behind_tower(side)
@@ -546,7 +589,7 @@ class Brain:
             lx, ly = self.lead(name, cx, cy, u0)
             return (int(round(lx)), int(round(ly)))
         if "building" in r:
-            return pull_spot(side)
+            return pull_spot(side, threat.get("main"), self.enemy_seen)
         c = card(name)
         if "ranged" in r or (c.get("range") or 0) >= 4:
             return behind_tower(side)
@@ -573,8 +616,15 @@ class Brain:
         if towers and (not self.tower_log or el_t - self.tower_log[-1][0] >= 1.0):
             self.tower_log.append((round(el_t, 1), dict(towers)))
         self._my_el = elixir
-        if now - self.last_play < 0.55: return None                              # one card at a time (the game
-                                                                                 # shows it ~0.5 s later)
+        gap = now - self.last_play
+        if gap < 0.55:
+            # one card at a time (the picture shows it ~0.5 s later) — except a DOUBLE DROP in defence (6.9.18): a
+            # fast threat about to hit a tower (Hog Rider, Ram, a Goblin Barrel landing...) gets a second card at once
+            # (another slot, >= 0.25 s after the first: the hand picture has moved on)
+            if gap < 0.25 or not self._urgent_defence(stable): return None
+            self._double_drop = True
+        else:
+            self._double_drop = False
         towers = towers or {}
         playable = [(i, hand[i]) for i in ready if i < len(hand) and hand[i] and card(hand[i])
                     and card(hand[i]).get("cost", 11) <= elixir]
@@ -684,9 +734,7 @@ class Brain:
             if sc > 0.8:
                 d = self._play(best, tile, f"defend {side} vs "
                                f"{', '.join(sorted({u for u, _, _ in t['units']}))}{why}", now)
-                if d and getattr(self, "mem", None):
-                    self.mem.defended(t.get("main"), best[1], side, towers, now, getattr(self, "_pl_lost", None))
-                return d
+                return d                                   # remembered with its tile in _play (6.9.18)
 
         if now < getattr(self, "_hold_until", 0.0): return None                 # a defense is coming in a moment
 
@@ -1205,6 +1253,18 @@ class Brain:
             rad = (c.get("splash") or SPELL_SPLASH_DEFAULT.get(name, 2.5))
             self.danger.append((tx, ty, rad + 1.0, now + 2.5, name))
 
+    def _their_answer(self, cn, x, y, now):
+        """6.9.18: they played `cn` on their half right after one of our attacks in that lane: their answer, judged on
+        their tower 8 s later (royale.memory.opp_defended)."""
+        if not getattr(self, "mem", None) or y < RIVER_Y + 1: return
+        el = self.elapsed()
+        for p in reversed(self.plays[-4:]):
+            if el - p["t"] > 4.0: break
+            px, py = p["tile"]
+            if py >= RIVER_Y - 3 and lane(px) == lane(x) and "spell" not in roles(p["card"]):
+                self.mem.opp_defended(p["card"], cn, lane(x), (x, y), getattr(self, "_towers_now", {}), now)
+                return
+
     def _learn_opponent(self, cn, x, y):
         """The opponent just played `cn` at (x, y): the moment as THEY saw it (board turned round: their king at
         y 0), what they did — kept to learn from. Their hand: their deck (seen + guessed) minus their last 4."""
@@ -1313,4 +1373,14 @@ class Brain:
                                **({"b": self._ctx[3]} if self._ctx[3] else {})})
             self._ctx = None
         self.plays.append(d)
+        # 6.9.18: every defence (whoever chose it: the rules, the engine, the AI model) remembered with its tile
+        try:
+            if getattr(self, "mem", None) and y <= RIVER_Y + 1:
+                th = self.threats(self._stable or [])
+                t_ = th.get(lane(x)) or {}
+                if t_.get("main") and t_.get("units"):
+                    self.mem.defended(t_["main"], n, lane(x), getattr(self, "_towers_now", {}), now,
+                                      getattr(self, "_pl_lost", None), tile=(x, y))
+        except Exception:
+            pass
         return d

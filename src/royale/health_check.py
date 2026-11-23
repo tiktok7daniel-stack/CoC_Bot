@@ -97,6 +97,21 @@ def run(frame_fn=None, stream=None, log=None):
     except Exception as e:
         items.append(_item("big_eyes", "bad", "error", "حصل خطأ في العيون الكبيرة", e))
 
+    # ---- the fast eyes (6.9.18: YOLO26s at 640, the same-moment look when the big eyes are slow)
+    try:
+        from royale import strong_eyes
+        if strong_eyes.fast_ready():
+            fs = strong_eyes._F["sess"]
+            xf = np.random.rand(1, 3, 640, 640).astype(np.float32)
+            nf = fs.get_inputs()[0].name
+            ms = _bench(lambda: fs.run(None, {nf: xf}), 8)
+            items.append(_item("fast_eyes", "ok" if ms <= 25 else "warn", f"{ms:.0f} ms a picture on {getattr(fs, 'kind', '?')}"))
+        else:
+            items.append(_item("fast_eyes", "warn", "not trained yet",
+                               "العيون السريعة (YOLO26) لسه ما اتدربتش — صفحة التدريب ← «درّب العيون» (بيكمّل من مكانه)"))
+    except Exception as e:
+        items.append(_item("fast_eyes", "warn", "error", "", e))
+
     # ---- the small eyes
     try:
         from royale.vision.detectors.unit_detector import UnitDetector

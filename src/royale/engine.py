@@ -441,6 +441,16 @@ def candidates(brain, playable, rule_d, defend, first=()):
         mine = {(i, n) for i, n, _t in first} | ({(rule_d["slot"], rule_d["card"])} if rule_d else set())
         cards = [c for c in cards if c in mine] or [c for c in mine]
     enemies = [(x, y) for _u, x, y in (brain._stable or [])]
+    # 6.9.18: the tiles where a card HELD against this threat before (our battles + the opponents' answers to us)
+    try:
+        th = brain.threats(brain._stable or []) if getattr(brain, "mem", None) else {}
+        for side, t_ in th.items():
+            if not t_.get("main"): continue
+            for i, n in cards:
+                for tile, _rate, _n in brain.mem.best_tiles(t_["main"], n, side, k=2):
+                    add(i, n, tile)
+    except Exception:
+        pass
     for i, n in cards:
         r = roles(n)
         c = card(n) or {}

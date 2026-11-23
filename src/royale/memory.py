@@ -41,19 +41,71 @@ class Memory:
         try: return float(v)
         except (TypeError, ValueError): return None
 
-    def defended(self, threat, mine, side, towers, now, predicted=None):
+    def defended(self, threat, mine, side, towers, now, predicted=None, tile=None):
         if not threat or not mine: return
         self.pending.append({"threat": threat, "mine": mine, "side": side, "t": now, "hp": self._hp(towers, side),
-                             "pred": predicted})
+                             "pred": predicted, "tile": list(tile) if tile else None})
+
+    # -------------------------------------------------------------- where it worked (6.9.18: the replay heat maps)
+    # Every answer is remembered WITH ITS TILE: our own defences, and the OPPONENTS' defences against our attacks (the
+    # board turned round to our side) — a heat map per (their threat, our card) of the tiles that held. Tiles are kept
+    # for the left lane (a right-lane tile is mirrored), so both lanes teach each other.
+    @staticmethod
+    def _norm(x, y):
+        x = float(x)
+        return (int(round(17 - x)) if x > 8.5 else int(round(x)), int(round(y)))
+
+    @staticmethod
+    def _denorm(x, y, side):
+        return (17 - x if side == "right" else x, y)
+
+    def _heat_add(self, threat, mine, tile, ok):
+        if not tile: return
+        nx, ny = self._norm(*tile)
+        h = self.d.setdefault("heat", {}).setdefault(f"{threat}|{mine}", {})
+        c = h.setdefault(f"{nx},{ny}", [0, 0])
+        c[0 if ok else 1] += 1
+
+    def opp_defended(self, our_card, their_card, side, tile_theirs, towers, now):
+        """They answered our `our_card` attack on `side` with `their_card` at `tile_theirs` (our board): judged like
+        ours 8 s later on THEIR tower; when it held, the tile — turned round to our half — is a tile to try when we
+        meet `our_card` ourselves."""
+        if not our_card or not their_card or not tile_theirs: return
+        x, y = tile_theirs
+        self.pending.append({"opp": True, "threat": our_card, "mine": their_card, "side": side, "t": now,
+                             "hp": self._hp_their(towers, side), "tile": [17 - x, 31 - y]})
+
+    @staticmethod
+    def _hp_their(towers, side):
+        v = (towers or {}).get(f"their_{side}")
+        try: return float(v)
+        except (TypeError, ValueError): return None
+
+    def best_tiles(self, threat, mine, side, k=3, min_n=2):
+        """The tiles where `mine` held against `threat` most often (ours + theirs), for `side`: [((x, y), rate, n)]."""
+        h = (self.d.get("heat") or {}).get(f"{threat}|{mine}") or {}
+        out = []
+        for key, (ok, bad) in h.items():
+            n = ok + bad
+            if n < min_n: continue
+            rate = (ok + 1) / (n + 2)
+            if rate < 0.55: continue
+            nx, ny = (int(v) for v in key.split(","))
+            out.append((self._denorm(nx, ny, side), round(rate, 2), n))
+        return sorted(out, key=lambda r: (-r[1], -r[2]))[:k]
 
     def tick(self, towers, now):
         keep = []
         for p in self.pending:
             if now - p["t"] < JUDGE_S:
                 keep.append(p); continue
-            hp0, hp1 = p["hp"], self._hp(towers, p["side"])
+            hp0 = p["hp"]
+            hp1 = self._hp_their(towers, p["side"]) if p.get("opp") else self._hp(towers, p["side"])
             if hp0 is None or hp1 is None or hp0 <= 0: continue
             ok = (hp0 - hp1) / hp0 < 0.08                  # the tower lost (almost) nothing: the answer held
+            self._heat_add(p["threat"], p["mine"], p.get("tile"), ok)
+            if p.get("opp"):                               # their answer: only its tile is learned
+                continue
             if p.get("pred") is not None:                  # the simulation's guess against what really happened
                 actual = max(0.0, (hp0 - hp1) / hp0)
                 c = self.d.setdefault("calib", {"ratio": 1.0, "n": 0})

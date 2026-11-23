@@ -29,6 +29,8 @@ on:
       - "src/royale/trainer.py"
       - "scripts/calibrate_team_color.py"
       - "src/royale/frames.py"
+      - "src/royale/memory.py"
+      - "src/royale/health_check.py"
   workflow_dispatch:
 
 permissions:

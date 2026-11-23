@@ -578,8 +578,9 @@ def run(epochs=30, n_bulk=4):
         log(f"letting the graphics card cool {wait} s before going on")
         time.sleep(wait)
     pg = prog()
-    fresh = ("--fresh" in sys.argv or pg.get("recipe") != RECIPE or time.time() - float(pg.get("t0", 0)) > 7 * 86400
-             or read_status().get("stage") == "done")
+    # 6.9.18: a finished training is not started again from nothing when a new step was added (the fast eyes): only
+    # what is not done yet runs; a new week (7 days) or --fresh starts a whole new training
+    fresh = ("--fresh" in sys.argv or pg.get("recipe") != RECIPE or time.time() - float(pg.get("t0", 0)) > 7 * 86400)
     if fresh:
         pg = {"recipe": RECIPE, "t0": time.time(), "done": {}}
         if not os.environ.get("CF_TRAIN_SAFE"): status(stage="start", started=time.time(), error="", data={})
@@ -621,6 +622,10 @@ def run(epochs=30, n_bulk=4):
         _prepare_data(names, n_bulk)
         pg["data"] = time.time(); save_prog(pg)
     used = _after_data(names, epochs, SAFE, pg)
+    try:                                         # 6.9.18: the fast eyes (YOLO26s, 640) for the same-moment look
+        _train_fast(names, SAFE)
+    except Exception as e:
+        log(f"fast eyes skipped: {type(e).__name__}: {e}")
     if defer_hand and not SAFE:
         try:
             log("the hand-card model (it did not finish last time)")
@@ -680,6 +685,40 @@ def _restart_safe(why):
     subprocess.Popen([sys.executable, "-m", "royale.trainer", *sys.argv[1:]],
                      cwd=str(Path(__file__).resolve().parent.parent), env=env, **kw)
     os._exit(0)
+
+
+FAST_MIN = 0.80              # the fast eyes are used only from this mAP50 on the honest test
+
+
+def _train_fast(names, SAFE, hours=1.5):
+    """6.9.18: YOLO26s at 640 (NMS-free head, small-object aware) on the same pictures and the same honest test, put
+    in place as the FAST eyes (cr_detector_fast.onnx) when its mAP50 >= FAST_MIN — the bot looks with it on the very
+    picture it decides on when the big eyes are too slow for that. Done once per recipe (going on after a stop)."""
+    from ultralytics import YOLO
+    pg = prog()
+    if (pg.get("done") or {}).get("fast26") is not None:
+        log("the fast eyes (YOLO26s): done before (not again)"); return
+    yaml_p = ROOT / "data.yaml"
+    if not yaml_p.exists():
+        log("the fast eyes: no data list yet — skipped"); return
+    bs = max(4, _gpu_batch(640) * 2)                   # a small model at 640: about twice the pictures a step
+    log(f"the fast eyes — YOLO26s at 640px, up to {hours} h, {bs} pictures a step, tested every {VAL_EVERY} rounds")
+    w = _train("fast26", "yolo26s.pt", yaml_p, 60, hours, 640, bs, SAFE,
+               resume=pg.get("cur1") == "fast26")
+    res = None
+    if w:
+        r = YOLO(str(w)).val(data=str(yaml_p), imgsz=640, batch=16, device=0, verbose=False, plots=False)
+        m50, m = float(r.box.map50), float(r.box.map)
+        res = [m, m50, str(w)]
+        if m50 >= FAST_MIN:
+            out = YOLO(str(w)).export(format="onnx", imgsz=640, dynamic=False, simplify=False, opset=12)
+            os.replace(out, MODELS / "cr_detector_fast.onnx")
+            (MODELS / "cr_detector_fast.json").write_text(json.dumps(names), encoding="utf-8")
+            log(f"the fast eyes IN USE — mAP50 {m50:.3f} (the bot looks with them when the big eyes are too slow)")
+        else:
+            log(f"the fast eyes not used — mAP50 {m50:.3f} (needs {FAST_MIN:.2f})")
+        status(fast={"map50": round(m50, 4), "used": m50 >= FAST_MIN})
+    pg = prog(); pg.setdefault("done", {})["fast26"] = res; pg["cur1"] = None; save_prog(pg)
 
 
 def _after_data(names, epochs, SAFE, pg=None):

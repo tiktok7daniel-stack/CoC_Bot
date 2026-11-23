@@ -21,6 +21,11 @@ URL = "https://huggingface.co/SudhishNeel/clash-royale-detector/resolve/main/v8/
 W, H = 568, 896                       # the arena picture the model was trained on
 SPEC_QUEENS = [(116, 200), (461, 200), (116, 689), (461, 689)]
 _S = {"sess": None, "names": None, "busy": False, "error": "", "tried": 0.0}
+# 6.9.18: the FAST eyes — YOLO26s at 640 trained on this PC on the same data (royale.trainer, "fast26"); when the
+# big model cannot answer for the very picture (> SYNC_MS), the fast one does, on that same picture
+FAST = DIR / "cr_detector_fast.onnx"
+FAST_NAMES = DIR / "cr_detector_fast.json"
+_F = {"sess": None, "names": None, "mtime": 0.0, "ms": 0.0, "tried": 0.0}
 from royale.vision.detectors.onnx_detector import GPU_LOCK as _LOCK      # one model at a time on the card
 
 # the model's names -> the bot's unit names (royale.vision Units / cards.json "units")
@@ -96,6 +101,23 @@ def _load():
         return True
     except Exception as e:
         _S["error"] = f"load: {e}"[:200]
+        return False
+
+
+def fast_ready():
+    """The fast eyes loaded (and reloaded when a training put new ones in place)."""
+    try:
+        if not FAST.exists() or not FAST_NAMES.exists(): return False
+        if _F["sess"] is None or FAST.stat().st_mtime > _F["mtime"] + 1:
+            if time.time() - _F["tried"] < 60 and _F["sess"] is None: return False
+            _F["tried"] = time.time()
+            import trt_engine
+            _F["sess"] = trt_engine.make_session(FAST, threads=2)
+            _F["names"] = {int(k): v for k, v in json.loads(FAST_NAMES.read_text(encoding="utf-8")).items()}
+            _F["mtime"] = FAST.stat().st_mtime
+        return _F["sess"] is not None
+    except Exception:
+        _F["sess"] = None
         return False
 
 
@@ -176,6 +198,20 @@ def look_now(frame_rgb):
     """The big model's detections for THIS picture when it is fast enough (same moment as the decision: positions
     are exact, no 0.6 s old answer); otherwise in the background, its answer at most 0.35 s old (5.83)."""
     ms = _A.get("ms") or 0.0
+    if not (0 < ms <= SYNC_MS) and fast_ready() and (_F["ms"] == 0 or _F["ms"] <= SYNC_MS * 1.6):
+        # 6.9.18: the big model is too slow for this very picture — the fast eyes look at it now (same moment); the
+        # big one keeps looking in the background (health bars, spells)
+        t0 = time.monotonic()
+        try:
+            d = detect(frame_rgb, state=_F)
+        except Exception:
+            d = []
+        _F["ms"] = (time.monotonic() - t0) * 1000 if not _F["ms"] else 0.8 * _F["ms"] + 0.2 * (time.monotonic() - t0) * 1000
+        _A["sync"] = True
+        _A["fast"] = True
+        submit(frame_rgb)
+        return d
+    _A["fast"] = False
     if 0 < ms <= SYNC_MS:
         t0 = time.monotonic()
         try:
@@ -212,10 +248,12 @@ def speed_ms():
 
 
 # ------------------------------------------------------------------ one look
-def detect(frame_rgb, conf=0.45):      # 6.8: 0.35 let skins / sparks through
-    """-> [(model_name, conf, x0, y0, x1, y1)] in the game picture's pixels, or [] when not ready."""
+def detect(frame_rgb, conf=0.45, state=None):      # 6.8: 0.35 let skins / sparks through
+    """-> [(model_name, conf, x0, y0, x1, y1)] in the game picture's pixels, or [] when not ready.
+    state: the model to use (_S the big eyes — the default — or _F the fast eyes: the same output format)."""
     import cv2, numpy as np
-    s = _S["sess"]
+    st = state or _S
+    s = st["sess"]
     if s is None: return []
     x0, y0, x1, y1 = arena_box(frame_rgb.shape)
     hh, ww = frame_rgb.shape[:2]
@@ -250,7 +288,7 @@ def detect(frame_rgb, conf=0.45):      # 6.8: 0.35 let skins / sparks through
     idx = np.array(idx).reshape(-1) if len(idx) else []
     sx, sy = (xb - xa) / W, (yb - ya) / H
     dets = []
-    names = _S["names"] or {}
+    names = st["names"] or {}
     for i in idx:
         a, c, e, f = xyxy[i]
         a, e = (a - px) / k, (e - px) / k                                  # model input -> arena 568x896

@@ -171,6 +171,73 @@ def test_team_birth():
     check("team: barrel goblins on our half go by their colour (red = theirs)", out[0][1].team == "enemy", out[0][1].team)
 
 
+def test_fast_eyes():
+    """6.9.18: the big eyes too slow for the very picture -> the fast eyes (YOLO26s) look at it (same moment)."""
+    import numpy as np, time
+    from royale import strong_eyes as se
+
+    class Sess:
+        def __init__(self, ms, cls): self.ms, self.cls, self.kind = ms, cls, "cpu"
+        def get_inputs(self):
+            class I: name, shape = "images", [1, 3, 640, 640]
+            return [I()]
+        def run(self, _n, feed):
+            time.sleep(self.ms / 1000)
+            out = np.zeros((1, 4 + 3, 10), np.float32)
+            out[0, :4, 0] = [320, 320, 40, 40]; out[0, 4 + self.cls, 0] = 0.9      # one box of class `cls`
+            return [out]
+    saved = (dict(se._S), dict(se._F), dict(se._A), se.fast_ready)
+    try:
+        se._S.update(sess=Sess(60, 0), names={0: "knight", 1: "archer", 2: "giant"})
+        se._F.update(sess=Sess(5, 2), names={0: "knight", 1: "archer", 2: "giant"}, ms=0.0)
+        se._A.update(ms=60.0, t=0.0, dets=[])
+        se.fast_ready = lambda: True
+        d = se.look_now(np.zeros((1280, 720, 3), np.uint8))
+        check("fast eyes: a slow big model -> the fast one answers for the very picture",
+              bool(d) and d[0][0] == "giant" and se.same_moment(), str(d[:1]))
+    finally:
+        se._S.clear(); se._S.update(saved[0]); se._F.clear(); se._F.update(saved[1])
+        se._A.update({k: v for k, v in saved[2].items() if k != "thread"}); se.fast_ready = saved[3]
+
+
+def test_double_drop():
+    """6.9.18: a second card right after the first when a fast threat is about to hit a tower; not otherwise."""
+    import time
+    from royale.brain import Brain
+    from royale.unit_tracker import UnitTracker, Det
+    b = Brain(["cannon", "musketeer", "fireball", "the_log", "knight", "skeletons", "ice_spirit", "hog_rider"])
+    tr = UnitTracker(); tr.reset()
+    t0 = time.monotonic() - 0.6
+    for k in range(7):
+        tr.update([Det("hog_rider", 14.5, 12.0 - 2.0 * k * 0.1, 0.9, "enemy", 3.0, None)], t0 + k * 0.1)
+    b.tracker = tr
+    b._stable = [("hog_rider", 14, 11)]
+    check("double drop: a Hog about to hit our tower is urgent", b._urgent_defence([("hog_rider", 14, 11)]))
+    check("double drop: nothing coming is not urgent", not b._urgent_defence([]))
+
+
+def test_replay_heat():
+    """6.9.18: answers remembered with their tile; their answers to our attacks learned turned round to our half."""
+    import tempfile, os
+    from pathlib import Path
+    os.environ["HOME"] = tempfile.mkdtemp()
+    import importlib, royale.memory as mm
+    importlib.reload(mm)
+    m = mm.Memory("t"); m.start()
+    ok_t = {"our_left": 1.0, "our_right": 1.0, "their_left": 1.0, "their_right": 1.0}
+    bad_t = dict(ok_t, our_left=0.7)
+    t = 0.0
+    for _ in range(3):
+        m.defended("hog_rider", "cannon", "left", ok_t, t, tile=(7, 9)); t += 9; m.tick(ok_t, t)
+    m.defended("hog_rider", "cannon", "left", ok_t, t, tile=(5, 4)); t += 9; m.tick(bad_t, t)
+    for _ in range(2):
+        m.opp_defended("hog_rider", "tesla", "right", (10, 21), ok_t, t); t += 9; m.tick(ok_t, t)
+    check("replay heat: the tile that held comes back", m.best_tiles("hog_rider", "cannon", "left")[0][0] == (7, 9))
+    check("replay heat: mirrored for the other lane", m.best_tiles("hog_rider", "cannon", "right")[0][0] == (10, 9))
+    check("replay heat: the failed tile does not", all(x[0] != (5, 4) for x in m.best_tiles("hog_rider", "cannon", "left")))
+    check("replay heat: their answer learned on our half", m.best_tiles("hog_rider", "tesla", "left")[0][0] == (7, 10))
+
+
 def test_path():
     """The aim follows the path: a Hog Rider goes over its bridge then turns to the Cannon pulling it; a unit already
     at our tower stands there (no lead behind it); a building never walks."""
@@ -285,7 +352,7 @@ def test_sessions():
     check("sessions: no TensorRT here = no crash, a working provider", s.kind in ("cpu", "dml", "cuda", "trt"), s.kind)
 
 
-for fn in (test_tracker, test_brain_lead, test_occlusion, test_skins_and_ids, test_team_birth, test_path, test_soft_rules, test_team, test_hand, test_sessions):
+for fn in (test_tracker, test_brain_lead, test_occlusion, test_skins_and_ids, test_team_birth, test_fast_eyes, test_double_drop, test_replay_heat, test_path, test_soft_rules, test_team, test_hand, test_sessions):
     try:
         fn()
     except Exception as e:
