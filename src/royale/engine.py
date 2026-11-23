@@ -253,7 +253,8 @@ def mirror(brain, st, hand, my_elixir):
         if hero and (n in (getattr(brain, "heroes", set()) or set()) or "hero" in look): return hero
         if evo and "ev1" in look: return evo
         return base
-    env = m.ClashRoyaleEnv(_filler_deck(m, [vid(n) for n in deck]), _deck_ids(m, their), 3600)
+    my_ids = _filler_deck(m, [vid(n) for n in deck])
+    env = m.ClashRoyaleEnv(my_ids, _deck_ids(m, their), 3600)
     env.reset()
     env.set_current_tick(int(min(3599, brain.elapsed() * 10)))
     # towers: fractions of life (the engine's towers are level 9; a fraction is what perception can trust)
@@ -300,10 +301,16 @@ def mirror(brain, st, hand, my_elixir):
     el1 = float(brain.enemy_elixir or 5.0)
     if brain.p.get("2v2"): el1 = min(10.0, max(el1 / 2.0, el1 - 10.0))
     env.set_elixir_for_team(1, el1)
-    want = [vid(h) for h in hand if h]
+    want = [vid(h) if h and h != "blank" else None for h in hand]
+    # 6.9.18: a blank slot (a card just played) is filled with another card of the deck, so the REAL hand is still set
+    # — before, the engine kept its own shuffled hand and a playable card (the Cannon in the CI check) was sometimes
+    # not in it: never thought through, the Hog went undefended
+    if len(want) == 4 and any(w is None for w in want):
+        spare = [c for c in my_ids if c not in want]
+        want = [w if w is not None else (spare.pop(0) if spare else None) for w in want]
     slots = {}
-    if len(want) == 4 and len(hand) == 4 and env.set_hand_for_team(0, want):
-        slots = {h: i for i, h in enumerate(hand) if h}
+    if len(want) == 4 and None not in want and env.set_hand_for_team(0, want):
+        slots = {h: i for i, h in enumerate(hand) if h and h != "blank"}
     else:
         got = env.get_hand_for_team(0)
         slots = {h: got.index(vid(h)) for h in hand if h and vid(h) in got}
