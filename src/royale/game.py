@@ -131,7 +131,7 @@ class RoyaleBot:
             logger.debug("Clash Royale: the check failed", exc_info=True)
         try:                                         # and trained on this PC's graphics card, by themselves
             from royale import trainer
-            if self.s.get("auto_train", True) and trainer.due():
+            if self.s.get("auto_train", False) and trainer.due():
                 logger.info("Clash Royale: training the eyes on this PC in the background (data + graphics card)")
                 trainer.start(_u().INSTANCE_ID)
         except Exception:
@@ -609,8 +609,9 @@ class RoyaleBot:
                 last = self.battle()
                 try:
                     from royale import engine_ai
-                    engine_ai.resume_background()                      # training / version test go on
-                    self._gate_after_battle()
+                    if self.s.get("ai_self_play", False):
+                        engine_ai.resume_background()                  # only resume when the user enabled it
+                        self._gate_after_battle()
                 except Exception:
                     pass
                 self.results(last)
@@ -1266,6 +1267,7 @@ def _gate_after_battle(self):
     """Between battles: a newer trained version is tested against the one in use (its own process, paused while
     a battle runs)."""
     from royale import engine_ai, engine
+    if not self.s.get("ai_self_play", False): return
     import threading
     deck = list(self.brain.deck or self.eyes.deck or [])
     # the self-play AI trains by itself between battles on this deck (paused while a battle runs)

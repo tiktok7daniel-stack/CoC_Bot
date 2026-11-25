@@ -125,12 +125,13 @@ class Eyes:
         img = Image.fromarray(frame_rgb).convert("RGB").resize((C.SCREENSHOT_WIDTH, C.SCREENSHOT_HEIGHT),
                                                                 Image.Resampling.BILINEAR)
         t_prep = time.perf_counter()
-        big, big_now = [], False
+        big, big_now, fast_now = [], False, False
         try:                                         # the big model first: is it the eyes of this very picture?
             from royale import strong_eyes
             if strong_eyes.ready():
                 big = strong_eyes.look_now(frame_rgb)
                 big_now = strong_eyes.same_moment()
+                fast_now = big_now and bool(strong_eyes._A.get("fast"))
         except Exception:
             big = []
         t_big = time.perf_counter()
@@ -167,7 +168,7 @@ class Eyes:
                 side, "units") for lst, side in ((enemies, "enemy"), (allies, "ally")) for d in lst]
         hp, spells = {}, []
         if big_current:
-            try: hp, spells = self._health()
+            try: hp, spells = self._health(frame_rgb, big_current)
             except Exception: pass
         en, al = self._units(frame_rgb, raw, big_current, img, now, hp, spells)
         t_track = time.perf_counter()
@@ -188,16 +189,16 @@ class Eyes:
                        "our_left": nums.left_ally_princess_hp.number, "our_right": nums.right_ally_princess_hp.number},
             "hp": hp, "spells": spells, "evo": list(getattr(self, "evo_now", []) or []),
             "tracks": self.tracker.snapshot(now),
-            "vision_source": "large-current-frame" if big_now else "small-current-frame",
+            "vision_source": ("fast-current-frame" if fast_now else
+                              "large-current-frame" if big_now else "small-current-frame"),
+            "vision_timing": dict(self.last_timings),
             "t": now, "_seen_t": seen_t,
         }
 
-    def _health(self):
-        """Health bars of their units + spells landing, from the big model's last picture (royale.health)."""
-        from royale import strong_eyes, health
-        seen = strong_eyes.last_seen()
-        if not seen or time.monotonic() - strong_eyes._A.get("t", 0) > 0.8: return {}, []
-        fr, dets = seen
+    def _health(self, frame_rgb, dets):
+        """Health bars and spells from the exact frame/detections used for this look."""
+        from royale import health
+        fr = frame_rgb
         h, w = fr.shape[:2]
 
         def tile_of(px, py):

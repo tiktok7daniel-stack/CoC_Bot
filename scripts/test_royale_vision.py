@@ -581,7 +581,7 @@ def test_adb_and_stream_fixes():
         class _Tr:
             def update(self, dets, now): return [(d, types.SimpleNamespace(team=d.team, life=None, conf=d.conf, x=d.x, y=d.y)) for d in dets]
             def ghosts(self, *a, **kw): return []
-        e.tracker = _Tr(); e.two_v_two = False
+        e.tracker = _Tr(); e.two_v_two = False; e._side_cache = []
         small = types.SimpleNamespace(width=720, height=1280, crop=lambda box: None)
         fr = np.zeros((1280, 720, 3), np.uint8)
         en, al = e._units(fr, [], [("knight", 0.9, 100, 600, 140, 660)], small, 10.0,
@@ -733,15 +733,91 @@ def test_live_ai_sync_and_watch_mode():
     check("watch_mode: ar & en i18n keys exist",
           "rh_watch" in i18n["ar"] and "rh_watch_sub" in i18n["ar"]
           and "rh_watch" in i18n["en"] and "rh_watch_sub" in i18n["en"])
-    for rel in ("src/royale/strong_eyes.py", "src/royale/eyes.py", "src/royale/cr_api.py",
+    for rel in ("src/royale/strong_eyes.py", "src/royale/eyes.py", "src/royale/live_view.py",
+                "src/royale/cr_api.py", "src/settings.py", "src/qt_ui/i18n.py",
+                "src/qt_ui/screens/royale_live_screen.py",
                 "src/royale/brain.py", "src/royale/game.py", "src/qt_ui/live_video.py",
                 "src/qt_ui/live_tracker.py", "src/qt_ui/screens/royale_ai_screen.py",
                 "src/qt_ui/screens/royale_home_screen.py"):
-        ast.parse((ROOT / rel).read_text(encoding="utf-8"), filename=rel)
+        ast.parse((ROOT / rel).read_text(encoding="utf-8-sig"), filename=rel)
     check("watch_mode & sync: all modified files compile cleanly", True)
 
 
-for fn in (test_tracker, test_brain_lead, test_occlusion, test_skins_and_ids, test_team_birth, test_fast_eyes, test_double_drop, test_replay_heat, test_path, test_soft_rules, test_team, test_hand, test_sessions, test_tactics, test_tactics_stronger, test_trt_and_gpu_recovery, test_adb_and_stream_fixes, test_qt_ui_design_system, test_live_ai_sync_and_watch_mode):
+def test_frame_integrity():
+    """A stale detector result must not enter state; fresh fast-model health uses its own frame."""
+    import types
+    import numpy as np
+    from royale import strong_eyes
+    from royale.eyes import Eyes
+
+    old_ready, old_look, old_same = strong_eyes.ready, strong_eyes.look_now, strong_eyes.same_moment
+    old_fast = strong_eyes._A.get("fast", False)
+    try:
+        captured = {}
+        one = types.SimpleNamespace(number=1.0)
+        nums = types.SimpleNamespace(elixir=one, left_enemy_princess_hp=one, right_enemy_princess_hp=one,
+                                     left_ally_princess_hp=one, right_ally_princess_hp=one)
+
+        def make_eyes():
+            e = Eyes.__new__(Eyes)
+            e._card_det = types.SimpleNamespace(
+                run=lambda img: ([types.SimpleNamespace(name="blank") for _ in range(5)], []),
+                last_variants=[""] * 5)
+            e.units = types.SimpleNamespace(run=lambda img: ([], []))
+            e.numbers = types.SimpleNamespace(run=lambda img: nums)
+            e.dual = False
+            e.single_used = 0
+            e.tracker = types.SimpleNamespace(snapshot=lambda now: [])
+            e._units = lambda frame, raw, big, small, now, hp=None, spells=None: (
+                captured.update(big=big, hp=hp, spells=spells) or ([], []))
+            e._health = lambda frame, dets: captured.update(health_frame=frame, health_dets=dets) or ({}, [])
+            return e
+
+        frame = np.zeros((1280, 720, 3), dtype=np.uint8)
+        stale = [("hog-rider", 0.9, 10, 20, 30, 40)]
+        strong_eyes.ready = lambda: True
+        strong_eyes.look_now = lambda image: stale
+        strong_eyes.same_moment = lambda: False
+        strong_eyes._A["fast"] = False
+        e = make_eyes()
+        s = e.look(frame)
+        check("frame integrity: stale big-model detections are excluded from the current tracker",
+              captured.get("big") == [] and s.get("vision_source") == "small-current-frame",
+              str((captured.get("big"), s.get("vision_source"))))
+
+        current = [("hog-rider", 0.9, 10, 20, 30, 40)]
+        strong_eyes.look_now = lambda image: current
+        strong_eyes.same_moment = lambda: True
+        strong_eyes._A["fast"] = True
+        e = make_eyes()
+        s = e.look(frame)
+        check("frame integrity: fast-model health is read from the exact current frame and detections",
+              captured.get("health_frame") is frame and captured.get("health_dets") is current
+              and captured.get("big") is current and s.get("vision_source") == "fast-current-frame",
+              str((captured.get("vision_source"), s.get("vision_source"))))
+        check("frame integrity: per-look timing is returned for diagnostics",
+              isinstance(s.get("vision_timing"), dict) and "total_ms" in s["vision_timing"])
+    finally:
+        strong_eyes.ready, strong_eyes.look_now, strong_eyes.same_moment = old_ready, old_look, old_same
+        strong_eyes._A["fast"] = old_fast
+
+
+def test_training_stays_off_by_default():
+    from settings import default_settings
+    from qt_ui.i18n import EXTRA
+    r = default_settings()["royale"]
+    check("training remains opt-in: YOLO and PPO self-play default off",
+          r.get("auto_train") is False and r.get("ai_self_play") is False,
+          str((r.get("auto_train"), r.get("ai_self_play"))))
+    check("training safeguards preserve model-only decision mode",
+          r.get("ai_only") is True and r.get("ai_play") is True,
+          str((r.get("ai_only"), r.get("ai_play"))))
+    check("live vision diagnostics have Arabic and English labels",
+              all(k in EXTRA[lang] for lang in ("ar", "en") for k in
+              ("rl_vision", "rl_source_large", "rl_source_fast", "rl_source_fallback", "rl_units", "rl_tracks")))
+
+
+for fn in (test_tracker, test_brain_lead, test_occlusion, test_skins_and_ids, test_team_birth, test_fast_eyes, test_double_drop, test_replay_heat, test_path, test_soft_rules, test_team, test_hand, test_sessions, test_tactics, test_tactics_stronger, test_trt_and_gpu_recovery, test_adb_and_stream_fixes, test_qt_ui_design_system, test_frame_integrity, test_training_stays_off_by_default, test_live_ai_sync_and_watch_mode):
     try:
         fn()
     except Exception as e:

@@ -202,6 +202,12 @@ def battle(acc, brain, st, d, force=False, frame=None):
         "events": _S["events"],
         "engine": engine_state(),
         "perf": st.get("_perf") or {},
+        "vision": {
+            "source": st.get("vision_source", "unknown"),
+            "units": len(st.get("enemies") or []) + len(st.get("allies") or []),
+            "tracks": len(st.get("tracks") or []),
+            "ms": (st.get("vision_timing") or {}).get("total_ms"),
+        },
         "frame_t": _S.get("frame_t", 0.0),
         "model": _model(brain),
         "boxes": _boxes(brain, st),

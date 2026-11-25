@@ -36,7 +36,7 @@ def default_settings():
             "scan_cards": True,      # weekly: every card's Info page photographed and read (royale.card_scan)
             "engine_think": True,    # every move thought through in the battle engine (royale.engine) when it is built
             "ai_play": True,         # AI mode: the AI model decides, the engine checks it, the rules only guard
-            "ai_self_play": True,
+            "ai_self_play": False,  # training stays off until the user enables it
             "ai_only": True,         # the AI model alone plays (no move of the rule brain)    # the self-play AI trains by itself between battles (paused in battle)
             "local_ai": False,       # True: the local AI model (royale.board + royale.policy, learning every battle) plays
             "lock_deck": True,       # the user's own deck is played as it is: the bot never changes it (the user's order)
@@ -48,7 +48,7 @@ def default_settings():
             "deck_slot": 0,          # the deck slot it uses (1-10; 0 = the slot selected in the game)
             "max_battles": 0,        # stop after this many battles (0 = keep playing)
             "notify": True,          # every result to the phone
-            "auto_train": True,      # train the eyes on this PC's NVIDIA card by themselves (once a week at most)
+            "auto_train": False,     # training stays off until the user enables it
             "manage_account": True,  # between battles: upgrade cards with gold, clan donations / requests, free rewards,
                                      # card mastery, clan gifts, the shop's free daily offer, Clan War, daily report
             "learned_brain": True,   # the neural network trained on 17 M real plays helps every decision

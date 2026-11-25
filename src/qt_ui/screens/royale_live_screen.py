@@ -197,6 +197,26 @@ class Camera(QWidget):
                 bar = QRectF(r.left(), r.bottom() + 1, r.width(), 3)
                 p.fillRect(bar, QColor(0, 0, 0, 160))
                 p.fillRect(QRectF(bar.left(), bar.top(), bar.width() * max(0.0, life), 3), QColor("#ffd24d"))
+        vision = self.d.get("vision") or {}
+        if vision:
+            source = {
+                "large-current-frame": tr("rl_source_large"),
+                "fast-current-frame": tr("rl_source_fast"),
+                "small-current-frame": tr("rl_source_fallback"),
+            }.get(vision.get("source"), tr("rl_source_unknown"))
+            details = (f"{tr('rl_units')} {vision.get('units', 0)} · "
+                       f"{tr('rl_tracks')} {vision.get('tracks', 0)}")
+            if vision.get("ms") is not None:
+                details += f" · {vision['ms']} {tr('rl_vision_ms')} ms"
+            text = f"{source}  |  {details}"
+            p.setFont(ui_font(7.5, QFont.DemiBold))
+            fm = p.fontMetrics()
+            badge = QRectF(ox + 5, oy + 5, min(w - 10, fm.horizontalAdvance(text) + 16), 23)
+            p.setPen(QPen(QColor(255, 255, 255, 45), 1))
+            p.setBrush(QColor(10, 16, 24, 210))
+            p.drawRoundedRect(badge, 5, 5)
+            p.setPen(QColor(TOKENS["text"]))
+            p.drawText(badge.adjusted(8, 0, -5, 0), Qt.AlignVCenter | Qt.AlignLeft, text)
         t = self.d.get("target")
         if t:
             p.setPen(QPen(QColor(TOKENS["gold"]), 3)); p.setBrush(Qt.NoBrush)
@@ -345,7 +365,8 @@ class RoyaleLiveScreen(Screen):
         self.l_state.setText(
             f"{tr('rl_time')}: {int(t // 60)}:{int(t % 60):02d}" + (f"  ·  {tr('rl_double')}" if d.get("double") else "") + "\n" +
             f"{tr('rl_elixir')}: {d.get('elixir')}  ·  {tr('rl_their_elixir')}: ~{d.get('their_elixir')}\n" +
-            f"{tr('rl_hand')}: " + "   ".join(card_txt(h) for h in hand) + f"\n{tr('rl_next')}: {d.get('next')}")
+            f"{tr('rl_hand')}: " + "   ".join(card_txt(h) for h in hand) + f"\n{tr('rl_next')}: {d.get('next')}" +
+            self._vision_line(d))
         dec = d.get("decision")
         th = d.get("think") or {}
         eng = d.get("engine") or {}
@@ -381,3 +402,17 @@ class RoyaleLiveScreen(Screen):
             who = tr("rl_us") if e.get("who") == "us" else tr("rl_them_short")
             ev.append(f"<span style='color:{col}'>{who}</span> {e.get('card')} {tuple(e['tile']) if e.get('tile') else ''}")
         self.l_ev.setText("<br>".join(ev[:12]) or tr("rl_no_events"))
+
+    @staticmethod
+    def _vision_line(d):
+        vision = d.get("vision") or {}
+        if not vision: return ""
+        source = {
+            "large-current-frame": tr("rl_source_large"),
+            "fast-current-frame": tr("rl_source_fast"),
+            "small-current-frame": tr("rl_source_fallback"),
+        }.get(vision.get("source"), tr("rl_source_unknown"))
+        line = f"\n{tr('rl_vision')}: {source} · {tr('rl_units')} {vision.get('units', 0)} · " \
+               f"{tr('rl_tracks')} {vision.get('tracks', 0)}"
+        if vision.get("ms") is not None: line += f" · {vision['ms']} {tr('rl_vision_ms')} ms"
+        return line
