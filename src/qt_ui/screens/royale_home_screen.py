@@ -152,9 +152,10 @@ class RoyaleHomeScreen(Screen):
         hold.setLayout(row)
         v.addWidget(hold)
 
-        # ---------- 4 choices (saved at once)
+        # ---------- choices (saved at once)
         ch = GlassCard("rh_choices", "sliders", "rh_choices_sub")
         for key, path, sub in (("rh_ai_plays", "royale.ai_play", "rh_ai_plays_sub"),
+                               ("rh_watch", "royale.watch_only", "rh_watch_sub"),
                                ("rh_chores", "royale.manage_account", "rh_chores_sub"),
                                ("royale_tc", "royale.training_camp", "royale_tc_sub"),
                                ("rh_phone", "royale.notify", "rh_phone_sub")):

@@ -658,7 +658,90 @@ def test_qt_ui_design_system():
             else: sys.modules[k] = v
 
 
-for fn in (test_tracker, test_brain_lead, test_occlusion, test_skins_and_ids, test_team_birth, test_fast_eyes, test_double_drop, test_replay_heat, test_path, test_soft_rules, test_team, test_hand, test_sessions, test_tactics, test_tactics_stronger, test_trt_and_gpu_recovery, test_adb_and_stream_fixes, test_qt_ui_design_system):
+def test_live_ai_sync_and_watch_mode():
+    """6.9.23: capture timestamps carry forward, LiveTracker.visible_rich keeps velocity, API levels sync all cards, Watch mode logs human play."""
+    import ast, json, tempfile, time, types
+    import numpy as np
+    from royale import cr_api
+    from royale.brain import Brain
+    from royale.memory import Memory
+    from royale import game as rgame
+    from qt_ui.live_tracker import LiveTracker
+    from qt_ui.live_video import LiveVideo
+
+    # 1) LiveTracker.visible_rich preserves velocities + LiveVideo.take_at reads predecoded QImage under _buf_lock
+    lt = LiveTracker()
+    t0 = time.time() - 0.1
+    lt.feed([["knight", True, 0.5, 0.5, 0.9]], t0)
+    lt.feed([["knight", True, 0.52, 0.48, 0.9]], t0 + 0.05)
+    rich = lt.visible_rich(t0 + 0.08)
+    check("live_tracker: visible_rich returns interpolated position + velocity",
+          len(rich) == 1 and "vx" in rich[0] and "vy" in rich[0] and abs(rich[0]["vx"]) + abs(rich[0]["vy"]) > 0,
+          str(rich))
+
+    lv = LiveVideo()
+    with lv._buf_lock:
+        lv.buf.append((10.0, 1, "qimg_1"))
+        lv.buf.append((10.2, 2, "qimg_2"))
+    got = lv.take_at(10.1, None)
+    check("live_video: take_at picks pre-decoded buffered frame cleanly", got == (1, "qimg_1", 10.0), str(got))
+
+    # 2) cr_api.card_levels normalizes full card collection to level-16 scale
+    orig_player = cr_api.player
+    try:
+        cr_api.player = lambda acc: {
+            "cards": [
+                {"name": "Cannon", "level": 13, "maxLevel": 14, "evolutionLevel": 1, "rarity": "common"},
+                {"name": "Mini P.E.K.K.A", "level": 12, "maxLevel": 12, "evolutionLevel": 0, "rarity": "rare"},
+            ],
+            "currentDeck": [{"name": "Cannon", "level": 13, "maxLevel": 14, "evolutionLevel": 1}],
+        }
+        cl = cr_api.card_levels("main")
+        check("cr_api: card_levels normalizes owned cards & evos",
+              cl["levels"].get("cannon") == 15 and cl["levels"].get("minipekka") == 16 and "cannon" in cl["evos"],
+              str(cl))
+    finally:
+        cr_api.player = orig_player
+
+    # 3) Watch mode: _detect_human_play + record_human_play saves to Brain.plays and Memory.pending without bot tap
+    with tempfile.TemporaryDirectory() as td:
+        from royale import memory as rmem
+        orig_dir = rmem.DIR
+        try:
+            rmem.DIR = Path(td)
+            b = Brain(["cannon", "knight", "musketeer", "the_log", "hog_rider", "skeletons", "ice_spirit", "fireball"])
+            b.reset()
+            b.mem = Memory("watch_test")
+            b.mem.start()
+            b._stable = [("hog_rider", 3.5, 13.0)]
+            bot = rgame.RoyaleBot.__new__(rgame.RoyaleBot)
+            bot.brain = b
+            bot.eyes = types.SimpleNamespace(tracker=types.SimpleNamespace(note_play=lambda *a: None))
+            prev_st = {"hand": ["cannon", "knight", "musketeer", "the_log"], "ready": [0, 1], "allies": []}
+            cur_st = {"hand": ["blank", "knight", "musketeer", "the_log"], "ready": [1],
+                      "allies": [("cannon", 8, 9, 0.9)], "enemies": [("hog_rider", 3, 13, 0.9)],
+                      "towers": {"our_left": 1.0, "our_right": 1.0}}
+            res = bot._detect_human_play(cur_st, prev_st)
+            check("watch_mode: detects human drop & feeds memory heatmap",
+                  res is not None and res["card"] == "cannon" and res["tile"] == (8, 9) and len(b.mem.pending) == 1,
+                  str((res, len(b.mem.pending))))
+        finally:
+            rmem.DIR = orig_dir
+
+    # 4) Verify all edited backend/UI files parse & rh_watch keys exist in both ar and en
+    i18n = json.loads((ROOT / "src" / "qt_ui" / "i18n_data.json").read_text(encoding="utf-8"))
+    check("watch_mode: ar & en i18n keys exist",
+          "rh_watch" in i18n["ar"] and "rh_watch_sub" in i18n["ar"]
+          and "rh_watch" in i18n["en"] and "rh_watch_sub" in i18n["en"])
+    for rel in ("src/royale/strong_eyes.py", "src/royale/eyes.py", "src/royale/cr_api.py",
+                "src/royale/brain.py", "src/royale/game.py", "src/qt_ui/live_video.py",
+                "src/qt_ui/live_tracker.py", "src/qt_ui/screens/royale_ai_screen.py",
+                "src/qt_ui/screens/royale_home_screen.py"):
+        ast.parse((ROOT / rel).read_text(encoding="utf-8"), filename=rel)
+    check("watch_mode & sync: all modified files compile cleanly", True)
+
+
+for fn in (test_tracker, test_brain_lead, test_occlusion, test_skins_and_ids, test_team_birth, test_fast_eyes, test_double_drop, test_replay_heat, test_path, test_soft_rules, test_team, test_hand, test_sessions, test_tactics, test_tactics_stronger, test_trt_and_gpu_recovery, test_adb_and_stream_fixes, test_qt_ui_design_system, test_live_ai_sync_and_watch_mode):
     try:
         fn()
     except Exception as e:

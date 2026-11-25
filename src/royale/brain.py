@@ -1483,3 +1483,33 @@ class Brain:
         except Exception:
             pass
         return d
+
+    def record_human_play(self, card_name, tile, towers=None, enemies=None, now=None):
+        """Record a human play observed in Phone/Watch mode so memory & heatmaps learn real placements."""
+        if not card_name or not tile: return None
+        now = time.monotonic() if now is None else now
+        x, y = int(max(0, min(17, round(tile[0])))), int(max(0, min(31, round(tile[1]))))
+        if card_name in K.SUPPORT or (pro.data().get("follow", {}).get(pro.key(card_name)) and "win" in roles(card_name)):
+            self.support_due = (lane(x), now + 5.0, card_name)
+            self.support_due_back = y <= 3
+        if card_name in K.NOT_TOGETHER[0]: self.heavy_mine_at = now
+        self.last_play = now
+        self.last_tiles.append((x, y))
+        d = {"slot": None, "card": card_name, "tile": (x, y), "why": "human play (watched)", "t": round(self.elapsed(), 1)}
+        self.plays.append(d)
+        try:
+            if getattr(self, "mem", None) and y <= RIVER_Y + 1:
+                pts = [tuple(e[:3]) for e in (enemies if enemies is not None else (self._stable or []))]
+                th = self.threats(pts)
+                ln = lane(x)
+                t_ = th.get(ln) or {}
+                if not t_.get("main") and 6 <= x <= 11:
+                    other = "right" if ln == "left" else "left"
+                    if (th.get(other) or {}).get("main"):
+                        ln, t_ = other, th[other]
+                if t_.get("main") and t_.get("units"):
+                    self.mem.defended(t_["main"], card_name, ln, towers or getattr(self, "_towers_now", {}),
+                                      now, None, tile=(x, y))
+        except Exception:
+            pass
+        return d

@@ -300,6 +300,11 @@ class RoyaleBot:
                 def _chk():
                     try: self._check_deck()
                     except Exception: log.debug("deck check failed", exc_info=True)
+                    try:
+                        if self.brain.deck and any(not self.brain.my_level(c) for c in self.brain.deck):
+                            self._api_start()
+                    except Exception:
+                        pass
                 __import__("threading").Thread(target=_chk, daemon=True, name="deck-check").start()
             if len(self.eyes.deck) == 8 and getattr(self, "_studied", None) != sorted(self.eyes.deck):
                 self._studied = sorted(self.eyes.deck)
@@ -326,21 +331,30 @@ class RoyaleBot:
                      prev is not None and i < len(prev) and prev[i] == st["hand"][i] and st["hand"][i] != "blank" and
                      time.monotonic() - self._slot_used.get(i, 0) > 0.8 and
                      (__import__("royale.brain", fromlist=["card"]).card(st["hand"][i]).get("cost", 11) <= el)]
-            try:
-                t_dec = time.monotonic()
-                d = self.brain.decide(st["hand"], ready, el, st["enemies"], st["allies"], st["towers"],
-                                      hp=st.get("hp"), spells=st.get("spells"), evo=st.get("evo"))
-            except Exception:
-                log.warning("Clash Royale: a decision failed — next look", exc_info=True)
-                d = None
-            try: perf["decide"] += (time.monotonic() - t_dec) * 1000
-            except NameError: pass
-            t_eng = time.monotonic()
-            if engine_on:
+            watch_only = bool(self.s.get("watch_only", False))
+            if watch_only:
                 try:
-                    d = self._engine_turn(st, d, ready, el)
+                    self.brain.observe(st["enemies"], st["allies"], st["towers"], el,
+                                       hp=st.get("hp"), spells=st.get("spells"))
                 except Exception:
-                    log.debug("engine turn failed", exc_info=True)
+                    pass
+                d = self._detect_human_play(st, last)
+            else:
+                try:
+                    t_dec = time.monotonic()
+                    d = self.brain.decide(st["hand"], ready, el, st["enemies"], st["allies"], st["towers"],
+                                          hp=st.get("hp"), spells=st.get("spells"), evo=st.get("evo"))
+                except Exception:
+                    log.warning("Clash Royale: a decision failed — next look", exc_info=True)
+                    d = None
+                try: perf["decide"] += (time.monotonic() - t_dec) * 1000
+                except NameError: pass
+                t_eng = time.monotonic()
+                if engine_on:
+                    try:
+                        d = self._engine_turn(st, d, ready, el)
+                    except Exception:
+                        log.debug("engine turn failed", exc_info=True)
             if self.brain.arch and self.brain.arch != getattr(self, "_arch_logged", None):
                 self._arch_logged = self.brain.arch
                 log.info(f"Clash Royale: their deck looks like {self.brain.arch} "
@@ -348,14 +362,16 @@ class RoyaleBot:
             if self.brain.predicted and self.brain.predicted != getattr(self, "_pred_logged", None):
                 self._pred_logged = set(self.brain.predicted)
                 log.info("Clash Royale: their deck probably also has " + ", ".join(sorted(self.brain.predicted)))
-            perf["engine"] += (time.monotonic() - t_eng) * 1000
+            if not watch_only: perf["engine"] += (time.monotonic() - t_eng) * 1000
             lp = (time.monotonic() - t0) * 1000
             perf["loop"] += lp; perf["n"] += 1; perf["worst_loop"] = max(perf["worst_loop"], lp)
             if lp > 1500 and len(slow) < 6:                 # where a long moment went (the freezes in the reports)
                 try:
                     slow.append({"ms": round(lp), "capture": round((t_cap - t0) * 1000),
-                                 "look": round((t_dec - t_cap) * 1000), "decide": round((t_eng - t_dec) * 1000),
-                                 "engine": round((time.monotonic() - t_eng) * 1000), "t": round(self.brain.elapsed())})
+                                 "look": round((t_dec - t_cap) * 1000) if not watch_only else 0,
+                                 "decide": 0 if watch_only else round((t_eng - t_dec) * 1000),
+                                 "engine": 0 if watch_only else round((time.monotonic() - t_eng) * 1000),
+                                 "t": round(self.brain.elapsed())})
                 except Exception:
                     pass
             st["_perf"] = {k: (round(v / max(1, perf["n"])) if k not in ("n", "worst_loop") else round(v))
@@ -363,12 +379,12 @@ class RoyaleBot:
             try:
                 from royale import live_view
                 if d: live_view.event("us", d["card"], d["tile"], d.get("why", ""))
-                st["_seen_t"] = seen_t
+                st["_seen_t"] = st.get("_seen_t") or seen_t
                 live_view.battle(_u().INSTANCE_ID, self.brain, st, d, force=bool(d), frame=fr)
             except Exception:
                 pass
             now_t = time.monotonic()
-            if d:
+            if d and not watch_only:
                 # never a card that is in none of the account's real decks (5.89): it can only be a misread — the
                 # Goblin Barrel read as Goblin Gang was played as a troop in our half
                 try:
@@ -390,7 +406,7 @@ class RoyaleBot:
                 log.warning(f"Clash Royale: {d['card']} was aimed at {d['tile']} ({d['why']}) — sent to their tower "
                             f"{fixed} instead")
                 d["tile"], d["why"] = fixed, d["why"] + " | guard: onto their tower"
-            if d:
+            if d and not watch_only:
                 play_log.append({"t": round(self.brain.elapsed(), 1), "card": d["card"], "tile": list(d["tile"]),
                                  "why": str(d.get("why", ""))[:90], "el": round(float(st["elixir"]), 1)})
                 self._spent = (__import__("royale.brain", fromlist=["card"]).card(d["card"]).get("cost", 4),
@@ -408,12 +424,18 @@ class RoyaleBot:
                 plays += 1
                 log.info(f"Clash Royale: {d['card']} -> tile {d['tile']} ({d['why']}) — elixir {st['elixir']:.0f}, "
                          f"theirs ~{self.brain.enemy_elixir:.0f}")
+            elif d and watch_only:
+                play_log.append({"t": round(self.brain.elapsed(), 1), "card": d["card"], "tile": list(d["tile"]),
+                                 "why": "human play (watched)", "el": round(float(st["elixir"]), 1)})
+                plays += 1
+                log.info(f"Clash Royale (watched): you played {d['card']} -> tile {d['tile']} (elixir {st['elixir']:.0f})")
             last = st
-            if not abil_base:
-                abil.reset(fr); abil_base = True                       # the strip above the cards, before any hero
-            elif not d:
-                try: abil.tick(fr, self.brain, el, tap)
-                except Exception: log.debug("ability check failed", exc_info=True)
+            if not watch_only:
+                if not abil_base:
+                    abil.reset(fr); abil_base = True                       # the strip above the cards, before any hero
+                elif not d:
+                    try: abil.tick(fr, self.brain, el, tap)
+                    except Exception: log.debug("ability check failed", exc_info=True)
             if self.s.get("keep_frames", True):
                 try:
                     from royale import frames
@@ -421,7 +443,7 @@ class RoyaleBot:
                     if not getattr(self, "_empty_kept", None) == id(self.brain.plays) and 0.5 < self.brain.elapsed() < 4 \
                             and not self.brain.plays and not self.brain.enemy_hist and not self.brain._stable:
                         if frames.keep(empty=True): self._empty_kept = id(self.brain.plays)
-                    frames.keep()
+                    frames.keep(every=1.0 if (watch_only and d) else 4.0)
                 except Exception:
                     pass
             time.sleep(max(0.0, LOOK_EVERY - (time.monotonic() - t0)))
@@ -626,6 +648,15 @@ class RoyaleBot:
                 log.info("Clash Royale: looking after the account (cards, clan, rewards)")
                 self.account.run()
                 continue
+            if b and self.s.get("watch_only", False):
+                self.unknown_since = None
+                if not getattr(self, "_watch_told", False):
+                    self._watch_told = True
+                    self._say("👁️ كلاش رويال: وضع المراقبة شغال — العب على تليفونك أو المحاكي وأنا براقب واتعلّم",
+                              "watch mode active — play yourself while YOLO watches and learns", phone=False)
+                self._status("ready")
+                time.sleep(1.0)
+                continue
             if b and not self._go_ok():
                 self.unknown_since = None
                 time.sleep(1.0)                              # ready, waiting for the user's Start
@@ -772,22 +803,31 @@ def _api_start(self):
 
     def work():
         try:
-            md = cr_api.my_deck(_u().INSTANCE_ID)
-            lv = {k: (int(l) + 16 - int(m)) for k, l, m, _e in md if l and m}       # the levels shown in the game
+            cl = cr_api.card_levels(_u().INSTANCE_ID)
+            md = cr_api.my_deck(_u().INSTANCE_ID) if not cl.get("deck") else []
             from royale.brain import card as _card, cards_db as _cdb
             _nm = {cr_api.key_of(n): n for n in _cdb()}
-            self.brain.evo_cards = {_nm[k]: ((_card(_nm[k]).get("evo") or {}).get("cycles") or 2)
-                                    for k, _l, _m, e in md if e and k in _nm}
+            lv = dict(cl.get("levels") or {})
+            if not lv and md:
+                lv = {k: (int(l) + 16 - int(m)) for k, l, m, _e in md if l and m}
+            evos = {_nm[k]: ((_card(_nm[k]).get("evo") or {}).get("cycles") or 2)
+                    for k in (cl.get("evos") or ()) if k in _nm}
+            if not evos and md:
+                evos = {_nm[k]: ((_card(_nm[k]).get("evo") or {}).get("cycles") or 2)
+                        for k, _l, _m, e in md if e and k in _nm}
+            self.brain.evo_cards = evos
+            deck_keys = cl.get("deck") or [k for k, *_ in md]
             if lv:
                 self.brain.levels = lv
-                self.brain.king_level = round(sum(lv.values()) / len(lv))
+                cur_lvs = [lv[k] for k in deck_keys if k in lv] or list(lv.values())
+                self.brain.king_level = round(sum(cur_lvs) / max(1, len(cur_lvs)))
                 gaps = [b["levels"][1] - b["levels"][0] for b in (self.brain.mem.d.get("api_battles") or [])[-30:]
                         if self.brain.mem and b.get("levels")] if self.brain.mem else []
                 gap = (sum(gaps) / len(gaps)) if gaps else 0.0
                 self.brain.their_level = round(self.brain.king_level + gap)
-                self.log.info(f"Clash Royale API: my levels ~{self.brain.king_level}, opponents usually "
+                self.log.info(f"Clash Royale API: synced {len(lv)} cards (~lv {self.brain.king_level}), opponents "
                               f"{'+' if gap >= 0 else ''}{gap:.1f} — the thinking uses the real numbers")
-            deck = _api_names(self.eyes, [k for k, *_ in md])
+            deck = _api_names(self.eyes, deck_keys)
             if len(deck) == 8:
                 self._api_deck = deck
                 self.log.info("Clash Royale: my deck from the official API = " + ", ".join(deck))
@@ -1114,6 +1154,40 @@ def _recover(self, err):
     time.sleep(min(60, 5 * n))
 
 
+def _detect_human_play(self, st, prev_st):
+    """6.9.23: Watch mode — infer a card the human just played by hand-slot change + new ally unit or spell."""
+    if not prev_st: return None
+    from royale.brain import unit_card, THEIR_TOWERS, roles
+    prev_hand = prev_st.get("hand") or []
+    cur_hand = st.get("hand") or []
+    prev_ready = set(prev_st.get("ready") or [])
+    played = None
+    for i in prev_ready:
+        if i >= len(prev_hand) or i >= len(cur_hand): continue
+        c = prev_hand[i]
+        if c and c != "blank" and cur_hand[i] != c:
+            played = c
+            break
+    if not played: return None
+    prev_pts = {(a[0], round(a[1]), round(a[2])) for a in (prev_st.get("allies") or [])}
+    new_allies = [a for a in (st.get("allies") or []) if (a[0], round(a[1]), round(a[2])) not in prev_pts]
+    tile = None
+    for a in new_allies:
+        if (unit_card(a[0]) or a[0]) == played:
+            tile = (a[1], a[2]); break
+    if tile is None and new_allies:
+        tile = (new_allies[0][1], new_allies[0][2])
+    if tile is None:
+        if "spell" in roles(played):
+            en = st.get("enemies") or []
+            tile = (en[0][1], en[0][2]) if en else THEIR_TOWERS["left"]
+        else:
+            tile = (8, 4)
+    try: self.eyes.tracker.note_play(played, tile)
+    except Exception: pass
+    return self.brain.record_human_play(played, tile, st.get("towers"), st.get("enemies"))
+
+
 def _status(self, st):
     """The app's status line: "now" = running, "waiting_start" = ready, waiting for Start a battle."""
     if getattr(self, "_last_status", None) == st: return
@@ -1245,6 +1319,7 @@ RoyaleBot._check_deck = _check_deck
 RoyaleBot._pick_deck = _pick_deck
 RoyaleBot._api_start = _api_start
 RoyaleBot._api_after_battle = _api_after_battle
+RoyaleBot._detect_human_play = _detect_human_play
 
 
 def _save_deck(deck):

@@ -25,7 +25,8 @@ class LiveVideo:
         self.arr, self.arr_seq, self.arr_t, self._arr_taken = None, 0, 0.0, 0
         # 6.9.17: the last ~0.6 s of decoded pictures with the time each arrived — the screen can show the picture the
         # bot's eyes looked at, so every box sits on its unit (take_at)
-        self.buf = deque(maxlen=160)
+        self.buf = deque(maxlen=90)
+        self._buf_lock = threading.Lock()
         self._bseq = 0
 
     def start(self):
@@ -46,20 +47,15 @@ class LiveVideo:
     def take_at(self, t, last_key):
         """The newest picture that arrived at or before wall-clock time t -> (key, QImage, its time) or None when it is
         the one already shown / none is buffered (hardware decoding keeps no buffer: take() is used then)."""
-        from PySide6.QtGui import QImage
-        pick = None
-        for item in reversed(list(self.buf)):
-            if item[0] <= t:
-                pick = item; break
+        with self._buf_lock:
+            pick = None
+            for item in reversed(self.buf):
+                if item[0] <= t:
+                    pick = item; break
         if pick is None: return None
-        ts, key, fr = pick
+        ts, key, qimg = pick
         if key == last_key: return None
-        try:
-            arr = fr.to_ndarray(format="rgb24")
-        except Exception:
-            return None
-        h, w = arr.shape[:2]
-        return key, QImage(arr.data, w, h, 3 * w, QImage.Format_RGB888).copy(), ts
+        return key, qimg, ts
 
     def latest_array(self):
         """(seq, RGB array, monotonic time it was decoded) of the newest picture — for the screen's own eyes."""
@@ -125,13 +121,9 @@ class LiveVideo:
                         continue
                     for fr in frames:
                         n += 1
-                        if not self.hw:                     # 6.9.17: kept for the synced screen (software frames only)
-                            now_w = time.time()
-                            self._bseq += 1
-                            self.buf.append((now_w, self._bseq, fr))
-                            while self.buf and now_w - self.buf[0][0] > 0.6: self.buf.popleft()
-                        if self._taken != self.seq and self.img is not None:
-                            continue                # the screen has not shown the last one yet: skip converting
+                        need_show = self._taken == self.seq or self.img is None
+                        if not need_show and self.hw:
+                            continue                # hardware frame skipped cleanly when GUI already holds unshown image
                         tc = time.perf_counter()
                         arr = fr.to_ndarray(format="rgb24")
                         if self.hw:              # bringing a picture back from the card can cost more than
@@ -144,11 +136,19 @@ class LiveVideo:
                                 except Exception: pass
                                 self.hw = False
                         h, w = arr.shape[:2]
-                        self.arr, self.arr_t = arr, time.monotonic()
-                        self.arr_seq += 1
-                        self.img = QImage(arr.data, w, h, 3 * w, QImage.Format_RGB888).copy()
-                        self.size = (w, h)
-                        self.seq += 1
+                        qimg = QImage(arr.data, w, h, 3 * w, QImage.Format_RGB888).copy()
+                        if not self.hw:                     # pre-converted on decoder thread so GUI thread never stalls
+                            now_w = time.time()
+                            with self._buf_lock:
+                                self._bseq += 1
+                                self.buf.append((now_w, self._bseq, qimg))
+                                while self.buf and now_w - self.buf[0][0] > 0.6: self.buf.popleft()
+                        if need_show:
+                            self.arr, self.arr_t = arr, time.monotonic()
+                            self.arr_seq += 1
+                            self.img = qimg
+                            self.size = (w, h)
+                            self.seq += 1
                     if time.monotonic() - t0 >= 1.0:
                         self.fps, n, t0 = n / (time.monotonic() - t0), 0, time.monotonic()
             except Exception as e:

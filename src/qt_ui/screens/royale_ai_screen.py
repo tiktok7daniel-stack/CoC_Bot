@@ -135,9 +135,21 @@ class AiPicture(_Base):
         fts = getattr(self, "frame_ts", None)
         if fts and now - fts < 1.0: now = fts            # 6.9.17: the moment of the picture shown (synced)
         tr = getattr(self, "tracker", None)
-        if tr is not None and tr.active():               # every unit placed for the picture's own moment
-            shown = [{"n": n, "m": m, "l": 1.0, "cx": x, "cy": y, "w": bw, "h": bh, "vx": 0.0, "vy": 0.0, "t": now}
-                     for n, m, x, y, bw, bh in tr.visible(now)]
+        if tr is not None and tr.active():               # every unit placed for the picture's own moment + preserve HP
+            raw_boxes = self.d.get("boxes") or []
+            shown = tr.visible_rich(now) if hasattr(tr, "visible_rich") else [
+                {"n": n, "m": m, "l": 1.0, "cx": x, "cy": y, "w": bw, "h": bh, "vx": 0.0, "vy": 0.0, "t": now}
+                for n, m, x, y, bw, bh in tr.visible(now)
+            ]
+            for b in shown:
+                best_l, best_d = 1.0, 0.07
+                for rb in raw_boxes:
+                    if bool(rb.get("m")) != bool(b.get("m")): continue
+                    rx0, ry0, rx1, ry1 = rb["b"]
+                    dd = abs((rx0 + rx1) / 2 - b["cx"]) + abs((ry0 + ry1) / 2 - b["cy"])
+                    if rb.get("n") == b.get("n") and dd < best_d:
+                        best_d, best_l = dd, float(rb.get("l", 1.0))
+                b["l"] = best_l
         else:
             shown = getattr(self, "_boxes", [])
         for b in shown:
@@ -345,7 +357,7 @@ class RoyaleAiScreen(Screen):
 
     def text(self, d):
         if d.get("phase") != "battle": return tr("ra_none")
-        g, r, gold = "#4ade80", "#f87171", TOKENS["gold"]
+        g, r, gold = TOKENS["ok"], TOKENS["bad"], TOKENS["gold"]
         out = []
         t = d.get("time_s", 0)
         out.append(f"<b>{int(t // 60)}:{int(t % 60):02d}</b>" + (" · ⚡x2" if d.get("double") else "") +

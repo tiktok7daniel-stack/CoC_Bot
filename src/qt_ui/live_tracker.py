@@ -109,3 +109,15 @@ class LiveTracker:
                 x, y = tr.at(now)
                 out.append((tr.name, tr.mine, x, y - BOX_UP, BOX_W, BOX_H))
             return out
+
+    def visible_rich(self, now=None):
+        """Detailed visible tracks with velocities so AiPicture interpolates smoothly and preserves HP bars."""
+        now = now or time.time()
+        with self._lock:
+            out = []
+            for tr in self.tracks:
+                if tr.conf < 0.3 and tr.hits < 2: continue
+                x, y = tr.at(now)
+                out.append({"n": tr.name, "m": tr.mine, "l": 1.0, "cx": x, "cy": y - BOX_UP,
+                            "w": BOX_W, "h": BOX_H, "vx": tr.vx, "vy": tr.vy, "t": now})
+            return out

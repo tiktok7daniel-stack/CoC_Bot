@@ -118,6 +118,7 @@ class Eyes:
         """frame_rgb: numpy RGB of the game screen. -> dict (see module doc)."""
         import numpy as np
         from PIL import Image
+        seen_t = time.time()
         img = Image.fromarray(frame_rgb).convert("RGB").resize((C.SCREENSHOT_WIDTH, C.SCREENSHOT_HEIGHT),
                                                                 Image.Resampling.BILINEAR)
         big, big_now = [], False
@@ -165,7 +166,7 @@ class Eyes:
                        "our_left": nums.left_ally_princess_hp.number, "our_right": nums.right_ally_princess_hp.number},
             "hp": hp, "spells": spells, "evo": list(getattr(self, "evo_now", []) or []),
             "tracks": self.tracker.snapshot(now),
-            "t": now,
+            "t": now, "_seen_t": seen_t,
         }
 
     def _health(self):

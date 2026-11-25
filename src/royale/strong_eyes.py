@@ -166,10 +166,11 @@ def _calibrate(frame_shape, box, dets):
 # The big model takes 50 ms on a graphics card but up to a second on the processor: it never holds the battle up.
 # The game loop hands it the newest picture (submit) and takes whatever it saw last (latest); the fast eyes
 # (royale.vision, ~70 ms) answer every look in the meantime.
-_A = {"frame": None, "dets": [], "t": 0.0, "ms": 0.0, "thread": None, "ev": threading.Event()}
+_A = {"frame": None, "dets": [], "t": 0.0, "sub_t": 0.0, "ms": 0.0, "thread": None, "ev": threading.Event()}
 
 
 def submit(frame_rgb):
+    _A["sub_t"] = time.monotonic()
     _A["frame"] = frame_rgb
     _A["ev"].set()
     if _A["thread"] is None or not _A["thread"].is_alive():
@@ -177,14 +178,14 @@ def submit(frame_rgb):
             while True:
                 _A["ev"].wait(5.0)
                 _A["ev"].clear()
-                fr, _A["frame"] = _A["frame"], None
+                fr, _A["frame"], sub_t = _A["frame"], None, _A.get("sub_t") or time.monotonic()
                 if fr is None: continue
                 t0 = time.monotonic()
                 try:
                     d = detect(fr)
                 except Exception:
                     d = []
-                _A["dets"], _A["t"] = d, t0                     # the time of the picture, not of the answer
+                _A["dets"], _A["t"] = d, sub_t                  # exact moment the picture was submitted
                 _A["seen"] = (fr, d)                            # the picture with what was found in it (royale.frames)
                 _A["ms"] = (time.monotonic() - t0) * 1000
         _A["thread"] = threading.Thread(target=work, daemon=True, name="cr-strong-eyes-run")
