@@ -177,24 +177,6 @@ def card_levels(account):
     return {"levels": levels, "evos": evos, "heroes": heroes, "deck": deck}
 
 
-def card_levels(account):
-    """All owned cards' normalized levels (Level 16 scale), evos, and current deck from the official API."""
-    p = player(account)
-    levels, evos, heroes = {}, set(), set()
-    for c in list(p.get("cards") or []) + list(p.get("currentDeck") or []):
-        k = key_of(c.get("name"))
-        if not k: continue
-        l, m = c.get("level"), c.get("maxLevel")
-        if l and m:
-            levels[k] = int(l) + 16 - int(m)
-        if c.get("evolutionLevel"):
-            evos.add(k)
-        if c.get("rarity") == "champion":
-            heroes.add(k)
-    deck = [key_of(c.get("name")) for c in (p.get("currentDeck") or []) if c.get("name")]
-    return {"levels": levels, "evos": evos, "heroes": heroes, "deck": deck}
-
-
 def last_battle(account, after=0.0):
     """The newest battle of the player (newer than `after`, a unix time) ->
     {"won", "crowns", "their_crowns", "their_deck": [(key, level)], "my_deck": [...], "time", "type"} or None."""
