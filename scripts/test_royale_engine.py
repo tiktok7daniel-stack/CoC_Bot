@@ -30,13 +30,15 @@ deck = ["hog_rider", "cannon", "musketeer", "fireball", "ice_golem", "skeletons"
 check("our deck's cards are known", all(n in ids for n in deck), str([n for n in deck if n not in ids]))
 user = ["witch", "bowler", "musketeer", "bats", "hog_rider", "cannon", "goblin_barrel", "the_log"]
 check("the user's deck's cards are known", all(n in ids for n in user), str([n for n in user if n not in ids]))
+check("Knight's native id 0 stays in the deck",
+      ids.get("knight", (None,))[0] == 0 and 0 in engine._deck_ids(m, ["knight"]))
 
 # Minion Giant must work through normal card play, including its flight and
 # building-only attack. Use a Cannon near midriver, away from the towers.
 minion_giant_id = ids.get("minion_giant", (None,))[0]
 check("Minion Giant is mapped from the native registry", minion_giant_id is not None)
 if minion_giant_id is not None:
-    deck_ids = [ids[n][0] for n in ("minion_giant", *deck[1:])]
+    deck_ids = engine._deck_ids(m, ["minion_giant", "knight", *deck[2:]])
     match = m.ClashRoyaleEnv(deck_ids, deck_ids, 3600)
     match.reset()
     check("Minion Giant fits in a native deck and hand", match.set_hand_for_team(0, deck_ids[:4]))
@@ -65,7 +67,7 @@ if minion_giant_id is not None:
 # coordinates: a unit put on our tile (3, 10) shows at engine (3, 11); our left Princess is at our (3.5, 5)
 e = m.ClashRoyaleEnv(engine._filler_deck(m, []), engine._filler_deck(m, []), 3600)
 e.reset()
-e.inject(ids["knight"][0] if "knight" in ids else 2, *engine.eng_xy(3, 10), 0, -1.0, 0)
+e.inject(ids["knight"][0], *engine.eng_xy(3, 10), 0, -1.0, 0)
 e.step_self_play_fast(-1, 0.0, 0.0, -1, 0.0, 0.0, 1)          # an injected body joins the board on the next tick
 u = [u for u in e.get_units() if not u.tower]
 check("tile -> engine point", u and abs(u[0].x - 3) < 0.3 and abs(u[0].y - 11) < 0.3,

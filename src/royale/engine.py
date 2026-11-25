@@ -65,7 +65,7 @@ def card_ids():
     m = module()
     from royale.brain import cards_db
     by = {}
-    for cid in range(1, 260):
+    for cid in range(260):
         try: info = m.get_card_info(cid)
         except Exception: continue
         name = _k(info["name"])
@@ -80,7 +80,7 @@ def card_ids():
     alias = {"thelog": "thelog", "minipekka": "minipekka", "pekka": "pekka"}
     for n in cards_db():
         e = by.get(alias.get(_k(n), _k(n)))
-        if e and e.get("base"): out[n] = (e["base"], e.get("evo"), e.get("hero"))
+        if e and "base" in e: out[n] = (e["base"], e.get("evo"), e.get("hero"))
     _S["ids"] = out
     return out
 
@@ -157,7 +157,7 @@ def _filler_deck(m, want):
     What does not fit is left out (its units are still put on the board)."""
     cards = []
     for c in list(want) + [15, 6, 25, 40, 24, 72, 33, 7, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12]:
-        if c and c not in cards: cards.append(c)
+        if c is not None and c not in cards: cards.append(c)
     slots = [None] * 8
     special = [c for c in cards[:8] if _kind_of(m, c) == "special"][:2]
     evo = [c for c in cards[:8] if _kind_of(m, c) == "evo"]
@@ -165,11 +165,11 @@ def _filler_deck(m, want):
     for c in evo:
         for i in (0, 2):
             if slots[i] is None: slots[i] = c; break
-    used = set(x for x in slots if x)
+    used = {x for x in slots if x is not None}
     plain = [c for c in cards if c not in used and _kind_of(m, c) == "plain"]
     for i in range(8):
         if slots[i] is None and plain: slots[i] = plain.pop(0)
-    return [c for c in slots if c][:8]
+    return [c for c in slots if c is not None]
 
 
 def _deck_ids(m, names):
