@@ -36,11 +36,11 @@ class Eyes:
         self.hand_cls = None                      # the hand-card model (royale.hand_classifier), when trained
         self._side_cache = []                     # avoid rerunning the per-unit ONNX classifier on every look
         self.last_timings = {}
-        # 6.7: ONE arena detector a look. The big model (174 kinds: evolutions, heroes, every new card) is the eyes when
-        # it answers for this very picture (on the graphics card); BuildABot's 97-kind model only fills in while it
-        # is not ready / runs on the processor in the background — or always, with royale.dual_eyes (Advanced)
+        # Prefer the large detector on the current frame. The small detector fills in
+        # when it is unavailable and periodically checks frames with few reliable detections.
         self.dual = False
         self.single_used = 0
+        self._coverage_at = 0.0
         self._card_det = None
         self.set_deck(deck or [])
 
@@ -141,13 +141,21 @@ class Eyes:
         # the large model only when it actually analyzed this frame; otherwise use the
         # current-frame side detector below.
         big_current = big if big_now else []
+        reliable = sum(cf >= 0.50 and strong_eyes.unit_name(name) is not None
+                       for name, cf, *_ in big_current)
+        tick = time.monotonic()
+        backup_due = tick - getattr(self, "_coverage_at", 0.0) >= 0.35
+        coverage = big_now and (self.dual or (reliable <= 4 and backup_due))
+        use_small = not big_now or coverage
         with _LOCK:
             cards, ready = self._card_det.run(img)
-            if big_now and not self.dual:
-                allies, enemies = [], []             # one detector this look (the big one, same moment)
-                self.single_used += 1
-            else:
+            if use_small:
                 allies, enemies = self.units.run(img)
+                if coverage:
+                    self._coverage_at = tick
+            else:
+                allies, enemies = [], []
+                self.single_used += 1
             nums = self.numbers.run(img)
         t_models = time.perf_counter()
         hand = [c.name for c in cards[1:5]]
@@ -165,7 +173,8 @@ class Eyes:
         kx, ky = w / float(C.SCREENSHOT_WIDTH), h / float(C.SCREENSHOT_HEIGHT)
         # every unit found, with its box on the real picture and what the small side model said
         raw = [(d.unit.name, float(d.position.conf), tuple(v * k for v, k in zip(d.position.bbox, (kx, ky, kx, ky))),
-                side, "units") for lst, side in ((enemies, "enemy"), (allies, "ally")) for d in lst]
+                side, "units") for lst, side in ((enemies, "enemy"), (allies, "ally")) for d in lst
+               if self.dual or not big_now or d.position.conf >= (0.50 if reliable == 0 else 0.62)]
         hp, spells = {}, []
         if big_current:
             try: hp, spells = self._health(frame_rgb, big_current)
@@ -191,7 +200,8 @@ class Eyes:
             "hp": hp, "spells": spells, "evo": list(getattr(self, "evo_now", []) or []),
             "tracks": self.tracker.snapshot(now),
             "overlay_boxes": self.overlay_boxes,
-            "vision_source": ("fast-current-frame" if fast_now else
+            "vision_source": ("combined-current-frame" if big_now and raw else
+                              "fast-current-frame" if fast_now else
                               "large-current-frame" if big_now else "small-current-frame"),
             "vision_timing": dict(self.last_timings),
             "t": now, "_seen_t": seen_t,
@@ -238,7 +248,8 @@ class Eyes:
         for u, cf, box, side, _src in raw:
             cand.append([u, cf, box, side if u in self.units.possible_ally_names else None, False, None])
         self.evo_now = []
-        for name, cf, x0, y0, x1, y1 in big or []:
+        unmatched_small = set(range(len(cand)))
+        for name, cf, x0, y0, x1, y1 in sorted(big or [], key=lambda item: -item[1]):
             u = strong_eyes.unit_name(name)
             if not u: continue
             box = (x0, y0, x1, y1)
@@ -259,15 +270,22 @@ class Eyes:
                         self._side_cache.append((u, fx, fy, side, now))
                 except Exception:
                     side = None
-            same = None
-            for c in cand:
-                if c[0] != u: continue
+            matches = []
+            for idx in unmatched_small:
+                c = cand[idx]
+                if c[0] != u:
+                    continue
                 gx, gy = self._tile_f(c[2], w, h)
-                if abs(gx - fx) <= 1.2 and abs(gy - fy) <= 1.2: same = c; break
-            if same is None:
+                distance = math.hypot(gx - fx, gy - fy)
+                if distance <= 0.85:
+                    matches.append((distance, idx))
+            if not matches:
                 cand.append([u, cf, box, side, name.endswith("-evolution"), col_read])
             else:
-                # both eyes see it on the same tile: surer than either alone (5.83); the big model's box is finer
+                _, idx = min(matches)
+                unmatched_small.remove(idx)
+                same = cand[idx]
+                # Each small eye detection can corroborate only one unit.
                 same[1] = min(0.99, 1 - (1 - float(same[1])) * (1 - float(cf)))
                 same[2] = box
                 same[3] = side or same[3]
@@ -307,13 +325,13 @@ class Eyes:
             # the track's side once settled; a new / doubtful one: this look's evidence
             # 6.9.17: the track's whole record (where it was born, our own placement, every colour / side-model read)
             team = tr.team
-            tx, ty = int(round(d.x)), int(round(d.y))
-            if evolved and team != "ally": self.evo_now.append((d.name, tx, ty))
-            (al if team == "ally" else en).append((d.name, tx, ty, d.conf))
-            if tr is not None and hp:                        # its health bar, for the hidden-for-a-moment rule
-                lf = self._match_hp(hp, d.name, tx, ty)
+            tx, ty = int(round(tr.x)), int(round(tr.y))
+            if evolved and team != "ally": self.evo_now.append((tr.name, tx, ty))
+            (al if team == "ally" else en).append((tr.name, tx, ty, d.conf))
+            if hp:
+                lf = self._match_hp(hp, d.name, int(round(d.x)), int(round(d.y)))
                 if lf is not None: tr.life = float(lf)
-            overlays.append({"n": d.name, "m": team == "ally", "c": d.conf, "l": tr.life if tr.life is not None else 1.0,
+            overlays.append({"n": tr.name, "m": team == "ally", "c": d.conf, "l": tr.life if tr.life is not None else 1.0,
                              "b": [round(max(0.0, min(1.0, v / dim)), 4)
                                    for v, dim in zip(d.box, (w, h, w, h))]})
         self.overlay_boxes = overlays

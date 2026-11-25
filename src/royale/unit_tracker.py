@@ -250,6 +250,7 @@ class UnitTracker:
         from scipy.optimize import linear_sum_assignment
         t = time.monotonic() if t is None else float(t)
         self.t = t
+        self.tracks = [tr for tr in self.tracks if t - tr.seen <= self.KEEP]
         for tr in self.tracks: tr.predict(t)
         dets = list(dets or [])
         out = [None] * len(dets)
@@ -262,8 +263,11 @@ class UnitTracker:
                 for b, k in enumerate(free):
                     tr = self.tracks[k]
                     c = math.hypot(d.x - tr.s[0], d.y - tr.s[1])
-                    if c > self.GATE + 0.5 * tr.miss: continue
-                    if d.name != tr.name and d.name not in tr.names: c += self.NAME_PEN
+                    if c > self.GATE + 0.5 * min(2, tr.miss): continue
+                    if d.name != tr.name and d.name not in tr.names:
+                        if d.conf < self.HIGH and c > 1.0:
+                            continue
+                        c += self.NAME_PEN
                     if d.team in ("ally", "enemy") and d.team != tr.team and (d.team_conf or 0) >= 1.0 and tr.locked():
                         c += self.TEAM_PEN
                     if d.conf < self.HIGH: c += 0.3

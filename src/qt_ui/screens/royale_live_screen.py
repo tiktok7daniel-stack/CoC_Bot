@@ -211,6 +211,7 @@ class Camera(QWidget):
             source = {
                 "large-current-frame": tr("rl_source_large"),
                 "fast-current-frame": tr("rl_source_fast"),
+                "combined-current-frame": tr("rl_source_combined"),
                 "small-current-frame": tr("rl_source_fallback"),
             }.get(vision.get("source"), tr("rl_source_unknown"))
             details = (f"{tr('rl_units')} {vision.get('units', 0)} · "
@@ -421,6 +422,7 @@ class RoyaleLiveScreen(Screen):
         source = {
             "large-current-frame": tr("rl_source_large"),
             "fast-current-frame": tr("rl_source_fast"),
+            "combined-current-frame": tr("rl_source_combined"),
             "small-current-frame": tr("rl_source_fallback"),
         }.get(vision.get("source"), tr("rl_source_unknown"))
         line = f"\n{tr('rl_vision')}: {source} · {tr('rl_units')} {vision.get('units', 0)} · " \

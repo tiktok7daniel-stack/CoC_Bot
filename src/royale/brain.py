@@ -404,6 +404,8 @@ class Brain:
                 s["urgent"] = any(K.counter(c, card(c)).get("urgent") for c in cards_here)
                 # 6.6: seconds until the first of them is hitting our tower (its tracked speed and heading)
                 s["eta"] = self._lane_eta(s["units"])
+                if s["eta"] is not None and s["eta"] <= 2.0:
+                    s["urgent"] = True
         return out
 
     def _urgent_defence(self, stable):

@@ -15,7 +15,7 @@ manual match or a stalled bot, without duplicating inference during normal track
 """
 from collections import deque
 from itertools import count
-import threading, time
+import math, threading, time
 
 BOX_W, BOX_H, BOX_UP = 0.057, 0.042, 0.011      # a unit's box in screen fractions (as royale.live_view draws them)
 
@@ -45,7 +45,9 @@ class Track:
 
 class LiveTracker:
     A, B = 0.7, 0.3                       # alpha-beta: how much a new detection corrects the place / the speed
-    COAST = 0.5                           # seconds a unit keeps its box without being seen
+    COAST = 0.55
+    HIGH = 0.35
+    LOW = 0.22
 
     def __init__(self, video=None):
         self.video = video
@@ -90,13 +92,13 @@ class LiveTracker:
                 self.local_state = "bot"
                 time.sleep(0.12)
                 continue
-            if bot_active and self._bot_empty_since is not None and now - self._bot_empty_since < 0.8:
+            if bot_active and self._bot_empty_since is not None and now - self._bot_empty_since < 0.25:
                 self.local_state = "bot_empty"
                 time.sleep(0.08)
                 continue
-            interval = 0.40 if bot_active else 0.20  # low-rate assist if the bot is reporting no units
+            interval = max(0.18 if bot_active else 1 / 15, self.local_ms / 1000 * (2.5 if bot_active else 1.8))
             if now - last_infer < interval:
-                time.sleep(0.02)
+                time.sleep(min(0.015, interval - (now - last_infer)))
                 continue
             sample = self.video.latest_array() if self.video is not None else None
             if not sample or now - sample[2] > 0.5:
@@ -116,14 +118,13 @@ class LiveTracker:
                         time.sleep(0.1)
                         continue
                 t0 = time.perf_counter()
-                detections = strong_eyes.detect(frame, conf=0.35)
-                self.local_ms = (time.perf_counter() - t0) * 1000
+                detections = strong_eyes.detect(frame, conf=self.LOW)
                 h, w = frame.shape[:2]
                 colors.prepare(frame)
                 boxes, found = [], []
                 for name, conf, x0, y0, x1, y1 in detections:
                     unit = strong_eyes.unit_name(name)
-                    if not unit or conf < 0.35:
+                    if not unit:
                         continue
                     team, confidence = colors.team((x0, y0, x1, y1))
                     mine = (team == "ally") if team and confidence >= 2.0 else None
@@ -131,14 +132,17 @@ class LiveTracker:
                     a, b0, c, d = b
                     if a >= c or b0 >= d:
                         continue
-                    boxes.append({"n": unit, "c": float(conf), "b": b})
+                    if conf >= self.HIGH:
+                        boxes.append({"n": unit, "c": float(conf), "b": b})
                     found.append([unit, mine, (a + c) / 2, (b0 + d) / 2, float(conf), c - a, d - b0])
                 captured_at = time.time() - max(0.0, time.monotonic() - _decoded_t)
                 self.local_tracker.feed(found[:50], captured_at)
                 self.local_boxes = boxes[:50]
                 self.local_state = "ready"
                 self._local_t = time.time()
-                self.local_fps = 1.0 / max(0.001, interval + self.local_ms / 1000.0)
+                cost_ms = (time.perf_counter() - t0) * 1000
+                self.local_ms = cost_ms if not self.local_ms else 0.8 * self.local_ms + 0.2 * cost_ms
+                self.local_fps = self.local_tracker.rate
             except Exception as e:
                 self.local_state = "error"
                 self.local_boxes = []
@@ -152,7 +156,8 @@ class LiveTracker:
         """One look of the bot: [[name, ours, x, y, conf]] found in the picture taken at seen_t (wall clock)."""
         if not dets and dets != []: return
         t = float(seen_t or time.time())
-        if t == self._seen: return
+        if self._seen is not None and t <= self._seen:
+            return
         self._seen = t
         if dets:
             self._bot_empty_since = None
@@ -162,20 +167,17 @@ class LiveTracker:
         self.lat = lat if self.lat is None else 0.8 * self.lat + 0.2 * lat
         with self._lock:
             free = [tr for tr in self.tracks if 0 < t - tr.t <= self.COAST]
-            for detection in sorted(dets, key=lambda d: -d[4]):
+            strong = [d for d in dets if d[4] >= self.HIGH]
+            weak = [d for d in dets if self.LOW <= d[4] < self.HIGH]
+            matches, new, free = self._match(free, strong, t)
+            recovery, _, _ = self._match(free, weak, t, weak=True)
+            for detection in new:
                 name, mine, x, y, conf = detection[:5]
                 size = tuple(detection[5:7]) if len(detection) >= 7 else None
-                best, bd = None, 0.08
-                for tr in free:
-                    if tr.mine is not None and mine is not None and tr.mine != mine: continue
-                    px, py = tr.at(t)
-                    d = abs(px - x) + abs(py - y)
-                    if tr.name != name: d += 0.05            # another name: only when really close (a flicker)
-                    if d < bd: best, bd = tr, d
-                if best is None:
-                    self.tracks.append(Track(name, mine, x, y, t, conf, size, next(self._ids)))
-                    continue
-                free.remove(best)
+                self.tracks.append(Track(name, mine, x, y, t, conf, size, next(self._ids)))
+            for best, detection in matches + recovery:
+                name, mine, x, y, conf = detection[:5]
+                size = tuple(detection[5:7]) if len(detection) >= 7 else None
                 dt = max(1e-3, t - best.t)
                 px, py = best.x + best.vx * dt, best.y + best.vy * dt
                 rx, ry = x - px, y - py
@@ -183,11 +185,14 @@ class LiveTracker:
                 if dt < 0.6:
                     best.vx = max(-0.4, min(0.4, best.vx + self.B * rx / dt))
                     best.vy = max(-0.4, min(0.4, best.vy + self.B * ry / dt))
-                best.t, best.conf, best.size = t, conf, size
+                best.t = t
+                best.conf = max(conf, best.conf * 0.85)
+                if size is not None:
+                    best.size = tuple(0.7 * v + 0.3 * old for v, old in zip(size, best.size or size))
                 if best.mine is None:
                     best.mine = mine
-                if abs(best.trail[-1][0] - x) + abs(best.trail[-1][1] - y) > 0.002:
-                    best.trail.append((x, y))
+                if math.hypot(best.trail[-1][0] - best.x, best.trail[-1][1] - best.y) > 0.002:
+                    best.trail.append((best.x, best.y))
                 best.names[name] = best.names.get(name, 0.0) + conf
                 best.hits += 1
             self.tracks = [tr for tr in self.tracks if t - tr.t <= self.COAST]
@@ -195,6 +200,41 @@ class LiveTracker:
         self._n += 1
         if time.time() - self._n_t >= 1.0:
             self.rate, self._n, self._n_t = self._n / (time.time() - self._n_t), 0, time.time()
+
+    @staticmethod
+    def _match(tracks, detections, t, weak=False):
+        if not tracks or not detections:
+            return [], detections, tracks
+        from scipy.optimize import linear_sum_assignment
+        costs = []
+        for tr in tracks:
+            px, py = tr.at(t)
+            gate = min(0.075, 0.025 + 0.13 * (t - tr.t))
+            row = []
+            for d in detections:
+                name, team, x, y = d[:4]
+                distance = math.hypot(px - x, py - y)
+                wrong_side = team is not None and tr.mine is not None and team != tr.mine
+                different_name = name != tr.name
+                if wrong_side or distance > gate or (different_name and (weak or distance > 0.022)):
+                    row.append(1e3)
+                    continue
+                overlap = 0.0
+                if tr.size and len(d) >= 7:
+                    tw, th = tr.size
+                    w, h = d[5:7]
+                    iw = max(0.0, min(px + tw / 2, x + w / 2) - max(px - tw / 2, x - w / 2))
+                    ih = max(0.0, min(py + th / 2, y + h / 2) - max(py - th / 2, y - h / 2))
+                    overlap = iw * ih / max(1e-6, tw * th + w * h - iw * ih)
+                row.append(distance + (0.012 if different_name else 0.0) + 0.012 * (1 - overlap))
+            costs.append(row)
+        rows, cols = linear_sum_assignment(costs)
+        pairs = [(i, j) for i, j in zip(rows, cols) if costs[i][j] < 1e3]
+        used_tracks = {i for i, _ in pairs}
+        used_dets = {j for _, j in pairs}
+        return ([(tracks[i], detections[j]) for i, j in pairs],
+                [d for j, d in enumerate(detections) if j not in used_dets],
+                [tr for i, tr in enumerate(tracks) if i not in used_tracks])
 
     def sync_delay(self):
         """How far behind real time the screen shows the game so the boxes sit on their units: the looks' age + 20 ms

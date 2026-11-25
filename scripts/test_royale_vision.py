@@ -579,7 +579,7 @@ def test_adb_and_stream_fixes():
             side_detector=types.SimpleNamespace(run=lambda img: side_calls.__setitem__("n", side_calls["n"] + 1) or "ally"),
         )
         class _Tr:
-            def update(self, dets, now): return [(d, types.SimpleNamespace(team=d.team, life=None, conf=d.conf, x=d.x, y=d.y)) for d in dets]
+            def update(self, dets, now): return [(d, types.SimpleNamespace(name=d.name, team=d.team, life=None, conf=d.conf, x=d.x, y=d.y)) for d in dets]
             def ghosts(self, *a, **kw): return []
         e.tracker = _Tr(); e.two_v_two = False; e._side_cache = []
         small = types.SimpleNamespace(width=720, height=1280, crop=lambda box: None)
@@ -590,6 +590,10 @@ def test_adb_and_stream_fixes():
         e.colors = types.SimpleNamespace(prepare=lambda f: None, team=lambda box: ("ally", 0.8))
         e._units(fr, [], [("knight", 0.9, 100, 600, 140, 660)], small, 10.1, hp={}, spells=[])
         check("eyes: calls side_detector when color sure < 2.0", side_calls["n"] == 1, str(side_calls["n"]))
+        raw = [("knight", 0.8, (100, 600, 140, 660), "ally", "units")]
+        big = [("knight", 0.9, 100, 600, 140, 660), ("knight", 0.9, 117, 600, 157, 660)]
+        en, al = e._units(fr, raw, big, small, 10.2)
+        check("fusion keeps two same-class neighbors", len(en) + len(al) == 2)
         check("eyes: _match_hp recovers life across 1-tile shift",
               Eyes._match_hp({("hog_rider", 14, 18): 0.65}, "hog_rider", 14, 17) == 0.65
               and Eyes._match_hp({("hog_rider", 14, 18): 0.65}, "hog_rider", 14, 10) is None)
@@ -817,7 +821,34 @@ def test_training_stays_off_by_default():
               ("rl_vision", "rl_source_large", "rl_source_fast", "rl_source_fallback", "rl_units", "rl_tracks")))
 
 
-for fn in (test_tracker, test_brain_lead, test_occlusion, test_skins_and_ids, test_team_birth, test_fast_eyes, test_double_drop, test_replay_heat, test_path, test_soft_rules, test_team, test_hand, test_sessions, test_tactics, test_tactics_stronger, test_trt_and_gpu_recovery, test_adb_and_stream_fixes, test_qt_ui_design_system, test_frame_integrity, test_training_stays_off_by_default, test_live_ai_sync_and_watch_mode):
+def test_viewer_assignment_and_eta():
+    import time
+    from qt_ui.live_tracker import LiveTracker
+    from royale.brain import Brain
+    from types import SimpleNamespace
+    tracker = LiveTracker()
+    now = time.time() - 0.3
+
+    def det(x, conf=0.9):
+        return ["knight", False, x, 0.4, conf, 0.025, 0.03]
+
+    tracker.feed([det(0.40), det(0.45)], now)
+    tracker.feed([det(0.42), det(0.37)], now + 0.15)
+    a, b = tracker.visible_rich(now + 0.15)
+    check("viewer assigns both neighboring units globally", a["id"] == 1 and b["id"] == 2 and a["cx"] < b["cx"])
+    tracker.feed([det(0.36, 0.25), det(0.41, 0.25), det(0.80, 0.25)], now + 0.3)
+    shown = tracker.visible_rich(now + 0.3)
+    check("weak detections extend existing tracks without spawning one", {d["id"] for d in shown} == {1, 2}
+          and all(len(d["trail"]) >= 2 for d in shown))
+    tracker.feed([det(0.15)], now + 0.1)
+    check("viewer ignores late telemetry", {d["id"] for d in tracker.visible_rich(now + 0.3)} == {1, 2})
+    brain = Brain()
+    brain.tracker = SimpleNamespace(nearest=lambda *a, **k: SimpleNamespace(id=1), eta=lambda i: 1.4)
+    threat = brain.threats([("knight", 3, 14)])["left"]
+    check("a tracked unit reaching the tower soon makes its lane urgent", threat.get("urgent") and threat["eta"] == 1.4)
+
+
+for fn in (test_viewer_assignment_and_eta, test_tracker, test_brain_lead, test_occlusion, test_skins_and_ids, test_team_birth, test_fast_eyes, test_double_drop, test_replay_heat, test_path, test_soft_rules, test_team, test_hand, test_sessions, test_tactics, test_tactics_stronger, test_trt_and_gpu_recovery, test_adb_and_stream_fixes, test_qt_ui_design_system, test_frame_integrity, test_training_stays_off_by_default, test_live_ai_sync_and_watch_mode):
     try:
         fn()
     except Exception as e:
