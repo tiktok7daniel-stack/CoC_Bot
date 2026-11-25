@@ -170,6 +170,7 @@ class Eyes:
         if big_current:
             try: hp, spells = self._health(frame_rgb, big_current)
             except Exception: pass
+        self.overlay_boxes = []
         en, al = self._units(frame_rgb, raw, big_current, img, now, hp, spells)
         t_track = time.perf_counter()
         self.last_timings = {
@@ -189,6 +190,7 @@ class Eyes:
                        "our_left": nums.left_ally_princess_hp.number, "our_right": nums.right_ally_princess_hp.number},
             "hp": hp, "spells": spells, "evo": list(getattr(self, "evo_now", []) or []),
             "tracks": self.tracker.snapshot(now),
+            "overlay_boxes": self.overlay_boxes,
             "vision_source": ("fast-current-frame" if fast_now else
                               "large-current-frame" if big_now else "small-current-frame"),
             "vision_timing": dict(self.last_timings),
@@ -299,6 +301,7 @@ class Eyes:
             dets.append(Det(u, fx, fy, float(cf), team, abs(votes["ally"] - votes["enemy"]), box, on_tower))
             extra.append(evolved)
         en, al = [], []
+        overlays = []
         for (d, tr), evolved in zip(self.tracker.update(dets, now), extra):
             if tr is None: continue            # 6.8: not followed (a doubtful new box, a tower decoration): not a unit
             # the track's side once settled; a new / doubtful one: this look's evidence
@@ -310,6 +313,10 @@ class Eyes:
             if tr is not None and hp:                        # its health bar, for the hidden-for-a-moment rule
                 lf = self._match_hp(hp, d.name, tx, ty)
                 if lf is not None: tr.life = float(lf)
+            overlays.append({"n": d.name, "m": team == "ally", "c": d.conf, "l": tr.life if tr.life is not None else 1.0,
+                             "b": [round(max(0.0, min(1.0, v / dim)), 4)
+                                   for v, dim in zip(d.box, (w, h, w, h))]})
+        self.overlay_boxes = overlays
         # 6.7: a followed unit hidden for a moment (a spell's flash, behind a tower) stays in the battle state for
         # 0.4 s, moved on its speed — the engine does not plan as if it died and change its mind when it is back
         for tr in self.tracker.ghosts(now, dead=lambda t: self._killed(t, spells)):

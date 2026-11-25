@@ -19,13 +19,14 @@ BOX_W, BOX_H, BOX_UP = 0.057, 0.042, 0.011      # a unit's box in screen fractio
 
 
 class Track:
-    __slots__ = ("names", "mine", "x", "y", "vx", "vy", "t", "hits", "conf")
+    __slots__ = ("names", "mine", "x", "y", "vx", "vy", "t", "hits", "conf", "size")
 
-    def __init__(self, name, mine, x, y, t, conf):
+    def __init__(self, name, mine, x, y, t, conf, size=None):
         self.names, self.mine = {name: conf}, mine
         self.x, self.y, self.t, self.conf = x, y, t, conf
         self.vx = self.vy = 0.0
         self.hits = 1
+        self.size = size
 
     @property
     def name(self):
@@ -89,7 +90,7 @@ class LiveTracker:
                 time.sleep(0.02)
                 continue
             sample = self.video.latest_array() if self.video is not None else None
-            if not sample:
+            if not sample or now - sample[2] > 0.5:
                 self.local_state = "waiting"
                 time.sleep(0.08)
                 continue
@@ -144,7 +145,9 @@ class LiveTracker:
         self.lat = lat if self.lat is None else 0.8 * self.lat + 0.2 * lat
         with self._lock:
             free = list(self.tracks)
-            for name, mine, x, y, conf in sorted(dets, key=lambda d: -d[4]):
+            for detection in sorted(dets, key=lambda d: -d[4]):
+                name, mine, x, y, conf = detection[:5]
+                size = tuple(detection[5:7]) if len(detection) >= 7 else None
                 best, bd = None, 0.08
                 for tr in free:
                     if tr.mine != mine: continue
@@ -153,7 +156,7 @@ class LiveTracker:
                     if tr.name != name: d += 0.05            # another name: only when really close (a flicker)
                     if d < bd: best, bd = tr, d
                 if best is None:
-                    self.tracks.append(Track(name, mine, x, y, t, conf))
+                    self.tracks.append(Track(name, mine, x, y, t, conf, size))
                     continue
                 free.remove(best)
                 dt = max(1e-3, t - best.t)
@@ -163,7 +166,7 @@ class LiveTracker:
                 if dt < 0.6:
                     best.vx = max(-0.4, min(0.4, best.vx + self.B * rx / dt))
                     best.vy = max(-0.4, min(0.4, best.vy + self.B * ry / dt))
-                best.t, best.conf = t, conf
+                best.t, best.conf, best.size = t, conf, size
                 best.names[name] = best.names.get(name, 0.0) + conf
                 best.hits += 1
             self.tracks = [tr for tr in self.tracks if t - tr.t <= self.COAST]
@@ -186,7 +189,8 @@ class LiveTracker:
             for tr in self.tracks:
                 if tr.conf < 0.3 and tr.hits < 2: continue
                 x, y = tr.at(now)
-                out.append((tr.name, tr.mine, x, y - BOX_UP, BOX_W, BOX_H))
+                w, h = tr.size or (BOX_W, BOX_H)
+                out.append((tr.name, tr.mine, x, y if tr.size else y - BOX_UP, w, h))
             return out
 
     def visible_rich(self, now=None):
@@ -197,6 +201,7 @@ class LiveTracker:
             for tr in self.tracks:
                 if tr.conf < 0.3 and tr.hits < 2: continue
                 x, y = tr.at(now)
-                out.append({"n": tr.name, "m": tr.mine, "l": 1.0, "cx": x, "cy": y - BOX_UP,
-                            "w": BOX_W, "h": BOX_H, "vx": tr.vx, "vy": tr.vy, "t": now})
+                w, h = tr.size or (BOX_W, BOX_H)
+                out.append({"n": tr.name, "m": tr.mine, "l": 1.0, "cx": x, "cy": y if tr.size else y - BOX_UP,
+                            "w": w, "h": h, "vx": tr.vx, "vy": tr.vy, "t": now})
             return out

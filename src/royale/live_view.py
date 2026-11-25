@@ -35,6 +35,7 @@ def phase(acc, what, note=""):
 
 def new_battle():
     _S["events"], _S["eh"] = [], 0
+    _S.pop("snapshot", None)
 
 
 def event(who, card, tile, why=""):
@@ -45,6 +46,8 @@ def event(who, card, tile, why=""):
 
 def _boxes(brain, st):
     """What the eyes see, as boxes on the screen (fractions): every unit with its name, side and life."""
+    if "overlay_boxes" in st:
+        return st["overlay_boxes"][:60]
     from royale.eyes import tile_xy
     from royale.vision import constants as C
     hw, hh = C.TILE_WIDTH / C.DISPLAY_WIDTH * 0.75, C.TILE_HEIGHT / C.DISPLAY_HEIGHT * 0.9  # 6.9.24: wider box
@@ -96,6 +99,12 @@ def _dets(st):
     unit's place as screen fractions — the live screen's tracker follows each one (5.97)."""
     from royale.eyes import tile_xy
     out = []
+    if "overlay_boxes" in st:
+        for box in st["overlay_boxes"][:60]:
+            x0, y0, x1, y1 = box["b"]
+            out.append([box["n"], box["m"], (x0 + x1) / 2, (y0 + y1) / 2, box["c"],
+                        x1 - x0, y1 - y0])
+        return out
     for lst, mine in ((st.get("enemies") or [], False), (st.get("allies") or [], True)):
         for e in lst[:60]:
             try:
@@ -132,7 +141,7 @@ def _tracks(brain, st):
 
 def _save_frame(acc, frame):
     """A small copy of the screen (360 px wide) for the app's "the bot's eyes" panel, twice a second."""
-    if frame is None or time.time() - _S.get("ft", 0) < 0.5: return False
+    if frame is None or time.time() - _S.get("ft", 0) < 0.5: return None
     _S["ft"] = time.time()
     try:
         import cv2
@@ -140,19 +149,26 @@ def _save_frame(acc, frame):
         small = cv2.resize(frame, (360, int(h * 360 / w)), interpolation=cv2.INTER_AREA)
         ok, buf = cv2.imencode(".jpg", cv2.cvtColor(small, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 70])
         if not ok: return False
-        p = path(acc).with_suffix(".jpg")
+        # Alternate files so a reader of the previous payload keeps its matching JPEG.
+        slot = 1 - (_S.get("snapshot") or {}).get("slot", 1)
+        p = path(acc).with_suffix(f".{slot}.jpg")
+        p.parent.mkdir(parents=True, exist_ok=True)
         tmp = p.with_name(p.name + f".{os.getpid()}.tmp")
         tmp.write_bytes(buf.tobytes())
         tmp.replace(p)
-        return True
+        return slot
     except Exception:
-        return False
+        return None
 
 
 def battle(acc, brain, st, d, force=False, frame=None):
     """One look of the battle. Cheap: skipped when the last write is under 0.1 s old (unless a move was made)."""
     now = time.time()
-    if _save_frame(acc, frame): _S["frame_t"] = now
+    boxes = _boxes(brain, st)
+    slot = _save_frame(acc, frame)
+    if slot is not None:
+        _S["snapshot"] = {"slot": slot, "t": now, "seen_t": st.get("_seen_t") or now, "boxes": boxes}
+        force = True
     hist = list(getattr(brain, "enemy_hist", []) or [])
     if len(hist) < _S["eh"]: _S["eh"] = 0
     for _t, name, x, y in hist[_S["eh"]:]:                 # their plays the bot noticed since the last write
@@ -208,9 +224,10 @@ def battle(acc, brain, st, d, force=False, frame=None):
             "tracks": len(st.get("tracks") or []),
             "ms": (st.get("vision_timing") or {}).get("total_ms"),
         },
-        "frame_t": _S.get("frame_t", 0.0),
+        "frame_t": (_S.get("snapshot") or {}).get("t", 0.0),
+        "snapshot": _S.get("snapshot"),
         "model": _model(brain),
-        "boxes": _boxes(brain, st),
+        "boxes": boxes,
         "dets": _dets(st),
         "tracks": trk[0],
         "lead": trk[1],

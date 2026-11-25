@@ -439,13 +439,11 @@ def candidates(brain, playable, rule_d, defend, first=()):
         if (n, t) in seen: return
         seen.add((n, t))
         out.append((i, n, t))
-    for i, n, t in first: add(i, n, t)
     if rule_d: add(rule_d["slot"], rule_d["card"], rule_d["tile"])
-    cards = [(i, n) for i, n in playable] if defend else ([(rule_d["slot"], rule_d["card"])] if rule_d else [])
     if brain.p.get("ai_only"):
-        # the AI model is the player: only ITS cards are compared (on its tiles and the spots around them)
-        mine = {(i, n) for i, n, _t in first} | ({(rule_d["slot"], rule_d["card"])} if rule_d else set())
-        cards = [c for c in cards if c in mine] or [c for c in mine]
+        return out
+    for i, n, t in first: add(i, n, t)
+    cards = [(i, n) for i, n in playable] if defend else ([(rule_d["slot"], rule_d["card"])] if rule_d else [])
     enemies = [(x, y) for _u, x, y in (brain._stable or [])]
     # 6.9.18: the tiles where a card HELD against this threat before (our battles + the opponents' answers to us)
     try:
@@ -507,6 +505,9 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
     """-> ("play", slot, card, tile, why) | ("wait", why) | None (no opinion: the brain's move stands)."""
     if not ready(): return _skip("engine off")
     if not playable: return _skip("no card ready")
+    ai_only = bool(brain.p.get("ai_only"))
+    if ai_only and not rule_d:
+        return None
     t0 = time.perf_counter()
     try:
         env, slots = mirror(brain, st, hand, my_elixir)
@@ -522,10 +523,10 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
     first, ai_note = [], ""
     try:
         from royale import engine_ai
-        if time.monotonic() - _S.get("ai_t", 0.0) >= 1.0:
+        if not ai_only and time.monotonic() - _S.get("ai_t", 0.0) >= 1.0:
             _S["ai_t"] = time.monotonic()
             _S["ai_p"] = engine_ai.propose(env)
-        p = _S.get("ai_p")
+        p = None if ai_only else _S.get("ai_p")
         if p and p[0] is not None:
             names = {v: k for k, v in slots.items()}
             n = names.get(p[0])
@@ -537,10 +538,6 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
             ai_note = "; the trained AI wanted to wait"
     except Exception:
         pass
-    # the AI model trained on pro games (royale.policy): its 3 likeliest cards on its own tiles are thought through
-    # too, and one of them is played when it beats waiting (AI mode: brain.p["ai"])
-    if brain.p.get("ai_only") and getattr(brain, "_ai_cands", None):
-        first = list(first) + [c for c in brain._ai_cands[:3]]
     try:
         pol = getattr(brain, "_pol", None)
         if pol and pol.get("cards") and not brain.p.get("ai_only"):
@@ -615,7 +612,7 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
     if first and not rule_d and any(best[2] == f[1] for f in first) and v > WAIT_MARGIN:
         return ("play", i, n, tile, f"AI: {n} at {tile}, checked in the engine +{v:.1f} vs waiting{ai_note}")
     if rule_d:
-        if v < VETO_MARGIN or (tile[1] >= 13 and v < 0.0 and brain.elapsed() < 15.0):
+        if v < VETO_MARGIN or (not ai_only and tile[1] >= 13 and v < 0.0 and brain.elapsed() < 15.0):
             return ("wait", f"engine: {rule_d['card']} now is {v:+.1f} elixir vs waiting — dropped")
         return ("play", i, n, tile, f"engine: {n} best at {tile} ({v:+.1f} vs waiting, {tried} spots, {ms:.0f} ms{ai_note})")
     return None

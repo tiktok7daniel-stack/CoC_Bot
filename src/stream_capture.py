@@ -287,13 +287,23 @@ def _small(img):
 
 def _client(device):
     c = _S["client"]
-    if c is not None and c.alive: return c
-
+    same_device = c is not None and (c.device is device or
+                                       (c.device.serial and c.device.serial == getattr(device, "serial", None)))
+    if same_device and c.alive:
+        return c
+    if c is not None:
+        c.close()
     _S["client"] = None
     _S["verified"] = False
+    _S["checking"] = False
     _S["ok_until"] = 0.0
     _S["starts"] += 1
-    c = Stream(device, max_fps=_S.get("max_fps", 120)).start()
+    c = Stream(device, max_fps=_S.get("max_fps", 120))
+    try:
+        c.start()
+    except Exception:
+        c.close()
+        raise
     for _ in range(80):                       # the first picture comes within ~1 s
         if c.frame is not None or not c.alive: break
         time.sleep(0.05)
@@ -309,12 +319,17 @@ def frame(dims, adb_grab, device):
     """The screen (RGB, size dims) from the live stream, or None -> the caller uses the next way."""
     if not _enabled(): return None
     now = time.time()
+    serial = getattr(device, "serial", None)
+    if serial != _S.get("serial"):
+        _S.update(serial=serial, off_until=0.0, fails_n=0, logged=None)
     if now < _S["off_until"]: return None
     try:
         import cv2, numpy as np
         with _LOCK:
             c = _client(device)
         img = c.latest()
+        if img is not None:
+            _S["fails_n"] = 0
         if img is None: return None
         # no new picture for a while: the stream may be holding back the last one (a still screen, like the battle
         # results, sends nothing new) -> a real screenshot this time, so the bot never acts on an old picture
@@ -373,6 +388,8 @@ def _verify(c, adb_grab):
                                                        _small(cv2.resize(before, (ref.shape[1], ref.shape[0])))).mean()) > 8:
                     moving = True
                 time.sleep(0.15)
+            if _S.get("client") is not c:
+                return
             if not ok and moving:
                 _S["ok_until"] = now + 5                 # the screen is moving: look again in a moment, keep streaming
             elif not ok:
@@ -398,9 +415,11 @@ def _verify(c, adb_grab):
                 _log(f"Live screen on: the emulator streams its screen ({c.size[0]}x{c.size[1]}), every look is instant")
                 _S["logged"] = True
     except Exception as e:
-        _S["why"] = _why(e)
+        if _S.get("client") is c:
+            _S["why"] = _why(e)
     finally:
-        _S["checking"] = False
+        if _S.get("client") is c:
+            _S["checking"] = False
 
 
 def _why(e):

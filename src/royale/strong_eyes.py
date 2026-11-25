@@ -129,14 +129,25 @@ def ready():
 
 
 # ------------------------------------------------------------------ the arena box on this screen
+def _saved_arena(frame_shape):
+    h, w = frame_shape[:2]
+    try:
+        data = json.loads(CALIB.read_text(encoding="utf-8"))
+        if data["size"] == [w, h]:
+            x0, y0, x1, y1 = map(float, data["box"])
+            if 0 <= x0 < x1 <= w and 0 <= y0 < y1 <= h:
+                return (x0, y0, x1, y1)
+    except (OSError, ValueError, TypeError, KeyError):
+        pass
+    return None
+
+
 def arena_box(frame_shape):
     """(x0, y0, x1, y1) pixels of the arena in the game picture: calibrated from the towers, else the tile grid."""
     h, w = frame_shape[:2]
-    try:
-        c = json.loads(CALIB.read_text(encoding="utf-8"))
-        if c.get("size") == [w, h]: return tuple(c["box"])
-    except (OSError, ValueError):
-        pass
+    saved = _saved_arena(frame_shape)
+    if saved is not None:
+        return saved
     # the tile grid of the 720x1280 game (royale.vision): 18 x 32 tiles from x 52, from y 1280-296 upward
     sx, sy = w / 720.0, h / 1280.0
     return (52 * sx, (984 - 32 * 27.6) * sy, (52 + 18 * 34) * sx, 984 * sy)
@@ -158,7 +169,17 @@ def _calibrate(frame_shape, box, dets):
     h, w = frame_shape[:2]
     if not (0.5 < sx / max(1e-6, sy) < 2.0) or new[2] - new[0] < w * 0.5: return False
     DIR.mkdir(parents=True, exist_ok=True)
-    CALIB.write_text(json.dumps({"size": [w, h], "box": new, "t": time.time()}), encoding="utf-8")
+    new = [max(0, new[0]), max(0, new[1]), min(w, new[2]), min(h, new[3])]
+    if not (new[0] < new[2] and new[1] < new[3]): return False
+    from tempfile import NamedTemporaryFile
+    with NamedTemporaryFile(dir=CALIB.parent, delete=False) as tmp:
+        path = Path(tmp.name)
+        try:
+            tmp.write(json.dumps({"size": [w, h], "box": new, "t": time.time()}).encode("utf-8"))
+            tmp.close()
+            path.replace(CALIB)
+        finally:
+            path.unlink(missing_ok=True)
     return True
 
 
@@ -206,7 +227,9 @@ def look_now(frame_rgb):
         try:
             d = detect(frame_rgb, state=_F)
         except Exception:
-            d = []
+            _A.update(sync=False, fast=False)
+            submit(frame_rgb)
+            return []
         _F["ms"] = (time.monotonic() - t0) * 1000 if not _F["ms"] else 0.8 * _F["ms"] + 0.2 * (time.monotonic() - t0) * 1000
         _A["sync"] = True
         _A["fast"] = True
@@ -218,7 +241,9 @@ def look_now(frame_rgb):
         try:
             d = detect(frame_rgb)
         except Exception:
-            d = []
+            _A.update(sync=False, fast=False)
+            submit(frame_rgb)
+            return []
         _A["dets"], _A["t"], _A["seen"] = d, t0, (frame_rgb, d)
         _A["ms"] = 0.8 * ms + 0.2 * (time.monotonic() - t0) * 1000
         _A["sync"] = True
@@ -340,7 +365,11 @@ def detect(frame_rgb, conf=0.45, state=None):      # 6.8: 0.35 let skins / spark
         c, f = (c - py) / k, (f - py) / k
         dets.append((names.get(int(cls[i]), str(int(cls[i]))), float(cf[i]),
                      xa + a * sx, ya + c * sy, xa + e * sx, ya + f * sy))
-    if not CALIB.exists() or time.time() - CALIB.stat().st_mtime > 3600:
+    try:
+        calibrated = time.time() - CALIB.stat().st_mtime <= 3600 and _saved_arena(frame_rgb.shape) is not None
+    except OSError:
+        calibrated = False
+    if not calibrated:
         try: _calibrate(frame_rgb.shape, (x0, y0, x1, y1), dets)
         except Exception: pass
     return dets

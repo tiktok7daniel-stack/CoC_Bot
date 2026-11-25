@@ -665,8 +665,9 @@ class Brain:
                 self._pol["play"] = (1 - wb) * self._pol["play"] + wb * self._board["play"]
         self._ctx = (round(el_t, 2), [round(float(v), 4) for v in self._pol["_x"][0]], list(self._pol["_ids"]),
                      (self._board or {}).get("_in")) if self._pol else None
-        if self.p.get("ai_only", False) and self._pol and self._pol.get("cards"):
-            d = self._ai_only_decide(playable, elixir, stable, th, now)     # the AI model alone plays
+        self._ai_cands = []
+        if self.p.get("ai_only", False):
+            d = self._ai_only_decide(playable, elixir, stable, th, now) if (self._pol or {}).get("cards") else None
         elif self.p.get("ai", False) and self._pol and self._pol.get("cards"):
             d = self._model_decide(playable, elixir, stable, th, now)       # the local AI model plays
         else:
@@ -792,8 +793,8 @@ class Brain:
     def _ai_only_decide(self, playable, elixir, stable, th, now):
         """The AI model is the player (5.75, the user's choice): its two networks choose when to play, which card
         and where; no move of the rule brain is ever played. When something comes at us or the elixir is full it
-        is asked to act now, and its own likeliest cards are offered to the battle engine, which only compares
-        them (royale.engine with brain.p["ai_only"]). The guards still refuse a move that is surely wrong
+        is asked to act now. The battle engine can veto a clearly bad move. The guards still refuse a move
+        that is surely wrong
         (a spell on our troops, a Goblin Barrel into our half, a tile the game refuses)."""
         self._ai_cands = []
         pol = self._pol
@@ -805,7 +806,7 @@ class Brain:
         if not (play >= 0.5 or threat or full): return None
         ranked = sorted(((pol["cards"].get(n, 0.0), i, n) for i, n in playable), reverse=True)
         for pr, i, n in ranked:
-            if pr < 0.03 and not full: break
+            if pr <= 0.0 or (pr < 0.03 and not full): break
             if self._reserved(n) and not threat: continue
             lt = self._ltile(n, anywhere=bool(card(n).get("anywhere")))
             if not lt: continue

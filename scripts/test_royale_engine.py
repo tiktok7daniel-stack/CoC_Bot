@@ -77,9 +77,19 @@ check("empty board: no move forced", r is None, str(r))
 # attack: the brain wants a Hog at the left bridge
 st2 = {"hand": ["hog_rider", "cannon", "fireball", "the_log"], "ready": [0, 1, 2, 3], "towers": {}, "allies": []}
 d = {"slot": 0, "card": "hog_rider", "tile": (3, 14), "why": "rule"}
-r = engine.think(brain([]), st2, st2["hand"], [(0, "hog_rider")], 7.0, d, Log())
+attack = brain([])
+attack.elapsed = lambda: 0.0
+r = engine.think(attack, st2, st2["hand"], [(0, "hog_rider")], 7.0, d, Log())
+check("opening guard vetoes a negative bridge attack", r is not None and r[0] == "wait", str(r))
+attack.elapsed = lambda: 16.0
+r = engine.think(attack, st2, st2["hand"], [(0, "hog_rider")], 7.0, d, Log())
 print("  attack:", r)
 check("attack keeps the card and finds a spot", r is not None and r[0] == "play" and r[2] == "hog_rider")
+attack.p["ai_only"] = True
+check("AI-only engine keeps the model's slot and tile",
+      engine.candidates(attack, [(0, "hog_rider"), (1, "cannon")], d, True, [(1, "cannon", (8, 9))])
+      == [(0, "hog_rider", (3, 14))])
+check("AI-only engine respects waiting", engine.think(attack, st2, st2["hand"], [(0, "hog_rider")], 7.0, None) is None)
 
 # a Giant + Musketeer push on the right: a building in the middle should beat waiting
 b = brain([("giant", 14, 16), ("musketeer", 14, 19)], {"giant", "musketeer"})

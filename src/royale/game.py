@@ -177,7 +177,7 @@ class RoyaleBot:
         # the AI model alone plays (5.75, on by default): the rule brain never plays a move of its own
         self.brain.p["ai_only"] = self.brain.p["ai"] and bool(self.s.get("ai_only", True))
         if self.brain.p["ai_only"]: log.info("Clash Royale: the AI model plays this battle by itself "
-                                             "(the engine compares its own choices, the guards stop sure mistakes)")
+                                             "(the engine can veto a clearly bad move, the guards stop sure mistakes)")
         if self.brain.p["ai"]: log.info("Clash Royale: the local AI model plays this battle (the rules only guard it)")
         self.brain.reset()
         # 2v2 (two opponents: their elixir counted as two players, no single-deck hand guess) — known from the Quick
@@ -376,13 +376,6 @@ class RoyaleBot:
                     pass
             st["_perf"] = {k: (round(v / max(1, perf["n"])) if k not in ("n", "worst_loop") else round(v))
                            for k, v in perf.items()}
-            try:
-                from royale import live_view
-                if d: live_view.event("us", d["card"], d["tile"], d.get("why", ""))
-                st["_seen_t"] = st.get("_seen_t") or seen_t
-                live_view.battle(_u().INSTANCE_ID, self.brain, st, d, force=bool(d), frame=fr)
-            except Exception:
-                pass
             now_t = time.monotonic()
             if d and not watch_only:
                 # never a card that is in none of the account's real decks (5.89): it can only be a misread — the
@@ -429,6 +422,13 @@ class RoyaleBot:
                                  "why": "human play (watched)", "el": round(float(st["elixir"]), 1)})
                 plays += 1
                 log.info(f"Clash Royale (watched): you played {d['card']} -> tile {d['tile']} (elixir {st['elixir']:.0f})")
+            try:
+                from royale import live_view
+                if d: live_view.event("us", d["card"], d["tile"], d.get("why", ""))
+                st["_seen_t"] = st.get("_seen_t") or seen_t
+                live_view.battle(_u().INSTANCE_ID, self.brain, st, d, force=bool(d), frame=fr)
+            except Exception:
+                pass
             last = st
             if not watch_only:
                 if not abil_base:
@@ -1201,6 +1201,8 @@ def _engine_turn(self, st, d, ready, el):
     """The battle engine thinks the move through: plays the best candidate, keeps the brain's, or waits."""
     from royale import engine
     now = time.monotonic()
+    if not d and self.brain.p.get("ai_only"):
+        return None
     enemies = bool(self.brain._stable)
     if not d and not enemies:
         try:

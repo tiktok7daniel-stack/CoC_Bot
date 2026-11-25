@@ -60,6 +60,7 @@ class AiPicture(_Base):
         are placed for THAT moment, so they sit on the units in the picture)."""
         self.img, self.live_t = img, time.monotonic()
         self.frame_ts = ts
+        self.snapshot = None
         self._n += 1
         if time.monotonic() - self._n_t >= 1.0:
             self.fps, self._n, self._n_t = self._n / (time.monotonic() - self._n_t), 0, time.monotonic()
@@ -93,11 +94,31 @@ class AiPicture(_Base):
     def set_data(self, d, img_path):
         if (d or {}).get("t") != self.d.get("t"): self._track(d or {})
         self.d = d or {}
-        ft = float(self.d.get("frame_t") or 0)
-        if time.monotonic() - self.live_t > 0.5 and ft and ft != self.img_t:   # no live video: the small picture
-            im = QImage(str(img_path))
-            if not im.isNull(): self.img, self.img_t = im, ft
+        self.img_path = img_path
+        self.use_snapshot()
         self.update()
+
+    def use_snapshot(self):
+        if time.monotonic() - self.live_t <= 0.5:
+            return
+        ft = float(self.d.get("frame_t") or 0)
+        if self.d.get("phase") != "battle" or not ft or time.time() - ft > 8:
+            if self.img is not None:
+                self.img, self.img_t, self.snapshot = None, 0.0, None
+                self.update()
+            return
+        snapshot = self.d.get("snapshot")
+        if (self.img_path, ft) == getattr(self, "_snapshot_key", None) and getattr(self, "snapshot", None) is not None:
+            return
+        slot = (snapshot or {}).get("slot")
+        path = self.img_path.with_suffix(f".{slot}.jpg") if slot in (0, 1) else self.img_path
+        im = QImage(str(path))
+        if not im.isNull():
+            self.img, self.img_t = im, ft
+            self._snapshot_key = (self.img_path, ft)
+            self.snapshot = snapshot or {"boxes": [], "seen_t": ft}
+            self.frame_ts = self.snapshot["seen_t"]
+            self.update()
 
     def _paint_local_detections(self, p, P, now):
         """Draw exact detector boxes when no fresh bot tracks are available; ownership is intentionally unknown."""
@@ -141,8 +162,9 @@ class AiPicture(_Base):
         f = ui_font(8, QFont.Bold)
         p.setFont(f)
         fm = p.fontMetrics()
+        snapshot = getattr(self, "snapshot", None)
         # the engine's moves: green better than waiting, red worse
-        for x, y, v, _c in self.d.get("cands_at") or []:
+        for x, y, v, _c in ([] if snapshot else self.d.get("cands_at") or []):
             col = QColor(61, 214, 140) if v > 0 else QColor(240, 85, 90)
             col.setAlpha(170)
             p.setPen(Qt.NoPen); p.setBrush(col)
@@ -150,7 +172,7 @@ class AiPicture(_Base):
             p.setPen(QColor("#ffffff"))
             p.drawText(P(x, y) + QPointF(8, 4), f"{v:+.1f}")
         # the AI model's own tiles: white rings
-        for c in ((self.d.get("model") or {}).get("tiles") or []):
+        for c in ([] if snapshot else (self.d.get("model") or {}).get("tiles") or []):
             p.setPen(QPen(QColor(255, 255, 255, 200), 2)); p.setBrush(Qt.NoBrush)
             p.drawEllipse(P(*c["at"]), 9, 9)
         # what the eyes see
@@ -158,7 +180,13 @@ class AiPicture(_Base):
         fts = getattr(self, "frame_ts", None)
         if fts and now - fts < 1.0: now = fts            # 6.9.17: the moment of the picture shown (synced)
         tr = getattr(self, "tracker", None)
-        if tr is not None and tr.active():               # every unit placed for the picture's own moment + preserve HP
+        if snapshot is not None:
+            shown = []
+            for box in snapshot["boxes"]:
+                x0, y0, x1, y1 = box["b"]
+                shown.append(dict(box, cx=(x0 + x1) / 2, cy=(y0 + y1) / 2, w=x1 - x0, h=y1 - y0,
+                                  vx=0.0, vy=0.0, t=now))
+        elif tr is not None and tr.active():               # every unit placed for the picture's own moment + preserve HP
             raw_boxes = self.d.get("boxes") or []
             shown = tr.visible_rich(now) if hasattr(tr, "visible_rich") else [
                 {"n": n, "m": m, "l": 1.0, "cx": x, "cy": y, "w": bw, "h": bh, "vx": 0.0, "vy": 0.0, "t": now}
@@ -194,8 +222,16 @@ class AiPicture(_Base):
                 bar = QRectF(r.left(), r.bottom() + 1, r.width(), 3)
                 p.fillRect(bar, QColor(0, 0, 0, 160))
                 p.fillRect(QRectF(bar.left(), bar.top(), bar.width() * max(0.0, life), 3), QColor("#ffd24d"))
+        if snapshot is not None:
+            p.setFont(ui_font(8, QFont.Bold))
+            text = tr("ra_snapshot")
+            badge = QRectF(ox + 6, oy + 6, p.fontMetrics().horizontalAdvance(text) + 12, 20)
+            p.fillRect(badge, QColor(0, 0, 0, 180))
+            p.setPen(QColor("#ffd166"))
+            p.drawText(badge, Qt.AlignCenter, text)
+            return
         if not shown:
-            self._paint_local_detections(p, P, now)
+            self._paint_local_detections(p, P, time.time())
         # 6.6: every tracked unit — its id, an arrow for where it walks (1 s ahead), and the spell's predicted impact
         import math
         for t in self.d.get("tracks") or []:
@@ -232,7 +268,7 @@ class AiPicture(_Base):
             if dec.get("card"):                          # 6.8: what it played, where, and why in one line
                 import re
                 m = re.search(r"([+-]\d+(?:\.\d+)?) (?:elixir )?vs waiting", dec.get("why", ""))
-                txt = f"AI PLAYED: {_nice(dec['card']).upper()} {list(dec.get('tile') or [])}" + (f"  {m.group(1)}" if m else "")
+                txt = f"{tr('ra_decision')}: {_nice(dec['card']).upper()} {list(dec.get('tile') or [])}" + (f"  {m.group(1)}" if m else "")
                 fb = ui_font(9, QFont.Bold); p.setFont(fb)
                 tw = p.fontMetrics().horizontalAdvance(txt) + 16
                 at = P(*t)
@@ -303,15 +339,19 @@ class RoyaleAiScreen(Screen):
         self.video.start(); self.tracker.start()
         ts = None
         delay = self.tracker.sync_delay()
-        if delay and self.video.buf:
+        if delay and self.video.buf and not self.video.hw:
             # 6.9.17: the picture of the moment the bot's eyes looked at (the screen runs `delay` behind, the boxes sit
             # on their units instead of chasing them)
             r = self.video.take_at(time.time() - delay, getattr(self, "_skey", None))
-            if not r: return
+            if not r:
+                self._use_snapshots(popped)
+                return
             self._skey, img, ts = r
         else:
             r = self.video.take(self._seq)
-            if not r: return
+            if not r:
+                self._use_snapshots(popped)
+                return
             self._seq, img = r
         self.pic.stream_fps = self.video.fps
         if self.isVisible(): self.pic.set_frame(img, ts)
@@ -324,6 +364,12 @@ class RoyaleAiScreen(Screen):
             if txt != self._txt:
                 self._txt = txt
                 self.panel.setText(txt)
+
+    def _use_snapshots(self, popped):
+        if hasattr(self.pic, "img_path"):
+            self.pic.use_snapshot()
+        if popped and hasattr(self._pop._pic, "img_path"):
+            self._pop._pic.use_snapshot()
 
     def _path(self):
         acc = self.store.account or "main"
@@ -372,10 +418,11 @@ class RoyaleAiScreen(Screen):
         try: mt = p.stat().st_mtime
         except OSError:
             self.pic.set_data({"phase": "none"}, p.with_suffix(".jpg")); self.panel.setText(tr("ra_none")); return
-        if mt == self._mtime and not force: return
-        self._mtime = mt
+        stamp = (p, mt)
+        if stamp == self._mtime and not force: return
         try: d = json.loads(p.read_text(encoding="utf-8"))
         except (OSError, ValueError): return
+        self._mtime = stamp
         if d.get("phase") == "battle" and time.time() - d.get("t", 0) > 8: d["phase"] = "stale"
         self.tracker.feed(d.get("dets"), d.get("seen_t"))   # every unit the bot's eyes found, timed (5.97)
         self.pic.set_data(d, p.with_suffix(".jpg"))

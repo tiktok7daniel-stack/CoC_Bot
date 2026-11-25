@@ -160,9 +160,18 @@ class Camera(QWidget):
     def set_data(self, d, img_path):
         self.d = d or {}
         ft = float(self.d.get("frame_t") or 0)
-        if ft and ft != self.img_t:
-            im = QImage(str(img_path))
-            if not im.isNull(): self.img, self.img_t = im, ft
+        if self.d.get("phase") != "battle" or not ft:
+            self.img, self.frame_boxes = None, []
+            self._snapshot_key = None
+        elif (img_path, ft) != getattr(self, "_snapshot_key", None):
+            snapshot = self.d.get("snapshot")
+            slot = (snapshot or {}).get("slot")
+            path = img_path.with_suffix(f".{slot}.jpg") if slot in (0, 1) else img_path
+            im = QImage(str(path))
+            if not im.isNull():
+                self.img, self.img_t = im, ft
+                self._snapshot_key = (img_path, ft)
+                self.frame_boxes = (snapshot or {}).get("boxes", [])
         self.update()
 
     def paintEvent(self, _e):
@@ -180,7 +189,7 @@ class Camera(QWidget):
         ox, oy = (self.width() - w) / 2, (self.height() - h) / 2
         p.drawImage(QRectF(ox, oy, w, h), self.img)
         p.setFont(ui_font(7.5, QFont.Bold))
-        for b in self.d.get("boxes") or []:
+        for b in getattr(self, "frame_boxes", []):
             x0, y0, x1, y1 = b["b"]
             col = QColor("#3fa9ff") if b.get("m") else QColor("#ff4d4d")
             r = QRectF(ox + x0 * w, oy + y0 * h, (x1 - x0) * w, (y1 - y0) * h)
@@ -338,13 +347,15 @@ class RoyaleLiveScreen(Screen):
             self.l_state.setText(tr("rl_no_data"))
             self._feed_pop({"phase": "none"})
             return
-        if mt == self._mtime and not force:
-            return
-        self._mtime = mt
+        stamp = (p, mt)
+        if stamp == self._mtime and not force:
+            if self.camera.d.get("phase") != "battle" or __import__("time").time() - self.camera.d.get("t", 0) <= 8:
+                return
         try:
             d = json.loads(p.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return
+        self._mtime = stamp
         import time as _t
         if d.get("phase") == "battle" and _t.time() - d.get("t", 0) > 8: d["phase"] = "stale"
         self.arena.set_data(d)
