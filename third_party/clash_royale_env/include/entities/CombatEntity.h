@@ -64,6 +64,7 @@ protected:
     struct FreezeSlot { int ticks = 0; float factor = 1.0f; int sourceId = -1; };
     static constexpr int FREEZE_SLOT_COUNT = 3;
     FreezeSlot freezeSlots[FREEZE_SLOT_COUNT];
+    friend class HeroIceWizardFrostyFellaEffect;
     bool frostyFellaArmed = false;
     std::vector<std::pair<int, int>> iceWizardSlowUntil;
 
