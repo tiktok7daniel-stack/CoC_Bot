@@ -17,11 +17,11 @@ from datetime import date
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from ..i18n import on_lang, tr
-from ..theme import TOKENS, display_font, ui_font
-from ..widgets.controls import GlassCard, IconButton, Toggle, bind_toggle, form_row, label
+from ..theme import TOKENS, ui_font
+from ..widgets.controls import GlassCard, IconButton, KpiTile, StatusPill, Toggle, bind_toggle, form_row, label
 from .base import Screen, page
 
 LEARN = Path.home() / ".CoC_Bot" / "learn"
@@ -37,24 +37,19 @@ def _read(p):
     except (OSError, ValueError): return {}
 
 
-class _Big(QWidget):
-    """A big number with its name under it."""
-    def __init__(self, key, col):
-        super().__init__()
-        v = QVBoxLayout(self)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(0)
-        self.n = QLabel("0")
-        self.n.setFont(display_font(30))
-        self.n.setAlignment(Qt.AlignCenter)
-        self.n.setStyleSheet(f"color: {col}; font-size: 30px; font-weight: 800;")
-        v.addWidget(self.n)
-        lb = label(key=key)
-        lb.setAlignment(Qt.AlignCenter)
-        v.addWidget(lb)
-
-    def set(self, t):
-        self.n.setText(str(t))
+def _status_row(title_key, badge_widget):
+    """Structured key/badge row inside the AI & Engine summary card."""
+    w = QFrame()
+    w.setObjectName("AiRow")
+    w.setStyleSheet(f"#AiRow {{ background: {TOKENS['glass2']}; border: 1px solid {TOKENS['border_solid']}; border-radius: 12px; }}")
+    h = QHBoxLayout(w)
+    h.setContentsMargins(12, 8, 12, 8)
+    h.setSpacing(10)
+    lb = label(key=title_key, role="sub")
+    h.addWidget(lb)
+    h.addStretch(1)
+    h.addWidget(badge_widget)
+    return w
 
 
 class RoyaleHomeScreen(Screen):
@@ -62,63 +57,90 @@ class RoyaleHomeScreen(Screen):
 
     def __init__(self, ctx):
         super().__init__(ctx)
-        sa, v = page(16)
+        sa, v = page(18)
         self.root.addWidget(sa)
 
-        # ---------- status + the big buttons
-        top = GlassCard(None, None, None, glow=True, pad=20)
+        # ---------- hero status + responsive command actions
+        top = GlassCard(None, None, None, glow=True, pad=22)
         h = QHBoxLayout()
-        h.setSpacing(16)
+        h.setSpacing(20)
         col = QVBoxLayout()
+        col.setSpacing(6)
+        head_row = QHBoxLayout()
+        head_row.setSpacing(10)
+        self.p_hero = StatusPill("stopped")
+        head_row.addWidget(self.p_hero)
+        head_row.addStretch(1)
+        col.addLayout(head_row)
         self.l_status = QLabel("")
-        self.l_status.setFont(ui_font(20, 700))
+        self.l_status.setFont(ui_font(19, 800))
         self.l_status.setWordWrap(True)
-        self.l_now = label("", wrap=True)
-        self.l_now.setStyleSheet("font-size: 14px;")
+        self.l_now = label("", role="sub", wrap=True)
+        self.l_now.setStyleSheet(f"font-size: 10.5pt; color: {TOKENS['muted']};")
         col.addWidget(self.l_status)
         col.addWidget(self.l_now)
+        col.addStretch(1)
         h.addLayout(col, 1)
-        self.b_start = IconButton("play", "rh_start", kind="go", size=20)
-        self.b_stop = IconButton("stop", "rh_stop", kind="stop", size=18)
-        self.b_view = IconButton("eye", "rh_view", size=18)
-        for b in (self.b_start, self.b_stop, self.b_view):
-            b.setMinimumHeight(54)
-            b.setMinimumWidth(170)
-            b.setFont(ui_font(12, 600))
+
+        btns = QVBoxLayout()
+        btns.setSpacing(8)
+        b_row = QHBoxLayout()
+        b_row.setSpacing(8)
+        self.b_start = IconButton("play", "rh_start", kind="go", size=18)
+        self.b_stop = IconButton("stop", "rh_stop", kind="stop", size=16)
+        self.b_view = IconButton("eye", "rh_view", kind="primary", size=16)
+        for b in (self.b_start, self.b_stop):
+            b.setMinimumHeight(46)
+            b.setMinimumWidth(136)
+            b.setFont(ui_font(11, 700))
+        self.b_view.setMinimumHeight(42)
+        self.b_view.setMinimumWidth(280)
+        self.b_view.setFont(ui_font(10.5, 700))
         self.b_start.clicked.connect(lambda: self.ctx.window.run_action("start"))
         self.b_stop.clicked.connect(lambda: self.ctx.window.run_action("stop"))
         self.b_view.clicked.connect(self.open_view)
-        h.addWidget(self.b_start)
-        h.addWidget(self.b_stop)
-        h.addWidget(self.b_view)
+        b_row.addWidget(self.b_start)
+        b_row.addWidget(self.b_stop)
+        btns.addLayout(b_row)
+        btns.addWidget(self.b_view)
+        h.addLayout(btns)
         top.add(h)
         v.addWidget(top)
 
-        # ---------- today + the AI
+        # ---------- today KPIs + structured AI/Engine status
         row = QHBoxLayout()
         row.setSpacing(16)
-        today = GlassCard("rh_today", "chart")
+        today = GlassCard("rh_today", "chart", pad=18)
         g = QHBoxLayout()
-        self.n_b = _Big("royale_battles", TOKENS["text"])
-        self.n_w = _Big("royale_wins", "#4ade80")
-        self.n_l = _Big("royale_losses", "#f87171")
-        self.n_r = _Big("royale_rate", TOKENS.get("gold", "#f5b740"))
+        g.setSpacing(10)
+        self.n_b = KpiTile("royale_battles", TOKENS["text"])
+        self.n_w = KpiTile("royale_wins", TOKENS["ok"])
+        self.n_l = KpiTile("royale_losses", TOKENS["bad"])
+        self.n_r = KpiTile("royale_rate", TOKENS["gold"])
         for x in (self.n_b, self.n_w, self.n_l, self.n_r): g.addWidget(x, 1)
         today.add(g)
-        self.l_chores = label("", wrap=True)
-        self.l_chores.setProperty("role", "sub")
+        self.l_chores = label("", "sub", wrap=True)
+        self.l_chores.setStyleSheet(f"padding-top: 6px; color: {TOKENS['dim']}; font-size: 9pt;")
         today.add(self.l_chores)
         row.addWidget(today, 1)
 
-        ai = GlassCard("rh_ai", "bolt")
-        self.l_ai = label("", wrap=True)
-        self.l_ai.setTextFormat(Qt.RichText)
-        self.l_ai.setMinimumHeight(78)
-        self.l_ai.setAlignment(Qt.AlignTop)
-        ai.add(self.l_ai)
+        ai = GlassCard("rh_ai", "bolt", pad=18)
+        self.v_who = label("", wrap=True)
+        self.v_who.setStyleSheet(f"font-weight: 700; color: {TOKENS['text']};")
+        self.v_eng = StatusPill("idle", "—")
+        self.v_train = label("", "numsm", wrap=True)
+        self.v_train.setStyleSheet(f"color: {TOKENS['accent_hi']}; font-weight: 700;")
+        for r_w in (_status_row("rh_who", self.v_who),
+                    _status_row("rh_engine", self.v_eng),
+                    _status_row("rh_training", self.v_train)):
+            ai.add(r_w)
         bh = QHBoxLayout()
+        bh.setSpacing(8)
+        bh.setContentsMargins(0, 6, 0, 0)
         self.b_train = IconButton("play", "rh_train", kind="go", size=14)
-        self.b_tstop = IconButton("stop", "rh_train_stop", size=14)
+        self.b_tstop = IconButton("stop", "rh_train_stop", kind="stop", size=14)
+        self.b_train.setMinimumHeight(38)
+        self.b_tstop.setMinimumHeight(38)
         self.b_train.clicked.connect(self.train)
         self.b_tstop.clicked.connect(self.train_stop)
         bh.addWidget(self.b_train)
@@ -196,12 +218,14 @@ class RoyaleHomeScreen(Screen):
         live = _read(LEARN / f"royale_live_{_safe(acc)}.json")
         phase = live.get("phase") if live and time.time() - float(live.get("t", 0)) < 15 else None
         if not running:
-            self.l_status.setText("⏹  " + tr("rh_stopped"))
-            self.l_status.setStyleSheet(f"color: {TOKENS['muted']}; font-size: 24px; font-weight: 800;")
+            self.p_hero.set("stopped", tr("st_stopped"))
+            self.l_status.setText(tr("rh_stopped"))
+            self.l_status.setStyleSheet(f"color: {TOKENS['text']}; font-size: 19pt; font-weight: 800;")
             self.l_now.setText(tr("rh_stopped_sub"))
         else:
-            self.l_status.setText("▶  " + tr("rh_running"))
-            self.l_status.setStyleSheet("color: #4ade80; font-size: 24px; font-weight: 800;")
+            self.p_hero.set("running", tr("st_running"))
+            self.l_status.setText(tr("rh_running"))
+            self.l_status.setStyleSheet(f"color: {TOKENS['ok']}; font-size: 19pt; font-weight: 800;")
             if phase == "battle":
                 d = live.get("decision")
                 t = live.get("time_s", 0)
@@ -221,12 +245,13 @@ class RoyaleHomeScreen(Screen):
                                               "war_battles") if day.get(k)]
         self.l_chores.setText(" · ".join(f"{tr('rh_c_' + k)} {n}" for k, n in extra) if extra else tr("rh_no_chores"))
 
-        lines = []
         ai_on = bool(self.store.get("royale.ai_play", True))
-        lines.append(f"<b>{tr('rh_who')}:</b> " + (tr("rh_who_ai") if ai_on else tr("rh_who_rules")))
+        self.v_who.setText(tr("rh_who_ai") if ai_on else tr("rh_who_rules"))
         eng = live.get("engine") or {}
         if eng:
-            lines.append(f"<b>{tr('rh_engine')}:</b> " + (tr("rl_engine_on") if eng.get("on") else tr("rl_engine_off")))
+            self.v_eng.set("ok" if eng.get("on") else "bad", tr("rl_engine_on") if eng.get("on") else tr("rl_engine_off"))
+        else:
+            self.v_eng.set("idle", tr("rl_engine_off"))
         pr = _read(EXIT)
         training = False
         try:
@@ -235,12 +260,10 @@ class RoyaleHomeScreen(Screen):
         except Exception:
             pass
         if pr:
-            lines.append(f"<b>{tr('rh_training')}:</b> " + (tr("rh_train_on") if training else tr("rh_train_off")) +
-                         f" · {tr('rh_round')} {pr.get('iteration', 0)} · {tr('rh_versions')} {pr.get('accepted', 0)}"
-                         + (f" · {tr('rh_last')} {int(100 * float(pr.get('last_score', 0)))}%"
-                            if pr.get("last_score") is not None else ""))
+            score_txt = f" · {tr('rh_last')} {int(100 * float(pr.get('last_score', 0)))}%" if pr.get("last_score") is not None else ""
+            self.v_train.setText(f"{tr('rh_train_on') if training else tr('rh_train_off')} · "
+                                 f"{tr('rh_round')} {pr.get('iteration', 0)} · {tr('rh_versions')} {pr.get('accepted', 0)}{score_txt}")
         else:
-            lines.append(f"<b>{tr('rh_training')}:</b> " + (tr("rh_train_on") if training else tr("rh_train_never")))
-        self.l_ai.setText("<br>".join(lines))
+            self.v_train.setText(tr("rh_train_on") if training else tr("rh_train_never"))
         self.b_train.setEnabled(not training)
         self.b_tstop.setEnabled(training)

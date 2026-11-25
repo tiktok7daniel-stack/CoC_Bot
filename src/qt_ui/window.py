@@ -62,11 +62,15 @@ class Canvas(QWidget):
         path.addRoundedRect(r, radius, radius)
         p.fillPath(path, QColor(TOKENS["void"]))
         rtl = self.layoutDirection() == Qt.RightToLeft
-        # one warm light from the top corner of the sidebar, very soft
-        g = QRadialGradient(r.right() - 120 if rtl else r.left() + 120, r.top(), 620)
-        g.setColorAt(0, QColor(245, 183, 64, 20))
+        # balanced dual ambient lighting: warm Clash gold near sidebar crown, faint slate-indigo opposite
+        g = QRadialGradient(r.right() - 120 if rtl else r.left() + 120, r.top(), 680)
+        g.setColorAt(0, QColor(245, 183, 64, 24))
         g.setColorAt(1, QColor(245, 183, 64, 0))
         p.fillPath(path, QBrush(g))
+        g2 = QRadialGradient(r.left() + 180 if rtl else r.right() - 180, r.bottom(), 560)
+        g2.setColorAt(0, QColor(94, 177, 245, 14))
+        g2.setColorAt(1, QColor(94, 177, 245, 0))
+        p.fillPath(path, QBrush(g2))
         p.setPen(QPen(QColor(TOKENS["border_solid"]), 1))
         p.drawPath(path)
         p.end()
@@ -79,8 +83,8 @@ class ContentFrame(QWidget):
         r = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         path = QPainterPath()
         path.addRoundedRect(r, 22, 22)
-        p.fillPath(path, QColor(10, 10, 14, 230))
-        p.setPen(QPen(QColor(255, 255, 255, 14), 1))
+        p.fillPath(path, QColor(TOKENS["void2"]))
+        p.setPen(QPen(QColor(TOKENS["border_solid"]), 1))
         p.drawPath(path)
         p.end()
 

@@ -108,24 +108,24 @@ class GlassCard(QFrame):
         r = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         path = QPainterPath()
         path.addRoundedRect(r, 20, 20)
-        # card: solid dark surface, a faint top light, a hairline border; gold edge + glow when hovered
-        p.fillPath(path, QColor(14, 14, 19, 236))
+        # card: elevated obsidian-slate surface with top light sheen and crisp edge separation
+        p.fillPath(path, QColor(TOKENS["glass_solid"]))
         sheen = QLinearGradient(r.topLeft(), r.bottomLeft())
-        sheen.setColorAt(0, QColor(255, 255, 255, 12))
-        sheen.setColorAt(0.25, QColor(255, 255, 255, 0))
+        sheen.setColorAt(0, QColor(255, 255, 255, 11))
+        sheen.setColorAt(0.24, QColor(255, 255, 255, 0))
         p.fillPath(path, QBrush(sheen))
         if self._glow:
-            g = QRadialGradient(QPointF(r.center().x(), r.top()), max(r.width(), r.height()) * 0.7)
-            g.setColorAt(0, QColor(245, 183, 64, 26))
+            g = QRadialGradient(QPointF(r.center().x(), r.top()), max(r.width(), r.height()) * 0.72)
+            g.setColorAt(0, QColor(245, 183, 64, 30))
             g.setColorAt(1, QColor(245, 183, 64, 0))
             p.fillPath(path, QBrush(g))
         if self._hover:
             bg = QLinearGradient(r.topLeft(), r.bottomLeft())
-            bg.setColorAt(0, QColor(245, 183, 64, 120))
-            bg.setColorAt(1, QColor(245, 183, 64, 20))
+            bg.setColorAt(0, QColor(245, 183, 64, 140))
+            bg.setColorAt(1, QColor(245, 183, 64, 30))
             p.setPen(QPen(QBrush(bg), 1.2))
         else:
-            p.setPen(QPen(QColor(255, 255, 255, 18), 1))
+            p.setPen(QPen(QColor(TOKENS["border_solid"]), 1))
         p.drawPath(path)
         p.end()
 
@@ -184,21 +184,22 @@ class Toggle(QAbstractButton):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         r = QRectF(1, 1, self.width() - 2, self.height() - 2)
-        off = QColor(TOKENS["glass3"])
-        if self._pos > 0:
-            g = QLinearGradient(r.topLeft(), r.topRight())
-            g.setColorAt(0, QColor(TOKENS["violet"]))
-            g.setColorAt(1, QColor(TOKENS["fuchsia"]))
-            p.setBrush(QBrush(g) if self._pos > 0.5 else off)
-        else:
-            p.setBrush(off)
-        p.setPen(QPen(QColor(245, 183, 64, 90), 1))
+        c0 = QColor(TOKENS["glass3"])
+        c1 = QColor(TOKENS["accent"])
+        t = max(0.0, min(1.0, float(self._pos)))
+        track = QColor(
+            int(c0.red() + (c1.red() - c0.red()) * t),
+            int(c0.green() + (c1.green() - c0.green()) * t),
+            int(c0.blue() + (c1.blue() - c0.blue()) * t),
+        )
+        p.setBrush(track)
+        p.setPen(QPen(QColor(245, 183, 64, int(55 + 115 * t)), 1))
         p.drawRoundedRect(r, r.height() / 2, r.height() / 2)
         d = r.height() - 6
         rtl = self.layoutDirection() == Qt.RightToLeft
         start, end = r.left() + 3, r.right() - 3 - d
         if rtl: start, end = end, start
-        x = start + (end - start) * self._pos
+        x = start + (end - start) * t
         p.setPen(Qt.NoPen)
         p.setBrush(QColor("#FFFFFF") if self.isEnabled() else QColor(TOKENS["dim"]))
         p.drawEllipse(QRectF(x, r.top() + 3, d, d))
@@ -299,12 +300,40 @@ class StatusPill(QLabel):
         self.set(key, text)
 
     def set(self, key, text=None):
-        c = TOKENS[self.COLORS.get(key, "dim")]
+        tone = self.COLORS.get(key, "dim")
+        c = TOKENS[tone]
+        bg = TOKENS.get(f"{tone}_bg", "rgba(255,255,255,0.04)")
         mark = icons.img_tag("verified", 15) if key in ("ok", "learned") else f'<span style="color:{c};font-size:13pt">&#9679;</span>'
         if key == "learned": mark = icons.img_tag("verified_gold", 15)
         self.setText(f'{mark}&nbsp;{text if text is not None else tr("st_" + key)}')
-        self.setStyleSheet(f"QLabel {{ background: rgba(255,255,255,0.03); border: 1px solid {TOKENS['border']};"
-                           f" border-radius: 13px; padding: 2px 12px; font-weight: 600; }}")
+        self.setStyleSheet(f"QLabel {{ background: {bg}; border: 1px solid {TOKENS['border_solid']};"
+                           f" border-radius: 13px; padding: 3px 12px; font-weight: 600; }}")
+
+
+class KpiTile(QFrame):
+    """Elevated tabular-numeral KPI metric card (shared across dashboard / Clash Royale screens)."""
+
+    def __init__(self, key, accent=None, parent=None):
+        super().__init__(parent)
+        self._accent = accent or TOKENS["text"]
+        self.setObjectName("KpiTile")
+        self.setStyleSheet(
+            f"#KpiTile {{ background: {TOKENS['glass2']}; border: 1px solid {TOKENS['border_solid']}; border-radius: 14px; }}"
+        )
+        v = QVBoxLayout(self)
+        v.setContentsMargins(12, 10, 12, 10)
+        v.setSpacing(2)
+        self.value = QLabel("0")
+        self.value.setProperty("role", "kpi")
+        self.value.setAlignment(Qt.AlignCenter)
+        self.value.setStyleSheet(f"color: {self._accent}; font-size: 21pt; font-weight: 800;")
+        v.addWidget(self.value)
+        self.cap = label(key=key, role="sub")
+        self.cap.setAlignment(Qt.AlignCenter)
+        v.addWidget(self.cap)
+
+    def set(self, text):
+        self.value.setText(str(text))
 
 
 class Chip(QPushButton):

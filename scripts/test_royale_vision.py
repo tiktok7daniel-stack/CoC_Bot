@@ -597,7 +597,68 @@ def test_adb_and_stream_fixes():
         if orig_cv2 is None: sys.modules.pop("cv2", None)
 
 
-for fn in (test_tracker, test_brain_lead, test_occlusion, test_skins_and_ids, test_team_birth, test_fast_eyes, test_double_drop, test_replay_heat, test_path, test_soft_rules, test_team, test_hand, test_sessions, test_tactics, test_tactics_stronger, test_trt_and_gpu_recovery, test_adb_and_stream_fixes):
+def test_qt_ui_design_system():
+    """6.9.22: qt_ui TOKENS pass contrast + step elevation checks, qss() is valid & tokenized, and styled cards use QFrame."""
+    import ast, types
+    orig_ps6 = {k: sys.modules.get(k) for k in ("PySide6", "PySide6.QtGui", "PySide6.QtCore", "PySide6.QtWidgets")}
+    if orig_ps6["PySide6"] is None:
+        class _DummyFont:
+            Normal = 400
+            Weight = lambda v: v
+            def __init__(self, *a): pass
+            def setFamilies(self, *a): pass
+            def setPointSizeF(self, *a): pass
+            def setWeight(self, *a): pass
+            def setStyleHint(self, *a): pass
+            Monospace = 0
+        sys.modules["PySide6"] = types.SimpleNamespace()
+        sys.modules["PySide6.QtGui"] = types.SimpleNamespace(
+            QColor=lambda *a: None, QFont=_DummyFont, QFontDatabase=types.SimpleNamespace(addApplicationFont=lambda *a: 0)
+        )
+    try:
+        from qt_ui import theme
+        t = theme.TOKENS
+        def _lum(hex_col):
+            h = hex_col.lstrip("#")
+            r, g, b = (int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
+            conv = lambda c: c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+            return 0.2126 * conv(r) + 0.7152 * conv(g) + 0.0722 * conv(b)
+        def _cr(a, b):
+            la, lb = _lum(a), _lum(b)
+            return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+
+        check("ui: distinct obsidian-slate elevation ramp",
+              len({t["void"], t["void2"], t["glass_solid"], t["glass2"], t["glass3"]}) == 5)
+        check("ui: WCAG AAA primary text & AA muted contrast on cards",
+              _cr(t["text"], t["glass_solid"]) >= 12.0 and _cr(t["muted"], t["glass_solid"]) >= 6.5,
+              f"text={_cr(t['text'], t['glass_solid']):.1f}, muted={_cr(t['muted'], t['glass_solid']):.1f}")
+        sheet = theme.qss()
+        check("ui: qss braces balanced & free of stale hardcoded surfaces",
+              sheet.count("{") == sheet.count("}") and "#17171F" not in sheet and "#15151C" not in sheet)
+
+        # syntax check all modified qt_ui files + QFrame check on DeckSlot
+        ui_files = (
+            ROOT / "src" / "qt_ui" / "theme.py",
+            ROOT / "src" / "qt_ui" / "window.py",
+            ROOT / "src" / "qt_ui" / "components" / "sidebar.py",
+            ROOT / "src" / "qt_ui" / "components" / "top_command_bar.py",
+            ROOT / "src" / "qt_ui" / "widgets" / "controls.py",
+            ROOT / "src" / "qt_ui" / "screens" / "royale_home_screen.py",
+            ROOT / "src" / "qt_ui" / "screens" / "royale_screen.py",
+            ROOT / "src" / "qt_ui" / "screens" / "royale_live_screen.py",
+        )
+        for p in ui_files:
+            ast.parse(p.read_text(encoding="utf-8"), filename=str(p))
+        rs_txt = (ROOT / "src" / "qt_ui" / "screens" / "royale_screen.py").read_text(encoding="utf-8")
+        check("ui: all redesigned qt_ui files parse & DeckSlot uses QFrame",
+              "cell = QFrame()\n            cell.setObjectName(\"DeckSlot\")" in rs_txt)
+    finally:
+        for k, v in orig_ps6.items():
+            if v is None: sys.modules.pop(k, None)
+            else: sys.modules[k] = v
+
+
+for fn in (test_tracker, test_brain_lead, test_occlusion, test_skins_and_ids, test_team_birth, test_fast_eyes, test_double_drop, test_replay_heat, test_path, test_soft_rules, test_team, test_hand, test_sessions, test_tactics, test_tactics_stronger, test_trt_and_gpu_recovery, test_adb_and_stream_fixes, test_qt_ui_design_system):
     try:
         fn()
     except Exception as e:

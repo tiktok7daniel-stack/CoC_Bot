@@ -59,13 +59,18 @@ class TopCommandBar(QFrame):
         self.search = QPushButton()
         self.search.setCursor(Qt.PointingHandCursor)
         self.search.setIcon(icons.icon("search", TOKENS["muted"], 16))
-        self.search.setMinimumWidth(300)
-        self.search.setStyleSheet(f"QPushButton {{ text-align: right; color: {TOKENS['muted']}; border-radius: 15px; padding: 8px 14px; }}")
+        self.search.setMinimumWidth(280)
+        self.search.setMinimumHeight(38)
+        self.search.setStyleSheet(
+            f"QPushButton {{ text-align: left; color: {TOKENS['muted']}; background: {TOKENS['glass2']};"
+            f" border: 1px solid {TOKENS['border_solid']}; border-radius: 14px; padding: 7px 14px; }}"
+            f" QPushButton:hover {{ border-color: {TOKENS['border_hover']}; color: {TOKENS['text']}; }}"
+        )
         retext(self.search, "search_ph")
         self.search.clicked.connect(self.search_requested.emit)
         r1.addWidget(self.search)
         acc = QFrame()
-        acc.setStyleSheet(f"QFrame#Acc {{ background: {TOKENS['glass2']}; border: 1px solid {TOKENS['border']}; border-radius: 16px; }}")
+        acc.setStyleSheet(f"QFrame#Acc {{ background: {TOKENS['glass_solid']}; border: 1px solid {TOKENS['border_solid']}; border-radius: 16px; }}")
         acc.setObjectName("Acc")
         ah = QHBoxLayout(acc)
         ah.setContentsMargins(8, 4, 12, 4)
@@ -303,7 +308,7 @@ class StatusBar(QFrame):
         self.ver = QLabel("Clash Farmer")
         self.ver.setStyleSheet(f"color: {TOKENS['muted']}; font-family: 'JetBrains Mono'; font-size: 8.5pt;")
         h.addWidget(self.ver)
-        self.setStyleSheet(f"StatusBar {{ background: {TOKENS['glass_solid']}; border: 1px solid {TOKENS['border']}; border-radius: 16px; }}")
+        self.setStyleSheet(f"StatusBar {{ background: {TOKENS['glass_solid']}; border: 1px solid {TOKENS['border_solid']}; border-radius: 16px; }}")
 
     def _sep(self):
         s = QLabel("|")

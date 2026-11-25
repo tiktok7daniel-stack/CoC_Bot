@@ -63,15 +63,17 @@ class Arena(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         s, ox, oy = self._geo()
         d = self.data
-        # ground, river, bridges
-        p.fillRect(QRectF(ox, oy, s * W, s * H), QColor("#2f5d34"))
+        # esports tactical arena turf, river, bridges & heatmap visibility
+        p.fillRect(QRectF(ox, oy, s * W, s * H), QColor("#1E3D26"))
         for ty in range(H):
             for tx in range(W):
-                if (tx + ty) % 2 == 0: p.fillRect(self._tile(tx, ty), QColor(255, 255, 255, 10))
+                if (tx + ty) % 2 == 0: p.fillRect(self._tile(tx, ty), QColor(255, 255, 255, 11))
         for ty in (15, 16):
             for tx in range(W):
                 bridge = tx in (2, 3, 14, 15)
-                p.fillRect(self._tile(tx, ty), QColor("#8a6a3d") if bridge else QColor("#2b6fa8"))
+                p.fillRect(self._tile(tx, ty), QColor("#9A7444") if bridge else QColor("#1F5E94"))
+        p.setPen(QPen(QColor(TOKENS["border_solid"]), 1.2))
+        p.drawRect(QRectF(ox, oy, s * W, s * H))
         # the engine's heat map
         think = d.get("think") or {}
         cands = think.get("cands") or []

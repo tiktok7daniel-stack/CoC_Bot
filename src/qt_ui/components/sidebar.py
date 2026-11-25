@@ -54,23 +54,23 @@ class NavButton(QAbstractButton):
         on = self.isChecked()
         hov = self._hover and not self.soon
         if on:
-            # tinted pill + gold indicator bar on the leading edge
+            # crisp tinted pill + solid gold indicator bar on leading edge
             p.setPen(Qt.NoPen)
             g = QLinearGradient(r.topRight() if rtl else r.topLeft(), r.topLeft() if rtl else r.topRight())
-            g.setColorAt(0, QColor(245, 183, 64, 46))
-            g.setColorAt(1, QColor(245, 183, 64, 8))
+            g.setColorAt(0, QColor(245, 183, 64, 48))
+            g.setColorAt(1, QColor(245, 183, 64, 12))
             p.setBrush(g)
             p.drawRoundedRect(r, 14, 14)
-            p.setPen(QPen(QColor(245, 183, 64, 70), 1))
+            p.setPen(QPen(QColor(245, 183, 64, 88), 1))
             p.setBrush(Qt.NoBrush)
             p.drawRoundedRect(r, 14, 14)
-            bar = QRectF(r.right() - 3, r.top() + 10, 3, r.height() - 20) if rtl else QRectF(r.left(), r.top() + 10, 3, r.height() - 20)
+            bar = QRectF(r.right() - 3.5, r.top() + 9, 3.5, r.height() - 18) if rtl else QRectF(r.left(), r.top() + 9, 3.5, r.height() - 18)
             p.setPen(Qt.NoPen)
             p.setBrush(QColor(TOKENS["accent"]))
-            p.drawRoundedRect(bar, 1.5, 1.5)
+            p.drawRoundedRect(bar, 1.75, 1.75)
         elif hov:
             p.setPen(Qt.NoPen)
-            p.setBrush(QColor(255, 255, 255, 12))
+            p.setBrush(QColor(255, 255, 255, 14))
             p.drawRoundedRect(r, 14, 14)
         fg = TOKENS["accent_hi"] if on else (TOKENS["dim"] if self.soon else ("#FFFFFF" if hov else TOKENS["muted"]))
         ic_color = TOKENS["accent"] if on else (TOKENS["dim"] if self.soon else ("#FFFFFF" if hov else TOKENS["muted"]))
@@ -88,12 +88,6 @@ class NavButton(QAbstractButton):
             tr_rect = QRectF(r.left() + 16 + reserve, r.top(), r.width() - 32 - isz - 10 - reserve, r.height())
             if not rtl: tr_rect.moveLeft(r.left() + 16 + isz + 10)
             align = (Qt.AlignRight if rtl else Qt.AlignLeft) | Qt.AlignVCenter
-            if on or hov:
-                halo = QColor(245, 183, 64, 60) if on else QColor(255, 255, 255, 26)
-                p.setPen(halo)
-                for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1.5, -1), (1.5, 1), (1.5, -1), (-1.5, 1)):
-                    p.drawText(tr_rect.translated(dx, dy), align, tr(self.text_key))
-                p.setPen(QColor(fg))
             p.drawText(tr_rect, align, tr(self.text_key))
             if self.soon:
                 txt = tr("soon")
@@ -233,12 +227,12 @@ class Sidebar(QFrame):
         r = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         path = QPainterPath()
         path.addRoundedRect(r, 24, 24)
-        p.fillPath(path, QColor(12, 12, 16, 235))
+        p.fillPath(path, QColor(TOKENS["glass_solid"]))
         g = QLinearGradient(r.topLeft(), r.bottomLeft())
-        g.setColorAt(0, QColor(245, 183, 64, 22))
-        g.setColorAt(0.35, QColor(245, 183, 64, 0))
+        g.setColorAt(0, QColor(245, 183, 64, 24))
+        g.setColorAt(0.32, QColor(245, 183, 64, 0))
         p.fillPath(path, QBrush(g))
-        p.setPen(QPen(QColor(255, 255, 255, 16), 1))
+        p.setPen(QPen(QColor(TOKENS["border_solid"]), 1))
         p.drawPath(path)
         p.end()
 

@@ -13,31 +13,16 @@ import os, re, sys
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from ..i18n import on_lang, tr
 from ..theme import TOKENS
-from ..widgets.controls import GlassCard, combo_row, form_row, label, num_row, toggle_row
+from ..widgets.controls import GlassCard, KpiTile, combo_row, form_row, label, num_row, toggle_row
 from ..widgets.log_view import LogView
 from .base import Screen, grid, page
 
 _ROOT = getattr(sys, "_MEIPASS", None) or os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 CARDS_DIR = os.path.join(_ROOT, "assets", "royale", "cards")
-
-
-class _Stat(QWidget):
-    def __init__(self, key, color):
-        super().__init__()
-        v = QVBoxLayout(self)
-        v.setContentsMargins(6, 4, 6, 4)
-        v.setSpacing(2)
-        self.value = QLabel("0")
-        self.value.setAlignment(Qt.AlignCenter)
-        self.value.setStyleSheet(f"font-size: 30px; font-weight: 800; color: {color};")
-        v.addWidget(self.value)
-        cap = label(key=key, role="sub")
-        cap.setAlignment(Qt.AlignCenter)
-        v.addWidget(cap)
 
 
 class RoyaleScreen(Screen):
@@ -65,10 +50,11 @@ class RoyaleScreen(Screen):
         g1.addWidget(game, 0, 0)
         today = GlassCard("royale_today", "chart", "royale_today_sub", glow=True)
         row = QHBoxLayout()
-        self.s_battles = _Stat("royale_battles", TOKENS["text"])
-        self.s_wins = _Stat("royale_wins", "#4ade80")
-        self.s_losses = _Stat("royale_losses", "#f87171")
-        self.s_rate = _Stat("royale_rate", TOKENS.get("gold", "#f5b740"))
+        row.setSpacing(10)
+        self.s_battles = KpiTile("royale_battles", TOKENS["text"])
+        self.s_wins = KpiTile("royale_wins", TOKENS["ok"])
+        self.s_losses = KpiTile("royale_losses", TOKENS["bad"])
+        self.s_rate = KpiTile("royale_rate", TOKENS["gold"])
         for s in (self.s_battles, self.s_wins, self.s_losses, self.s_rate): row.addWidget(s, 1)
         holder = QWidget()
         holder.setLayout(row)
@@ -79,20 +65,24 @@ class RoyaleScreen(Screen):
         # ---------- my deck (the 8 cards)
         deck = GlassCard("royale_deck", "bolt", "royale_deck_sub")
         self.deck_grid = QGridLayout()
-        self.deck_grid.setSpacing(10)
+        self.deck_grid.setSpacing(12)
         self.deck_slots = []
         for i in range(8):
             box = QVBoxLayout()
+            box.setContentsMargins(6, 8, 6, 8)
+            box.setSpacing(6)
             pic = QLabel()
             pic.setFixedSize(84, 100)
             pic.setAlignment(Qt.AlignCenter)
-            pic.setStyleSheet(f"background: {TOKENS['glass2']}; border: 1px solid {TOKENS['border']}; border-radius: 12px;")
+            pic.setStyleSheet(f"background: {TOKENS['void2']}; border: 1px solid {TOKENS['border_solid']}; border-radius: 10px;")
             name = QLabel("")
             name.setAlignment(Qt.AlignCenter)
             name.setProperty("role", "sub")
             box.addWidget(pic, 0, Qt.AlignHCenter)
             box.addWidget(name)
-            cell = QWidget()
+            cell = QFrame()
+            cell.setObjectName("DeckSlot")
+            cell.setStyleSheet(f"#DeckSlot {{ background: {TOKENS['glass2']}; border: 1px solid {TOKENS['border_solid']}; border-radius: 14px; }}")
             cell.setLayout(box)
             self.deck_grid.addWidget(cell, 0, i)
             self.deck_slots.append((pic, name))
