@@ -375,7 +375,229 @@ def test_tactics():
     check("king: a princess tower down (king awake) = nothing", k2._king_activation([(1, "skeletons")], k2._stable, {}, now) is None)
 
 
-for fn in (test_tracker, test_brain_lead, test_occlusion, test_skins_and_ids, test_team_birth, test_fast_eyes, test_double_drop, test_replay_heat, test_path, test_soft_rules, test_team, test_hand, test_sessions, test_tactics):
+def test_tactics_stronger():
+    """6.9.21: barrel picks cheapest spell & keeps target on _play fail; far king splash ignored; early def spell & no bridge leak."""
+    import time, types
+    from royale.brain import Brain
+    from royale import engine
+    now = time.monotonic()
+    deck = ["fireball", "knight", "the_log", "musketeer", "hog_rider", "skeletons", "arrows", "cannon"]
+    b = Brain(deck); b.reset(); b._stable = []; b._towers_now = {}
+    b._barrels = [(now - 0.1, 3.6, 8.5), (now, 3.5, 7.5)]
+    d = b._intercept_barrel([(0, "fireball"), (2, "the_log")], now)
+    check("barrel: picks the_log before earlier-slot fireball", d is not None and d["card"] == "the_log", str(d))
+
+    # if _play declines (e.g. hold / blocked), keep _barrels intact
+    b2 = Brain(deck); b2.reset(); b2._stable = []; b2._towers_now = {}
+    b2._barrels = [(now - 0.1, 3.6, 8.5), (now, 3.5, 7.5)]
+    b2._play = lambda *a, **kw: None
+    d_none = b2._intercept_barrel([(2, "the_log")], now)
+    check("barrel: keeps tracked barrel when _play returns None", d_none is None and len(b2._barrels) == 2)
+
+    # king activation ignores far splash troops at river (y=11)
+    k = Brain(deck); k.reset(); k.t0 = now - 30; k._towers_now = {"our_left": 1.0, "our_right": 1.0}
+    k._stable, k._allies = [("bowler", 5, 11)], []
+    check("king: ignores far bowler at y=11", k._king_activation([(5, "skeletons")], k._stable, {}, now) is None)
+
+    # defensive spell allowed before all 8 deck cards known (on our half, swarm >= 2), blocked on their half
+    bs = Brain(["the_log", "witch", "hog_rider"]); bs.reset()
+    bs._allies, bs._allies_extra = [], []
+    bs._stable = [("skeleton", 4.0, 8.0), ("skeleton", 4.5, 8.2)]
+    check("spell: early defensive swarm allowed before 8 cards", bs._spell_sure("the_log", (4, 7)))
+    bs._stable = [("skeleton", 4.0, 24.0), ("skeleton", 4.5, 24.2)]
+    check("spell: blind attack spell still blocked before 8 cards", not bs._spell_sure("the_log", (4, 24)))
+
+    # ai_only opening hold < 4s without threat / full elixir
+    ba = Brain(deck); ba.reset(); ba.t0 = now - 1.5; ba._stable = []
+    ba._pol = {"play": 0.9, "cards": {"goblin_gang": 0.8, "hog_rider": 0.5}}
+    check("opening: ai_only waits < 4s when no threat and not full",
+          ba._ai_only_decide([(0, "hog_rider")], 6.0, [], {}, now) is None)
+
+    # engine vetoes losing early bridge play (v = -0.6 at ty=14)
+    orig = {k: getattr(engine, k) for k in ("ready", "module", "card_ids", "mirror", "rollout", "replies", "_snap_state", "_value", "candidates")}
+    try:
+        class _FakeEnv:
+            def is_valid_placement(self, *a): return True
+        class _FakeMod:
+            def get_card_info(self, cid): return {"cost": 3}
+        be = Brain(deck); be.reset(); be.t0 = now - 2.0; be._stable = []
+        engine.ready = lambda: True
+        engine.module = lambda: _FakeMod()
+        engine.card_ids = lambda: {"goblin_gang": (1, 0)}
+        engine.mirror = lambda br, st, hand, el: (_FakeEnv(), {"goblin_gang": 0})
+        engine.rollout = lambda *a: types.SimpleNamespace(v=0)
+        engine.replies = lambda *a: []
+        engine._snap_state = lambda env: {}
+        engine._value = lambda end, br, before, cost=0.0: (10.0 - 0.6) if cost else 10.0
+        engine.candidates = lambda *a: [(0, "goblin_gang", (3, 14))]
+        res = engine.think(be, {}, ["goblin_gang"], [(0, "goblin_gang")], 6.0,
+                           rule_d={"slot": 0, "card": "goblin_gang", "tile": (3, 14)})
+        check("engine: vetoes negative early bridge drop", res and res[0] == "wait", str(res))
+    finally:
+        for k, v in orig.items(): setattr(engine, k, v)
+
+
+def test_trt_and_gpu_recovery():
+    """6.9.21: trt_engine.activate succeeds even when ort_trt is inherited in sys.path; strong_eyes/OnnxDetector recover."""
+    import tempfile, types
+    import numpy as np
+    import trt_engine, ort_gpu
+
+    orig_ort = sys.modules.get("onnxruntime")
+    class _FakeSO: pass
+    if orig_ort is None:
+        sys.modules["onnxruntime"] = types.SimpleNamespace(
+            SessionOptions=_FakeSO,
+            InferenceSession=lambda *a, **kw: types.SimpleNamespace(get_providers=lambda: ["CPUExecutionProvider"], run=lambda *a: [np.array([1.0])]),
+            get_available_providers=lambda: ["CPUExecutionProvider"],
+        )
+    from royale import strong_eyes
+
+    # 1) trt_engine.activate with TARGET already in sys.path (inherited via PYTHONPATH)
+    orig_target, orig_ready, orig_s = trt_engine.TARGET, trt_engine.READY, dict(trt_engine._S)
+    orig_info, orig_dirs, orig_healthy = trt_engine.info, trt_engine.dll_dirs, ort_gpu.healthy
+    orig_path_env, orig_pp, orig_sys_path = os.environ.get("PATH", ""), os.environ.get("PYTHONPATH"), list(sys.path)
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td); dll = tp / "tensorrt_libs"; dll.mkdir()
+            (tp / "READY").write_text("ok", encoding="utf-8")
+            trt_engine.TARGET = tp; trt_engine.READY = tp / "READY"
+            trt_engine._S.update(active=False)
+            trt_engine.info = lambda: {"mode": "trt"}
+            trt_engine.dll_dirs = lambda: [dll]
+            ort_gpu.healthy = lambda folder: True
+            sys.path.insert(0, str(tp))
+            ok = trt_engine.activate()
+            check("trt_engine: activates even when inherited in sys.path",
+                  ok and trt_engine.active() and str(dll) in os.environ.get("PATH", ""), str(ok))
+    finally:
+        trt_engine.TARGET, trt_engine.READY = orig_target, orig_ready
+        trt_engine._S.clear(); trt_engine._S.update(orig_s)
+        trt_engine.info, trt_engine.dll_dirs = orig_info, orig_dirs
+        ort_gpu.healthy = orig_healthy
+        os.environ["PATH"] = orig_path_env
+        if orig_pp is None: os.environ.pop("PYTHONPATH", None)
+        else: os.environ["PYTHONPATH"] = orig_pp
+        sys.path[:] = orig_sys_path
+
+    # 2) strong_eyes._run_sess rebuilds GPU session instead of crashing on 887A0005
+    class _FailSess:
+        kind = "dml"; path = "fake.onnx"
+        def get_inputs(self): return [types.SimpleNamespace(name="images")]
+        def run(self, *a): raise RuntimeError("887A0005 The GPU device instance has been suspended")
+    class _GoodSess:
+        kind = "trt"; path = "fake.onnx"
+        def get_inputs(self): return [types.SimpleNamespace(name="images")]
+        def run(self, *a): return [np.array([[[1.0, 2.0]]], dtype=np.float32)]
+    orig_se_s = dict(strong_eyes._S)
+    orig_make = trt_engine.make_session
+    try:
+        st = {"sess": _FailSess(), "cpu_until": 0.0, "error": ""}
+        trt_engine.make_session = lambda *a, **kw: _GoodSess()
+        out = strong_eyes._run_sess(st, st["sess"], np.zeros((1, 3, 16, 16), np.float32))
+        check("strong_eyes: rebuilds GPU session after DirectML 887A0005",
+              out.shape == (1, 2) and isinstance(st["sess"], _GoodSess), str(out.shape))
+
+        # 3) OnnxDetector._infer rebuilds GPU rather than staying locked on CPU forever
+        from royale.vision.detectors.onnx_detector import OnnxDetector
+        det = OnnxDetector.__new__(OnnxDetector)
+        det.model_path, det.output_name, det.input_name = "m.onnx", "out", "in"
+        det.gpu, det._gpu_retry_at, det._threads = True, 0.0, 2
+        det.sess = _FailSess()
+        trt_engine.make_session = lambda *a, **kw: types.SimpleNamespace(
+            kind="trt", get_providers=lambda: ["TensorrtExecutionProvider"],
+            run=lambda *a: [np.array([42.0])]
+        )
+        res = det._infer(np.zeros((1, 3, 8, 8), np.float32))
+        check("onnx_detector: restores GPU session on error instead of locking CPU",
+              det.gpu and float(res[0]) == 42.0, str(res))
+    finally:
+        trt_engine.make_session = orig_make
+        strong_eyes._S.clear(); strong_eyes._S.update(orig_se_s)
+        if orig_ort is None: sys.modules.pop("onnxruntime", None)
+
+
+def test_adb_and_stream_fixes():
+    """6.9.21: start_game routes through _recover on ADB loss; verified fresh stream avoids periodic adb_grab; side_detector skipped when color sure."""
+    import time, types
+    import numpy as np
+    orig_cv2 = sys.modules.get("cv2")
+    if orig_cv2 is None:
+        sys.modules["cv2"] = types.SimpleNamespace(INTER_LINEAR=1, resize=lambda img, d, interpolation=1: img)
+    try:
+        import stream_capture
+        from royale import game as rgame
+
+        # 1) start_game failure in RoyaleBot.run() triggers _recover instead of escaping to launch.py
+        bot = rgame.RoyaleBot.__new__(rgame.RoyaleBot)
+        bot.s, bot.log, bot._frame_fails = {}, types.SimpleNamespace(info=lambda *a: None, warning=lambda *a: None, debug=lambda *a, **k: None), 0
+        recovered = {"n": 0}
+        def fake_recover(err):
+            recovered["n"] += 1
+            bot._frame_fails = 0
+        bot._recover = fake_recover
+        bot._status = lambda *a: None
+        bot._say = lambda *a, **kw: None
+        orig_start, orig_u = rgame.start_game, rgame._u
+        try:
+            rgame.start_game = lambda log: (_ for _ in ()).throw(RuntimeError("Action 'shell' failed"))
+            calls = {"n": 0}
+            def fake_running():
+                calls["n"] += 1
+                return calls["n"] == 1
+            rgame._u = lambda: types.SimpleNamespace(running=fake_running)
+            bot.run()
+            check("game: start_game failure calls _recover cleanly", recovered["n"] == 1, str(recovered))
+        finally:
+            rgame.start_game, rgame._u = orig_start, orig_u
+
+        # 2) stream_capture skips periodic adb_grab when already verified and frames are fresh
+        orig_s = dict(stream_capture._S)
+        orig_en, orig_cl = stream_capture._enabled, stream_capture._client
+        try:
+            adb_calls = {"n": 0}
+            fake_c = types.SimpleNamespace(alive=True, frame_t=time.monotonic(), frames=50,
+                                           latest=lambda: np.zeros((1280, 720, 3), np.uint8))
+            stream_capture._enabled = lambda: True
+            stream_capture._client = lambda dev: fake_c
+            stream_capture._S.update(off_until=0.0, verified=True, ok_until=0.0, checking=False)
+            out = stream_capture.frame((720, 1280), lambda: adb_calls.__setitem__("n", adb_calls["n"] + 1), None)
+            check("stream_capture: skips adb_grab verify on healthy verified stream",
+                  out is not None and adb_calls["n"] == 0 and stream_capture._S["ok_until"] > time.time() + 10,
+                  str((adb_calls["n"], out is not None)))
+        finally:
+            stream_capture._enabled, stream_capture._client = orig_en, orig_cl
+            stream_capture._S.clear(); stream_capture._S.update(orig_s)
+
+        # 3) Eyes._units skips side_detector.run when TeamColor sure >= 2.0, calls when < 2.0, and _match_hp matches +/-1 tile
+        from royale.eyes import Eyes
+        e = Eyes.__new__(Eyes)
+        side_calls = {"n": 0}
+        e.colors = types.SimpleNamespace(prepare=lambda f: None, team=lambda box: ("ally", 2.5))
+        e.units = types.SimpleNamespace(
+            possible_ally_names={"knight"},
+            side_detector=types.SimpleNamespace(run=lambda img: side_calls.__setitem__("n", side_calls["n"] + 1) or "ally"),
+        )
+        class _Tr:
+            def update(self, dets, now): return [(d, types.SimpleNamespace(team=d.team, life=None, conf=d.conf, x=d.x, y=d.y)) for d in dets]
+            def ghosts(self, *a, **kw): return []
+        e.tracker = _Tr(); e.two_v_two = False
+        small = types.SimpleNamespace(width=720, height=1280, crop=lambda box: None)
+        fr = np.zeros((1280, 720, 3), np.uint8)
+        en, al = e._units(fr, [], [("knight", 0.9, 100, 600, 140, 660)], small, 10.0,
+                          hp={("knight", 2, 11): 0.72}, spells=[])
+        check("eyes: skips side_detector when color sure >= 2.0", side_calls["n"] == 0 and len(al) == 1, str((side_calls["n"], al)))
+        e.colors = types.SimpleNamespace(prepare=lambda f: None, team=lambda box: ("ally", 0.8))
+        e._units(fr, [], [("knight", 0.9, 100, 600, 140, 660)], small, 10.1, hp={}, spells=[])
+        check("eyes: calls side_detector when color sure < 2.0", side_calls["n"] == 1, str(side_calls["n"]))
+        check("eyes: _match_hp recovers life across 1-tile shift",
+              Eyes._match_hp({("hog_rider", 14, 18): 0.65}, "hog_rider", 14, 17) == 0.65
+              and Eyes._match_hp({("hog_rider", 14, 18): 0.65}, "hog_rider", 14, 10) is None)
+    finally:
+        if orig_cv2 is None: sys.modules.pop("cv2", None)
+
+
+for fn in (test_tracker, test_brain_lead, test_occlusion, test_skins_and_ids, test_team_birth, test_fast_eyes, test_double_drop, test_replay_heat, test_path, test_soft_rules, test_team, test_hand, test_sessions, test_tactics, test_tactics_stronger, test_trt_and_gpu_recovery, test_adb_and_stream_fixes):
     try:
         fn()
     except Exception as e:

@@ -2414,6 +2414,8 @@ class ADB_Manager:
             # Never kill the shared adb server (it drops every connection, including
             # minitouch and other accounts): just reconnect this device.
             subprocess.run([adb_executable, "disconnect", addr], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **_no_window())
+        if cls.device_state(addr) == "offline":
+            subprocess.run([adb_executable, "reconnect", "offline"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **_no_window())
         res = adbutils.adb.connect(addr)
         if "connected" not in res:
             reset_adb()
@@ -2529,6 +2531,12 @@ class ADB_Manager:
             except (KeyboardInterrupt, SystemExit): raise
             except Exception as e:
                 state = cls.device_state()
+                if state == "offline" and cls._adb_exe:
+                    try:
+                        import subprocess
+                        subprocess.run([cls._adb_exe, "reconnect", "offline"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10, **_no_window())
+                    except Exception:
+                        pass
                 if state != "device" or not cls.boot_completed():
                     # emulator still starting: normal, wait quietly instead of logging errors
                     if not waiting_logged:

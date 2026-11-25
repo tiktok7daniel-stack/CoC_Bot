@@ -94,18 +94,30 @@ def _swap_in():
 def activate():
     """Before anything imports onnxruntime (main.py): this onnxruntime first, its DLL folders known. -> True when on."""
     try:
-        _swap_in()
-        if not READY.exists() or str(TARGET) in sys.path: return _S["active"]
+        if _S["active"]: return True
+        inherited = str(TARGET) in sys.path
+        if not inherited: _swap_in()
+        if not READY.exists(): return False
         if info().get("mode") not in ("trt", "cuda"): return False
         import ort_gpu
         if not ort_gpu.healthy(TARGET):             # 6.9.13: a broken copy is never used; set up clean again later
             _log("TensorRT onnxruntime is broken — not used; it is installed clean again in the background")
+            sys.path[:] = [p for p in sys.path if p != str(TARGET)]
+            pp = [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p and p != str(TARGET)]
+            if pp: os.environ["PYTHONPATH"] = os.pathsep.join(pp)
+            else: os.environ.pop("PYTHONPATH", None)
             ort_gpu.clean_folder(TARGET)
             return False
-        sys.path.insert(0, str(TARGET))
-        os.environ["PYTHONPATH"] = str(TARGET) + os.pathsep + os.environ.get("PYTHONPATH", "")
+        if not inherited:
+            sys.path.insert(0, str(TARGET))
+        pp = [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p]
+        if str(TARGET) not in pp:
+            os.environ["PYTHONPATH"] = str(TARGET) + (os.pathsep + os.environ["PYTHONPATH"] if pp else "")
         dirs = [str(p) for p in dll_dirs()]
-        os.environ["PATH"] = os.pathsep.join(dirs + [os.environ.get("PATH", "")])
+        cur_path = [p for p in os.environ.get("PATH", "").split(os.pathsep) if p]
+        missing = [d for d in dirs if d not in cur_path]
+        if missing:
+            os.environ["PATH"] = os.pathsep.join(missing + cur_path)
         for d in dirs:
             try: os.add_dll_directory(d)
             except (OSError, AttributeError): pass

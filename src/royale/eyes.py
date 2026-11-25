@@ -204,20 +204,22 @@ class Eyes:
         try: self.colors.prepare(frame)
         except Exception: pass
         sw, sh = small.width / w, small.height / h
-        cand = []                                          # (unit, conf, box, side_model or None, evolved)
+        cand = []                                          # (unit, conf, box, side_model or None, evolved, col_read)
         for u, cf, box, side, _src in raw:
-            cand.append([u, cf, box, side if u in self.units.possible_ally_names else None, False])
+            cand.append([u, cf, box, side if u in self.units.possible_ally_names else None, False, None])
         self.evo_now = []
         for name, cf, x0, y0, x1, y1 in big or []:
             u = strong_eyes.unit_name(name)
             if not u: continue
+            box = (x0, y0, x1, y1)
+            try: col_read = self.colors.team(box)
+            except Exception: col_read = (None, 0.0)
             side = None
-            if u in self.units.possible_ally_names:
+            if u in self.units.possible_ally_names and col_read[1] < 2.0:
                 try:
                     side = self.units.side_detector.run(small.crop((int(x0 * sw), int(y0 * sh), int(x1 * sw) + 1, int(y1 * sh) + 1)))
                 except Exception:
                     side = None
-            box = (x0, y0, x1, y1)
             fx, fy = self._tile_f(box, w, h)
             same = None
             for c in cand:
@@ -225,13 +227,14 @@ class Eyes:
                 gx, gy = self._tile_f(c[2], w, h)
                 if abs(gx - fx) <= 1.2 and abs(gy - fy) <= 1.2: same = c; break
             if same is None:
-                cand.append([u, cf, box, side, name.endswith("-evolution")])
+                cand.append([u, cf, box, side, name.endswith("-evolution"), col_read])
             else:
                 # both eyes see it on the same tile: surer than either alone (5.83); the big model's box is finer
                 same[1] = min(0.99, 1 - (1 - float(same[1])) * (1 - float(cf)))
                 same[2] = box
                 same[3] = side or same[3]
                 same[4] = same[4] or name.endswith("-evolution")
+                same[5] = col_read
         # the towers the big model sees this look: a "unit" whose middle sits INSIDE one is a tower skin / decoration
         # until it moves (6.8: skulls / Christmas decorations were read as Archers and Wall Breakers)
         towers = []
@@ -240,15 +243,18 @@ class Eyes:
                 mx, my = 0.15 * (x1 - x0), 0.15 * (y1 - y0)
                 towers.append((x0 + mx, y0 + my, x1 - mx, y1 - my))
         dets, extra = [], []
-        for u, cf, box, side, evolved in cand:
+        for u, cf, box, side, evolved, col_read in cand:
             fx0, fy0 = self._tile_f(box, w, h)
             if not (-0.5 <= fx0 <= 17.5 and -0.5 <= fy0 <= 31.5): continue     # the arena's edge / the buttons below
             cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
             on_tower = any(a <= cx <= c and b <= cy <= d for a, b, c, d in towers)
             if on_tower and cf < 0.6: continue                                 # a doubtful one on a tower: never
             votes = {"ally": 0.0, "enemy": 0.0}
-            try: col, sure = self.colors.team(box)
-            except Exception: col, sure = None, 0.0
+            if col_read is not None:
+                col, sure = col_read
+            else:
+                try: col, sure = self.colors.team(box)
+                except Exception: col, sure = None, 0.0
             if col: votes[col] += sure
             if side in ("ally", "enemy"): votes[side] += 1.0
             if u not in self.units.possible_ally_names and not self.two_v_two: votes["enemy"] += 1.5
@@ -266,7 +272,7 @@ class Eyes:
             if evolved and team != "ally": self.evo_now.append((d.name, tx, ty))
             (al if team == "ally" else en).append((d.name, tx, ty, d.conf))
             if tr is not None and hp:                        # its health bar, for the hidden-for-a-moment rule
-                lf = hp.get((d.name, tx, ty))
+                lf = self._match_hp(hp, d.name, tx, ty)
                 if lf is not None: tr.life = float(lf)
         # 6.7: a followed unit hidden for a moment (a spell's flash, behind a tower) stays in the battle state for
         # 0.4 s, moved on its speed — the engine does not plan as if it died and change its mind when it is back
@@ -274,6 +280,19 @@ class Eyes:
             x, y = tr.at(now)
             (al if tr.team == "ally" else en).append((tr.name, int(round(x)), int(round(y)), max(0.5, 0.9 * tr.conf)))
         return en, al
+
+    @staticmethod
+    def _match_hp(hp, name, tx, ty):
+        """Exact (name, tx, ty) match, else closest matching unit within 2 tiles when health frame lagged."""
+        lf = hp.get((name, tx, ty))
+        if lf is not None: return lf
+        best_d, best_lf = 2.25, None
+        for (nm, hx, hy), val in hp.items():
+            if nm != name: continue
+            dist = math.hypot(hx - tx, hy - ty)
+            if dist <= best_d:
+                best_d, best_lf = dist, val
+        return best_lf
 
     @staticmethod
     def _killed(tr, spells):

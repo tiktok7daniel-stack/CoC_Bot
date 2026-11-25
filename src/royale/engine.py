@@ -27,8 +27,7 @@ ACTION_DELAY_TICKS = 4         # from the screen the decision was made on to the
 TOWER_ELIXIR = {0: 18.0, 1: 10.0, 2: 10.0}    # what a whole tower is worth, in elixir (King more: it ends the game)
 OFFENSE_DISCOUNT = 0.5         # in a rollout the opponent does not answer: damage we deal counts half
 WAIT_MARGIN = 0.4              # a move must beat waiting by this much (elixir)
-VETO_MARGIN = -2.5             # the brain's attack is dropped only when it is clearly worse than waiting (the rollout's
-                               # 8 s are short for an attack's full worth, and the opponent there does not answer)
+VETO_MARGIN = -1.0             # the brain's attack is dropped when worse than waiting (prevents bridge leaks)
 
 _S = {"mod": None, "ok": None, "why": "", "ids": None, "maxhp": {}, "bodies": {}, "skips": {}}
 OURS_STANDING = 1.0            # our units still standing are worth this much of their elixir (they may still die)
@@ -616,7 +615,7 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
     if first and not rule_d and any(best[2] == f[1] for f in first) and v > WAIT_MARGIN:
         return ("play", i, n, tile, f"AI: {n} at {tile}, checked in the engine +{v:.1f} vs waiting{ai_note}")
     if rule_d:
-        if v < VETO_MARGIN:
+        if v < VETO_MARGIN or (tile[1] >= 13 and v < 0.0 and brain.elapsed() < 15.0):
             return ("wait", f"engine: {rule_d['card']} now is {v:+.1f} elixir vs waiting — dropped")
         return ("play", i, n, tile, f"engine: {n} best at {tile} ({v:+.1f} vs waiting, {tried} spots, {ms:.0f} ms{ai_note})")
     return None

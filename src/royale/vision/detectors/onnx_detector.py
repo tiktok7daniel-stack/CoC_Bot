@@ -1,4 +1,4 @@
-import os, threading
+import os, threading, time
 
 import numpy as np
 import onnxruntime as ort
@@ -27,6 +27,8 @@ class OnnxDetector:
             so.intra_op_num_threads = max(2, (os.cpu_count() or 4) // 2)
             self.sess = ort.InferenceSession(self.model_path, sess_options=so, providers=["CPUExecutionProvider"])
         self.gpu = self.sess.get_providers()[0] != "CPUExecutionProvider"
+        self._gpu_retry_at = 0.0
+        self._threads = max(2, (os.cpu_count() or 4) // 2)
         self.output_name = self.sess.get_outputs()[0].name
 
         input_ = self.sess.get_inputs()[0]
@@ -79,17 +81,43 @@ class OnnxDetector:
         )
         return x
 
-    def _infer(self, x):
-        if not self.gpu or getattr(self.sess, "kind", "dml") != "dml":     # 6.9.15: the lock is for DirectML only
-            return self.sess.run([self.output_name], {self.input_name: x})[0]
+    def _rebuild_gpu(self):
+        """Try creating a fresh GPU session once; returns True if a non-CPU provider is active."""
+        self._gpu_retry_at = time.monotonic() + 60.0
         try:
+            import trt_engine
+            ns = trt_engine.make_session(self.model_path, threads=self._threads)
+            if ns.get_providers()[0] != "CPUExecutionProvider":
+                self.sess = ns
+                self.gpu = True
+                self._gpu_retry_at = 0.0
+                return True
+        except Exception:
+            pass
+        return False
+
+    def _run_raw(self, x):
+        if self.gpu and getattr(self.sess, "kind", "dml") == "dml":
             with GPU_LOCK:
                 return self.sess.run([self.output_name], {self.input_name: x})[0]
-        except Exception:                        # the card said no: this model goes on on the processor
+        return self.sess.run([self.output_name], {self.input_name: x})[0]
+
+    def _infer(self, x):
+        if not self.gpu and self._gpu_retry_at and time.monotonic() >= self._gpu_retry_at:
+            self._rebuild_gpu()
+        try:
+            return self._run_raw(x)
+        except Exception:
+            if self.gpu and self._rebuild_gpu():
+                try:
+                    return self._run_raw(x)
+                except Exception:
+                    pass
             so = ort.SessionOptions()
-            so.intra_op_num_threads = max(2, (os.cpu_count() or 4) // 2)
+            so.intra_op_num_threads = self._threads
             self.sess = ort.InferenceSession(self.model_path, sess_options=so, providers=["CPUExecutionProvider"])
             self.gpu = False
+            self._gpu_retry_at = time.monotonic() + 60.0
             return self.sess.run([self.output_name], {self.input_name: x})[0]
 
     def run(self, image):

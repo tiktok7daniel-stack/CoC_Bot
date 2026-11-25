@@ -247,6 +247,54 @@ def speed_ms():
     return _A["ms"]
 
 
+def _recover_sess(st, s):
+    """Rebuild a failed GPU session (e.g. DirectML 887A0005), falling back briefly to CPU if needed."""
+    import onnxruntime as ort
+    import trt_engine
+    model_path = getattr(s, "path", None) or (FAST if st is _F else ONNX)
+    try:
+        ns = trt_engine.make_session(model_path, threads=2)
+        if getattr(ns, "kind", "cpu") != "cpu":
+            st["sess"] = ns
+            st["cpu_until"] = 0.0
+            return ns
+    except Exception:
+        pass
+    so = ort.SessionOptions()
+    so.intra_op_num_threads = max(2, (os.cpu_count() or 4) // 2)
+    ns = ort.InferenceSession(str(model_path), sess_options=so, providers=["CPUExecutionProvider"])
+    st["sess"] = ns
+    st["cpu_until"] = time.monotonic() + 60.0
+    st["error"] = "gpu suspended — temporary CPU fallback"
+    return ns
+
+
+def _run_sess(st, s, x):
+    """Run one inference tensor, recovering once on GPU error instead of crashing or returning empty forever."""
+    if st.get("cpu_until") and time.monotonic() >= st["cpu_until"]:
+        st["cpu_until"] = time.monotonic() + 60.0
+        try:
+            import trt_engine
+            ns = trt_engine.make_session(getattr(s, "path", None) or (FAST if st is _F else ONNX), threads=2)
+            if getattr(ns, "kind", "cpu") != "cpu":
+                st["sess"] = s = ns
+                st["cpu_until"] = 0.0
+                st["error"] = ""
+        except Exception:
+            pass
+    try:
+        if getattr(s, "kind", "dml") == "dml":
+            with _LOCK:
+                return s.run(None, {s.get_inputs()[0].name: x})[0][0]
+        return s.run(None, {s.get_inputs()[0].name: x})[0][0]
+    except Exception:
+        ns = _recover_sess(st, s)
+        if getattr(ns, "kind", "dml") == "dml":
+            with _LOCK:
+                return ns.run(None, {ns.get_inputs()[0].name: x})[0][0]
+        return ns.run(None, {ns.get_inputs()[0].name: x})[0][0]
+
+
 # ------------------------------------------------------------------ one look
 def detect(frame_rgb, conf=0.45, state=None):      # 6.8: 0.35 let skins / sparks through
     """-> [(model_name, conf, x0, y0, x1, y1)] in the game picture's pixels, or [] when not ready.
@@ -270,11 +318,7 @@ def detect(frame_rgb, conf=0.45, state=None):      # 6.8: 0.35 let skins / spark
     px, py = (S - nw) // 2, (S - nh) // 2
     img[py:py + nh, px:px + nw] = cv2.resize(arena, (nw, nh), interpolation=cv2.INTER_LINEAR)
     x = img.astype(np.float32).transpose(2, 0, 1)[None] / 255.0
-    if getattr(s, "kind", "dml") == "dml":
-        with _LOCK:
-            out = s.run(None, {s.get_inputs()[0].name: x})[0][0]       # (4 + classes, N)
-    else:                       # 6.9.15: the processor / CUDA / TensorRT need no lock (it made the small eyes wait 1 s)
-        out = s.run(None, {s.get_inputs()[0].name: x})[0][0]
+    out = _run_sess(st, s, x)
     out = out.T
     scores = out[:, 4:]
     cls = scores.argmax(1)

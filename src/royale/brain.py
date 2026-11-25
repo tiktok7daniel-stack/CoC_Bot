@@ -801,6 +801,7 @@ class Brain:
         threat = any(v.get("units") and (v.get("urgent") or v["value"] >= self.p.get("defend_min", 1.5))
                      for v in (th or {}).values())
         full = elixir >= 9.5
+        if self.elapsed() < 4.0 and not threat and not full: return None
         if not (play >= 0.5 or threat or full): return None
         ranked = sorted(((pol["cards"].get(n, 0.0), i, n) for i, n in playable), reverse=True)
         for pr, i, n in ranked:
@@ -1090,12 +1091,13 @@ class Brain:
         if any(dist(t, tile) <= rad + 1.5 for t in THEIR_TOWERS.values()):
             hit = [u for u, x, y in (self._stable or []) if dist((x, y), tile) <= rad]
             if not hit: return True                      # the tower itself (finishing it)
-        if len(self.deck or []) != 8: return False
+        if len(self.deck or []) != 8 and tile[1] > 12: return False
         if name in ROLLING:
             hit = self._spell_hits(name, tile)
         else:
             hit = [u for u, x, y in (self._stable or []) if dist((x, y), tile) <= rad]
         if not hit: return False
+        if len(self.deck or []) != 8 and len(hit) < 2: return False
         # a unit our deck also makes (their Goblins vs our Goblin Barrel, Skeletons vs our Witch) is ours only when
         # it can be: that card played in the last 12 s, or a unit of ours that makes it standing on the board
         # (before 5.72 any such unit was taken as ours and their Goblins were never Logged)
@@ -1297,8 +1299,8 @@ class Brain:
         side, (tx, ty) = min(towers, key=key)
         land = (tx, ty + 1.5)                                        # the goblins appear in front of the tower
         left = dist((bx, by), land) / self.BARREL_SPEED
-        for i, n in playable:
-            if n not in self.INTERCEPT: continue
+        order = {k: idx for idx, k in enumerate(self.INTERCEPT)}
+        for i, n in sorted((c for c in playable if c[1] in order), key=lambda c: (order[c[1]], c[0])):
             wait, speed = self.INTERCEPT[n]
             flight = dist(OUR_TOWERS["king"], land) / speed if speed else 0.0
             need = 0.15 + wait + flight                              # the tap + the spell's wait + its flight
@@ -1306,8 +1308,10 @@ class Brain:
                 self._hold_until = now + 0.3                         # keep it (and the elixir) for the landing
                 return None
             tile = (int(round(land[0])), int(round(land[1] - (1 if n in ROLLING else 0))))
-            self._barrels = []
-            return self._play((i, n), tile, f"intercept: {n} as their Goblin Barrel lands at our {side} tower", now)
+            d = self._play((i, n), tile, f"intercept: {n} as their Goblin Barrel lands at our {side} tower", now)
+            if d:
+                self._barrels = []
+                return d
         return None
 
     def _our_tower_down(self, side):
@@ -1339,7 +1343,7 @@ class Brain:
                     return self._play((i, n), (8 if x < kx else 9, 4), f"king activation: Tornado pulls their {u} "
                                       "onto our King Tower", now)
         for u, x, y in stable:
-            if unit_card(u) not in self.KING_SPLASH or y > RIVER_Y or dist((x, y), (kx, ky)) > 10: continue
+            if unit_card(u) not in self.KING_SPLASH or y > 9.5 or dist((x, y), (kx, ky)) > 8.5: continue
             for i, n in playable:
                 if n in self.KING_BAIT and (card(n) or {}).get("cost", 9) <= 2:
                     self._king_tried = True

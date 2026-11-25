@@ -535,7 +535,17 @@ class RoyaleBot:
     def run(self):
         from royale.eyes import in_battle
         log = self.log
-        start_game(log)
+        while _u().running():
+            try:
+                start_game(log)
+                self._frame_fails = 0
+                break
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except Exception as e:
+                self._frame_fails = getattr(self, "_frame_fails", 0) + 1
+                self._recover(e)
+                if self._frame_fails == 0: break
         max_b = int(self.s.get("max_battles", 0) or 0)
         self._status("now")                                  # the app shows "running", not "starting…"
         try:                                                 # the account's real decks before the first battle

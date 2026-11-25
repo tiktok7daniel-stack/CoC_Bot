@@ -29,11 +29,19 @@ def healthy(folder):
     mark = folder / "HEALTH"
     try:
         h = json.loads(mark.read_text(encoding="utf-8"))
-        if h.get("mtime") == key: return bool(h.get("ok"))
+        if h.get("mtime") == key and h.get("v") == 2: return bool(h.get("ok"))
     except (OSError, ValueError):
         pass
     env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
-    code = "import sys; sys.path.insert(0, sys.argv[1]); import onnxruntime as o; o.InferenceSession; print(o.__file__)"
+    code = (
+        "import os, pathlib, sys; p = pathlib.Path(sys.argv[1]); "
+        "sys.path.insert(0, str(p)); "
+        "dirs = [p / 'tensorrt_libs', p / 'onnxruntime' / 'capi'] + "
+        "[b for b in p.glob('nvidia/*/bin') if b.is_dir()]; "
+        "[os.add_dll_directory(str(d)) for d in dirs if d.exists() and hasattr(os, 'add_dll_directory')]; "
+        "os.environ['PATH'] = os.pathsep.join([str(d) for d in dirs if d.exists()] + [os.environ.get('PATH', '')]); "
+        "import onnxruntime as o; o.InferenceSession; print(o.__file__)"
+    )
     try:
         r = subprocess.run([_py(), "-c", code, str(folder)], capture_output=True, text=True, timeout=120, env=env,
                            creationflags=0x08000000 if os.name == "nt" else 0)
@@ -42,7 +50,7 @@ def healthy(folder):
     except Exception as e:
         ok = False
         _log(f"health of {folder}: check failed {e}")
-    try: mark.write_text(json.dumps({"mtime": key, "ok": ok}), encoding="utf-8")
+    try: mark.write_text(json.dumps({"mtime": key, "ok": ok, "v": 2}), encoding="utf-8")
     except OSError: pass
     return ok
 

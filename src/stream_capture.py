@@ -19,7 +19,7 @@ REST = 90
 STALE = 1.5               # seconds without a new stream picture -> use a real screenshot
 
 _S = {"client": None, "ok_until": 0.0, "off_until": 0.0, "logged": None, "setting_t": 0.0, "setting": True, "starts": 0,
-      "max_fps": 120}
+      "max_fps": 120, "verified": False}
 
 
 def set_max_fps(n):
@@ -290,6 +290,8 @@ def _client(device):
     if c is not None and c.alive: return c
 
     _S["client"] = None
+    _S["verified"] = False
+    _S["ok_until"] = 0.0
     _S["starts"] += 1
     c = Stream(device, max_fps=_S.get("max_fps", 120)).start()
     for _ in range(80):                       # the first picture comes within ~1 s
@@ -320,12 +322,13 @@ def frame(dims, adb_grab, device):
             _S["stale"] = _S.get("stale", 0) + 1
             return None
         if now > _S["ok_until"] and not _S.get("checking"):
-            # check the stream shows the same as a real screenshot — on its own thread (5.87): the ADB screenshot
-            # it needs can take seconds, and before it the battle stood still that long once a minute (10 s
-            # freezes in the user's reports); the picture of this look is used meanwhile
-            _S["checking"] = True
-            _S["ok_until"] = now + 10                     # at most one check every 10 s, whatever it finds
-            threading.Thread(target=_verify, args=(c, adb_grab), daemon=True, name="stream-check").start()
+            if _S.get("verified") and c.alive and c.frame_t and time.monotonic() - c.frame_t <= STALE:
+                _S["ok_until"] = now + RECHECK
+            else:
+                # check the stream shows the same as a real screenshot on initial start or after recovery
+                _S["checking"] = True
+                _S["ok_until"] = now + 10                     # at most one check every 10 s, whatever it finds
+                threading.Thread(target=_verify, args=(c, adb_grab), daemon=True, name="stream-check").start()
         if (img.shape[1], img.shape[0]) != tuple(dims):
             img = cv2.resize(img, tuple(dims), interpolation=cv2.INTER_LINEAR)
         else:
@@ -386,7 +389,9 @@ def _verify(c, adb_grab):
                     return None
             else:
                 _S["mismatch"] = 0
-            if ok: _S["ok_until"] = now + RECHECK
+            if ok:
+                _S["verified"] = True
+                _S["ok_until"] = now + RECHECK
             _S["why"] = ""
             _S["fails_n"] = 0
             if ok and _S["logged"] is not True:
