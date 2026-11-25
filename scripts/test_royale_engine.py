@@ -31,6 +31,37 @@ check("our deck's cards are known", all(n in ids for n in deck), str([n for n in
 user = ["witch", "bowler", "musketeer", "bats", "hog_rider", "cannon", "goblin_barrel", "the_log"]
 check("the user's deck's cards are known", all(n in ids for n in user), str([n for n in user if n not in ids]))
 
+# Minion Giant must work through normal card play, including its flight and
+# building-only attack. Use a Cannon near midriver, away from the towers.
+minion_giant_id = ids.get("minion_giant", (None,))[0]
+check("Minion Giant is mapped from the native registry", minion_giant_id is not None)
+if minion_giant_id is not None:
+    deck_ids = [ids[n][0] for n in ("minion_giant", *deck[1:])]
+    match = m.ClashRoyaleEnv(deck_ids, deck_ids, 3600)
+    match.reset()
+    check("Minion Giant fits in a native deck and hand", match.set_hand_for_team(0, deck_ids[:4]))
+    match.set_elixir_for_team(0, 8.0)
+    match.inject(ids["knight"][0], 8.0, 15.0, 1, -1.0, 0)
+    match.inject(ids["cannon"][0], 8.0, 18.0, 1, -1.0, 0)
+    match.step_self_play_fast(0, 8.0, 13.0, -1, 0.0, 0.0, 1)
+    spawned = [u for u in match.get_units() if u.card_id == minion_giant_id and u.team == 0]
+    check("Minion Giant costs four elixir and spawns as a flying unit",
+          m.get_card_info(minion_giant_id)["cost"] == 4 and
+          4 <= match.get_elixir_for_team(0) < 4.1 and len(spawned) == 1 and
+          spawned[0].flying and spawned[0].hp == 1817)
+    enemy_knight = next(u for u in match.get_units() if u.card_id == ids["knight"][0])
+    cannon = next(u for u in match.get_units() if u.card_id == ids["cannon"][0])
+    targeted_cannon = False
+    for _ in range(40):
+        match.step_self_play_fast(-1, 0.0, 0.0, -1, 0.0, 0.0, 1)
+        targeted_cannon |= any(u.card_id == minion_giant_id and u.target_id == cannon.id
+                               for u in match.get_units())
+        if match.get_damage_dealt_by_card(minion_giant_id, 0):
+            break
+    check("Minion Giant targets Cannon for 153 damage and ignores Knight",
+          targeted_cannon and match.get_damage_dealt_by_card(minion_giant_id, 0) == 153 and
+          any(u.id == enemy_knight.id and u.hp == enemy_knight.hp for u in match.get_units()))
+
 # coordinates: a unit put on our tile (3, 10) shows at engine (3, 11); our left Princess is at our (3.5, 5)
 e = m.ClashRoyaleEnv(engine._filler_deck(m, []), engine._filler_deck(m, []), 3600)
 e.reset()

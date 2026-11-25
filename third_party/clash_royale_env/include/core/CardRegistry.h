@@ -909,6 +909,10 @@ private:
             .withFlying()
             .withDeathEffect(std::make_shared<SpawnOnDeath>(lavaHoundPupStats())));
 
+        // Minion Giant: level 11 stats with the October 2026 balance changes.
+        add(troop(176, "Minion Giant", 4.0f, Archetype::RangedBuildingTargeter, 1817, SPEED_MEDIUM, 4.0f, 153, 17, 'g')
+            .withFlying().withSightRange(6.5f));
+
         // === Defensive structures (expansion) ===
         // X-Bow: the default 30 s building lifetime matches the real card;
         // withDeployDelay adds the ~3.5 s lock-on.
