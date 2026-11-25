@@ -1,4 +1,4 @@
-"""
+﻿"""
 What the bot sees and thinks during a battle, for the app's "Battle view" screen (qt_ui/screens/royale_live_screen.py)
 — the idea of crforge's debug visualizer, on the real game: the arena with every unit the eyes read (side, place,
 life), the towers, both elixirs, our hand and theirs as the bot works it out, the moves the engine thought through
@@ -47,13 +47,13 @@ def _boxes(brain, st):
     """What the eyes see, as boxes on the screen (fractions): every unit with its name, side and life."""
     from royale.eyes import tile_xy
     from royale.vision import constants as C
-    hw, hh = C.TILE_WIDTH / C.DISPLAY_WIDTH * 0.6, C.TILE_HEIGHT / C.DISPLAY_HEIGHT * 0.75
+    hw, hh = C.TILE_WIDTH / C.DISPLAY_WIDTH * 0.75, C.TILE_HEIGHT / C.DISPLAY_HEIGHT * 0.9  # 6.9.24: wider box
     out = []
 
     def add(u, x, y, mine, life):
         cx, cy = tile_xy(x, y)
-        out.append({"n": str(u), "m": mine, "b": [round(cx - hw, 4), round(cy - 2 * hh, 4), round(cx + hw, 4),
-                                                   round(cy + hh * 0.6, 4)], "l": life})
+        out.append({"n": str(u), "m": mine, "b": [round(cx - hw, 4), round(cy - hh * 0.8, 4), round(cx + hw, 4),
+                                                   round(cy + hh * 0.8, 4)], "l": life})
     for u, x, y in (brain._stable or [])[:40]:
         try: life = round(float(brain.life(u, x, y)), 2)
         except Exception: life = 1.0

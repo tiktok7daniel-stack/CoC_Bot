@@ -158,7 +158,8 @@ class AiPicture(_Base):
             x0, y0, x1, y1 = cx - b["w"] / 2, cy - b["h"] / 2, cx + b["w"] / 2, cy + b["h"] / 2
             col = QColor("#3fa9ff") if b.get("m") else QColor("#ff4d4d")
             r = QRectF(P(x0, y0), P(x1, y1))
-            p.setPen(QPen(col, 2)); p.setBrush(Qt.NoBrush)
+            fill = QColor(col); fill.setAlpha(45)
+            p.setPen(QPen(col, 3)); p.setBrush(fill)  # 6.9.24: visible fill + thicker border
             p.drawRect(r)
             name = _nice(b.get("n"))
             lab = QRectF(r.left(), r.top() - 14, max(fm.horizontalAdvance(name) + 6, r.width()), 14)
