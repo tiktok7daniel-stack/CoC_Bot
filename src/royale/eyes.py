@@ -134,6 +134,12 @@ class Eyes:
         except Exception:
             big = []
         t_big = time.perf_counter()
+        # `look_now` may return the last background result when the detector is slower than
+        # this game frame. Those boxes belong to an older image; using them with this frame's
+        # colour/team reads moves detections across time and can assign the wrong side. Keep
+        # the large model only when it actually analyzed this frame; otherwise use the
+        # current-frame side detector below.
+        big_current = big if big_now else []
         with _LOCK:
             cards, ready = self._card_det.run(img)
             if big_now and not self.dual:
@@ -160,10 +166,10 @@ class Eyes:
         raw = [(d.unit.name, float(d.position.conf), tuple(v * k for v, k in zip(d.position.bbox, (kx, ky, kx, ky))),
                 side, "units") for lst, side in ((enemies, "enemy"), (allies, "ally")) for d in lst]
         hp, spells = {}, []
-        if big:
+        if big_current:
             try: hp, spells = self._health()
             except Exception: pass
-        en, al = self._units(frame_rgb, raw, big, img, now, hp, spells)
+        en, al = self._units(frame_rgb, raw, big_current, img, now, hp, spells)
         t_track = time.perf_counter()
         self.last_timings = {
             "prep_ms": round((t_prep - started) * 1000, 1),
@@ -182,6 +188,7 @@ class Eyes:
                        "our_left": nums.left_ally_princess_hp.number, "our_right": nums.right_ally_princess_hp.number},
             "hp": hp, "spells": spells, "evo": list(getattr(self, "evo_now", []) or []),
             "tracks": self.tracker.snapshot(now),
+            "vision_source": "large-current-frame" if big_now else "small-current-frame",
             "t": now, "_seen_t": seen_t,
         }
 
