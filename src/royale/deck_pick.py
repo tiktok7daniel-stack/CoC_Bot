@@ -89,7 +89,7 @@ def deck_link(ids, tower=None, scheme=True):
     return f"clashroyale://copyDeck?{q}" if scheme else f"https://link.clashroyale.com/en/?clashroyale://copyDeck?{q}"
 
 
-def apply(account, pick, log, slot=0):
+def apply(account, pick, log, slot=0, strict_slot=False):
     """Open the copy-deck link in the emulator and confirm the game's Copy dialog. -> True when the deck is in."""
     from royale import game
     from royale.account import _bad, _tab, TABS, TAB_Y
@@ -98,9 +98,14 @@ def apply(account, pick, log, slot=0):
     if slot:                                                     # the bot's own slot: Cards tab, its number
         _tab("cards")
         ws = game.words(game.frame())
-        s = game.find_word(ws, str(slot), y_min=0.12, y_max=0.3)
+        s = game.find_word([(word, box) for word, box in ws if word.strip() == str(slot)],
+                           str(slot), y_min=0.12, y_max=0.3) if strict_slot else \
+            game.find_word(ws, str(slot), y_min=0.12, y_max=0.3)
         if s:
             game.tap(*s); time.sleep(1.0)
+        elif strict_slot:
+            game.tap(TABS["battle"], TAB_Y)
+            return False
     for scheme in (True, False):
         dev.shell(f'am start -a android.intent.action.VIEW -d "{deck_link(pick["ids"], pick.get("tower"), scheme)}"')
         time.sleep(4.0)

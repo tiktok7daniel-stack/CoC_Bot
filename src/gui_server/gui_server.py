@@ -104,6 +104,41 @@ def handle_instance_start_stop():
 
 # ---------------------------------------------------------------- settings
 
+@app.route("/api/royale/deck-catalog", methods=["GET"])
+def api_royale_deck_catalog():
+    from royale.deck_catalog import page
+
+    offset = request.args.get("offset", 0, type=int)
+    limit = request.args.get("limit", 50, type=int)
+    return jsonify(page(request.args.get("q", "")[:100], max(0, offset), max(1, min(limit, 100))))
+
+
+@app.route("/api/royale/deck-catalog/<deck_id>", methods=["GET"])
+def api_royale_deck_detail(deck_id):
+    from royale.deck_catalog import lookup
+
+    entry = lookup(deck_id)
+    if entry is None:
+        return jsonify({"ok": False, "error": "unknown_deck"}), 404
+    return jsonify({"ok": True, "deck": entry})
+
+
+@app.route("/api/royale/deck-selection/<id>", methods=["GET", "POST"])
+def api_royale_deck_selection(id):
+    from royale import catalog_selection
+
+    if not valid_id(id):
+        return jsonify({"ok": False, "error": "invalid_account"}), 404
+    if request.method == "GET":
+        return jsonify(catalog_selection.state(id))
+    if id in instances:
+        return jsonify({"ok": False, "error": "stop_first"}), 409
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict) or not isinstance(body.get("id"), str) or len(body["id"]) > 200:
+        return jsonify({"ok": False, "error": "unknown_deck"}), 400
+    result = catalog_selection.select(id, body["id"], body.get("slot", 0))
+    return jsonify(result), 200 if result["ok"] else 400
+
 @app.route("/api/settings/<id>", methods=["GET", "POST"])
 def api_settings(id):
     if not valid_id(id): abort(404)

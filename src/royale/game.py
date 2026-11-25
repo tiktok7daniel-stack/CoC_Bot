@@ -554,7 +554,35 @@ class RoyaleBot:
             time.sleep(0.8)
 
     # -------------------------------------------------------------- the loop
+    def _catalog_gate(self, picked):
+        """Apply a saved deck once per start. A mismatch must never queue a match."""
+        from royale import catalog_selection
+
+        if not picked.get("id") or self.s.get("watch_only", False):
+            return True
+        revision = picked["revision"]
+        if revision == getattr(self, "_catalog_attempt", None):
+            return bool(getattr(self, "_catalog_verified", False))
+        self._catalog_attempt, self._catalog_verified = revision, False
+        account = _u().INSTANCE_ID
+        catalog_selection.report(account, picked, "checking")
+        try:
+            names, reason = catalog_selection.activate(account, picked, self.eyes, self.log)
+            if names:
+                self.eyes.set_deck(names)
+                self.brain.deck = list(names)
+                self._api_deck = list(names)
+                self._catalog_verified = True
+        except Exception:
+            reason = "copy_failed"
+            self.log.debug("catalogue deck preparation failed", exc_info=True)
+        catalog_selection.report(account, picked, "ready" if self._catalog_verified else "blocked", reason)
+        if not self._catalog_verified:
+            self.log.warning(f"Clash Royale: selected deck could not be verified ({reason}); waiting in lobby")
+        return self._catalog_verified
+
     def run(self):
+        from royale import catalog_selection
         from royale.eyes import in_battle
         log = self.log
         while _u().running():
@@ -605,6 +633,12 @@ class RoyaleBot:
                 self._recover(e)
                 continue
             if in_battle(fr):
+                picked = catalog_selection.selection(_u().INSTANCE_ID)
+                if (picked.get("id") and not self.s.get("watch_only", False)
+                        and (picked.get("revision") != getattr(self, "_catalog_attempt", None)
+                             or not getattr(self, "_catalog_verified", False))):
+                    time.sleep(1.0)
+                    continue
                 self.unknown_since = None
                 last = self.battle()
                 try:
@@ -631,7 +665,24 @@ class RoyaleBot:
                 continue
             b = find_word(ws, "battle", y_min=0.55, y_max=0.9)
             qm = find_word(ws, "quick match", y_min=0.3, y_max=0.8)          # the 2v2 window left open
+            picked = catalog_selection.selection(_u().INSTANCE_ID) if (b or qm) else {}
+            if picked.get("id") and not self.s.get("watch_only", False):
+                if qm or self.s.get("training_camp", False):
+                    if getattr(self, "_catalog_mode_blocked", None) != picked["revision"]:
+                        catalog_selection.report(_u().INSTANCE_ID, picked, "blocked", "unsupported_mode")
+                        self._catalog_mode_blocked = picked["revision"]
+                    time.sleep(1.0)
+                    continue
+                already_checked = picked["revision"] == getattr(self, "_catalog_attempt", None)
+                if not self._catalog_gate(picked):
+                    time.sleep(1.0)
+                    continue
+                if not already_checked:
+                    continue  # The copy dialog may have changed the screen. Read it again before any tap.
             if qm and not in_battle(fr):
+                if self.s.get("watch_only", False):
+                    time.sleep(1.0)
+                    continue
                 log.info("Clash Royale: 2v2 — Quick Match")
                 self._mode_2v2 = True
                 tap(*qm)
@@ -640,7 +691,7 @@ class RoyaleBot:
             if b and self._cards_study_due():
                 self._study_cards()
                 continue
-            if b and self.s.get("auto_deck", True) and not self.s.get("lock_deck", True) \
+            if b and not picked.get("id") and self.s.get("auto_deck", True) and not self.s.get("lock_deck", True) \
                     and not getattr(self, "_deck_checked", False):
                 self._deck_checked = True
                 self._pick_deck()
@@ -687,6 +738,8 @@ class RoyaleBot:
                         # 2v2 (the user's mode): its window asks Play with Friend / Quick Match -> Quick Match
                         qm = find_word(words(fr2), "quick match", "quick", y_min=0.3, y_max=0.8)
                         if qm:
+                            if picked.get("id"):
+                                break
                             log.info("Clash Royale: 2v2 — Quick Match")
                             self._mode_2v2 = True
                             tap(*qm)

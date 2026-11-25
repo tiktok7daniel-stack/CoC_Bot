@@ -103,6 +103,9 @@ class RoyaleHomeScreen(Screen):
         b_row.addWidget(self.b_stop)
         btns.addLayout(b_row)
         btns.addWidget(self.b_view)
+        self.b_catalog = IconButton("layers", "rc_title", kind="primary", size=16)
+        self.b_catalog.clicked.connect(self.open_catalog)
+        btns.addWidget(self.b_catalog)
         h.addLayout(btns)
         top.add(h)
         v.addWidget(top)
@@ -177,6 +180,13 @@ class RoyaleHomeScreen(Screen):
         on_lang(self.refresh)
 
     # -------------------------------------------------------------- actions
+    def open_catalog(self):
+        if not self.store.account:
+            return
+        from .royale_catalog_dialog import RoyaleCatalogDialog
+        self.catalog_dialog = RoyaleCatalogDialog(self, self.api, self.store.account)
+        self.catalog_dialog.open()
+
     def open_view(self):
         w = self.ctx.window
         s = w.screens.get("royale_ai")
@@ -235,6 +245,12 @@ class RoyaleHomeScreen(Screen):
                 self.l_now.setText(now)
             else:
                 self.l_now.setText(tr("rl_phase_" + str(phase)) if phase else tr("rh_lobby"))
+        if running and phase != "battle":
+            from royale.catalog_selection import state as catalog_state
+            catalog = catalog_state(acc)["status"]
+            if catalog.get("state") == "blocked":
+                text = tr("rc_" + catalog.get("reason", "copy_failed"))
+                self.l_now.setText(text)
         self.b_start.setEnabled(not running)
         self.b_stop.setEnabled(running)
 
