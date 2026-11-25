@@ -35,7 +35,7 @@ class ReplayTests(unittest.TestCase):
         bad["actions"][0]["grid_x"] = -1
         self.assertEqual(audit.evaluate(bad, "team")["reason"], "incomplete_or_invalid_placements")
         unknown = sample()
-        unknown["battle"]["team"]["players"][0]["deck"][-1]["card_key"] = "minion-giant"
+        unknown["battle"]["team"]["players"][0]["deck"][-1]["card_key"] = "unregistered-test-card"
         self.assertEqual(audit.evaluate(unknown, "team")["reason"], "unsupported_cards")
 
     def test_simulation_clock_stops_at_event(self):

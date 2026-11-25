@@ -289,6 +289,7 @@ class _CardsNamespace:
     VINES: Card = Card("vines", True, 3, [], 28000026)
     RUNE_GIANT: Card = Card("rune_giant", False, 4, [Units.RUNE_GIANT], 0)
     SPIRIT_EMPRESS: Card = Card("spirit_empress", False, 6, [Units.SPIRIT_EMPRESS], 0)
+    MINION_GIANT: Card = Card("minion_giant", False, 4, [Units.MINION_GIANT], 26000107)
     VOID: Card = Card("void", True, 5, [], 0)
 
 Cards = _CardsNamespace()

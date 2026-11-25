@@ -66,6 +66,7 @@ COUNTERS = {
     "dark_prince":   {"want": ["dps", "defense_building"], "where": "front", "avoid": ["swarm"]},
     "balloon":       {"want": ["anti_air", "ranged", "big_spell"], "where": "behind"},
     "lava_hound":    {"want": ["anti_air", "dps"], "where": "behind"},
+    "minion_giant":  {"want": ["anti_air", "defense_building"], "where": "pull"},
     "goblin_barrel": {"want": ["small_spell", "splash"], "where": "tower", "urgent": True},
     "graveyard":     {"want": ["splash", "big_spell"], "where": "tower", "urgent": True},
     "miner":         {"want": ["swarm", "cycle", "dps"], "where": "tower"},

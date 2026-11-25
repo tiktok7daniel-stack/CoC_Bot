@@ -25,6 +25,7 @@ FEATURED_ICONS = (
 )
 # IDs verified in the official battle log. This mapping does not establish simulator support.
 EXTRA_CARD_IDS = {"void": 28000023, "runegiant": 26000101, "spiritempress": 28000025}
+UNVERIFIED_ARENA = {"miniongiant"}
 
 
 def variant_key(name):
@@ -40,6 +41,10 @@ def signature(cards):
     return tuple(sorted(variant_key(c) for c in cards))
 
 
+def unverified_arena_cards(cards):
+    return [c for c in cards if variant_key(c).split("-", 1)[0] in UNVERIFIED_ARENA]
+
+
 def api_card_variant(card):
     """Used form in a Clash Royale battle log card entry."""
     name = card.get("name")
@@ -50,6 +55,7 @@ def api_card_variant(card):
 def _entry(deck_id, name, cards, card_ids, games, win_rate, source, forms_known):
     return {"id": deck_id, "name": name, "cards": list(cards), "card_ids": card_ids,
             "games": games, "win_rate": win_rate, "source": source, "forms_known": forms_known,
+            "unverified_arena_cards": unverified_arena_cards(cards),
             "copy_url": deck_pick.deck_link(card_ids, scheme=False) if card_ids else None}
 
 

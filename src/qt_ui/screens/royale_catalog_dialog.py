@@ -176,10 +176,13 @@ class RoyaleCatalogDialog(QDialog):
         self.metrics.setText(f"{win:.1%} · {games:,} {tr('rc_games')} · {source}"
                              if win is not None and games is not None else "")
         note = ("rc_unsupported_cards" if entry.get("unsupported_cards")
+                else "rc_arena_vision_unverified" if entry.get("unverified_arena_cards")
                 else "rc_forms_known" if entry.get("forms_known") else "rc_forms_unknown")
         self.note.setText(tr(note) if entry else "")
         if entry.get("unsupported_cards"):
             self.note.setText(self.note.text() + " " + ", ".join(entry["unsupported_cards"]))
+        elif entry.get("unverified_arena_cards"):
+            self.note.setText(self.note.text() + " " + ", ".join(entry["unverified_arena_cards"]))
         for i, (picture, caption) in enumerate(self.pictures):
             key = names[i] if i < len(names) else ""
             caption.setText(key.replace("-", " ").title())

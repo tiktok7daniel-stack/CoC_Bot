@@ -346,6 +346,7 @@ class _UnitsNamespace:
     SUSPICIOUS_BUSH: Unit = Unit("suspicious_bush", UnitCategory.TROOP, Target.BUILDINGS, Transport.GROUND)
     RUNE_GIANT: Unit = Unit("rune_giant", UnitCategory.TROOP, Target.BUILDINGS, Transport.GROUND)
     SPIRIT_EMPRESS: Unit = Unit("spirit_empress", UnitCategory.TROOP, Target.ALL, Transport.GROUND)
+    MINION_GIANT: Unit = Unit("minion_giant", UnitCategory.TROOP, Target.BUILDINGS, Transport.AIR)
 
 Units = _UnitsNamespace()
 NAME2UNIT = {

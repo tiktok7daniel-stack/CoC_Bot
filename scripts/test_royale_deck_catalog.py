@@ -80,14 +80,13 @@ class SelectionTests(unittest.TestCase):
             self.assertEqual(client.get(path).json["status"]["state"], "none")
 
     def test_copy_only_unblocks_after_api_verification(self):
-        from royale.brain import cards_db
         from royale import cr_api, deck_pick
+        from royale.vision.namespaces.cards import NAME2CARD
 
         entry = next(d for d in catalog.page("hogrider", limit=100)["items"]
                      if set(d["cards"]) == {"cannon", "fireball", "hogrider", "icegolem", "icespirit",
                                             "musketeer", "skeletons", "thelog"})
-        eyes = SimpleNamespace(by_name={name: SimpleNamespace(id=c["id"]) for name, c in cards_db().items()
-                                       if c.get("id") in entry["card_ids"]})
+        eyes = SimpleNamespace(by_name={c.name: c for c in NAME2CARD.values()})
         cards = [{"id": ident} for ident in entry["card_ids"]]
         before, after = {"cards": cards}, {"cards": cards, "currentDeck": cards}
         picked = {"id": entry["id"], "slot": 3, "revision": "rev"}
@@ -100,7 +99,7 @@ class SelectionTests(unittest.TestCase):
             copy.assert_called_once_with("test", {"ids": entry["card_ids"]}, None, 3, strict_slot=True)
         with patch.object(deck_pick, "apply") as copy:
             self.assertEqual(catalog_selection.activate("test", dict(picked, id=catalog.FEATURED_ID), eyes, None),
-                             ([], "unsupported_cards"))
+                             ([], "arena_vision_unverified"))
             copy.assert_not_called()
 
     def test_featured_requires_equipped_forms(self):

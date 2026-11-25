@@ -3261,6 +3261,30 @@
 "radius": 0.6,
 "mass": 6,
 "source": "FirstLight CR card_specs (Apache-2.0)"
+},
+"minion_giant": {
+"id": 26000107,
+"cost": 4,
+"kind": "troop",
+"anywhere": false,
+"air": true,
+"hits_air": false,
+"hits_ground": true,
+"buildings_only": true,
+"hp": 709.765625,
+"damage": 59.765625,
+"hit_ms": 1700,
+"range": 4.0,
+"splash": null,
+"speed": 60.0,
+"count": 1,
+"deploy_ms": 1000,
+"units": ["minion_giant"],
+"rarity": "Rare",
+"sight": 6.5,
+"radius": 0.75,
+"mass": 15,
+"source": "RoyaleAPI Minion Academy preview and October 2026 final balance; level 11 numbers normalized to the simulator base"
 }
 },
 "levels": {

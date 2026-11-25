@@ -92,10 +92,12 @@ def activate(account, picked, eyes, log):
     if not prepared["ok"]:
         return [], prepared["error"]
     deck = prepared["deck"]
-    names_by_id = {c.id: name for name, c in eyes.by_name.items()}
+    names_by_id = {c.id_: name for name, c in eyes.by_name.items() if c.id_ > 0}
     names = [names_by_id.get(ident) for ident in prepared["ids"]]
     if any(not name or not card(name) for name in names):
         return [], "unsupported_cards"
+    if deck_catalog.unverified_arena_cards(deck["cards"]):
+        return [], "arena_vision_unverified"
     tag = cr_api.tag(account)
     if not tag:
         return [], "verification_api"
