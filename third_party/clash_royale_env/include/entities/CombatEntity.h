@@ -61,9 +61,11 @@ protected:
     int ticksSinceAttack = TICKS_SINCE_ATTACK_NEVER;
 
     // The freezes in force, each running its own duration (see applyFreeze).
-    struct FreezeSlot { int ticks = 0; float factor = 1.0f; };
+    struct FreezeSlot { int ticks = 0; float factor = 1.0f; int sourceId = -1; };
     static constexpr int FREEZE_SLOT_COUNT = 3;
     FreezeSlot freezeSlots[FREEZE_SLOT_COUNT];
+    bool frostyFellaArmed = false;
+    std::vector<std::pair<int, int>> iceWizardSlowUntil;
 
 public:
     // The entity this one is locked onto (-1 for none). Read-only view for
@@ -460,6 +462,7 @@ public:
         id = newId;
         hp = 1;
         abilitySlotCardId = 0;
+        frostyFellaArmed = false;
     }
 
     // Deploy delay before the first shot (X-Bow's slow lock-on). Called once
@@ -506,11 +509,11 @@ public:
     // takes a slot of its own and runs its own duration. With every slot taken,
     // it displaces the weakest held freeze if it is stronger, else it is
     // dropped (three concurrent strengths are enough for every card).
-    void applyFreeze(int ticks, float slowFactor) {
+    void applyFreeze(int ticks, float slowFactor, int sourceId = -1) {
         if (ticks <= 0) return;
         FreezeSlot* slot = nullptr;
         for (auto& s : freezeSlots) {
-            if (s.ticks > 0 && s.factor == slowFactor) { slot = &s; break; }
+            if (s.ticks > 0 && s.factor == slowFactor && s.sourceId == sourceId) { slot = &s; break; }
         }
         if (!slot) {
             for (auto& s : freezeSlots) {
@@ -533,6 +536,7 @@ public:
             } else {
                 slot->ticks = ticks;
                 slot->factor = slowFactor;
+                slot->sourceId = sourceId;
             }
             refreshFreezeView();
         }
@@ -576,6 +580,14 @@ public:
         // time-stopped: poison, cooldowns and buffs keep ticking.
         const bool deploying = deployTicksRemaining > 0;
         if (deploying) deployTicksRemaining--;
+        bool released = false;
+        for (auto& s : freezeSlots) {
+            if (s.ticks > 0 && s.sourceId >= 0 && !board.hasLivingEntity(s.sourceId)) {
+                s.ticks = 0;
+                released = true;
+            }
+        }
+        if (released) refreshFreezeView();
 
         // Captured before the decrement, so the last tick of a freeze still
         // counts as frozen, at its own strength, for the ramp reset, the
@@ -859,6 +871,7 @@ public:
     }
 
     void onDeath(Board& board) override {
+        if (abilityEffect) abilityEffect->onOwnerDeath(board, *this);
         if (deathEffect) deathEffect->apply(board, position, team);
     }
 

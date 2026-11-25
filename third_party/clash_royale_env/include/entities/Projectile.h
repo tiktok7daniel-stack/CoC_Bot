@@ -123,7 +123,7 @@ private:
         if (!onHitEffects.empty()) {
             if (auto combatTarget = std::dynamic_pointer_cast<CombatEntity>(t)) {
                 for (const auto& effect : onHitEffects) {
-                    effect->apply(combatTarget);
+                    effect->applyFrom(board, attackerId, combatTarget);
                 }
             }
         }

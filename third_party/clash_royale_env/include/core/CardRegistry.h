@@ -1,4 +1,5 @@
 #pragma once
+#include "HeroIceWizardFrostyFellaEffect.h"
 #include <string>
 #include <functional>
 #include <unordered_map>
@@ -912,6 +913,11 @@ private:
         // Minion Giant: level 11 stats with the October 2026 balance changes.
         add(troop(176, "Minion Giant", 4.0f, Archetype::RangedBuildingTargeter, 1817, SPEED_MEDIUM, 4.0f, 153, 17, 'g')
             .withFlying().withSightRange(6.5f));
+
+        // Frosty Fella arms once per deployment and fires when the hero slows an enemy.
+        const auto frostyFella = std::make_shared<HeroIceWizardFrostyFellaEffect>();
+        add(troop(177, "Hero Ice Wizard", 3.0f, Archetype::RangedSquad, 689, SPEED_MEDIUM, 5.5f, 90, 17, 'i')
+            .withTargetsAir().withOnHit(frostyFella).withHeroAbility(2.0f, 0, frostyFella, 1));
 
         // === Defensive structures (expansion) ===
         // X-Bow: the default 30 s building lifetime matches the real card;

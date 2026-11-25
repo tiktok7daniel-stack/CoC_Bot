@@ -64,6 +64,47 @@ if minion_giant_id is not None:
           targeted_cannon and match.get_damage_dealt_by_card(minion_giant_id, 0) == 153 and
           any(u.id == enemy_knight.id and u.hp == enemy_knight.hp for u in match.get_units()))
 
+ice_wizard_hero = ids.get("ice_wizard", (None, None, None))[2]
+check("Hero Ice Wizard is mapped from the native registry", ice_wizard_hero is not None)
+if ice_wizard_hero is not None and minion_giant_id is not None:
+    featured = [ids["cannon"][1], ice_wizard_hero, ids["bats"][1], ids["barbarian_barrel"][0],
+                ids["knight"][0], ids["lightning"][0], minion_giant_id, ids["skeletons"][0]]
+    enemy_deck = engine._deck_ids(m, deck)
+    hero_match = m.ClashRoyaleEnv(featured, enemy_deck, 3600)
+    hero_match.reset()
+    hero_match.set_elixir_for_team(0, 10.0)
+    check("featured deck keeps both Evolutions and Hero Ice Wizard",
+          not m.validate_deck_slots(featured) and hero_match.set_hand_for_team(0, featured[:4]))
+    hero_match.step_self_play_fast(1, 8.0, 13.0, -1, 0.0, 0.0, 12)
+    armed = hero_match.activate_champion_ability(0, 1)
+    check("Frosty Fella is available once and waits until a target is slowed",
+          armed and not hero_match.activate_champion_ability(0, 1) and
+          not any(u.name == "Snowman" for u in hero_match.get_units()))
+    hero_match.inject(ids["knight"][0], 8.0, 16.0, 1, -1.0, 0)
+    advance = (-1, 0.0, 0.0, -1, 0.0, 0.0)
+    snowman = None
+    for _ in range(16):
+        hero_match.step_self_play_fast(*advance, 1)
+        snowman = next((u for u in hero_match.get_units() if u.name == "Snowman"), None)
+        if snowman is not None:
+            break
+    check("A slowed enemy triggers the Snowman and the area damage",
+          snowman is not None and hero_match.get_damage_dealt_by_card(ice_wizard_hero, 0) >= 179)
+    if snowman is not None:
+        knight = next(u for u in hero_match.get_units() if u.card_id == ids["knight"][0] and u.team == 1)
+        copy = hero_match.snapshot()
+        fireball = ids["fireball"][0]
+        copy.set_hand_for_team(1, [fireball, *[c for c in enemy_deck if c != fireball][:3]])
+        copy.set_elixir_for_team(1, 10.0)
+        copy.step_self_play_fast(-1, 0.0, 0.0, 0, snowman.x, snowman.y, 24)
+        hero_match.step_self_play_fast(*advance, 24)
+        still = next((u for u in hero_match.get_units() if u.id == knight.id), None)
+        moved = next((u for u in copy.get_units() if u.id == knight.id), None)
+        check("Destroying the Snowman releases the enemy in that rollout only",
+              not any(u.id == snowman.id for u in copy.get_units()) and
+              any(u.id == snowman.id for u in hero_match.get_units()) and
+              still is not None and moved is not None and moved.y < still.y - 0.15)
+
 # coordinates: a unit put on our tile (3, 10) shows at engine (3, 11); our left Princess is at our (3.5, 5)
 e = m.ClashRoyaleEnv(engine._filler_deck(m, []), engine._filler_deck(m, []), 3600)
 e.reset()

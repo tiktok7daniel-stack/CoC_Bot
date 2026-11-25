@@ -176,6 +176,12 @@ public:
         return activeEntities;
     }
 
+    bool hasLivingEntity(int id) const {
+        const auto matches = [id](const auto& e) { return e->id == id && e->isAlive(); };
+        return std::any_of(activeEntities.begin(), activeEntities.end(), matches) ||
+               std::any_of(pendingEntities.begin(), pendingEntities.end(), matches);
+    }
+
     void cleanDeadEntities(int tick = 0) {
         // Nothing died: skip the three passes below, which would all be no-ops.
         // Most ticks take this branch.

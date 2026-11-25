@@ -2,6 +2,7 @@
 #include <memory>
 
 class CombatEntity;
+class Board;
 
 // Behaviour triggered when a CombatEntity lands an attack, independent of how
 // the attack deals damage, so cards like Ice Wizard are a normal troop plus an
@@ -14,4 +15,5 @@ class IOnHitEffect {
 public:
     virtual ~IOnHitEffect() = default;
     virtual void apply(std::shared_ptr<CombatEntity> target) const = 0;
+    virtual void applyFrom(Board&, int, const std::shared_ptr<CombatEntity>& target) const { apply(target); }
 };

@@ -11,4 +11,5 @@ class IAbilityEffect {
 public:
     virtual ~IAbilityEffect() = default;
     virtual void apply(Board& board, CombatEntity& self) const = 0;
+    virtual void onOwnerDeath(Board&, CombatEntity&) const {}
 };
