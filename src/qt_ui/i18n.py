@@ -62,6 +62,12 @@ EXTRA = {
         "tg_need_token": "اكتب توكن بوت تيليجرام الأول", "ui_kind": "شكل البرنامج", "ui_kind_sub": "الواجهة الجديدة أو القديمة (بيتطبق لما تفتح البرنامج تاني)",
         "ui_qt": "الواجهة الجديدة (v4)", "ui_web": "الواجهة القديمة", "up_building": "مبنى", "up_wall": "سور", "up_lab": "مختبر",
         "up_pet": "حيوان", "session_since": "الجلسة من", "no_attacks": "مفيش هجمات لسه",
+        "ra_live_vision": "رؤية YOLO المباشرة", "ra_live_detections": "وحدات مرصودة",
+        "ra_live_no_units": "الموديل جاهز لكن مفيش وحدات مرصودة حالياً.",
+        "ra_live_loading": "جاري تجهيز موديل الكشف…", "ra_live_error": "حصل خطأ في الكشف المحلي",
+        "ra_live_waiting": "في انتظار صورة من بث اللعبة…",
+        "ra_live_bot_note": "قرارات الكروت ومكان اللعب تظهر لما يكون بوت المعركة شغال.",
+        "ra_picture_sub": "المربعات: أحمر = الخصم، أزرق = بتاعنا، أصفر = كشف YOLO مباشر ولسه الجهة مش مؤكدة · الشريط = الحياة · النقط: الحركات اللي المحرك جربها · الدواير البيضا: اختيارات الموديل · السهم الدهبي: من الكارت للمكان اللي اتلعب فيه",
     },
     "en": {
         "app_sub": "Smart Clash farming", "soon": "Soon", "search_ph": "Search every setting… (Ctrl+K)",
@@ -116,6 +122,12 @@ EXTRA = {
         "tg_need_token": "Enter the Telegram bot token first", "ui_kind": "Interface", "ui_kind_sub": "New or classic window (applies on next start)",
         "ui_qt": "New interface (v4)", "ui_web": "Classic interface", "up_building": "Building", "up_wall": "Wall", "up_lab": "Lab",
         "up_pet": "Pet", "session_since": "Session since", "no_attacks": "No attacks yet",
+        "ra_live_vision": "Live YOLO vision", "ra_live_detections": "units detected",
+        "ra_live_no_units": "The model is ready but has no unit detections right now.",
+        "ra_live_loading": "Loading the detection model…", "ra_live_error": "Local detection failed",
+        "ra_live_waiting": "Waiting for a game video frame…",
+        "ra_live_bot_note": "Card choices and placements appear while the battle bot loop is running.",
+        "ra_picture_sub": "Boxes: red = theirs, blue = ours, yellow = live YOLO with ownership not yet known · bar = life · dots: engine candidate moves · white rings: model choices · gold arrow: the played card and placement",
     },
 }
 

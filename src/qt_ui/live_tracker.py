@@ -1,5 +1,7 @@
 """
-The live screen's tracker (5.97): every unit the bot's eyes find, followed smoothly on every displayed picture.
+The live screen's tracker: consume the bot's detections when available, and run the local arena detector on the live
+video when the bot telemetry is stale or has no tracked units. This keeps the YOLO overlay useful while inspecting a
+manual match or a stalled bot, without duplicating inference during normal tracked play.
 
   in       each look of the bot: everything both eye models found (unfiltered: name, ours / theirs, place, confidence)
            with the time its picture was TAKEN (royale.live_view "dets" / "seen_t")
@@ -10,7 +12,6 @@ The live screen's tracker (5.97): every unit the bot's eyes find, followed smoot
            speed for the time since that picture was taken — the bot's delay is made up, the box sits on its unit;
            a unit missed for a look or two keeps its box (coasting, 0.5 s) instead of blinking out
 
-No second model runs in the app (in 5.96 it did: twice the heavy work, everything slower).
 """
 import threading, time
 
@@ -41,16 +42,90 @@ class LiveTracker:
     COAST = 0.5                           # seconds a unit keeps its box without being seen
 
     def __init__(self, video=None):
+        self.video = video
         self.tracks = []
         self._lock = threading.Lock()
         self._last = 0.0
+        self._bot_empty_since = None
         self._seen = None
         self.rate, self._n, self._n_t = 0.0, 0, time.time()
         self.lat = None                    # 6.9.17: how old the bot's looks are when they arrive here (smoothed)
+        self.local_boxes = []
+        self.local_state = "waiting"
+        self.local_fps = 0.0
+        self.local_ms = 0.0
+        self._local_t = 0.0
+        self._want = False
+        self._worker = None
 
-    # kept for the screen's calls (no model thread any more)
-    def start(self): pass
-    def stop(self): pass
+    def start(self):
+        self._want = True
+        if self.video is not None and (self._worker is None or not self._worker.is_alive()):
+            self._worker = threading.Thread(target=self._vision_loop, daemon=True, name="royale-live-vision")
+            self._worker.start()
+
+    def stop(self):
+        self._want = False
+
+    def _vision_loop(self):
+        """Latest-frame-only fallback; it yields to bot detections and never queues stale screenshots."""
+        seq = -1
+        last_infer = 0.0
+        while self._want:
+            now = time.monotonic()
+            bot_active = self.active()
+            has_tracks = bool(self.visible())
+            if bot_active and has_tracks:
+                self.local_boxes = []
+                self.local_state = "bot"
+                time.sleep(0.12)
+                continue
+            if bot_active and self._bot_empty_since is not None and now - self._bot_empty_since < 0.8:
+                self.local_state = "bot_empty"
+                time.sleep(0.08)
+                continue
+            interval = 0.40 if bot_active else 0.20  # low-rate assist if the bot is reporting no units
+            if now - last_infer < interval:
+                time.sleep(0.02)
+                continue
+            sample = self.video.latest_array() if self.video is not None else None
+            if not sample:
+                self.local_state = "waiting"
+                time.sleep(0.08)
+                continue
+            frame_seq, frame, _decoded_t = sample
+            if frame_seq == seq:
+                time.sleep(0.025)
+                continue
+            seq, last_infer = frame_seq, now
+            try:
+                from royale import strong_eyes
+                if not strong_eyes.ready():
+                    self.local_state = "loading"
+                    strong_eyes.ensure()
+                    time.sleep(0.1)
+                    continue
+                t0 = time.perf_counter()
+                detections = strong_eyes.detect(frame, conf=0.35)
+                self.local_ms = (time.perf_counter() - t0) * 1000
+                h, w = frame.shape[:2]
+                boxes = []
+                for name, conf, x0, y0, x1, y1 in detections:
+                    unit = strong_eyes.unit_name(name)
+                    if not unit or conf < 0.35:
+                        continue
+                    boxes.append({"n": unit, "c": round(float(conf), 2),
+                                  "b": [max(0.0, x0 / w), max(0.0, y0 / h),
+                                        min(1.0, x1 / w), min(1.0, y1 / h)]})
+                self.local_boxes = boxes[:50]
+                self.local_state = "ready"
+                self._local_t = time.time()
+                self.local_fps = 1.0 / max(0.001, interval + self.local_ms / 1000.0)
+            except Exception as e:
+                self.local_state = "error"
+                self.local_boxes = []
+                self.local_error = f"{type(e).__name__}: {e}"[:160]
+                time.sleep(0.5)
 
     def active(self):
         return time.time() - self._last < 1.0
@@ -61,6 +136,10 @@ class LiveTracker:
         t = float(seen_t or time.time())
         if t == self._seen: return
         self._seen = t
+        if dets:
+            self._bot_empty_since = None
+        elif self._bot_empty_since is None:
+            self._bot_empty_since = time.monotonic()
         lat = max(0.0, time.time() - t)
         self.lat = lat if self.lat is None else 0.8 * self.lat + 0.2 * lat
         with self._lock:

@@ -47,6 +47,9 @@ class AiPicture(_Base):
         if time.monotonic() - self.live_t >= 0.5: return
         p.setFont(ui_font(8, QFont.Bold))
         tag = f"● LIVE · {getattr(self, 'stream_fps', 0) or self.fps:.0f} fps · {iw}x{ih}"
+        trk = getattr(self, "tracker", None)
+        if trk is not None and trk.local_state == "ready" and time.time() - trk._local_t < 1.2:
+            tag += f" · YOLO {len(trk.local_boxes)}"
         r = QRectF(ox + 6, oy + h * 0.78, p.fontMetrics().horizontalAdvance(tag) + 10, 16)
         p.fillRect(r, QColor(0, 0, 0, 170))
         p.setPen(QColor("#4ade80"))
@@ -96,6 +99,25 @@ class AiPicture(_Base):
             if not im.isNull(): self.img, self.img_t = im, ft
         self.update()
 
+    def _paint_local_detections(self, p, P, now):
+        """Draw exact detector boxes when no fresh bot tracks are available; ownership is intentionally unknown."""
+        trk = getattr(self, "tracker", None)
+        if trk is None or trk.local_state != "ready" or now - trk._local_t > 1.2:
+            return
+        p.setFont(ui_font(8, QFont.Bold))
+        for item in trk.local_boxes:
+            x0, y0, x1, y1 = item["b"]
+            rect = QRectF(P(x0, y0), P(x1, y1))
+            color = QColor("#ffd166")
+            fill = QColor(color); fill.setAlpha(35)
+            p.setPen(QPen(color, 2)); p.setBrush(fill)
+            p.drawRect(rect)
+            text = f"{_nice(item['n'])} {item['c']:.0%}"
+            tag = QRectF(rect.left(), max(2, rect.top() - 17),
+                         max(rect.width(), p.fontMetrics().horizontalAdvance(text) + 8), 16)
+            p.fillRect(tag, color)
+            p.setPen(QColor("#111820")); p.drawText(tag, Qt.AlignCenter, text)
+
     def paintEvent(self, _e):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
@@ -113,6 +135,7 @@ class AiPicture(_Base):
         p.drawImage(QRectF(ox, oy, w, h), self.img)
         battle = self.d.get("phase") == "battle" and time.time() - float(self.d.get("t", 0)) < 8
         if not battle:                                   # the game as it is (lobby, menus): the picture alone
+            self._paint_local_detections(p, P, time.time())
             self._badge(p, ox, oy, w, h, iw, ih)
             return
         f = ui_font(8, QFont.Bold)
@@ -171,6 +194,8 @@ class AiPicture(_Base):
                 bar = QRectF(r.left(), r.bottom() + 1, r.width(), 3)
                 p.fillRect(bar, QColor(0, 0, 0, 160))
                 p.fillRect(QRectF(bar.left(), bar.top(), bar.width() * max(0.0, life), 3), QColor("#ffd24d"))
+        if not shown:
+            self._paint_local_detections(p, P, now)
         # 6.6: every tracked unit — its id, an arrow for where it walks (1 s ahead), and the spell's predicted impact
         import math
         for t in self.d.get("tracks") or []:
@@ -268,6 +293,7 @@ class RoyaleAiScreen(Screen):
         self.ftimer.timeout.connect(self.frame_tick)
         self.ftimer.start(4)                         # up to 240 pictures a second
         self._seq = 0
+        self._vision_panel_t = 0.0
 
     def frame_tick(self):
         popped = getattr(self, "_pop", None) is not None and self._pop.isVisible()
@@ -292,6 +318,12 @@ class RoyaleAiScreen(Screen):
         if popped:
             self._pop._pic.stream_fps = self.video.fps
             self._pop._pic.set_frame(img, ts)
+        if self.isVisible() and time.monotonic() - self._vision_panel_t > 0.5:
+            self._vision_panel_t = time.monotonic()
+            txt = self.text(self.pic.d)
+            if txt != self._txt:
+                self._txt = txt
+                self.panel.setText(txt)
 
     def _path(self):
         acc = self.store.account or "main"
@@ -357,7 +389,27 @@ class RoyaleAiScreen(Screen):
             self._pop._pic.set_data(d, p.with_suffix(".jpg"))
 
     def text(self, d):
-        if d.get("phase") != "battle": return tr("ra_none")
+        if d.get("phase") != "battle" or time.time() - float(d.get("t", 0)) > 8:
+            trk = self.tracker
+            state = getattr(trk, "local_state", "waiting")
+            boxes = getattr(trk, "local_boxes", [])
+            out = [f"<b>{tr('ra_live_vision')}</b>"]
+            if state == "ready":
+                names = []
+                for b in boxes:
+                    name = _nice(b["n"])
+                    if name not in names: names.append(name)
+                summary = ", ".join(names[:8]) or tr("ra_live_no_units")
+                out.append(f"{len(boxes)} {tr('ra_live_detections')} · {trk.local_fps:.1f} fps · {trk.local_ms:.0f} ms")
+                out.append(f"<small>{summary}</small>")
+            elif state == "loading":
+                out.append(tr("ra_live_loading"))
+            elif state == "error":
+                out.append(f"{tr('ra_live_error')}: {_nice(getattr(trk, 'local_error', ''))}")
+            else:
+                out.append(tr("ra_live_waiting"))
+            out.append(f"<br><small>{tr('ra_live_bot_note')}</small>")
+            return "<br>".join(out)
         g, r, gold = TOKENS["ok"], TOKENS["bad"], TOKENS["gold"]
         out = []
         t = d.get("time_s", 0)
