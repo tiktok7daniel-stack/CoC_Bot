@@ -234,8 +234,9 @@ class Arena:
             for p in [p for p in self.pending if p[0] <= self.t]:
                 self.pending.remove(p)
                 self._land(p[1], p[2], p[3], p[4])
-            step(self.units, dt)
-            self.t += dt
+            delta = min(dt, t - self.t)
+            step(self.units, delta)
+            self.t = min(t, self.t + delta)
             for u in self.units:
                 if u.building and not u.tower and self.t - self.born.get(id(u), self.t) > u.life: u.hp = 0
             self.units = [u for u in self.units if u.hp > 0 or u.tower]
