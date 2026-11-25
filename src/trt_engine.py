@@ -263,7 +263,6 @@ class VisionSession:
         if self.sess is None and "CUDAExecutionProvider" in av: self._try("cuda")
         if self.sess is None and "DmlExecutionProvider" in av: self._try("dml")
         if self.sess is None: self._try("cpu")
-        self._in = {}
         if "TensorrtExecutionProvider" in av and self.kind != "trt" and not (CACHE / (_key(self.path) + ".failed")).exists():
             threading.Thread(target=self._build_trt, daemon=True, name="trt-build").start()
 
@@ -313,7 +312,7 @@ class VisionSession:
             feed = _dummy(s)
             for _ in range(3): s.run(None, feed)              # the build happens in the first run; then warm
             (CACHE / (_key(self.path) + ".built")).write_text(str(time.time()), encoding="utf-8")
-            self.sess, self.kind, self._in = s, "trt", {}
+            self.sess, self.kind = s, "trt"
             _log(f"{Path(self.path).name}: TensorRT engine ready ({'FP16' if _fp16() else 'FP32'})")
         except Exception as e:
             CACHE.mkdir(parents=True, exist_ok=True)
@@ -328,27 +327,9 @@ class VisionSession:
     def get_providers(self): return self.sess.get_providers()
 
     def run(self, names, feed, run_options=None):
-        s = self.sess
-        if self.kind not in ("trt", "cuda"):
-            return s.run(names, feed, run_options)
-        # the input kept on the card (updated in place: no new buffer every picture), the answer copied back once
-        try:
-            io = s.io_binding()
-            for k, x in feed.items():
-                key = (id(s), k)
-                v = self._in.get(key)
-                if v is None or tuple(v.shape()) != tuple(x.shape):
-                    v = self._ort.OrtValue.ortvalue_from_numpy(x, "cuda", 0)
-                    self._in[key] = v
-                else:
-                    v.update_inplace(x)
-                io.bind_ortvalue_input(k, v)
-            outs = names or [o.name for o in s.get_outputs()]
-            for o in outs: io.bind_output(o, "cpu")
-            s.run_with_iobinding(io, run_options)
-            return io.copy_outputs_to_cpu()
-        except Exception:
-            return s.run(names, feed, run_options)
+        # Let ONNX Runtime manage the upload and synchronization. Reusing a device
+        # input with update_inplace silently zeroed repeated detections on TensorRT.
+        return self.sess.run(names, feed, run_options)
 
 
 def make_session(path, threads=None):
@@ -368,7 +349,7 @@ def bench(path, kind, n=60):
     """ms a run of `path` on `kind` (warmed up)."""
     s = VisionSession.__new__(VisionSession)
     import onnxruntime as ort
-    s.path, s._ort, s.threads, s._in = str(path), ort, None, {}
+    s.path, s._ort, s.threads = str(path), ort, None
     s.sess, s.kind = s._make(kind), kind
     feed = _dummy(s.sess)
     for _ in range(5): s.run(None, feed)

@@ -13,20 +13,25 @@ manual match or a stalled bot, without duplicating inference during normal track
            a unit missed for a look or two keeps its box (coasting, 0.5 s) instead of blinking out
 
 """
+from collections import deque
+from itertools import count
 import threading, time
 
 BOX_W, BOX_H, BOX_UP = 0.057, 0.042, 0.011      # a unit's box in screen fractions (as royale.live_view draws them)
 
 
 class Track:
-    __slots__ = ("names", "mine", "x", "y", "vx", "vy", "t", "hits", "conf", "size")
+    __slots__ = ("names", "mine", "x", "y", "vx", "vy", "t", "hits", "conf", "size", "id", "origin", "trail")
 
-    def __init__(self, name, mine, x, y, t, conf, size=None):
+    def __init__(self, name, mine, x, y, t, conf, size=None, track_id=0):
         self.names, self.mine = {name: conf}, mine
         self.x, self.y, self.t, self.conf = x, y, t, conf
         self.vx = self.vy = 0.0
         self.hits = 1
         self.size = size
+        self.id = track_id
+        self.origin = (x, y)
+        self.trail = deque([(x, y)], maxlen=8)
 
     @property
     def name(self):
@@ -45,6 +50,8 @@ class LiveTracker:
     def __init__(self, video=None):
         self.video = video
         self.tracks = []
+        self._ids = count(1)
+        self.local_tracker = LiveTracker() if video is not None else None
         self._lock = threading.Lock()
         self._last = 0.0
         self._bot_empty_since = None
@@ -70,6 +77,8 @@ class LiveTracker:
 
     def _vision_loop(self):
         """Latest-frame-only fallback; it yields to bot detections and never queues stale screenshots."""
+        from royale.team_color import TeamColor
+        colors = TeamColor()
         seq = -1
         last_infer = 0.0
         while self._want:
@@ -103,21 +112,29 @@ class LiveTracker:
                 from royale import strong_eyes
                 if not strong_eyes.ready():
                     self.local_state = "loading"
-                    strong_eyes.ensure()
-                    time.sleep(0.1)
-                    continue
+                    if not strong_eyes.ensure():
+                        time.sleep(0.1)
+                        continue
                 t0 = time.perf_counter()
                 detections = strong_eyes.detect(frame, conf=0.35)
                 self.local_ms = (time.perf_counter() - t0) * 1000
                 h, w = frame.shape[:2]
-                boxes = []
+                colors.prepare(frame)
+                boxes, found = [], []
                 for name, conf, x0, y0, x1, y1 in detections:
                     unit = strong_eyes.unit_name(name)
                     if not unit or conf < 0.35:
                         continue
-                    boxes.append({"n": unit, "c": round(float(conf), 2),
-                                  "b": [max(0.0, x0 / w), max(0.0, y0 / h),
-                                        min(1.0, x1 / w), min(1.0, y1 / h)]})
+                    team, confidence = colors.team((x0, y0, x1, y1))
+                    mine = (team == "ally") if team and confidence >= 2.0 else None
+                    b = [max(0.0, x0 / w), max(0.0, y0 / h), min(1.0, x1 / w), min(1.0, y1 / h)]
+                    a, b0, c, d = b
+                    if a >= c or b0 >= d:
+                        continue
+                    boxes.append({"n": unit, "c": float(conf), "b": b})
+                    found.append([unit, mine, (a + c) / 2, (b0 + d) / 2, float(conf), c - a, d - b0])
+                captured_at = time.time() - max(0.0, time.monotonic() - _decoded_t)
+                self.local_tracker.feed(found[:50], captured_at)
                 self.local_boxes = boxes[:50]
                 self.local_state = "ready"
                 self._local_t = time.time()
@@ -144,19 +161,19 @@ class LiveTracker:
         lat = max(0.0, time.time() - t)
         self.lat = lat if self.lat is None else 0.8 * self.lat + 0.2 * lat
         with self._lock:
-            free = list(self.tracks)
+            free = [tr for tr in self.tracks if 0 < t - tr.t <= self.COAST]
             for detection in sorted(dets, key=lambda d: -d[4]):
                 name, mine, x, y, conf = detection[:5]
                 size = tuple(detection[5:7]) if len(detection) >= 7 else None
                 best, bd = None, 0.08
                 for tr in free:
-                    if tr.mine != mine: continue
+                    if tr.mine is not None and mine is not None and tr.mine != mine: continue
                     px, py = tr.at(t)
                     d = abs(px - x) + abs(py - y)
                     if tr.name != name: d += 0.05            # another name: only when really close (a flicker)
                     if d < bd: best, bd = tr, d
                 if best is None:
-                    self.tracks.append(Track(name, mine, x, y, t, conf, size))
+                    self.tracks.append(Track(name, mine, x, y, t, conf, size, next(self._ids)))
                     continue
                 free.remove(best)
                 dt = max(1e-3, t - best.t)
@@ -167,6 +184,10 @@ class LiveTracker:
                     best.vx = max(-0.4, min(0.4, best.vx + self.B * rx / dt))
                     best.vy = max(-0.4, min(0.4, best.vy + self.B * ry / dt))
                 best.t, best.conf, best.size = t, conf, size
+                if best.mine is None:
+                    best.mine = mine
+                if abs(best.trail[-1][0] - x) + abs(best.trail[-1][1] - y) > 0.002:
+                    best.trail.append((x, y))
                 best.names[name] = best.names.get(name, 0.0) + conf
                 best.hits += 1
             self.tracks = [tr for tr in self.tracks if t - tr.t <= self.COAST]
@@ -187,7 +208,7 @@ class LiveTracker:
         with self._lock:
             out = []
             for tr in self.tracks:
-                if tr.conf < 0.3 and tr.hits < 2: continue
+                if now - tr.t > self.COAST or (tr.conf < 0.3 and tr.hits < 2): continue
                 x, y = tr.at(now)
                 w, h = tr.size or (BOX_W, BOX_H)
                 out.append((tr.name, tr.mine, x, y if tr.size else y - BOX_UP, w, h))
@@ -199,9 +220,10 @@ class LiveTracker:
         with self._lock:
             out = []
             for tr in self.tracks:
-                if tr.conf < 0.3 and tr.hits < 2: continue
+                if now - tr.t > self.COAST or (tr.conf < 0.3 and tr.hits < 2): continue
                 x, y = tr.at(now)
                 w, h = tr.size or (BOX_W, BOX_H)
-                out.append({"n": tr.name, "m": tr.mine, "l": 1.0, "cx": x, "cy": y if tr.size else y - BOX_UP,
-                            "w": w, "h": h, "vx": tr.vx, "vy": tr.vy, "t": now})
+                out.append({"id": tr.id, "n": tr.name, "m": tr.mine, "l": 1.0, "c": tr.conf,
+                            "cx": x, "cy": y if tr.size else y - BOX_UP, "w": w, "h": h,
+                            "vx": tr.vx, "vy": tr.vy, "t": now, "origin": tr.origin, "trail": tuple(tr.trail)})
             return out

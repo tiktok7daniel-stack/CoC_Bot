@@ -48,8 +48,12 @@ class AiPicture(_Base):
         p.setFont(ui_font(8, QFont.Bold))
         tag = f"● LIVE · {getattr(self, 'stream_fps', 0) or self.fps:.0f} fps · {iw}x{ih}"
         trk = getattr(self, "tracker", None)
-        if trk is not None and trk.local_state == "ready" and time.time() - trk._local_t < 1.2:
-            tag += f" · YOLO {len(trk.local_boxes)}"
+        if trk is not None:
+            bot_boxes = trk.visible() if self.d.get("phase") == "battle" and trk.active() else []
+            if bot_boxes:
+                tag += f" · YOLO {len(bot_boxes)}"
+            elif trk.local_state == "ready" and time.time() - trk._local_t < 0.75:
+                tag += f" · YOLO {len(trk.local_tracker.visible_rich())}"
         r = QRectF(ox + 6, oy + h * 0.78, p.fontMetrics().horizontalAdvance(tag) + 10, 16)
         p.fillRect(r, QColor(0, 0, 0, 170))
         p.setPen(QColor("#4ade80"))
@@ -120,20 +124,50 @@ class AiPicture(_Base):
             self.frame_ts = self.snapshot["seen_t"]
             self.update()
 
+    @staticmethod
+    def _paint_motion(p, point, track, color):
+        import math
+        trail = track.get("trail") or ()
+        if len(trail) < 2:
+            return
+        origin = point(*track["origin"])
+        faded = QColor(color)
+        faded.setAlpha(160)
+        p.setPen(QPen(faded, 1.5)); p.setBrush(Qt.NoBrush)
+        p.drawEllipse(origin, 3.5, 3.5)
+        p.drawPolyline(QPolygonF([point(*sample) for sample in trail]))
+        vx, vy = track["vx"], track["vy"]
+        start = point(track["cx"], track["cy"])
+        end = point(track["cx"] + vx * 0.35, track["cy"] + vy * 0.35)
+        length = math.hypot(end.x() - start.x(), end.y() - start.y())
+        if length < 5:
+            return
+        ux, uy = (end.x() - start.x()) / length, (end.y() - start.y()) / length
+        tail = end - QPointF(ux * 7, uy * 7)
+        wing = QPointF(-uy * 3, ux * 3)
+        p.setPen(QPen(color, 2))
+        p.drawLine(start, end)
+        p.setBrush(color)
+        p.drawPolygon(QPolygonF([end, tail + wing, tail - wing]))
+
     def _paint_local_detections(self, p, P, now):
-        """Draw exact detector boxes when no fresh bot tracks are available; ownership is intentionally unknown."""
+        """Draw names, team evidence and motion when the viewer is tracking its own video."""
         trk = getattr(self, "tracker", None)
-        if trk is None or trk.local_state != "ready" or now - trk._local_t > 1.2:
+        if trk is None or trk.local_state != "ready" or now - trk._local_t > 0.75:
             return
         p.setFont(ui_font(8, QFont.Bold))
-        for item in trk.local_boxes:
-            x0, y0, x1, y1 = item["b"]
-            rect = QRectF(P(x0, y0), P(x1, y1))
-            color = QColor("#ffd166")
+        frame_time = getattr(self, "frame_ts", None) or now
+        colors = {True: "#3fa9ff", False: "#ff4d4d", None: "#ffd166"}
+        for item in trk.local_tracker.visible_rich(frame_time):
+            x, y = item["cx"], item["cy"]
+            hw, hh = item["w"] / 2, item["h"] / 2
+            rect = QRectF(P(x - hw, y - hh), P(x + hw, y + hh))
+            color = QColor(colors[item["m"]])
             fill = QColor(color); fill.setAlpha(35)
             p.setPen(QPen(color, 2)); p.setBrush(fill)
             p.drawRect(rect)
-            text = f"{_nice(item['n'])} {item['c']:.0%}"
+            self._paint_motion(p, P, item, color)
+            text = f"#{item['id']} {_nice(item['n'])} {item['c']:.0%}"
             tag = QRectF(rect.left(), max(2, rect.top() - 17),
                          max(rect.width(), p.fontMetrics().horizontalAdvance(text) + 8), 16)
             p.fillRect(tag, color)
@@ -212,7 +246,10 @@ class AiPicture(_Base):
             fill = QColor(col); fill.setAlpha(45)
             p.setPen(QPen(col, 3)); p.setBrush(fill)  # 6.9.24: visible fill + thicker border
             p.drawRect(r)
+            self._paint_motion(p, P, b, col)
             name = _nice(b.get("n"))
+            if b.get("id") is not None:
+                name = f"#{b['id']} {name}"
             lab = QRectF(r.left(), r.top() - 14, max(fm.horizontalAdvance(name) + 6, r.width()), 14)
             p.fillRect(lab, col)
             p.setPen(QColor("#ffffff"))
@@ -234,7 +271,7 @@ class AiPicture(_Base):
             self._paint_local_detections(p, P, time.time())
         # 6.6: every tracked unit — its id, an arrow for where it walks (1 s ahead), and the spell's predicted impact
         import math
-        for t in self.d.get("tracks") or []:
+        for t in ([] if any(b.get("id") is not None for b in shown) else self.d.get("tracks") or []):
             col = QColor("#3fa9ff") if t.get("m") else QColor("#ff4d4d")
             a = P(t["x"], t["y"])
             p.setPen(QColor("#ffffff"))
@@ -353,6 +390,7 @@ class RoyaleAiScreen(Screen):
                 self._use_snapshots(popped)
                 return
             self._seq, img = r
+            ts = time.time() - max(0.0, time.monotonic() - self.video.arr_t)
         self.pic.stream_fps = self.video.fps
         if self.isVisible(): self.pic.set_frame(img, ts)
         if popped:
