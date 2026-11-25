@@ -9,8 +9,7 @@ outside the PC.
 Checks
   onnxruntime     which copy is loaded (the app's TensorRT / DirectML folder or Python's) and that it imports
   eyes_device     what runs the eyes: TensorRT / CUDA / DirectML (graphics card) or the processor
-  big_eyes        the arena detector (174 kinds): loaded, its own time for one picture (10 runs), the trained
-                  accuracy installed
+  big_eyes        the arena detector (174 kinds): loaded, inference time and the installed training mAP50
   small_eyes      BuildABot's units model + side model: loaded, their time
   hand_model      the hand-card model: loaded, its accuracy, its time for the 5 slots
   one_look        a whole look of the eyes on a battle-sized picture (both models, colours, tracker): the time the
@@ -89,7 +88,7 @@ def run(frame_fn=None, stream=None, log=None):
                 st = trainer.read_status()
             except Exception:
                 pass
-            acc = f" · accuracy {100 * st['new_map50']:.1f}%" if st.get("used") and st.get("new_map50") else ""
+            acc = f" · mAP50 {100 * st['new_map50']:.1f}%" if st.get("used") and st.get("new_map50") else ""
             state = "ok" if big_ms <= 60 else ("warn" if big_ms <= 150 else "bad")
             items.append(_item("big_eyes", state, f"{big_ms:.0f} ms a picture on {kind}{acc}",
                                "" if state == "ok" else "العيون الكبيرة بطيئة — لو مكتوب cpu يبقى كارت الشاشة مش متشغّل "
@@ -161,9 +160,11 @@ def run(frame_fn=None, stream=None, log=None):
         for _ in range(10): e.look(fr)
         look_ms = (time.perf_counter() - t) * 100
         state = "ok" if look_ms <= 150 else ("warn" if look_ms <= 300 else "bad")
+        stages = getattr(e, "last_timings", {})
+        stage_detail = " · ".join(f"{k.removesuffix('_ms')} {v:g} ms" for k, v in stages.items())
         items.append(_item("one_look", state, f"{look_ms:.0f} ms a moment ({1000 / max(1, look_ms):.1f} looks a second)",
                            "" if state == "ok" else "النظرة الكاملة بطيئة — السبب غالبًا العيون على المعالج أو الكارت "
-                           "مشغول بحاجة تانية (تدريب / برنامج تاني)"))
+                           "مشغول بحاجة تانية (تدريب / برنامج تاني)", detail=stage_detail))
     except Exception as e:
         items.append(_item("one_look", "bad", "error", "النظرة الكاملة ما اشتغلتش", e))
 

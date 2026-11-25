@@ -34,6 +34,8 @@ class Eyes:
         self.colors = TeamColor()                 # ours / theirs from the badge / health-bar colour (6.6)
         self.two_v_two = False                    # 2v2: a unit not in our deck can be our partner's
         self.hand_cls = None                      # the hand-card model (royale.hand_classifier), when trained
+        self._side_cache = []                     # avoid rerunning the per-unit ONNX classifier on every look
+        self.last_timings = {}
         # 6.7: ONE arena detector a look. The big model (174 kinds: evolutions, heroes, every new card) is the eyes when
         # it answers for this very picture (on the graphics card); BuildABot's 97-kind model only fills in while it
         # is not ready / runs on the processor in the background — or always, with royale.dual_eyes (Advanced)
@@ -118,9 +120,11 @@ class Eyes:
         """frame_rgb: numpy RGB of the game screen. -> dict (see module doc)."""
         import numpy as np
         from PIL import Image
+        started = time.perf_counter()
         seen_t = time.time()
         img = Image.fromarray(frame_rgb).convert("RGB").resize((C.SCREENSHOT_WIDTH, C.SCREENSHOT_HEIGHT),
                                                                 Image.Resampling.BILINEAR)
+        t_prep = time.perf_counter()
         big, big_now = [], False
         try:                                         # the big model first: is it the eyes of this very picture?
             from royale import strong_eyes
@@ -129,6 +133,7 @@ class Eyes:
                 big_now = strong_eyes.same_moment()
         except Exception:
             big = []
+        t_big = time.perf_counter()
         with _LOCK:
             cards, ready = self._card_det.run(img)
             if big_now and not self.dual:
@@ -137,6 +142,7 @@ class Eyes:
             else:
                 allies, enemies = self.units.run(img)
             nums = self.numbers.run(img)
+        t_models = time.perf_counter()
         hand = [c.name for c in cards[1:5]]
         nxt = cards[0].name
         # the picture each hand card shows: "_ev1" = its evolution is charged (this play comes out evolved),
@@ -146,6 +152,7 @@ class Eyes:
             nxt, hand, hand_look = self._hand_model(frame_rgb, nxt, hand, hand_look)
         except Exception:
             pass
+        t_hand = time.perf_counter()
         now = time.monotonic()
         h, w = frame_rgb.shape[:2]
         kx, ky = w / float(C.SCREENSHOT_WIDTH), h / float(C.SCREENSHOT_HEIGHT)
@@ -157,6 +164,15 @@ class Eyes:
             try: hp, spells = self._health()
             except Exception: pass
         en, al = self._units(frame_rgb, raw, big, img, now, hp, spells)
+        t_track = time.perf_counter()
+        self.last_timings = {
+            "prep_ms": round((t_prep - started) * 1000, 1),
+            "big_ms": round((t_big - t_prep) * 1000, 1),
+            "models_ms": round((t_models - t_big) * 1000, 1),
+            "hand_ms": round((t_hand - t_models) * 1000, 1),
+            "track_ms": round((t_track - t_hand) * 1000, 1),
+            "total_ms": round((t_track - started) * 1000, 1),
+        }
         return {
             "next": nxt, "hand": hand, "ready": list(ready), "hand_look": hand_look,
             "elixir": float(nums.elixir.number),
@@ -205,6 +221,9 @@ class Eyes:
         try: self.colors.prepare(frame)
         except Exception: pass
         sw, sh = small.width / w, small.height / h
+        # Keep the side classifier's last answer for a nearby tracked unit. Calling the
+        # 16x16 ONNX model for every unit on every look serialized many GPU syncs.
+        self._side_cache = [c for c in self._side_cache if now - c[4] <= 0.8]
         cand = []                                          # (unit, conf, box, side_model or None, evolved, col_read)
         for u, cf, box, side, _src in raw:
             cand.append([u, cf, box, side if u in self.units.possible_ally_names else None, False, None])
@@ -213,15 +232,23 @@ class Eyes:
             u = strong_eyes.unit_name(name)
             if not u: continue
             box = (x0, y0, x1, y1)
+            fx, fy = self._tile_f(box, w, h)
             try: col_read = self.colors.team(box)
             except Exception: col_read = (None, 0.0)
             side = None
             if u in self.units.possible_ally_names and col_read[1] < 2.0:
+                cached = next((c for c in reversed(self._side_cache)
+                               if c[0] == u and abs(c[1] - fx) <= 1.2 and abs(c[2] - fy) <= 1.2), None)
+                if cached:
+                    side = cached[3]
+                    self._side_cache.remove(cached)
+                    self._side_cache.append((u, fx, fy, side, now))
                 try:
-                    side = self.units.side_detector.run(small.crop((int(x0 * sw), int(y0 * sh), int(x1 * sw) + 1, int(y1 * sh) + 1)))
+                    if side is None:
+                        side = self.units.side_detector.run(small.crop((int(x0 * sw), int(y0 * sh), int(x1 * sw) + 1, int(y1 * sh) + 1)))
+                        self._side_cache.append((u, fx, fy, side, now))
                 except Exception:
                     side = None
-            fx, fy = self._tile_f(box, w, h)
             same = None
             for c in cand:
                 if c[0] != u: continue
