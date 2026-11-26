@@ -15,6 +15,25 @@ ACT = "com.supercell.clashroyale/com.supercell.titan.GameApp"
 LOOK_EVERY = 0.08          # seconds between looks in a battle (~10 a second: a look takes ~70 ms)
 
 
+MAX_PLAY_FRAME_AGE = 0.65
+
+
+def _play_rejection(brain, move, hand, ready, elixir, frame_age):
+    """Check the final move, after the engine and card rules have adjusted it."""
+    from royale.brain import card
+
+    if frame_age > MAX_PLAY_FRAME_AGE:
+        return "stale frame"
+    slot = move["slot"]
+    if not 0 <= slot < len(hand) or slot not in ready or hand[slot] != move["card"]:
+        return "hand slot changed or unavailable"
+    if not card(move["card"]).get("cost", 11) <= elixir:
+        return "insufficient elixir"
+    if not brain.legal(*move["tile"], move["card"]):
+        return "illegal tile"
+    return None
+
+
 def _u():
     import utils
     return utils
@@ -400,6 +419,12 @@ class RoyaleBot:
                 log.warning(f"Clash Royale: {d['card']} was aimed at {d['tile']} ({d['why']}) — sent to their tower "
                             f"{fixed} instead")
                 d["tile"], d["why"] = fixed, d["why"] + " | guard: onto their tower"
+            if d and not watch_only:
+                rejection = _play_rejection(self.brain, d, st["hand"], ready, el, time.monotonic() - t0)
+                if rejection:
+                    self.brain.undo(d)
+                    log.debug(f"Clash Royale: skipped {d['card']} at {d['tile']} ({rejection})")
+                    d = None
             if d and not watch_only:
                 play_log.append({"t": round(self.brain.elapsed(), 1), "card": d["card"], "tile": list(d["tile"]),
                                  "why": str(d.get("why", ""))[:90], "el": round(float(st["elixir"]), 1)})
