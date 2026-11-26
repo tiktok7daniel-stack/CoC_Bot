@@ -204,6 +204,12 @@ def test_fast_eyes():
             observed = se.look_now(np.zeros((128, 72, 3), np.uint8))
         check("periodic full detector supplies a current observation on a slow device",
               se.same_moment() and observed[0][0] == "balloon")
+        se._S["sess"].kind = "trt"
+        se._A.update(ms=40.0, next_probe=time.monotonic() + 10)
+        with patch.object(se, "detect", return_value=[("balloon", .9, 2, 2, 9, 9)]):
+            observed = se.look_now(np.zeros((128, 72, 3), np.uint8))
+        check("accelerator keeps the full detector on the current frame within its latency budget",
+              se.same_moment() and observed[0][0] == "balloon")
         frame = np.zeros((1280, 720, 3), np.uint8)
         end_to_end = np.zeros((300, 6), np.float32)
         end_to_end[0] = [310, 310, 330, 330, .85, 2]

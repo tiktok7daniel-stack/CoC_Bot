@@ -216,14 +216,19 @@ def submit(frame_rgb):
         _A["thread"].start()
 
 
-SYNC_MS = 28.0          # the big model answers this fast (graphics card): it looks at the very picture being decided on
+SYNC_MS = 28.0
+GPU_SYNC_MS = 55.0     # Keep full coverage when accelerator inference fits the live frame budget.
 
 
 def look_now(frame_rgb):
     """The big model's detections for THIS picture when it is fast enough (same moment as the decision: positions
     are exact, no 0.6 s old answer); otherwise in the background, its answer at most 0.35 s old (5.83)."""
     ms = _A.get("ms") or 0.0
-    if (not _S.get("sess") or not 0 < ms <= SYNC_MS) and fast_ready() and (_F["ms"] == 0 or _F["ms"] <= SYNC_MS * 1.6):
+    session = _S.get("sess")
+    accelerator = getattr(session, "kind", "cpu") in ("trt", "cuda", "dml")
+    current_budget = GPU_SYNC_MS if accelerator else SYNC_MS
+    full_current = session is not None and 0 < ms <= current_budget
+    if not full_current and fast_ready() and (_F["ms"] == 0 or _F["ms"] <= SYNC_MS * 1.6):
         # 6.9.18: the big model is too slow for this very picture — the fast eyes look at it now (same moment); the
         # big one keeps looking in the background (health bars, spells)
         t0 = time.monotonic()
@@ -243,7 +248,7 @@ def look_now(frame_rgb):
     # output is asynchronous, Eyes correctly discards every one of its boxes.
     # Give it a current frame periodically, without competing with a background run.
     probe_due = time.monotonic() >= _A.get("next_probe", 0.0)
-    if _S.get("sess") is not None and (0 < ms <= SYNC_MS or (probe_due and (ms <= 120 or not _A.get("t")))):
+    if full_current or (session is not None and probe_due and (ms <= 120 or not _A.get("t"))):
         t0 = time.monotonic()
         try:
             d = detect(frame_rgb)
