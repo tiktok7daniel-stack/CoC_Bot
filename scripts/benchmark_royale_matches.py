@@ -40,12 +40,15 @@ def main():
                 pair = [my_deck, other] if side == 0 else [other, my_deck]
                 for candidate_side in (0, 1):
                     pilots = [candidate, baseline] if candidate_side == 0 else [baseline, candidate]
+                    trace = []
                     _, winner, stats = exit_train.battle(
-                        baseline, pair, pilots, record=False, explore=0, max_ticks=3600, seed=seed)
+                        baseline, pair, pilots, record=False, explore=0, max_ticks=3600, seed=seed, trace=trace)
                     outcome = "draw" if winner is None else "win" if winner == candidate_side else "loss"
                     matches.append({"opponent_deck": name, "seed": seed, "candidate_side": candidate_side,
                                     "candidate_uses_featured_deck": candidate_side == side,
                                     "outcome": outcome, **stats})
+                    if outcome == "loss":
+                        matches[-1]["play_trace"] = trace
     totals = {result: sum(m["outcome"] == result for m in matches) for result in ("win", "draw", "loss")}
     report = {"candidate": args.candidate, "baseline": args.baseline.name, "native_deck": my_deck,
               "featured_deck": featured, "totals": totals,

@@ -315,7 +315,7 @@ def _winner(env):
     return 0 if hp[0] > hp[1] else 1
 
 
-def battle(cx, decks, pilots, record=True, explore=0.15, max_ticks=1800, seed=None):
+def battle(cx, decks, pilots, record=True, explore=0.15, max_ticks=1800, seed=None, trace=None):
     """decks: (ids team 0, ids team 1); pilots: per side "search" | a Ctx (its brain alone).
     -> (samples, winner, stats)"""
     rnd = random.Random(seed)
@@ -357,6 +357,13 @@ def battle(cx, decks, pilots, record=True, explore=0.15, max_ticks=1800, seed=No
         a1 = acts[1] or (-1, 0.0, 0.0)
         # Placement checks use world coordinates. Self-play accepts team 1's
         # local Y and converts it back internally; X stays in world coordinates.
+        if trace is not None and any(acts):
+            trace.append({"tick": env.get_current_tick(), "plays": [
+                None if action is None else {"card": cx.names.get(env.get_hand_for_team(team)[action[0]]),
+                                             "world_x": action[1], "world_y": action[2]}
+                for team, action in enumerate(acts)],
+                "elixir": [round(env.get_elixir_for_team(team), 2) for team in (0, 1)],
+                "tower_hp": [[env.get_tower_hp(team, slot) for slot in range(3)] for team in (0, 1)]})
         y1 = env.BOARD_HEIGHT - 1 - a1[2]
         r = env.step_self_play_fast(a0[0], a0[1], a0[2], a1[0], a1[1], y1, DECIDE)
         if r.done: break
