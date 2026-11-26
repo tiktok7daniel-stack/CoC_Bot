@@ -282,5 +282,15 @@ without_replays = engine.candidates(replay_defender, [(0, "cannon")], None, True
 check("replay evidence proposes a legal alternate Cannon tile",
       (0, "cannon", (8, 13)) in with_replays and (0, "cannon", (8, 13)) not in without_replays)
 
+cycle = brain([], deck)
+cycle.enemy_elixir = 8
+cycle.enemy_cycle.extend(["fireball", "the_log", "hog_rider", "cannon"])
+reply_ids = {reply[0] for reply in engine.replies(cycle, "musketeer", 3, 13)}
+check("an observed full cycle rules out a just-used Fireball",
+      reply_ids and ids["fireball"][0] not in reply_ids)
+cycle.p["2v2"] = True
+check("2v2 keeps plausible responses when two hands cannot be reconstructed",
+      ids["fireball"][0] in {reply[0] for reply in engine.replies(cycle, "musketeer", 3, 13)})
+
 print(f"\n{'ALL PASSED' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)

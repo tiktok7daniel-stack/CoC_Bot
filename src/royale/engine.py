@@ -406,10 +406,19 @@ def replies(brain, name, tx, ty):
     from royale.brain import card, roles
     ids = card_ids()
     el = float(getattr(brain, "enemy_elixir", 0) or 0)
-    known = set(getattr(brain, "enemy_seen", set()) or set()) | set(getattr(brain, "predicted", set()) or set())
-    try: hand = list(brain.their_hand() or [])
-    except Exception: hand = []
-    pool = [c for c in K.ANSWERS_TO.get(name, []) if c in known] + hand + sorted(known)
+    observed = set(getattr(brain, "enemy_seen", ()) or ())
+    known = observed | set(getattr(brain, "predicted", ()) or ())
+    recent = list(getattr(brain, "enemy_cycle", ()))[-4:]
+    if (len(observed) == 8 and len(set(recent)) == 4 and set(recent) <= observed
+            and not brain.p.get("2v2") and "mirror" not in observed
+            and all(c in ids and not module().get_card_info(ids[c][0]).get("is_champion") for c in observed)):
+        # Only exclude cards when the standard four-card cycle is observed.
+        available = observed - set(recent)
+    else:
+        available = known
+    hand = brain.their_hand() or ()
+    pool = ([c for c in K.ANSWERS_TO.get(name, []) if c in available]
+            + sorted(set(hand) & available) + sorted(available))
     out, seen = [], set()
     for c in pool:
         if c in seen or c not in ids: continue
