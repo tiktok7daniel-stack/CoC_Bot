@@ -64,6 +64,13 @@ def answer_tile(threat, y, side, name):
     return _side(x, yy, side)
 
 
+def answer_tiles(threat, y, side, name, min_share=0.08):
+    """Up to three placements that recur among recorded replies with this card."""
+    row = _row(threat, y) or {}
+    tiles = (row.get("tiles") or {}).get(key(name), [])
+    return [_side(*map(int, xy.split("|")), side) for xy, share in tiles[:3] if share >= min_share]
+
+
 def place(name, side, min_share=0.25):
     v = data().get("place", {}).get(key(name))
     if not v or not v.get("top"): return None

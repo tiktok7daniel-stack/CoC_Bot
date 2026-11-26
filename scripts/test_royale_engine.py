@@ -275,5 +275,12 @@ quiet = brain([("hog_rider", 3, 25)])
 check("a distant rush does not spend prematurely",
       engine.think(quiet, rush_state, hand, playable, 5.0, None) is None)
 
+replay_defender = brain([("hog_rider", 3, 16)])
+with_replays = engine.candidates(replay_defender, [(0, "cannon")], None, True)
+replay_defender.p["pro_moves"] = False
+without_replays = engine.candidates(replay_defender, [(0, "cannon")], None, True)
+check("replay evidence proposes a legal alternate Cannon tile",
+      (0, "cannon", (8, 13)) in with_replays and (0, "cannon", (8, 13)) not in without_replays)
+
 print(f"\n{'ALL PASSED' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)

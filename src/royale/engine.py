@@ -441,7 +441,7 @@ def rollout_reply(env, slot, x, y, reply):
 
 def candidates(brain, playable, rule_d, defend, first=()):
     """(hand slot, card, our tile) to think through; `first` (the trained AI's move) goes first."""
-    from royale.brain import card, roles, pull_spot, SPELL_SPLASH_DEFAULT, THEIR_TOWERS
+    from royale.brain import card, roles, pull_spot, unit_card, SPELL_SPLASH_DEFAULT, THEIR_TOWERS
     from royale import pro
     out = []
     seen = set()
@@ -469,6 +469,21 @@ def candidates(brain, playable, rule_d, defend, first=()):
                     add(i, n, tile)
     except Exception:
         pass
+    if defend and brain.p.get("pro_moves", True):
+        # Replay placements add candidates. Current legality, elixir and simulated
+        # tower outcomes still decide which move is worth playing.
+        playable_names = [name for _, name in cards]
+        for unit, x, y in (brain._stable or [])[:4]:
+            threat = unit_card(unit)
+            if not threat:
+                continue
+            side = "left" if x < 9 else "right"
+            observed = pro.answer(threat, y, side, playable_names)
+            for i, name in cards:
+                if observed.get(name, 0) >= 0.025:
+                    for tile in pro.answer_tiles(threat, y, side, name):
+                        if brain.legal(*tile, name):
+                            add(i, name, tile)
     for i, n in cards:
         r = roles(n)
         c = card(n) or {}
