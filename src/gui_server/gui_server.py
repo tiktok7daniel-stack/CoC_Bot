@@ -575,6 +575,22 @@ def api_capture_stop(id):
     cs.request_stop(id)
     return jsonify({"ok": True})
 
+@app.route("/api/live-preview/<id>", methods=["GET"])
+def api_live_preview(id):
+    """Read-only emulator preview when the video relay has no new frames."""
+    from subprocess import TimeoutExpired
+    from flask import Response
+    from gui_server import emu_setup
+
+    if not valid_id(id): abort(404)
+    try:
+        png = emu_setup.screenshot(bot_settings.load_app(), id, connect=False, timeout=3)
+    except (OSError, TimeoutExpired):
+        abort(503)
+    if not png: abort(503)
+    return Response(png, mimetype="image/png", headers={"Cache-Control": "no-store"})
+
+
 @app.route("/api/capture/<id>/snap", methods=["POST"])
 def api_capture_snap(id):
     """The user's own picture: one screenshot of the emulator now, saved in the manual session."""

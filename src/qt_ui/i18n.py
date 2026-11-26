@@ -205,6 +205,9 @@ EXTRA = {
     },
 }
 
+EXTRA["ar"]["ra_emulator_preview"] = "معاينة المحاكي"
+EXTRA["en"]["ra_emulator_preview"] = "Emulator preview"
+
 LANG = "ar"
 _listeners = []
 _LOG_RULES = [(re.compile(src), rep) for src, rep in _DATA["log"]]

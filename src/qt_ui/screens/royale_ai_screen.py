@@ -45,9 +45,12 @@ class AiPicture(_Base):
         self.live_t, self.seq, self.fps, self._n, self._n_t = 0.0, 0, 0.0, 0, time.monotonic()
 
     def _badge(self, p, ox, oy, w, h, iw, ih):
-        if time.monotonic() - self.live_t >= 0.5: return
+        if time.monotonic() - self.live_t >= (1.5 if getattr(self, "preview", False) else 0.5): return
         p.setFont(ui_font(8, QFont.Bold))
-        tag = f"● LIVE · {getattr(self, 'stream_fps', 0) or self.fps:.0f} fps · {iw}x{ih}"
+        fps = getattr(self, "stream_fps", 0) or self.fps
+        tag = f"● LIVE · {fps:.0f} fps · {iw}x{ih}" if fps >= 1 else f"● LIVE · {iw}x{ih}"
+        if getattr(self, "preview", False):
+            tag = f"{tr('ra_emulator_preview')} · {iw}x{ih}"
         trk = getattr(self, "tracker", None)
         if trk is not None:
             bot_boxes = trk.visible() if self.d.get("phase") == "battle" and trk.active() else []
@@ -60,11 +63,12 @@ class AiPicture(_Base):
         p.setPen(QColor("#4ade80"))
         p.drawText(r, Qt.AlignCenter, tag)
 
-    def set_frame(self, img, ts=None):
+    def set_frame(self, img, ts=None, preview=False):
         """A full-size picture straight from the bot's video; ts = the wall-clock time it arrived (6.9.17: the boxes
         are placed for THAT moment, so they sit on the units in the picture)."""
         self.img, self.live_t = img, time.monotonic()
         self.frame_ts = ts
+        self.preview = preview
         self.snapshot = None
         self._n += 1
         if time.monotonic() - self._n_t >= 1.0:
@@ -104,7 +108,7 @@ class AiPicture(_Base):
         self.update()
 
     def use_snapshot(self):
-        if time.monotonic() - self.live_t <= 0.5:
+        if time.monotonic() - self.live_t <= (1.5 if getattr(self, "preview", False) else 0.5):
             return
         ft = float(self.d.get("frame_t") or 0)
         if self.d.get("phase") != "battle" or not ft or time.time() - ft > 8:
@@ -189,6 +193,9 @@ class AiPicture(_Base):
         ox, oy = (self.width() - w) / 2, (self.height() - h) / 2
         P = lambda x, y: QPointF(ox + x * w, oy + y * h)
         p.drawImage(QRectF(ox, oy, w, h), self.img)
+        if getattr(self, "preview", False):
+            self._badge(p, ox, oy, w, h, iw, ih)
+            return
         battle = self.d.get("phase") == "battle" and time.time() - float(self.d.get("t", 0)) < 8
         if not battle:                                   # the game as it is (lobby, menus): the picture alone
             self._paint_local_detections(p, P, time.time())
@@ -365,9 +372,11 @@ class RoyaleAiScreen(Screen):
         self.ftimer = QTimer(self)
         self.ftimer.setTimerType(Qt.PreciseTimer)
         self.ftimer.timeout.connect(self.frame_tick)
-        self.ftimer.start(4)                         # up to 240 pictures a second
+        self.ftimer.start(16)                        # Display at most about 60 pictures a second.
         self._seq = 0
         self._vision_panel_t = 0.0
+        self._preview_pending = False
+        self._preview_at = 0.0
 
     def frame_tick(self):
         popped = getattr(self, "_pop", None) is not None and self._pop.isVisible()
@@ -377,7 +386,7 @@ class RoyaleAiScreen(Screen):
         self.video.start(); self.tracker.start()
         ts = None
         delay = self.tracker.sync_delay()
-        if delay and self.video.buf and not self.video.hw:
+        if delay and self.video.buf and not self.video.hw and self.video.is_fresh():
             # 6.9.17: the picture of the moment the bot's eyes looked at (the screen runs `delay` behind, the boxes sit
             # on their units instead of chasing them)
             r = self.video.take_at(time.time() - delay, getattr(self, "_skey", None))
@@ -405,6 +414,27 @@ class RoyaleAiScreen(Screen):
                 self.panel.setText(txt)
 
     def _use_snapshots(self, popped):
+        now = time.monotonic()
+        account = self.store.account
+        if account and not self.video.is_fresh() and not self._preview_pending and now >= self._preview_at:
+            self._preview_pending = True
+            self._preview_at = now + 0.5
+            requested_at = time.time()
+
+            def display(data):
+                self._preview_pending = False
+                if not data or account != self.store.account or self.video.is_fresh():
+                    return
+                image = QImage.fromData(data, "PNG")
+                if image.isNull():
+                    return
+                if self.isVisible():
+                    self.pic.set_frame(image, requested_at, preview=True)
+                pop = getattr(self, "_pop", None)
+                if pop is not None and pop.isVisible():
+                    pop._pic.set_frame(image, requested_at, preview=True)
+
+            self.api.get(f"/api/live-preview/{account}", display, raw=True, timeout=5)
         if hasattr(self.pic, "img_path"):
             self.pic.use_snapshot()
         if popped and hasattr(self._pop._pic, "img_path"):

@@ -38,15 +38,20 @@ class LiveVideo:
     def stop(self):
         self._want = False
 
+    def is_fresh(self):
+        return time.monotonic() - self.arr_t < 0.75
+
     def take(self, last_seq):
         """(seq, QImage) when newer than last_seq, else None."""
-        if self.seq == last_seq or self.img is None: return None
-        self._taken = self.seq
-        return self.seq, self.img
+        seq = self.seq
+        self._taken = seq
+        if seq == last_seq or self.img is None or not self.is_fresh(): return None
+        return seq, self.img
 
     def take_at(self, t, last_key):
         """The newest picture that arrived at or before wall-clock time t -> (key, QImage, its time) or None when it is
         the one already shown / none is buffered (hardware decoding keeps no buffer: take() is used then)."""
+        self._taken = self.seq
         with self._buf_lock:
             pick = None
             for item in reversed(self.buf):

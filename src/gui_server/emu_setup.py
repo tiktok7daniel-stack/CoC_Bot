@@ -344,12 +344,12 @@ def open_game(app, acc):
     return "ok"
 
 
-def screenshot(app, acc):
+def screenshot(app, acc, *, connect=True, timeout=15):
     """PNG bytes of the account's emulator screen right now (straight from adb, the bot doesn't need to run)."""
     con, c = _account_copy(app, acc)
     addr, adb = address(app, c), adb_exe(app, con)
     if not addr or not adb: return None
-    if adb_state(adb, addr) != "device": return None
-    r = subprocess.run([adb, "-s", addr, "exec-out", "screencap", "-p"], capture_output=True, timeout=15, **KW)
+    if connect and adb_state(adb, addr) != "device": return None
+    r = subprocess.run([adb, "-s", addr, "exec-out", "screencap", "-p"], capture_output=True, timeout=timeout, **KW)
     data = r.stdout
     return data if data[:8] == b"\x89PNG\r\n\x1a\n" else None
