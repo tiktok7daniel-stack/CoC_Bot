@@ -325,9 +325,12 @@ def _value(env, brain, before, spent=0.0):
     for team, sign in ((1, OFFENSE_DISCOUNT), (0, -1.0)):
         for slot in (0, 1, 2):
             mx = env.get_tower_max_hp(team, slot)
+            hp0 = before["towers"][(team, slot)]
+            if hp0 <= 0: continue
+            if env.get_tower_hp(team, slot) <= 0:
+                v += sign * TOWER_ELIXIR[slot]  # losing the last HP also costs a crown
             if mx < 100: continue                      # a destroyed tower (max 0): nothing to count (was +72130)
             hp = max(0, env.get_tower_hp(team, slot))
-            hp0 = before["towers"][(team, slot)]
             v += sign * TOWER_ELIXIR[slot] * max(-1.0, min(1.0, (hp0 - hp) / mx))
     army = _army(env)
     v += before["army"][1] - army[1]                        # their units' worth destroyed
@@ -438,7 +441,7 @@ def rollout_reply(env, slot, x, y, reply):
 
 def candidates(brain, playable, rule_d, defend, first=()):
     """(hand slot, card, our tile) to think through; `first` (the trained AI's move) goes first."""
-    from royale.brain import card, roles, THEIR_TOWERS
+    from royale.brain import card, roles, pull_spot, SPELL_SPLASH_DEFAULT, THEIR_TOWERS
     from royale import pro
     out = []
     seen = set()
@@ -475,11 +478,20 @@ def candidates(brain, playable, rule_d, defend, first=()):
         except Exception:
             pass
         if "spell" in r:
-            for ex, ey in enemies[:6]: add(i, n, (ex, ey))
+            targets = enemies[:6]
+            radius = c.get("splash") or SPELL_SPLASH_DEFAULT.get(n, 0)
+            for j, (ex, ey) in enumerate(targets):
+                add(i, n, (ex, ey))
+                for x, y in targets[:j]:
+                    if radius < math.hypot(x - ex, y - ey) <= 2 * radius:
+                        add(i, n, (round((x + ex) / 2), round((y + ey) / 2)))
             if not enemies or not defend:
                 for s in ("left", "right"): add(i, n, THEIR_TOWERS[s])
             continue
         if defend:
+            if "building" in r:
+                for threat, ex, ey in (brain._stable or [])[:4]:
+                    add(i, n, pull_spot("left" if ex < 9 else "right", threat))
             for ex, ey in enemies[:4]:
                 for dx, dy in ((0, -2), (0, -4), (-2, -3), (2, -3), (0, -6)):
                     add(i, n, (ex + dx, min(14, ey + dy)))

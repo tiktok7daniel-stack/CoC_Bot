@@ -118,18 +118,18 @@ class Eyes:
     # -------------------------------------------------------------- one look
     def look(self, frame_rgb, captured_at=None, seen_t=None):
         """frame_rgb: numpy RGB of the game screen. -> dict (see module doc)."""
-        import numpy as np
+        import cv2
         from PIL import Image
         started = time.perf_counter()
         captured_at = time.monotonic() if captured_at is None else captured_at
         seen_t = time.time() if seen_t is None else seen_t
-        img = Image.fromarray(frame_rgb).convert("RGB").resize((C.SCREENSHOT_WIDTH, C.SCREENSHOT_HEIGHT),
-                                                                Image.Resampling.BILINEAR)
+        img = Image.fromarray(cv2.resize(frame_rgb, (C.SCREENSHOT_WIDTH, C.SCREENSHOT_HEIGHT),
+                                         interpolation=cv2.INTER_AREA))
         t_prep = time.perf_counter()
         big, big_now, fast_now = [], False, False
         try:                                         # the big model first: is it the eyes of this very picture?
             from royale import strong_eyes
-            if strong_eyes.ready():
+            if strong_eyes.ready() or strong_eyes.fast_ready():
                 big = strong_eyes.look_now(frame_rgb)
                 big_now = strong_eyes.same_moment()
                 fast_now = big_now and bool(strong_eyes._A.get("fast"))
@@ -152,8 +152,7 @@ class Eyes:
             cards, ready = self._card_det.run(img)
             if use_small:
                 allies, enemies = self.units.run(img)
-                if coverage:
-                    self._coverage_at = tick
+                self._coverage_at = time.monotonic()
             else:
                 allies, enemies = [], []
                 self.single_used += 1
@@ -174,8 +173,7 @@ class Eyes:
         kx, ky = w / float(C.SCREENSHOT_WIDTH), h / float(C.SCREENSHOT_HEIGHT)
         # every unit found, with its box on the real picture and what the small side model said
         raw = [(d.unit.name, float(d.position.conf), tuple(v * k for v, k in zip(d.position.bbox, (kx, ky, kx, ky))),
-                side, "units") for lst, side in ((enemies, "enemy"), (allies, "ally")) for d in lst
-               if self.dual or not big_now or d.position.conf >= (0.50 if reliable == 0 else 0.62)]
+                side, "units") for lst, side in ((enemies, "enemy"), (allies, "ally")) for d in lst]
         hp, spells = {}, []
         if big_current:
             try: hp, spells = self._health(frame_rgb, big_current)
@@ -300,7 +298,12 @@ class Eyes:
                 mx, my = 0.15 * (x1 - x0), 0.15 * (y1 - y0)
                 towers.append((x0 + mx, y0 + my, x1 - mx, y1 - my))
         dets, extra = [], []
-        for u, cf, box, side, evolved, col_read in cand:
+        has_reliable_large = any(cf >= 0.50 and strong_eyes.unit_name(name)
+                                 for name, cf, *_ in big or [])
+        for index, (u, cf, box, side, evolved, col_read) in enumerate(cand):
+            # First fuse evidence of the same unit, then filter unsupported small boxes.
+            if index in unmatched_small and has_reliable_large and not self.dual and cf < 0.62:
+                continue
             fx0, fy0 = self._tile_f(box, w, h)
             if not (-0.5 <= fx0 <= 17.5 and -0.5 <= fy0 <= 31.5): continue     # the arena's edge / the buttons below
             cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
@@ -336,7 +339,7 @@ class Eyes:
                 if lf is not None: tr.life = float(lf)
             overlays.append({"id": tr.id, "n": tr.name, "m": team == "ally", "c": d.conf,
                              "l": tr.life if tr.life is not None else 1.0,
-                             "b": [round(max(0.0, min(1.0, v / dim)), 4)
+                             "b": [round(max(0.0, min(1.0, float(v) / dim)), 4)
                                    for v, dim in zip(d.box, (w, h, w, h))]})
         self.overlay_boxes = overlays
         # 6.7: a followed unit hidden for a moment (a spell's flash, behind a tower) stays in the battle state for

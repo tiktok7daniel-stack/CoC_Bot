@@ -150,7 +150,7 @@ def _save_frame(acc, frame):
         h, w = frame.shape[:2]
         small = cv2.resize(frame, (360, int(h * 360 / w)), interpolation=cv2.INTER_AREA)
         ok, buf = cv2.imencode(".jpg", cv2.cvtColor(small, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 70])
-        if not ok: return False
+        if not ok: return None
         # Alternate files so a reader of the previous payload keeps its matching JPEG.
         slot = 1 - (_S.get("snapshot") or {}).get("slot", 1)
         p = path(acc).with_suffix(f".{slot}.jpg")

@@ -16,6 +16,7 @@ def providers():
 
 
 class OnnxDetector:
+    _SCALE = (np.arange(256, dtype=np.float32) / 255).astype(np.float16)
     def __init__(self, model_path):
         self.model_path = model_path
 
@@ -66,10 +67,9 @@ class OnnxDetector:
 
     def resize_pad_transpose_and_scale(self, image):
         image = self.resize(image)
-        image = np.array(image, dtype=np.float16)
+        image = np.asarray(image)
         image, padding = self.pad(image)
-        image = image.transpose(2, 0, 1)
-        image /= 255
+        image = self._SCALE[image.transpose(2, 0, 1)]
         return image, padding
 
     def fix_bboxes(self, x, width, height, padding):

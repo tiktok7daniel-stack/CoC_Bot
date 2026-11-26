@@ -155,10 +155,13 @@ def arena_box(frame_shape):
 
 def _calibrate(frame_shape, box, dets):
     """Four princess towers seen: the box that puts them where the model expects them (SPEC_QUEENS) -> remembered."""
-    import numpy as np
     q = [((d[2] + d[4]) / 2, (d[3] + d[5]) / 2) for d in dets if d[0] == "queen-tower" and d[1] >= 0.7]
     if len(q) != 4: return False
-    q.sort(key=lambda p: (p[1] > np.median([pp[1] for pp in q]), p[0]))      # top-left, top-right, bottom-left, -right
+    q.sort(key=lambda p: p[1])
+    top, bottom = q[:2], q[2:]
+    if bottom[0][1] - top[1][1] < frame_shape[0] * .20:
+        return False
+    q = sorted(top) + sorted(bottom)  # top-left, top-right, bottom-left, bottom-right
     xs = [p[0] for p in q]; ys = [p[1] for p in q]
     # display coordinates of the towers -> a linear map from the spec: x = x0 + sx * spec_x
     sx = ((xs[1] - xs[0]) + (xs[3] - xs[2])) / 2 / (SPEC_QUEENS[1][0] - SPEC_QUEENS[0][0])
@@ -220,7 +223,7 @@ def look_now(frame_rgb):
     """The big model's detections for THIS picture when it is fast enough (same moment as the decision: positions
     are exact, no 0.6 s old answer); otherwise in the background, its answer at most 0.35 s old (5.83)."""
     ms = _A.get("ms") or 0.0
-    if not (0 < ms <= SYNC_MS) and fast_ready() and (_F["ms"] == 0 or _F["ms"] <= SYNC_MS * 1.6):
+    if (not _S.get("sess") or not 0 < ms <= SYNC_MS) and fast_ready() and (_F["ms"] == 0 or _F["ms"] <= SYNC_MS * 1.6):
         # 6.9.18: the big model is too slow for this very picture — the fast eyes look at it now (same moment); the
         # big one keeps looking in the background (health bars, spells)
         t0 = time.monotonic()
@@ -236,7 +239,11 @@ def look_now(frame_rgb):
         submit(frame_rgb)
         return d
     _A["fast"] = False
-    if 0 < ms <= SYNC_MS:
+    # A moderately slow full detector still fits a single observation. If its only
+    # output is asynchronous, Eyes correctly discards every one of its boxes.
+    # Give it a current frame periodically, without competing with a background run.
+    probe_due = time.monotonic() >= _A.get("next_probe", 0.0)
+    if _S.get("sess") is not None and (0 < ms <= SYNC_MS or (probe_due and (ms <= 120 or not _A.get("t")))):
         t0 = time.monotonic()
         try:
             d = detect(frame_rgb)
@@ -245,11 +252,15 @@ def look_now(frame_rgb):
             submit(frame_rgb)
             return []
         _A["dets"], _A["t"], _A["seen"] = d, t0, (frame_rgb, d)
-        _A["ms"] = 0.8 * ms + 0.2 * (time.monotonic() - t0) * 1000
+        elapsed = (time.monotonic() - t0) * 1000
+        _A["ms"] = 0.8 * ms + 0.2 * elapsed if ms else elapsed
+        _A["next_probe"] = time.monotonic() + 0.30
         _A["sync"] = True
         return d
     _A["sync"] = False
-    submit(frame_rgb)
+    if probe_due:
+        _A["next_probe"] = time.monotonic() + 0.30
+        submit(frame_rgb)
     # 6.9.15: on a slow card / the processor its answer is older than 0.35 s every time — it was thrown away and no
     # box was drawn; an answer up to 1.5x its own time old is used (the tracker moves each unit on its speed)
     return latest(max(0.35, min(1.6, 1.5 * (ms or 0) / 1000.0)))
@@ -343,24 +354,38 @@ def detect(frame_rgb, conf=0.45, state=None):      # 6.8: 0.35 let skins / spark
     img = np.full((S, S, 3), 114, np.uint8)
     px, py = (S - nw) // 2, (S - nh) // 2
     img[py:py + nh, px:px + nw] = cv2.resize(arena, (nw, nh), interpolation=cv2.INTER_LINEAR)
-    x = img.astype(np.float32).transpose(2, 0, 1)[None] / 255.0
+    x = cv2.dnn.blobFromImage(img, scalefactor=1 / 255.0)
     out = _run_sess(st, s, x)
-    out = out.T
-    scores = out[:, 4:]
-    cls = scores.argmax(1)
-    cf = scores[np.arange(len(cls)), cls]
-    keep = cf >= conf
-    if not keep.any(): return []
-    b = out[keep, :4]; cls = cls[keep]; cf = cf[keep]
-    xyxy = np.stack([b[:, 0] - b[:, 2] / 2, b[:, 1] - b[:, 3] / 2, b[:, 0] + b[:, 2] / 2, b[:, 1] + b[:, 3] / 2], 1)
-    rects = [[float(a), float(c), float(e - a), float(f - c)] for a, c, e, f in xyxy]
-    idx = cv2.dnn.NMSBoxes(rects, cf.tolist(), conf, 0.5)
-    idx = np.array(idx).reshape(-1) if len(idx) else []
+    if out.ndim == 2 and out.shape[1] == 6 and out.shape[0] != 4 + len(st["names"] or {}):
+        # End-to-end YOLO export: already filtered xyxy, confidence, class.
+        rows = out[out[:, 4] >= conf]
+        xyxy, cf, cls = rows[:, :4], rows[:, 4], rows[:, 5].astype(int)
+        idx = range(len(rows))
+    else:
+        # Reduce the contiguous anchor rows before gathering classes. Transposing
+        # all anchors for argmax copied several MB even when only one unit survived.
+        scores = out[4:]
+        confidence = scores.max(axis=0)
+        keep = np.flatnonzero(confidence >= conf)
+        if not keep.size: return []
+        cf = confidence[keep]
+        cls = scores[:, keep].argmax(axis=0)
+        b = out[:4, keep].T
+        xyxy = np.stack([b[:, 0] - b[:, 2] / 2, b[:, 1] - b[:, 3] / 2, b[:, 0] + b[:, 2] / 2, b[:, 1] + b[:, 3] / 2], 1)
+        rects = [[float(a), float(c), float(e - a), float(f - c)] for a, c, e, f in xyxy]
+        # A clock or spell can lie directly over a troop. Suppress duplicate boxes
+        # within a class while preserving detections belonging to another class.
+        idx = []
+        for kind in np.unique(cls):
+            group = np.flatnonzero(cls == kind)
+            kept = cv2.dnn.NMSBoxes([rects[i] for i in group], cf[group].tolist(), conf, 0.5)
+            idx.extend(group[np.asarray(kept, dtype=int).ravel()])
+        idx.sort(key=lambda i: -cf[i])
     sx, sy = (xb - xa) / W, (yb - ya) / H
     dets = []
     names = st["names"] or {}
     for i in idx:
-        a, c, e, f = xyxy[i]
+        a, c, e, f = map(float, xyxy[i])
         a, e = (a - px) / k, (e - px) / k                                  # model input -> arena 568x896
         c, f = (c - py) / k, (f - py) / k
         dets.append((names.get(int(cls[i]), str(int(cls[i]))), float(cf[i]),

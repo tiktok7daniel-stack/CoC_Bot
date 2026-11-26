@@ -197,6 +197,37 @@ def test_fast_eyes():
         d = se.look_now(np.zeros((1280, 720, 3), np.uint8))
         check("fast eyes: a slow big model -> the fast one answers for the very picture",
               bool(d) and d[0][0] == "giant" and se.same_moment(), str(d[:1]))
+        from unittest.mock import patch
+        se.fast_ready = lambda: False
+        se._A.update(ms=75.0, next_probe=0.0)
+        with patch.object(se, "detect", return_value=[("balloon", .9, 2, 2, 9, 9)]):
+            observed = se.look_now(np.zeros((128, 72, 3), np.uint8))
+        check("periodic full detector supplies a current observation on a slow device",
+              se.same_moment() and observed[0][0] == "balloon")
+        frame = np.zeros((1280, 720, 3), np.uint8)
+        end_to_end = np.zeros((300, 6), np.float32)
+        end_to_end[0] = [310, 310, 330, 330, .85, 2]
+        with patch.object(se, "_run_sess", return_value=end_to_end):
+            observed = se.detect(frame, state=se._F)
+        check("end-to-end ONNX reads confidence and class from the six-column output",
+              len(observed) == 1 and observed[0][0] == "giant")
+        raw = np.zeros((7, 10), np.float32)
+        raw[:4, :3] = np.array([[320, 320, 60, 60]] * 3).T
+        raw[4, :2] = [.9, .85]
+        raw[6, 2] = .8
+        with patch.object(se, "_run_sess", return_value=raw):
+            observed = se.detect(frame, state=se._F)
+        check("an overlapping class survives while the duplicate of one class is suppressed",
+              [d[0] for d in observed] == ["knight", "giant"])
+        import tempfile
+        from pathlib import Path
+        towers = [("queen-tower", .95, x-10, y-10, x+10, y+10)
+                  for x, y in [(166, 299), (511, 301), (165, 790), (512, 788)]]
+        with tempfile.TemporaryDirectory() as tmp, patch.object(se, "CALIB", Path(tmp) / "arena.json"):
+            calibrated = se._calibrate(frame.shape, (0, 0, 720, 1280), towers)
+            arena = se._saved_arena(frame.shape)
+            check("calibration pairs each top tower with the bottom tower in its lane",
+                  calibrated and np.allclose(arena, (50, 100, 618, 996), atol=4), str(arena))
     finally:
         se._S.clear(); se._S.update(saved[0]); se._F.clear(); se._F.update(saved[1])
         se._A.update({k: v for k, v in saved[2].items() if k != "thread"}); se.fast_ready = saved[3]
@@ -593,6 +624,24 @@ def test_adb_and_stream_fixes():
         fr = np.zeros((1280, 720, 3), np.uint8)
         en, al = e._units(fr, [], [("knight", 0.9, 100, 600, 140, 660)], small, 10.0,
                           hp={("knight", 2, 11): 0.72}, spells=[])
+        import json, tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from royale import live_view
+        from royale.brain import Brain
+        from qt_ui.live_tracker import LiveTracker
+        e._units(fr, [], [("knight", .9, *np.array([100, 600, 140, 660], np.float32))],
+                 small, 10.05, hp={}, spells=[])
+        with tempfile.TemporaryDirectory() as tmp, patch.object(live_view, "DIR", Path(tmp)), \
+                patch.dict(live_view._S, {"ft": 0, "events": [], "eh": 0}):
+            live_view.battle("test", Brain(), {"overlay_boxes": e.overlay_boxes}, None, force=True, frame=fr)
+            payload = json.loads(live_view.path("test").read_text(encoding="utf8"))
+            tracker = LiveTracker()
+            tracker.feed(payload["dets"], payload["seen_t"])
+            check("float32 detector boxes reach the live tracker and the matching snapshot",
+                  tracker.visible_rich(payload["seen_t"])[0]["id"] == e.overlay_boxes[0]["id"] and
+                  payload["snapshot"]["boxes"] == payload["boxes"] and
+                  live_view.path("test").with_suffix(f".{payload['snapshot']['slot']}.jpg").exists())
         check("eyes: skips side_detector when color sure >= 2.0", side_calls["n"] == 0 and len(al) == 1, str((side_calls["n"], al)))
         e.colors = types.SimpleNamespace(prepare=lambda f: None, team=lambda box: ("ally", 0.8))
         e._units(fr, [], [("knight", 0.9, 100, 600, 140, 660)], small, 10.1, hp={}, spells=[])
