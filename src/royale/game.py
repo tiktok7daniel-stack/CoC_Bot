@@ -278,7 +278,7 @@ class RoyaleBot:
                     pass
             try:
                 tl = time.monotonic()
-                st = self.eyes.look(fr)
+                st = self.eyes.look(fr, captured_at=t0, seen_t=seen_t)
                 look_ms += (time.monotonic() - tl) * 1000; looks += 1
                 perf["capture"] += (t_cap - t0) * 1000
                 perf["look"] += (time.monotonic() - tl) * 1000
@@ -334,8 +334,8 @@ class RoyaleBot:
             watch_only = bool(self.s.get("watch_only", False))
             if watch_only:
                 try:
-                    self.brain.observe(st["enemies"], st["allies"], st["towers"], el,
-                                       hp=st.get("hp"), spells=st.get("spells"))
+                    self.brain.hp_seen = st.get("hp") or {}
+                    self.brain._stable = self.brain.observe(st["enemies"], tracked=True)
                 except Exception:
                     pass
                 d = self._detect_human_play(st, last)
@@ -343,7 +343,7 @@ class RoyaleBot:
                 try:
                     t_dec = time.monotonic()
                     d = self.brain.decide(st["hand"], ready, el, st["enemies"], st["allies"], st["towers"],
-                                          hp=st.get("hp"), spells=st.get("spells"), evo=st.get("evo"))
+                                          hp=st.get("hp"), spells=st.get("spells"), evo=st.get("evo"), tracked=True)
                 except Exception:
                     log.warning("Clash Royale: a decision failed — next look", exc_info=True)
                     d = None
@@ -377,6 +377,7 @@ class RoyaleBot:
             st["_perf"] = {k: (round(v / max(1, perf["n"])) if k not in ("n", "worst_loop") else round(v))
                            for k, v in perf.items()}
             now_t = time.monotonic()
+            st["decision_age_ms"] = round((now_t - t0) * 1000)
             if d and not watch_only:
                 # never a card that is in none of the account's real decks (5.89): it can only be a misread — the
                 # Goblin Barrel read as Goblin Gang was played as a troop in our half

@@ -116,12 +116,13 @@ class Eyes:
         return False
 
     # -------------------------------------------------------------- one look
-    def look(self, frame_rgb):
+    def look(self, frame_rgb, captured_at=None, seen_t=None):
         """frame_rgb: numpy RGB of the game screen. -> dict (see module doc)."""
         import numpy as np
         from PIL import Image
         started = time.perf_counter()
-        seen_t = time.time()
+        captured_at = time.monotonic() if captured_at is None else captured_at
+        seen_t = time.time() if seen_t is None else seen_t
         img = Image.fromarray(frame_rgb).convert("RGB").resize((C.SCREENSHOT_WIDTH, C.SCREENSHOT_HEIGHT),
                                                                 Image.Resampling.BILINEAR)
         t_prep = time.perf_counter()
@@ -168,7 +169,7 @@ class Eyes:
         except Exception:
             pass
         t_hand = time.perf_counter()
-        now = time.monotonic()
+        now = captured_at
         h, w = frame_rgb.shape[:2]
         kx, ky = w / float(C.SCREENSHOT_WIDTH), h / float(C.SCREENSHOT_HEIGHT)
         # every unit found, with its box on the real picture and what the small side model said
@@ -316,7 +317,8 @@ class Eyes:
             if u not in self.units.possible_ally_names and not self.two_v_two: votes["enemy"] += 1.5
             team = max(votes, key=votes.get) if any(votes.values()) else None
             fx, fy = self._tile_f(box, w, h)
-            dets.append(Det(u, fx, fy, float(cf), team, abs(votes["ally"] - votes["enemy"]), box, on_tower))
+            dets.append(Det(u, fx, fy, float(cf), team, abs(votes["ally"] - votes["enemy"]), box,
+                            on_tower, col if sure >= 2.0 else None))
             extra.append(evolved)
         en, al = [], []
         overlays = []
@@ -326,12 +328,14 @@ class Eyes:
             # 6.9.17: the track's whole record (where it was born, our own placement, every colour / side-model read)
             team = tr.team
             tx, ty = int(round(tr.x)), int(round(tr.y))
-            if evolved and team != "ally": self.evo_now.append((tr.name, tx, ty))
-            (al if team == "ally" else en).append((tr.name, tx, ty, d.conf))
+            if tr.confirmed():
+                if evolved and team != "ally": self.evo_now.append((tr.name, tx, ty))
+                (al if team == "ally" else en).append((tr.name, tx, ty, max(0.5, tr.conf)))
             if hp:
                 lf = self._match_hp(hp, d.name, int(round(d.x)), int(round(d.y)))
                 if lf is not None: tr.life = float(lf)
-            overlays.append({"n": tr.name, "m": team == "ally", "c": d.conf, "l": tr.life if tr.life is not None else 1.0,
+            overlays.append({"id": tr.id, "n": tr.name, "m": team == "ally", "c": d.conf,
+                             "l": tr.life if tr.life is not None else 1.0,
                              "b": [round(max(0.0, min(1.0, v / dim)), 4)
                                    for v, dim in zip(d.box, (w, h, w, h))]})
         self.overlay_boxes = overlays

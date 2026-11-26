@@ -363,6 +363,16 @@ def _snap_state(env):
             "army": _army(env)}
 
 
+def compare_rollouts(wait, move, before, cost):
+    """Unopposed eight-second projection, in HP and elixir versus waiting."""
+    comparison = _detail(move, before)
+    idle = _detail(wait, before)
+    return {"our_hp_saved": idle["our_tower_lost"] - comparison["our_tower_lost"],
+            "extra_enemy_damage": comparison["their_tower_lost"] - idle["their_tower_lost"],
+            "elixir_spent": cost,
+            "extra_ally_value": round(comparison["army_ours"][1] - idle["army_ours"][1], 2)}
+
+
 def rollout(env, slot, x, y):
     """The arena run ROLLOUT_TICKS ahead with our move. The move lands ACTION_DELAY_TICKS late, as it does for real
     (the picture the decision was made on is already old and the taps take time; the card then has its own
@@ -443,6 +453,7 @@ def candidates(brain, playable, rule_d, defend, first=()):
     if brain.p.get("ai_only"):
         return out
     for i, n, t in first: add(i, n, t)
+    priority_count = len(out)
     cards = [(i, n) for i, n in playable] if defend else ([(rule_d["slot"], rule_d["card"])] if rule_d else [])
     enemies = [(x, y) for _u, x, y in (brain._stable or [])]
     # 6.9.18: the tiles where a card HELD against this threat before (our battles + the opponents' answers to us)
@@ -481,7 +492,16 @@ def candidates(brain, playable, rule_d, defend, first=()):
                 except Exception:
                     pass
             for t in ((3, 14), (14, 14), (3, 4), (14, 4), (8, 0), (9, 0)): add(i, n, t)
-    return out
+    if not defend:
+        return out
+    # Search every usable defensive card before refining the position of one.
+    # A crowded lane can otherwise spend the whole frame budget on slot 0.
+    by_card = {}
+    for candidate in out[priority_count:]:
+        by_card.setdefault(candidate[1], []).append(candidate)
+    from itertools import zip_longest
+    return out[:priority_count] + [candidate for row in zip_longest(*by_card.values())
+                                   for candidate in row if candidate is not None]
 
 
 def _skip(why):
@@ -493,6 +513,8 @@ def _skip(why):
 def new_battle():
     _S["skips"] = {}
     _S["last_error"] = ""
+    for k in ("last", "ai_t", "ai_p"):
+        _S.pop(k, None)
 
 
 def skips():
@@ -555,17 +577,20 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
     if _S.get("debug") is not None:
         _S["debug"].append(("wait", round(base, 2), _detail(w_end, before)))
     best, tried, scored, rule_v = None, 0, [], None
-    ids = card_ids()
     m = module()
+    native_hand = env.get_hand_for_team(0)
+    winning_rollout = None
     for i, n, (tx, ty) in candidates(brain, playable, rule_d, defend, first):
         hs = slots.get(n)
         if hs is None: continue
         x, y = eng_xy(tx, ty)
+        cid = native_hand[hs]
         try:
-            if not env.is_valid_placement(ids[n][0], x, y, 0): continue
+            if not env.is_valid_placement(cid, x, y, 0): continue
+            cost = float(m.get_card_info(cid)["cost"])
         except Exception:
             continue
-        cost = float((m.get_card_info(ids[n][0]) or {}).get("cost", 3))
+        if cost > my_elixir: continue
         end = rollout(env, hs, x, y)
         v = _value(end, brain, before, cost) - base
         # the opponent answers (5.84): a move is only as good as it stays after their likeliest answers — half the
@@ -591,16 +616,20 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
         scored.append({"card": n, "tile": [tx, ty], "v": round(v, 2)})
         if _S.get("debug") is not None:
             _S["debug"].append((round(v, 2), n, (tx, ty), _detail(end, before)))
-        if best is None or v > best[0]: best = (v, i, n, (tx, ty))
+        if best is None or v > best[0]:
+            best = (v, i, n, (tx, ty))
+            winning_rollout = end, cost
         if rule_d and n == rule_d["card"] and (tx, ty) == tuple(rule_d["tile"]): rule_v = v
         if time.perf_counter() - t0 > THINK_BUDGET: break         # a look must stay fast
     ms = (time.perf_counter() - t0) * 1000
     # what was thought through, for the app's battle view (royale.live_view)
-    _S["last"] = {"t": time.time(), "defend": defend, "wait": round(base, 2), "ms": round(ms),
+    _S["last"] = {"t": time.time(), "seen_t": st.get("_seen_t"), "defend": defend, "wait": round(base, 2), "ms": round(ms),
                   "tried": tried, "ai": ai_note.strip("; "),
                   "cands": sorted(scored, key=lambda c: -c["v"])[:24]}
     if best is None: return None
     v, i, n, tile = best
+    comparison = compare_rollouts(w_end, winning_rollout[0], before, winning_rollout[1])
+    _S["last"]["best"] = {"card": n, "tile": list(tile), "comparison": comparison}
     if defend:
         if v > WAIT_MARGIN:
             return ("play", i, n, tile, f"engine: {n} at {tile} is +{v:.1f} elixir vs waiting "

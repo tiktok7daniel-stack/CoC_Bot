@@ -102,8 +102,10 @@ def _dets(st):
     if "overlay_boxes" in st:
         for box in st["overlay_boxes"][:60]:
             x0, y0, x1, y1 = box["b"]
-            out.append([box["n"], box["m"], (x0 + x1) / 2, (y0 + y1) / 2, box["c"],
-                        x1 - x0, y1 - y0])
+            row = [box["n"], box["m"], (x0 + x1) / 2, (y0 + y1) / 2, box["c"], x1 - x0, y1 - y0]
+            if box.get("id") is not None:
+                row.extend([box["id"], box.get("l", 1.0)])
+            out.append(row)
         return out
     for lst, mine in ((st.get("enemies") or [], False), (st.get("allies") or [], True)):
         for e in lst[:60]:
@@ -126,7 +128,7 @@ def _tracks(brain, st):
             x2, y2 = tile_xy(t["x"] + t["vx"], t["y"] + t["vy"])
             out.append({"id": t["id"], "n": t["unit"], "m": t["team"] == "ally", "x": round(x, 4), "y": round(y, 4),
                         "vx": round(x2 - x, 4), "vy": round(y2 - y, 4), "lock": bool(t.get("locked")),
-                        "eta": t.get("eta")})
+                        "eta": t.get("eta"), "age_ms": t.get("age_ms"), "confirm_ms": t.get("confirm_ms")})
         except Exception:
             pass
     lead = None
@@ -179,6 +181,8 @@ def battle(acc, brain, st, d, force=False, frame=None):
     try:
         from royale import engine
         think = dict(engine._S.get("last") or {})
+        if think.get("seen_t") != st.get("_seen_t"):
+            think.pop("best", None)
     except Exception:
         think = {}
     try: th = brain.their_hand()
@@ -223,6 +227,7 @@ def battle(acc, brain, st, d, force=False, frame=None):
             "units": len(st.get("enemies") or []) + len(st.get("allies") or []),
             "tracks": len(st.get("tracks") or []),
             "ms": (st.get("vision_timing") or {}).get("total_ms"),
+            "decision_age_ms": st.get("decision_age_ms"),
         },
         "frame_t": (_S.get("snapshot") or {}).get("t", 0.0),
         "snapshot": _S.get("snapshot"),

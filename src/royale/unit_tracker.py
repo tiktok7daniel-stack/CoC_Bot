@@ -28,8 +28,8 @@ from collections import namedtuple
 
 import numpy as np
 
-Det = namedtuple("Det", "name x y conf team team_conf box on_tower")
-Det.__new__.__defaults__ = (None, 0.0, None, False)
+Det = namedtuple("Det", "name x y conf team team_conf box on_tower color_team")
+Det.__new__.__defaults__ = (None, 0.0, None, False, None)
 
 ARENA_W, ARENA_H = 18, 32
 RIVER_Y = 15                                     # y <= 15: our half (as royale.brain; y grows toward their side)
@@ -84,11 +84,8 @@ OUR_PLAY_WEIGHT = 6.0       # 6.9.17: born where the bot just placed that card =
 
 
 class Track:
-    _ids = 0
-
-    def __init__(self, d, t):
-        Track._ids += 1
-        self.id = Track._ids
+    def __init__(self, d, t, ident):
+        self.id = ident
         self.s = np.array([d.x, d.y, 0.0, 0.0])          # x, y, vx, vy (tiles, tiles / s)
         self.P = np.diag([0.35 ** 2, 0.35 ** 2, 1.5 ** 2, 1.5 ** 2])
         self.t = self.born = self.seen = t        # t: the filter's time; seen: the last look it was really seen
@@ -96,6 +93,7 @@ class Track:
         self.life = None                          # 0..1 from its health bar when read (royale.health)
         self.names = {d.name: float(d.conf)}
         self.team_v = {"ally": 0.0, "enemy": 0.0}
+        self.color_votes = 0
         # 6.9.17: where it was BORN — a card is only placed on its player's own half (except the few that land anywhere)
         if d.name not in SPAWN_ANYWHERE:
             self.team_v["ally" if d.y <= RIVER_Y else "enemy"] += BIRTH_WEIGHT
@@ -107,6 +105,7 @@ class Track:
         self.x0, self.y0 = d.x, d.y               # where it was born (a unit that never moves from a tower = a skin)
         self.on_tower = bool(d.on_tower)
         self.max_move = 0.0
+        self.confirmed_at = t if self.confirmed() else None
 
     # -------------------------------------------------------------- what it is
     @property
@@ -115,6 +114,8 @@ class Track:
 
     @property
     def team(self):
+        if abs(self.color_votes) >= 2:
+            return "ally" if self.color_votes > 0 else "enemy"
         return "ally" if self.team_v["ally"] > self.team_v["enemy"] else "enemy"
 
     def team_sure(self):
@@ -123,9 +124,15 @@ class Track:
 
     def locked(self):
         """Its side is settled (3 colour reads' worth of votes ahead): a single doubtful look can not flip it."""
-        return abs(self.team_v["ally"] - self.team_v["enemy"]) >= 3.0
+        return abs(self.color_votes) >= 2
+
+    def confirmed(self):
+        return self.hits >= 2 or (self.conf >= 0.75 and not self.on_tower)
 
     def _vote_team(self, d):
+        if d.color_team in ("ally", "enemy"):
+            vote = 1 if d.color_team == "ally" else -1
+            self.color_votes = max(-4, min(4, self.color_votes + vote))
         if d.team in ("ally", "enemy"):
             self.team_v[d.team] += float(d.team_conf or 0.0)
 
@@ -196,25 +203,28 @@ class Track:
         self.max_move = max(self.max_move, math.hypot(d.x - self.x0, d.y - self.y0))
         self.conf = 0.7 * self.conf + 0.3 * float(d.conf)
         self.box = d.box or self.box
+        if self.confirmed_at is None and self.confirmed():
+            self.confirmed_at = self.t
 
     def as_dict(self, now=None):
         now = now or self.t
         x, y = self.at(now)
         return {"id": self.id, "unit": self.name, "team": self.team, "x": round(float(x), 2), "y": round(float(y), 2),
                 "vx": round(self.vx, 2), "vy": round(self.vy, 2), "conf": round(self.conf, 2),
-                "locked": self.locked(), "hits": self.hits}
+                "locked": self.locked(), "hits": self.hits,
+                "age_ms": round(max(0.0, now - self.seen) * 1000),
+                "confirm_ms": round((self.confirmed_at - self.born) * 1000) if self.confirmed_at is not None else None}
 
 
 class UnitTracker:
     HIGH = 0.5                  # ByteTrack: the sure detections are matched first
     GATE = 2.2                  # tiles: further than this from the predicted place = another unit
     NAME_PEN = 0.9              # tiles added for another name (the eyes flicker between two names)
-    TEAM_PEN = 2.5              # tiles added for the other side when both are sure
-    CONFIRM = 2                 # looks before a track counts
     KEEP = 1.0                  # seconds a track lives unseen (hidden behind a tower, a missed look)
 
     def __init__(self):
         self.tracks = []
+        self._next_id = 0
         self.t = 0.0
         self.our_plays = []         # (monotonic time, card, (x, y)): the bot's own placements (6.9.17)
         self.down = set()           # towers already down: ("our" | "their", "left" | "right" | "king")
@@ -242,40 +252,45 @@ class UnitTracker:
         self.tracks = []
         self.our_plays = []
         self.junk_spots = []
-        Track._ids = 0                                   # ids count from 1 again every battle
+        self.t = 0.0
+        self.down.clear()
+        self._next_id = 0
 
     # -------------------------------------------------------------- one look
     def update(self, dets, t=None):
         """dets: [Det] of one look taken at monotonic time t -> [(Det, Track)] (every detection with its track)."""
         from scipy.optimize import linear_sum_assignment
         t = time.monotonic() if t is None else float(t)
+        dets = list(dets or [])
+        if t <= self.t and self.tracks:
+            return [(d, None) for d in dets]
         self.t = t
         self.tracks = [tr for tr in self.tracks if t - tr.seen <= self.KEEP]
         for tr in self.tracks: tr.predict(t)
-        dets = list(dets or [])
         out = [None] * len(dets)
         free = list(range(len(self.tracks)))
-        if dets and free:
-            # one assignment over everything (globally best: two Knights side by side keep their own ids); a doubtful
-            # detection costs a little more, so a sure one wins a contested track (ByteTrack's order, in one pass)
-            C = np.full((len(dets), len(free)), 1e6)
-            for i, d in enumerate(dets):
+        strong = [i for i, d in enumerate(dets) if d.conf >= self.HIGH]
+        weak = [i for i, d in enumerate(dets) if d.conf < self.HIGH]
+        for indices, recovery in ((strong, False), (weak, True)):
+            if not indices or not free: continue
+            C = np.full((len(indices), len(free)), 1e6)
+            for row, i in enumerate(indices):
+                d = dets[i]
                 for b, k in enumerate(free):
                     tr = self.tracks[k]
                     c = math.hypot(d.x - tr.s[0], d.y - tr.s[1])
+                    if tr.locked() and d.color_team and d.color_team != tr.team: continue
+                    if recovery and (not tr.confirmed() or d.name != tr.name or c > 1.0): continue
                     if c > self.GATE + 0.5 * min(2, tr.miss): continue
                     if d.name != tr.name and d.name not in tr.names:
-                        if d.conf < self.HIGH and c > 1.0:
-                            continue
                         c += self.NAME_PEN
-                    if d.team in ("ally", "enemy") and d.team != tr.team and (d.team_conf or 0) >= 1.0 and tr.locked():
-                        c += self.TEAM_PEN
-                    if d.conf < self.HIGH: c += 0.3
-                    C[i, b] = c
+                    if d.color_team and d.color_team != tr.team: c += 1.0
+                    C[row, b] = c
             rows, cols = linear_sum_assignment(C)
             used = set()
-            for i, b in zip(rows, cols):
-                if C[i, b] >= 1e5: continue
+            for row, b in zip(rows, cols):
+                if C[row, b] >= 1e5: continue
+                i = indices[row]
                 k = free[b]
                 self.tracks[k].update(dets[i])
                 out[i] = self.tracks[k]
@@ -287,8 +302,9 @@ class UnitTracker:
             # a new unit only when the eyes are sure (6.8: doubtful boxes opened a new track every few looks, the ids
             # ran into the hundreds) and not on a spot already found to be a tower's decoration
             if any(n == d.name and math.hypot(d.x - jx, d.y - jy) <= 1.0 for n, jx, jy in self.junk_spots): continue
-            if d.conf >= 0.5:
-                tr = Track(d, t)
+            if d.conf >= self.HIGH:
+                self._next_id += 1
+                tr = Track(d, t, self._next_id)
                 if self._ours_born(d, t):                  # 6.9.17: our own card just placed there
                     tr.team_v["ally"] += OUR_PLAY_WEIGHT
                 self.tracks.append(tr)
@@ -299,11 +315,11 @@ class UnitTracker:
             if tr.junk(t):
                 self.junk_spots.append((tr.name, tr.x0, tr.y0))
         self.tracks = [tr for tr in self.tracks if not tr.junk(t)]
-        return [(d, tr) for d, tr in zip(dets, out)]
+        return [(d, tr if tr is None or not tr.junk(t) else None) for d, tr in zip(dets, out)]
 
     # -------------------------------------------------------------- what the brain asks
     def confirmed(self, team=None):
-        return [tr for tr in self.tracks if tr.hits >= self.CONFIRM and (team is None or tr.team == team)]
+        return [tr for tr in self.tracks if tr.confirmed() and (team is None or tr.team == team)]
 
     def get(self, track_id):
         return next((tr for tr in self.tracks if tr.id == track_id), None)
@@ -447,7 +463,7 @@ class UnitTracker:
         now = time.monotonic() if now is None else now
         out = []
         for tr in self.tracks:
-            if tr.hits < 3: continue                     # only units seen 3 times are drawn / given to the brain
+            if not tr.confirmed() or now - tr.seen > self.GHOST: continue
             d = tr.as_dict(now)
             d["ghost"] = tr.miss > 0
             e = self.eta(tr.id, now)

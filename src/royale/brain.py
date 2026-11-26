@@ -307,11 +307,12 @@ class Brain:
                 res[i] = (top, x, y, c)
         return res
 
-    def observe(self, enemies, now=None):
+    def observe(self, enemies, now=None, tracked=False):
         """enemies: [(unit_name, tile_x, tile_y, conf)] from one look. -> stable enemy list [(unit, x, y)]."""
         now = now or time.monotonic()
-        try: enemies = self._vote(list(enemies or []), now)
-        except Exception: pass
+        if not tracked:
+            try: enemies = self._vote(list(enemies or []), now)
+            except Exception: pass
         self._regen_enemy(now)
         cur = [(u, x, y) for u, x, y, c in enemies if c >= 0.35]
         self.seen.append({(u, x // 2, y // 2) for u, x, y in cur})
@@ -601,7 +602,8 @@ class Brain:
         ty = int(min(13, max(2, cy - 2)))
         return (tx, ty)
 
-    def decide(self, hand, ready, elixir, enemies, allies=(), towers=None, now=None, hp=None, spells=None, evo=None):
+    def decide(self, hand, ready, elixir, enemies, allies=(), towers=None, now=None, hp=None, spells=None, evo=None,
+               tracked=False):
         """
         hand: the 4 card names in hand (slot 0..3); ready: playable slots; elixir: ours (0..10);
         enemies / allies: [(unit, tile_x, tile_y, conf)]; towers: {"their_left": hp 0..1, ...}
@@ -612,7 +614,7 @@ class Brain:
         self.hp_seen = hp or {}
         self.evo_seen = evo or []
         if spells: self._spells(spells, now)
-        stable = self.observe(enemies, now)
+        stable = self.observe(enemies, now, tracked=True) if tracked else self.observe(enemies, now)
         self._stable, self._towers_now, self._allies = stable, dict(towers or {}), list(allies or [])
         if getattr(self, "mem", None): self.mem.tick(towers, now)
         el_t = self.elapsed()

@@ -21,6 +21,7 @@ from ..i18n import on_lang, tr
 from ..theme import TOKENS, ui_font
 from ..widgets.controls import GlassCard, IconButton, label
 from .base import Screen
+from .royale_live_screen import decision_projection
 
 
 def _nice(n):
@@ -515,6 +516,12 @@ class RoyaleAiScreen(Screen):
         out.append(f"▶ <b>{_nice(dec['card'])}</b> → {tuple(dec['tile'])}<br><small>{dec.get('why', '')}</small>"
                    if dec else tr("rl_waiting"))
         th = d.get("think") or {}
+        summary = decision_projection(dec, th)
+        if summary:
+            out.append(f"<small>{summary}</small>")
+        age = (d.get("vision") or {}).get("decision_age_ms")
+        if age is not None:
+            out.append(f"<small>{tr('rl_decision_age')} {age} ms</small>")
         if th.get("tried"):
             out.append(f"<small>{tr('rl_thought')}: {th.get('tried')} · {th.get('ms')} ms</small>")
         hand = d.get("hand") or []

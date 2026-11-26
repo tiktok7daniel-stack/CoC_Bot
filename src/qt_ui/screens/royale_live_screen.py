@@ -25,6 +25,18 @@ from .base import Screen
 W, H = 18, 32
 
 
+def decision_projection(decision, think):
+    best = think.get("best") or {}
+    if not decision or (best.get("card"), best.get("tile")) != (decision.get("card"), decision.get("tile")):
+        return ""
+    row = best.get("comparison")
+    if not row:
+        return ""
+    return (f"{tr('rl_rollout')} · {tr('rl_saved_hp')} {row['our_hp_saved']:+.0f} · "
+            f"{tr('rl_extra_damage')} {row['extra_enemy_damage']:+.0f} · "
+            f"{tr('rl_spent_elixir')} {row['elixir_spent']:g} · {tr('rl_ally_value')} {row['extra_ally_value']:+.1f}")
+
+
 def _short(name):
     n = str(name or "").replace("-", "_")
     parts = [p for p in n.split("_") if p and p != "the"]
@@ -327,7 +339,7 @@ class RoyaleLiveScreen(Screen):
         what = (f"<b style='color:{TOKENS['gold']}'>▶ {dec['card']} {tuple(dec['tile'])}</b> — {dec.get('why', '')}"
                 if dec else tr("rl_waiting"))
         more = f"{tr('rl_thought')}: {th.get('tried', 0)} · {th.get('ms', 0)} ms" if th.get("tried") else ""
-        w._info.setText("<br>".join(x for x in (head, what, more) if x))
+        w._info.setText("<br>".join(x for x in (head, what, decision_projection(dec, th), more) if x))
 
     def _path(self):
         acc = self.store.account or "main"
@@ -387,6 +399,9 @@ class RoyaleLiveScreen(Screen):
             lines.append(f"<b style='color:{TOKENS['gold']}'>▶ {dec['card']} → {tuple(dec['tile'])}</b><br>{dec.get('why', '')}")
         else:
             lines.append(f"<b>{tr('rl_waiting')}</b>")
+        projection = decision_projection(dec, th)
+        if projection:
+            lines.append(projection)
         if th.get("tried"):
             best = (th.get("cands") or [{}])[0]
             lines.append(f"{tr('rl_thought')}: {th['tried']} · {th.get('ms', 0)} ms" +
@@ -428,4 +443,6 @@ class RoyaleLiveScreen(Screen):
         line = f"\n{tr('rl_vision')}: {source} · {tr('rl_units')} {vision.get('units', 0)} · " \
                f"{tr('rl_tracks')} {vision.get('tracks', 0)}"
         if vision.get("ms") is not None: line += f" · {vision['ms']} {tr('rl_vision_ms')} ms"
+        if vision.get("decision_age_ms") is not None:
+            line += f" · {tr('rl_decision_age')} {vision['decision_age_ms']} ms"
         return line

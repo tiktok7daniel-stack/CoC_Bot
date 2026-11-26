@@ -21,7 +21,7 @@ BOX_W, BOX_H, BOX_UP = 0.057, 0.042, 0.011      # a unit's box in screen fractio
 
 
 class Track:
-    __slots__ = ("names", "mine", "x", "y", "vx", "vy", "t", "hits", "conf", "size", "id", "origin", "trail")
+    __slots__ = ("names", "mine", "x", "y", "vx", "vy", "t", "hits", "conf", "size", "id", "origin", "trail", "life")
 
     def __init__(self, name, mine, x, y, t, conf, size=None, track_id=0):
         self.names, self.mine = {name: conf}, mine
@@ -30,6 +30,7 @@ class Track:
         self.hits = 1
         self.size = size
         self.id = track_id
+        self.life = 1.0
         self.origin = (x, y)
         self.trail = deque([(x, y)], maxlen=8)
 
@@ -58,6 +59,7 @@ class LiveTracker:
         self._last = 0.0
         self._bot_empty_since = None
         self._seen = None
+        self._authoritative = False
         self.rate, self._n, self._n_t = 0.0, 0, time.time()
         self.lat = None                    # 6.9.17: how old the bot's looks are when they arrive here (smoothed)
         self.local_boxes = []
@@ -166,15 +168,30 @@ class LiveTracker:
         lat = max(0.0, time.time() - t)
         self.lat = lat if self.lat is None else 0.8 * self.lat + 0.2 * lat
         with self._lock:
+            authoritative = all(len(d) >= 8 for d in dets) if dets else self._authoritative
+            if authoritative != self._authoritative or time.time() - self._last > 1.0:
+                self.tracks.clear()
+            self._authoritative = authoritative
             free = [tr for tr in self.tracks if 0 < t - tr.t <= self.COAST]
-            strong = [d for d in dets if d[4] >= self.HIGH]
-            weak = [d for d in dets if self.LOW <= d[4] < self.HIGH]
-            matches, new, free = self._match(free, strong, t)
-            recovery, _, _ = self._match(free, weak, t, weak=True)
+            if authoritative:
+                known = {tr.id: tr for tr in free}
+                matches = [(known[d[7]], d) for d in dets if d[7] in known]
+                new = [d for d in dets if d[7] not in known]
+                recovery = []
+                replaced = {d[7] for d in new}
+                self.tracks = [tr for tr in self.tracks if tr.id not in replaced]
+            else:
+                strong = [d for d in dets if d[4] >= self.HIGH]
+                weak = [d for d in dets if self.LOW <= d[4] < self.HIGH]
+                matches, new, free = self._match(free, strong, t)
+                recovery, _, _ = self._match(free, weak, t, weak=True)
             for detection in new:
                 name, mine, x, y, conf = detection[:5]
                 size = tuple(detection[5:7]) if len(detection) >= 7 else None
-                self.tracks.append(Track(name, mine, x, y, t, conf, size, next(self._ids)))
+                track = Track(name, mine, x, y, t, conf, size, detection[7] if authoritative else next(self._ids))
+                if authoritative:
+                    track.life = detection[8] if len(detection) >= 9 else 1.0
+                self.tracks.append(track)
             for best, detection in matches + recovery:
                 name, mine, x, y, conf = detection[:5]
                 size = tuple(detection[5:7]) if len(detection) >= 7 else None
@@ -189,11 +206,15 @@ class LiveTracker:
                 best.conf = max(conf, best.conf * 0.85)
                 if size is not None:
                     best.size = tuple(0.7 * v + 0.3 * old for v, old in zip(size, best.size or size))
-                if best.mine is None:
+                if authoritative or best.mine is None:
                     best.mine = mine
                 if math.hypot(best.trail[-1][0] - best.x, best.trail[-1][1] - best.y) > 0.002:
                     best.trail.append((best.x, best.y))
-                best.names[name] = best.names.get(name, 0.0) + conf
+                if authoritative:
+                    best.names = {name: conf}
+                    best.life = detection[8] if len(detection) >= 9 else 1.0
+                else:
+                    best.names[name] = best.names.get(name, 0.0) + conf
                 best.hits += 1
             self.tracks = [tr for tr in self.tracks if t - tr.t <= self.COAST]
         self._last = time.time()
@@ -263,7 +284,7 @@ class LiveTracker:
                 if now - tr.t > self.COAST or (tr.conf < 0.3 and tr.hits < 2): continue
                 x, y = tr.at(now)
                 w, h = tr.size or (BOX_W, BOX_H)
-                out.append({"id": tr.id, "n": tr.name, "m": tr.mine, "l": 1.0, "c": tr.conf,
+                out.append({"id": tr.id, "n": tr.name, "m": tr.mine, "l": tr.life, "c": tr.conf,
                             "cx": x, "cy": y if tr.size else y - BOX_UP, "w": w, "h": h,
                             "vx": tr.vx, "vy": tr.vy, "t": now, "origin": tr.origin, "trail": tuple(tr.trail)})
             return out

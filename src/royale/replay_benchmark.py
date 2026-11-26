@@ -3,6 +3,7 @@ import math
 import time
 from collections import Counter, deque
 
+from royale import engine
 from royale.brain import Brain, card, cards_db
 from royale.deck_catalog import signature, variant_key
 from royale.replay_evidence import SIDES, validated_plays
@@ -38,7 +39,44 @@ def _elixir_between(brain, start, end):
     return gained
 
 
-def evaluate(replay, side, ai_only=True):
+def _projection(env, slots, before, wait, pick):
+    if pick is None:
+        return engine.compare_rollouts(wait, wait, before, 0)
+    slot = slots.get(pick["card"])
+    if slot is None:
+        return None
+    cid = env.get_hand_for_team(0)[slot]
+    x, y = engine.eng_xy(*pick["tile"])
+    if not env.is_valid_placement(cid, x, y, 0):
+        return None
+    cost = engine.module().get_card_info(cid)["cost"]
+    return engine.compare_rollouts(wait, engine.rollout(env, slot, x, y), before, cost)
+
+
+def _compare_engines(implementations, brain, state, elixir, proposal, reference):
+    hand = state["hand"]
+    playable = [(i, n) for i, n in enumerate(hand) if card(n).get("cost", 11) <= elixir]
+    env, slots = engine.mirror(brain, state, hand, elixir)
+    if env is None:
+        return {}
+    before = engine._snap_state(env)
+    wait = engine.rollout(env, None, 0, 0)
+    out = {"human_reference": {"projection": _projection(env, slots, before, wait, reference)}}
+    for label, implementation in implementations.items():
+        started = time.perf_counter()
+        result = implementation.think(brain, state, hand, playable, elixir, proposal)
+        latency = round((time.perf_counter() - started) * 1000, 2)
+        pick = proposal
+        if result and result[0] == "wait":
+            pick = None
+        elif result:
+            pick = dict(zip(("card", "tile", "why"), result[2:]))
+        out[label] = {"choice": pick, "decision_ms": latency,
+                      "projection": _projection(env, slots, before, wait, pick)}
+    return out
+
+
+def evaluate(replay, side, ai_only=True, implementations=None):
     """Compare suggestions at human play times once the four-card cycle is observable."""
     if side not in SIDES:
         raise ValueError("invalid side")
@@ -66,7 +104,11 @@ def evaluate(replay, side, ai_only=True):
         return {"status": "skip", "reason": "card_outside_recorded_deck"}
     perspective = "us" if side == "team" else "them"
     enemy = "opponent" if side == "team" else "team"
-    brain = _ClockBrain(deck=[by_key[_base(k)] for k in decks[side]], params={"ai": True, "ai_only": ai_only})
+    params = {"ai": True, "ai_only": ai_only} if not implementations else {"learned": False}
+    brain = _ClockBrain(deck=[by_key[_base(k)] for k in decks[side]], params=params)
+    if implementations:
+        for implementation in implementations.values():
+            implementation.new_battle()
     arena = Arena()
     recent_own = deque(maxlen=4)
     observed_enemy = []
@@ -108,8 +150,8 @@ def evaluate(replay, side, ai_only=True):
                 brain.current = seconds
                 brain.enemy_elixir, brain.enemy_t = elixir[enemy], base_time + seconds
                 brain._pol = None
-                pick = brain.decide(hand, list(range(4)), elixir[side], foes, friends,
-                                    dict(zip(TOWERS, arena.towers(perspective))),
+                towers = dict(zip(TOWERS, arena.towers(perspective)))
+                pick = brain.decide(hand, list(range(4)), elixir[side], foes, friends, towers,
                                     now=base_time + seconds, hp=health)
                 counts["compared"] += 1
                 row = {"at_s": seconds, "event": index, "reference": {"card": name, "tile": [x, y]},
@@ -120,6 +162,10 @@ def evaluate(replay, side, ai_only=True):
                     row["previous_enemy_play"] = {
                         "card": ec, "tile": [ex, ey], "seconds_before": round(seconds - et, 3),
                     }
+                if implementations:
+                    state = {"hand": hand, "towers": towers, "allies": friends}
+                    row["counterfactuals"] = _compare_engines(implementations, brain, state, elixir[side],
+                                                              pick, row["reference"])
                 if pick:
                     row["proposal"] = {k: pick[k] for k in ("card", "tile", "why")}
                     row["same_card"] = pick["card"] == name

@@ -44,9 +44,11 @@ def test_tracker():
             v[side] += 1.0
             tm = max(v, key=v.get)
             dets.append(Det(n, px + random.gauss(0, 0.3), py + random.gauss(0, 0.3), random.uniform(0.4, 0.9), tm,
-                            abs(v["ally"] - v["enemy"]), None))
+                            abs(v["ally"] - v["enemy"]), None, False, col))
             who.append(i)
         for (d, track), i in zip(tr.update(dets, t), who):
+            if track is None:
+                continue
             ids[i].append(track.id)
             if k > 15 and track.team != units[i][5]: flips += 1
     # two Knights 0.6 tile apart with 0.3 tile of noise can trade places for one look (one missed): what matters is
@@ -144,8 +146,7 @@ def test_skins_and_ids():
     snap = tr.snapshot(t)
     check("skins: the tower skin is not a unit after 0.8 s", not any(seen_skin[10:]) and
           not any(d["unit"] == "archer" and abs(d["x"] - 3.5) < 1 for d in snap), f"{sum(seen_skin[10:])} looks")
-    from royale.unit_tracker import Track
-    check("ids: doubtful sparks open no tracks (ids stay small)", Track._ids <= 3, f"last id #{Track._ids}")
+    check("ids: doubtful sparks open no tracks (ids stay small)", tr._next_id <= 3, f"last id #{tr._next_id}")
     tr.reset()
     tr.update([Det("knight", 5.0, 20.0, 0.9, "enemy", 3.0, None, False)], 0.0)
     check("ids: count from #1 every battle", tr.tracks[0].id == 1, f"#{tr.tracks[0].id}")
@@ -161,9 +162,10 @@ def test_team_birth():
     from royale.unit_tracker import UnitTracker, Det
     tr = UnitTracker(); tr.reset()
     tr.note_play("knight", (5, 8))
-    out = tr.update([Det("knight", 5.2, 8.4, 0.8, "enemy", 2.3, None)], __import__("time").monotonic())   # a wrong red read
+    t = __import__("time").monotonic()
+    out = tr.update([Det("knight", 5.2, 8.4, 0.8, "enemy", 2.3, None)], t)   # a wrong red read
     check("team: our just-placed Knight is ours despite a wrong colour read", out[0][1].team == "ally", out[0][1].team)
-    out = tr.update([Det("musketeer", 9.0, 24.0, 0.8, "ally", 1.0, None)], __import__("time").monotonic())  # side model wrong
+    out = tr.update([Det("musketeer", 9.0, 24.0, 0.8, "ally", 1.0, None)], t + 0.1)  # side model wrong
     check("team: a unit born on their half is theirs despite a wrong side-model read", out[0][1].team == "enemy",
           out[0][1].team)
     t2 = UnitTracker(); t2.reset()
@@ -414,10 +416,12 @@ def test_tactics_stronger():
           ba._ai_only_decide([(0, "hog_rider")], 6.0, [], {}, now) is None)
 
     # engine vetoes losing early bridge play (v = -0.6 at ty=14)
-    orig = {k: getattr(engine, k) for k in ("ready", "module", "card_ids", "mirror", "rollout", "replies", "_snap_state", "_value", "candidates")}
+    orig = {k: getattr(engine, k) for k in ("ready", "module", "card_ids", "mirror", "rollout", "replies", "_snap_state",
+                                          "_value", "candidates", "compare_rollouts")}
     try:
         class _FakeEnv:
             def is_valid_placement(self, *a): return True
+            def get_hand_for_team(self, team): return [1]
         class _FakeMod:
             def get_card_info(self, cid): return {"cost": 3}
         be = Brain(deck); be.reset(); be.t0 = now - 2.0; be._stable = []
@@ -430,6 +434,7 @@ def test_tactics_stronger():
         engine._snap_state = lambda env: {}
         engine._value = lambda end, br, before, cost=0.0: (10.0 - 0.6) if cost else 10.0
         engine.candidates = lambda *a: [(0, "goblin_gang", (3, 14))]
+        engine.compare_rollouts = lambda *a: {}
         res = engine.think(be, {}, ["goblin_gang"], [(0, "goblin_gang")], 6.0,
                            rule_d={"slot": 0, "card": "goblin_gang", "tile": (3, 14)})
         check("engine: vetoes negative early bridge drop", res and res[0] == "wait", str(res))
@@ -579,7 +584,9 @@ def test_adb_and_stream_fixes():
             side_detector=types.SimpleNamespace(run=lambda img: side_calls.__setitem__("n", side_calls["n"] + 1) or "ally"),
         )
         class _Tr:
-            def update(self, dets, now): return [(d, types.SimpleNamespace(name=d.name, team=d.team, life=None, conf=d.conf, x=d.x, y=d.y)) for d in dets]
+            def update(self, dets, now):
+                return [(d, types.SimpleNamespace(id=i, name=d.name, team=d.team, life=None, conf=d.conf, x=d.x, y=d.y,
+                                                  confirmed=lambda: True)) for i, d in enumerate(dets, 1)]
             def ghosts(self, *a, **kw): return []
         e.tracker = _Tr(); e.two_v_two = False; e._side_cache = []
         small = types.SimpleNamespace(width=720, height=1280, crop=lambda box: None)
@@ -842,13 +849,38 @@ def test_viewer_assignment_and_eta():
           and all(len(d["trail"]) >= 2 for d in shown))
     tracker.feed([det(0.15)], now + 0.1)
     check("viewer ignores late telemetry", {d["id"] for d in tracker.visible_rich(now + 0.3)} == {1, 2})
+    tracker.feed([det(0.36) + [17, 0.6], det(0.41) + [25, 0.7]], now + 0.4)
+    tracker.feed([det(0.36) + [25, 0.7], det(0.41) + [17, 0.6]], now + 0.5)
+    actual = {d["id"]: d for d in tracker.visible_rich(now + 0.5)}
+    check("viewer uses the bot IDs and health when units cross",
+          set(actual) == {17, 25} and actual[17]["cx"] > actual[25]["cx"] and actual[17]["l"] == 0.6)
     brain = Brain()
     brain.tracker = SimpleNamespace(nearest=lambda *a, **k: SimpleNamespace(id=1), eta=lambda i: 1.4)
     threat = brain.threats([("knight", 3, 14)])["left"]
     check("a tracked unit reaching the tower soon makes its lane urgent", threat.get("urgent") and threat["eta"] == 1.4)
 
 
-for fn in (test_viewer_assignment_and_eta, test_tracker, test_brain_lead, test_occlusion, test_skins_and_ids, test_team_birth, test_fast_eyes, test_double_drop, test_replay_heat, test_path, test_soft_rules, test_team, test_hand, test_sessions, test_tactics, test_tactics_stronger, test_trt_and_gpu_recovery, test_adb_and_stream_fixes, test_qt_ui_design_system, test_frame_integrity, test_training_stays_off_by_default, test_live_ai_sync_and_watch_mode):
+def test_tracking_priority():
+    from royale.unit_tracker import Det, UnitTracker
+
+    tr = UnitTracker()
+    def d(x, confidence, team):
+        return Det("knight", x, 15.0, confidence, team, 3.0, None, False, team)
+
+    left, right = (track.id for _, track in tr.update([d(7.6, .9, "ally"), d(8.4, .9, "enemy")], 1.0))
+    tr.update([d(7.8, .9, "ally"), d(8.2, .9, "enemy")], 1.1)
+    weak, enemy, ally = [track for _, track in tr.update(
+        [d(7.8, .4, "ally"), d(7.9, .9, "enemy"), d(8.1, .9, "ally")], 1.2)]
+    check("tracker uses confident detections first and keeps the two teams separate",
+          weak is None and enemy.id == right and ally.id == left and len(tr.tracks) == 2)
+    tr.update([], 1.3)
+    found, = [track for _, track in tr.update([d(8.3, .9, "ally")], 1.4)]
+    check("tracker restores the same ID after a missed detection", found.id == left)
+    check("tracker ignores duplicate or out-of-order frames",
+          tr.update([d(5, .9, "enemy")], 1.35)[0][1] is None and tr.t == 1.4)
+
+
+for fn in (test_viewer_assignment_and_eta, test_tracker, test_tracking_priority, test_brain_lead, test_occlusion, test_skins_and_ids, test_team_birth, test_fast_eyes, test_double_drop, test_replay_heat, test_path, test_soft_rules, test_team, test_hand, test_sessions, test_tactics, test_tactics_stronger, test_trt_and_gpu_recovery, test_adb_and_stream_fixes, test_qt_ui_design_system, test_frame_integrity, test_training_stays_off_by_default, test_live_ai_sync_and_watch_mode):
     try:
         fn()
     except Exception as e:
