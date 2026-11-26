@@ -44,7 +44,7 @@ class Ctx:
         self.names = {}
         for n, t in self.ids.items():
             for c in t:
-                if c: self.names.setdefault(c, n)
+                if c is not None: self.names.setdefault(c, n)
         meta = json.loads((_root() / "assets" / "royale" / "board.json").read_text(encoding="utf-8"))
         self.vocab = meta["vocab"]
         self.key = board.key
@@ -136,17 +136,18 @@ def _top_tiles(cx, inp, name, k, anywhere):
 def _playable(cx, env, team, hand):
     el = env.get_elixir_for_team(team)
     out = []
+    native_hand = env.get_hand_for_team(team)
     for slot, n in enumerate(hand):
         if not n: continue
-        try: cost = (cx.m.get_card_info(cx.ids[n][0]) or {}).get("cost", 11)
+        try: cost = (cx.m.get_card_info(native_hand[slot]) or {}).get("cost", 11)
         except Exception: continue
         if cost <= el + 1e-6: out.append((slot, n, float(cost)))
     return out
 
 
-def _valid(cx, env, team, name, tile):
+def _valid(env, team, slot, tile):
     x, y = eng_point(team, *tile)
-    try: return env.is_valid_placement(cx.ids[name][0], x, y, team)
+    try: return env.is_valid_placement(env.get_hand_for_team(team)[slot], x, y, team)
     except Exception: return False
 
 
@@ -166,7 +167,7 @@ def candidates(cx, env, team, inp, hand, per_card=3):
         tiles = []
         for t in _top_tiles(cx, inp, n, per_card, anywhere):
             if len(tiles) >= per_card: break
-            if _valid(cx, env, team, n, t): tiles.append(t)
+            if _valid(env, team, slot, t): tiles.append(t)
         extra = []
         if "spell" in roles(n): extra += enemies[:2] + [(3, 26), (14, 26)]
         elif enemies and enemies[0][1] <= 17:
@@ -175,7 +176,7 @@ def candidates(cx, env, team, inp, hand, per_card=3):
         else:
             extra += [(3, 13), (14, 13)]
         for t in extra:
-            if t not in tiles and len(tiles) < per_card + 2 and _valid(cx, env, team, n, t): tiles.append(t)
+            if t not in tiles and len(tiles) < per_card + 2 and _valid(env, team, slot, t): tiles.append(t)
         out += [(slot, n, t) for t in tiles]
     return out
 
@@ -213,7 +214,7 @@ REPLIES = 2                 # their likeliest answers tried for every move (5.84
 
 def _act(s, team, slot, x, y, ticks):
     if team == 0: return s.step_self_play_fast(slot, x, y, -1, 0.0, 0.0, ticks)
-    return s.step_self_play_fast(-1, 0.0, 0.0, slot, x, y, ticks)
+    return s.step_self_play_fast(-1, 0.0, 0.0, slot, x, s.BOARD_HEIGHT - 1 - y, ticks)
 
 
 def _rollout(env, team, act, reply=None):
@@ -245,8 +246,9 @@ def search(cx, env, team, cands):
     out = [(0.0, None, None, None)]
     o = 1 - team
     their = _playable(cx, env, o, [cx.names.get(c) for c in env.get_hand_for_team(o)])
+    native_hand = env.get_hand_for_team(team)
     for slot, n, tile in cands:
-        cost = float((cx.m.get_card_info(cx.ids[n][0]) or {}).get("cost", 3))
+        cost = float(cx.m.get_card_info(native_hand[slot])["cost"])
         pt = eng_point(team, *tile)
         end = _rollout(env, team, (slot, *pt))
         v = _value(cx, end, team, before, cost) - _leak(env, team, cost) - base
@@ -257,7 +259,7 @@ def search(cx, env, team, cands):
             from royale.brain import roles
             if "spell" in roles(on): t2 = otile
             else: t2 = (otile[0], max(1, min(14, otile[1] - 2)))
-            if not _valid(cx, env, o, on, t2): continue
+            if not _valid(env, o, oslot, t2): continue
             e2 = _rollout(env, team, (slot, *pt), (oslot, *eng_point(o, *t2)))
             vs.append(_value(cx, e2, team, before, cost) - _leak(env, team, cost) - base)
         if len(vs) > 1: v = 0.5 * min(vs) + 0.5 * sum(vs) / len(vs)
@@ -300,7 +302,7 @@ def net_move(cx, env, team, inp, hand):
     for slot, n, _c in sorted(pl, key=lambda q: -float(card_l[0][cx.vid(q[1])])):
         anywhere = bool((card(n) or {}).get("anywhere")) or "spell" in roles(n)
         for t in _top_tiles(cx, inp, n, 3, anywhere)[:12]:
-            if _valid(cx, env, team, n, t): return slot, n, t
+            if _valid(env, team, slot, t): return slot, n, t
     return None
 
 
@@ -353,7 +355,10 @@ def battle(cx, decks, pilots, record=True, explore=0.15, max_ticks=1800, seed=No
             if acts[team]: n_moves += 1
         a0 = acts[0] or (-1, 0.0, 0.0)
         a1 = acts[1] or (-1, 0.0, 0.0)
-        r = env.step_self_play_fast(a0[0], a0[1], a0[2], a1[0], a1[1], a1[2], DECIDE)
+        # Placement checks use world coordinates. Self-play accepts team 1's
+        # local Y and converts it back internally; X stays in world coordinates.
+        y1 = env.BOARD_HEIGHT - 1 - a1[2]
+        r = env.step_self_play_fast(a0[0], a0[1], a0[2], a1[0], a1[1], y1, DECIDE)
         if r.done: break
     stats = {"ticks": env.get_current_tick(), "searches": n_search, "moves": n_moves,
              "s": round(time.perf_counter() - t0, 1), "towers": [env.get_towers_alive(t) for t in (0, 1)]}

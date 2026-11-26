@@ -292,5 +292,22 @@ cycle.p["2v2"] = True
 check("2v2 keeps plausible responses when two hands cannot be reconstructed",
       ids["fireball"][0] in {reply[0] for reply in engine.replies(cycle, "musketeer", 3, 13)})
 
+# Native placement queries use world coordinates. Native self-play expects
+# team 1's local Y even though it still takes a world X.
+from royale import exit_train
+for team in (0, 1):
+    native_deck = engine._deck_ids(m, ["knight", *deck[1:]])
+    match = m.ClashRoyaleEnv(native_deck, native_deck, 3600)
+    match.reset()
+    knight_id = ids["knight"][0]
+    match.set_hand_for_team(team, native_deck[:4])
+    match.set_elixir_for_team(team, 8.0)
+    tile = (3, 13)
+    legal = exit_train._valid(match, team, 0, tile)
+    exit_train._act(match, team, 0, *exit_train.eng_point(team, *tile), 1)
+    check(f"simulator policy deploys Knight from team {team}'s local placement",
+          legal and match.get_elixir_for_team(team) < 8.0 and
+          any(u.team == team and not u.tower and u.card_id == knight_id for u in match.get_units()))
+
 print(f"\n{'ALL PASSED' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)
