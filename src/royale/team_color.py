@@ -99,7 +99,7 @@ class TeamColor:
         if nb + nr < 6: return None, 0.0                       # nothing coloured over it: unknown
         import cv2
         Wf = W                                                 # sizes relative to the (half-size) screen width
-        best = None
+        scores = {}
         for name, m, n in (("ally", self._mb, nb), ("enemy", self._mr, nr)):
             if n < 6: continue
             band = m[ya:yb, xa:xb]
@@ -115,13 +115,14 @@ class TeamColor:
                 if badge and bar: score = max(score, 3.0)
                 elif badge: score = max(score, 2.0 + min(0.5, a / max(1.0, w * h) - 0.45))
                 elif bar: score = max(score, 2.5)
-            if score and (best is None or score > best[1]): best = (name, score)
-        if best is None: return None, 0.0
-        # both colours over one unit (a blue unit next to a red badge): the stronger, much less sure
-        other = nr if best[0] == "ally" else nb
-        mine = nb if best[0] == "ally" else nr
-        if other > 0.6 * mine: return best[0], best[1] * 0.4
-        return best
+            if score:
+                scores[name] = score
+        if not scores:
+            return None, 0.0
+        best = max(scores, key=scores.get)
+        # Arena paint and effects can be saturated without forming a badge.
+        # Reduce confidence only when both colours form plausible markers.
+        return best, scores[best] * (0.4 if len(scores) == 2 else 1.0)
 
 
 # ------------------------------------------------------------------ measuring the colours on real battles (6.7)

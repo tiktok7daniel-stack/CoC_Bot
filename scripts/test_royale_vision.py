@@ -922,6 +922,9 @@ def test_tracking_priority():
     def d(x, confidence, team):
         return Det("knight", x, 15.0, confidence, team, 3.0, None, False, team)
 
+    _, spirit = tr.update([Det("ice_spirit", 3, 22, .82, "enemy", 2.0, None, False, "ally")], 0.5)[0]
+    check("a visible ally badge outranks inferred side in enemy territory", spirit.team == "ally")
+    tr = UnitTracker()
     left, right = (track.id for _, track in tr.update([d(7.6, .9, "ally"), d(8.4, .9, "enemy")], 1.0))
     tr.update([d(7.8, .9, "ally"), d(8.2, .9, "enemy")], 1.1)
     weak, enemy, ally = [track for _, track in tr.update(

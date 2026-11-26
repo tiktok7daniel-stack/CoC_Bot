@@ -94,6 +94,7 @@ class Track:
         self.names = {d.name: float(d.conf)}
         self.team_v = {"ally": 0.0, "enemy": 0.0}
         self.color_votes = 0
+        self.badge_team = None
         # 6.9.17: where it was BORN — a card is only placed on its player's own half (except the few that land anywhere)
         if d.name not in SPAWN_ANYWHERE:
             self.team_v["ally" if d.y <= RIVER_Y else "enemy"] += BIRTH_WEIGHT
@@ -116,9 +117,13 @@ class Track:
     def team(self):
         if abs(self.color_votes) >= 2:
             return "ally" if self.color_votes > 0 else "enemy"
+        if self.badge_team is not None:
+            return self.badge_team
         return "ally" if self.team_v["ally"] > self.team_v["enemy"] else "enemy"
 
     def team_sure(self):
+        if self.badge_team is not None:
+            return 1.0
         a, e = self.team_v["ally"], self.team_v["enemy"]
         return abs(a - e) / max(1e-6, a + e)
 
@@ -131,6 +136,7 @@ class Track:
 
     def _vote_team(self, d):
         if d.color_team in ("ally", "enemy"):
+            self.badge_team = d.color_team
             vote = 1 if d.color_team == "ally" else -1
             self.color_votes = max(-4, min(4, self.color_votes + vote))
         if d.team in ("ally", "enemy"):
