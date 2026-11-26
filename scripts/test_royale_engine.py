@@ -260,5 +260,20 @@ if env7 is not None and evo_id:
     got7 = env7.get_hand_for_team(0)
     check("a charged Evolution is the evolved card in the engine", got7[slots7["cannon"]] == evo_id, f"{got7} evo {evo_id}")
 
+# Cover the bridge approach, before the ordinary defensive search starts.
+hand = ["cannon", "musketeer", "fireball", "the_log"]
+playable = list(enumerate(hand))
+rush_state = {"hand": hand, "towers": {}, "allies": []}
+for row in (19, 21):
+    defender = brain([("hog_rider", 3, row)])
+    result = engine.think(defender, rush_state, hand, playable, 5.0, None)
+    plan = engine._S["last"].get("best", {})
+    check(f"intercept Hog Rider from row {row} and save tower health",
+          result is not None and result[0] == "play" and "early defense" in result[-1]
+          and plan.get("comparison", {}).get("our_hp_saved", 0) > 0, str(result))
+quiet = brain([("hog_rider", 3, 25)])
+check("a distant rush does not spend prematurely",
+      engine.think(quiet, rush_state, hand, playable, 5.0, None) is None)
+
 print(f"\n{'ALL PASSED' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)

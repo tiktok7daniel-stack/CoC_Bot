@@ -535,6 +535,22 @@ def skips():
     return out
 
 
+def _early_rush(brain, env, waiting, before):
+    """Open the defensive search before the bridge if waiting exposes a tower."""
+    from royale.brain import card, unit_card
+
+    rush = any(17 < y <= 21 and card(unit_card(unit) or "").get("buildings_only")
+               for unit, _, y in (brain._stable or []))
+    if not rush:
+        return False
+    for slot in (0, 1, 2):
+        start_hp = before["towers"][(0, slot)]
+        remaining = max(0, waiting.get_tower_hp(0, slot))
+        if start_hp > 0 and (remaining == 0 or start_hp - remaining >= 0.08 * env.get_tower_max_hp(0, slot)):
+            return True
+    return False
+
+
 def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
     """-> ("play", slot, card, tile, why) | ("wait", why) | None (no opinion: the brain's move stands)."""
     if not ready(): return _skip("engine off")
@@ -585,6 +601,8 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
         pass
     before = _snap_state(env)
     w_end = rollout(env, None, 0, 0)
+    early_rush = not defend and not ai_only and _early_rush(brain, env, w_end, before)
+    defend = defend or early_rush
     base = _value(w_end, brain, before)
     if _S.get("debug") is not None:
         _S["debug"].append(("wait", round(base, 2), _detail(w_end, before)))
@@ -592,6 +610,7 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
     m = module()
     native_hand = env.get_hand_for_team(0)
     winning_rollout = None
+    waiting_hp = sum(max(0, w_end.get_tower_hp(0, slot)) for slot in (0, 1, 2)) if early_rush else None
     for i, n, (tx, ty) in candidates(brain, playable, rule_d, defend, first):
         hs = slots.get(n)
         if hs is None: continue
@@ -628,7 +647,8 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
         scored.append({"card": n, "tile": [tx, ty], "v": round(v, 2)})
         if _S.get("debug") is not None:
             _S["debug"].append((round(v, 2), n, (tx, ty), _detail(end, before)))
-        if best is None or v > best[0]:
+        saves_hp = waiting_hp is None or sum(max(0, end.get_tower_hp(0, slot)) for slot in (0, 1, 2)) > waiting_hp
+        if saves_hp and (best is None or v > best[0]):
             best = (v, i, n, (tx, ty))
             winning_rollout = end, cost
         if rule_d and n == rule_d["card"] and (tx, ty) == tuple(rule_d["tile"]): rule_v = v
@@ -644,7 +664,8 @@ def think(brain, st, hand, playable, my_elixir, rule_d, log=None):
     _S["last"]["best"] = {"card": n, "tile": list(tile), "comparison": comparison}
     if defend:
         if v > WAIT_MARGIN:
-            return ("play", i, n, tile, f"engine: {n} at {tile} is +{v:.1f} elixir vs waiting "
+            prefix = "early defense" if early_rush else "engine"
+            return ("play", i, n, tile, f"{prefix}: {n} at {tile} is +{v:.1f} elixir vs waiting "
                                          f"({tried} moves thought through, {ms:.0f} ms{ai_note})")
         # nothing clearly better than waiting: the brain's own move stands unless the engine finds it clearly bad
         # (before 5.69 the engine cancelled it and the bot looked slow and hesitant)
