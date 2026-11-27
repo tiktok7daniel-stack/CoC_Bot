@@ -2,7 +2,7 @@
 Metric tiles, KPI cards, and tabular numeric displays — Luxury Dark Obsidian & Crimson.
 Tabular monospace numerals for zero-jitter live metrics.
 """
-from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
+from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, Property
 from PySide6.QtGui import QPainter, QColor, QPen, QFont, QPainterPath
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QLabel, QWidget
 

@@ -147,7 +147,11 @@ class TestUiPhase2Imports(unittest.TestCase):
         """preflight.py should import and have run_preflight."""
         from royale.preflight import run_preflight, PreflightResult
         self.assertTrue(callable(run_preflight))
-        self.assertTrue(hasattr(PreflightResult, 'ok'))
+        # PreflightResult is a dataclass with 'ok' as a field
+        self.assertTrue(hasattr(PreflightResult, 'ok') or 'ok' in PreflightResult.__dataclass_fields__)
+        # Verify by instantiation
+        result = PreflightResult(ok=True)
+        self.assertTrue(result.ok)
 
     def test_widgets_available(self):
         """Required widgets should be importable."""

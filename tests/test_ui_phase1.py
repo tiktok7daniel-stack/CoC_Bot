@@ -70,7 +70,7 @@ class TestUiPhase1Widgets(unittest.TestCase):
         c = color("crimson")
         self.assertEqual(c.name().lower(), "#e11d48")
         c2 = color("ok", alpha=0.5)
-        self.assertEqual(c2.alphaF(), 0.5)
+        self.assertAlmostEqual(c2.alphaF(), 0.5, places=2)
 
 
 class TestUiPhase1Icons(unittest.TestCase):
