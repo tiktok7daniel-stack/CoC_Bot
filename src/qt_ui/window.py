@@ -266,6 +266,13 @@ class MainWindow(QMainWindow):
         if royale and cur not in ("royale_home", "royale_ai", "royale_training", "royale", "royale_live", "acc", "set"): self.show_screen("royale_home")
         elif not royale and cur in ("royale_home", "royale_ai", "royale_training", "royale", "royale_live"): self.show_screen("dash")
 
+    def open_account_settings(self, account):
+        game = (self.store.APP.get("account_games") or {}).get(account, "coc") or "coc"
+        self.store.switch_account(account)
+        if game != self.ui_game():
+            self.store.set("ui_game", game, "app")
+        self.show_screen("royale" if game == "royale" else "dash")
+
     def choose_game(self, force=True):
         """The game chooser (when the program opens, and from the sidebar's 'change game')."""
         if not force and self.store.APP.get("ui_game") in ("coc", "royale") and self.store.APP.get("ui_game_remember"):

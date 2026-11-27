@@ -186,10 +186,8 @@ class Eyes:
         en, al = self._units(frame_rgb, raw, big_current, img, now, hp, spells)
         t_track = time.perf_counter()
 
-        # Detect stale/frozen frames: compare frame hash or timestamp gap
-        frame_age = now - getattr(self, '_last_frame_time', now)
-        is_stale = frame_age > 0.5  # more than 500ms since last frame
-        self._last_frame_time = now
+        frame_age = max(0.0, time.monotonic() - captured_at)
+        is_stale = frame_age > 0.5
 
         self.last_timings = {
             "prep_ms": round((t_prep - started) * 1000, 1),

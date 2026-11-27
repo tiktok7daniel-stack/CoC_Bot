@@ -406,7 +406,6 @@ class RoyaleLiveScreen(Screen):
         layout.addWidget(self.pf_adb)
         layout.addWidget(self.pf_ram)
         layout.addWidget(self.pf_disk)
-        layout.addStretch(1)
         return bar
 
     def _run_preflight_async(self):
@@ -482,17 +481,12 @@ class RoyaleLiveScreen(Screen):
         perf = d.get("perf") or {}
 
         # FPS from video stream
-        fps = vision.get("fps", 0)
-        if fps > 0:
-            self.tele_fps.set(f"{fps:.0f}")
+        fps = vision.get("fps")
+        self.tele_fps.set(f"{fps:.0f}" if fps is not None else "—")
 
         # Frame age / stale status
-        frame_age = vision.get("decision_age_ms", 0)
-        if frame_age > 0:
-            if frame_age > 500:
-                self.tele_frame_age.set(f"{frame_age:.0f}ms")
-            else:
-                self.tele_frame_age.set(f"{frame_age:.0f}ms")
+        frame_age = vision.get("decision_age_ms")
+        self.tele_frame_age.set(f"{frame_age:.0f} ms" if frame_age is not None else "—")
 
         # Vision source
         source_map = {

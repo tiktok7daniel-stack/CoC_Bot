@@ -199,7 +199,7 @@ def selftest(log=None):
         x, y = eng_xy(3, 17)
         e.inject(hog, x, y, 1, -1.0, 0)
         hp0 = e.get_tower_hp(0, 1)
-        for _ in range(8): e.step_self_play_fast(-1, 0.0, 0.0, -1.0, 0.0, 0.0, 10)
+        for _ in range(8): e.step_self_play_fast(-1, 0.0, 0.0, -1, 0.0, 0.0, 10)
         lost_alone = hp0 - e.get_tower_hp(0, 1)
         assert lost_alone > 0, f"Hog alone did -{lost_alone} damage (expected > 0)"
         # 2. a Cannon in the middle (our tile 8, 9) pulls it: the tower loses less

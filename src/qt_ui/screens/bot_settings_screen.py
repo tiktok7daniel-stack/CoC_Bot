@@ -252,7 +252,8 @@ class BotSettingsScreen(Screen):
         self.check_power()
 
     def on_sub(self, key):
-        if key == "general": self.check_tess()
+        if key == "general" and hasattr(self, "tess"):
+            self.check_tess()
 
     # ---------------------------------------------------------------- days
     def render_days(self):

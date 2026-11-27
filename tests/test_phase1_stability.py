@@ -34,9 +34,8 @@ class TestGamePyRecovery(unittest.TestCase):
         bot.log = MagicMock()
 
         with patch.object(time, 'sleep') as mock_sleep:
-            bot._recover(Exception("test"))
-            # Should sleep 60s for stopping
-            mock_sleep.assert_called_with(60)
+            self.assertFalse(bot._recover(Exception("test")))
+            mock_sleep.assert_not_called()
 
     def test_recover_backoff_timing(self):
         """_recover() should use exponential backoff."""
@@ -71,19 +70,9 @@ class TestEngineSelftest(unittest.TestCase):
         """selftest() should return False when module is None."""
         from royale import engine as eng
 
-        # Save original
-        orig_mod = eng._S.get("mod")
-
-        try:
-            eng._S["ok"] = None
-            eng._S["mod"] = None
-
-            result = eng.selftest()
-            self.assertFalse(result)
+        with patch.dict(eng._S, {"ok": None}), patch.object(eng, "module", return_value=None):
+            self.assertFalse(eng.selftest())
             self.assertFalse(eng._S["ok"])
-        finally:
-            eng._S["mod"] = orig_mod
-            eng._S["ok"] = None
 
     def test_selftest_handles_keyerror(self):
         """selftest() should handle KeyError when hog_rider missing."""

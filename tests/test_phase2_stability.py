@@ -131,28 +131,34 @@ class TestStaleFrameGuard(unittest.TestCase):
         # Verify the frame_age key is checked in game.py
         self.assertIn("frame_age", st)
 
-    def test_consecutive_stale_frames_escalate_to_recover(self):
-        """10+ consecutive stale frames should trigger _recover() and reset on fresh frame."""
+    def test_slow_vision_skips_learning_without_reconnecting(self):
         from royale.game import RoyaleBot
 
         bot = RoyaleBot.__new__(RoyaleBot)
         bot.log = MagicMock()
+        bot.brain = MagicMock()
+        bot.eyes = MagicMock()
+        bot.eyes.look.return_value = {"frame_age": 1.5}
         bot._recover = MagicMock()
-        bot.s = {}  # default stale_threshold = 1.0
+        bot._stale_frames = 0
+        bot.battles = 0
+        bot.s = {"engine_think": False}
+        bot._flag_t = float("inf")
+        utils = MagicMock()
+        utils.running.side_effect = [True] * 10 + [False]
+        utils.Frame_Handler._power = {}
 
-        # Simulate 10 consecutive stale frames
-        for i in range(10):
-            st = {"frame_age": 1.5, "hand": [], "ready": [], "enemies": [], "allies": [], "towers": {}, "elixir": 5.0}
-            # The actual logic is in the main loop, so we test the counter logic directly
-            bot._stale_frames = getattr(bot, "_stale_frames", 0) + 1
-            if bot._stale_frames >= 10:
-                bot._recover(Exception("stale frames"))
-                bot._stale_frames = 0
+        with patch("royale.game._u", return_value=utils), patch("royale.game.frame"), \
+                patch("royale.eyes.in_battle", return_value=True), \
+                patch("royale.learn.choose", return_value={}), patch("learn_sync.configured", return_value=False):
+            self.assertIsNone(bot.battle())
 
-        # Should have called _recover once
-        bot._recover.assert_called_once()
-        # Should have reset counter
-        self.assertEqual(bot._stale_frames, 0)
+        bot.brain.see_hand.assert_not_called()
+        bot.eyes.learn_deck.assert_not_called()
+        bot._recover.assert_not_called()
+        bot.log.warning.assert_called_once()
+        self.assertEqual(bot._stale_frames, 10)
+
 
     def test_fresh_frame_resets_stale_counter(self):
         """Fresh frame (frame_age < threshold) should reset stale counter."""
@@ -202,10 +208,10 @@ class TestPreflightChecks(unittest.TestCase):
         """ADB check should handle missing ADB gracefully."""
         from royale.preflight import _check_adb
 
-        with patch('shutil.which', return_value=None):
+        with patch('utils.emulator_adb', return_value=None), patch('shutil.which', return_value=None):
             result = _check_adb()
-            self.assertFalse(result.ok)
-            self.assertTrue(any("ADB not found" in e for e in result.errors))
+            self.assertTrue(result.ok)
+            self.assertTrue(any("ADB executable not found" in w for w in result.warnings))
 
     def test_preflight_resources_warns_low_ram(self):
         """Resource check should warn on low RAM."""

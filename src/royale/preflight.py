@@ -1,5 +1,4 @@
 """Lightweight pre-flight check before Clash Royale bot startup."""
-import os
 import shutil
 import subprocess
 import sys
@@ -17,7 +16,7 @@ class PreflightResult:
 
 def _find_root() -> Path:
     """Find project root from this file."""
-    return Path(__file__).resolve().parent.parent.parent
+    return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2]))
 
 
 def _check_assets(root: Path) -> PreflightResult:
@@ -47,11 +46,11 @@ def _check_adb() -> PreflightResult:
     """Verify ADB is available and can connect."""
     result = PreflightResult(ok=True)
 
-    # Check if adb is in PATH
-    adb_path = shutil.which("adb")
+    from utils import emulator_adb
+
+    adb_path = emulator_adb() or shutil.which("adb")
     if not adb_path:
-        result.errors.append("ADB not found in PATH")
-        result.ok = False
+        result.warnings.append("ADB executable not found; the connection manager will try to connect")
         return result
 
     try:
@@ -59,7 +58,6 @@ def _check_adb() -> PreflightResult:
         proc = subprocess.run([adb_path, "devices"], capture_output=True, text=True, timeout=5)
         if proc.returncode != 0:
             result.warnings.append(f"ADB devices failed: {proc.stderr.strip()}")
-            result.ok = False
         else:
             # Check if any device is connected
             lines = proc.stdout.strip().split('\n')
@@ -91,7 +89,6 @@ def _check_resources() -> PreflightResult:
         result.warnings.append(f"RAM check failed: {e}")
 
     try:
-        import shutil
         # Disk: warn if less than 1GB free
         total, used, free = shutil.disk_usage(Path.home())
         free_gb = free / (1024**3)
@@ -110,9 +107,9 @@ def run_preflight() -> PreflightResult:
     result = PreflightResult(ok=True)
 
     # Run all checks
-    for check in (_check_assets, _check_adb, _check_resources):
+    for check, args in ((_check_assets, (root,)), (_check_adb, ()), (_check_resources, ())):
         try:
-            r = check(root)
+            r = check(*args)
             result.errors.extend(r.errors)
             result.warnings.extend(r.warnings)
             if not r.ok:

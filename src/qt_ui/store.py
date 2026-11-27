@@ -37,6 +37,7 @@ class Store(QObject):
         self.qs = QSettings("CoC_Bot", "CoC_Bot_v4")
         self.S, self.APP = {}, {}
         self._saved_S, self._saved_APP = "", ""
+        self._settings_account = None
         self.account = str(self.qs.value("account", "") or "")
         self.bindings = []      # (scope, path, setter)
         self._filling = False
@@ -66,12 +67,16 @@ class Store(QObject):
         acc = self.account
 
         def got(s):
+            if acc != self.account:
+                if done: done(False)
+                return
             if not isinstance(s, dict) or s.get("error"):
                 if done: done(False)
                 return
             self.S = s
+            self._settings_account = acc
             self._saved_S = json.dumps(s, sort_keys=True)
-            self._set_dirty(False)
+            self._set_dirty(json.dumps(self.APP, sort_keys=True) != self._saved_APP)
             self.fill()
             self.loaded.emit()
             if done: done(True)
@@ -176,6 +181,9 @@ class Store(QObject):
                 self.saved.emit(False, "save_err")
                 if done: done(False)
                 return
+            if acc != self.account:
+                self.api.post("/api/app_settings", APP, got_app)
+                return
             self._saved_S = json.dumps(S, sort_keys=True)
             lead = s.get("follow") or ""
             if lead and json.dumps({k: v for k, v in S.items() if k not in ("follow", "clash_tag")}, sort_keys=True) != \
@@ -186,7 +194,7 @@ class Store(QObject):
                 self.saved.emit(True, "follow_note")
                 self._load_settings()                       # the screens show what the account really plays
             self.api.post("/api/app_settings", APP, got_app)
-        if not acc:
+        if not acc or self._settings_account != acc:
             self.api.post("/api/app_settings", APP, got_app)
         else:
             self.api.post(f"/api/settings/{acc}", S, got_s)
@@ -194,7 +202,8 @@ class Store(QObject):
     def save_blocking(self):
         """Save right now on the calling thread (window closing: the process ends right after)."""
         self._timer.stop()
-        if self.account: self.api.request("POST", f"/api/settings/{self.account}", self.S, timeout=10)
+        if self.account and self._settings_account == self.account:
+            self.api.request("POST", f"/api/settings/{self.account}", self.S, timeout=10)
         self.api.request("POST", "/api/app_settings", self.APP, timeout=10)
         self._saved_S = json.dumps(self.S, sort_keys=True)
         self._saved_APP = json.dumps(self.APP, sort_keys=True)

@@ -170,7 +170,7 @@ class AccountsScreen(Screen):
                 b.clicked.connect(lambda _=False, x=acc: self.ctx.window.account_action(x, "start"))
             h.addWidget(b)
             o = IconButton("sliders", "acc_settings", size=14)
-            o.clicked.connect(lambda _=False, x=acc: (self.store.switch_account(x), self.ctx.window.show_screen("dash")))
+            o.clicked.connect(lambda _=False, x=acc: self.ctx.window.open_account_settings(x))
             h.addWidget(o)
             d = IconButton("trash", kind="ghost", icon_color=TOKENS["bad"], size=15, tip_key="acc_delete")
             d.clicked.connect(lambda _=False, x=acc: self.remove(x))
