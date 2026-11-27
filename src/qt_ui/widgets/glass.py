@@ -6,6 +6,7 @@ from PySide6.QtGui import QPainter, QPainterPath, QLinearGradient, QRadialGradie
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QWidget, QLabel, QGraphicsDropShadowEffect
 
 from ..theme import TOKENS, LIGHT, ui_font
+from ..i18n import tr
 from .. import icons
 
 
@@ -43,7 +44,6 @@ class GlassCard(QFrame):
 
             box = QVBoxLayout()
             box.setSpacing(0)
-            from ..theme import tr
             self.title = QLabel(tr(title_key))
             self.title.setFont(ui_font(11, QFont.Weight(700)))
             self.title.setStyleSheet("color: #F4F4F5;")

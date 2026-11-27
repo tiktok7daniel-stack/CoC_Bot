@@ -7,6 +7,7 @@ from PySide6.QtGui import QPainter, QColor, QPen, QFont, QPainterPath
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QLabel, QWidget
 
 from ..theme import TOKENS, mono_font, ui_font
+from ..i18n import tr
 from .. import icons
 
 
@@ -40,7 +41,6 @@ class MetricTile(QFrame):
         self.value.setStyleSheet(f"color: {self._accent}; font-size: 28pt; font-weight: 800;")
         v.addWidget(self.value)
 
-        from ..theme import tr
         self.cap = QLabel(tr(key) if key else "")
         self.cap.setAlignment(Qt.AlignCenter)
         self.cap.setStyleSheet("color: #A1A1AA; font-size: 9pt;")
