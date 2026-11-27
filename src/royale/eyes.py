@@ -47,15 +47,19 @@ class Eyes:
     # -------------------------------------------------------------- the deck
     def set_deck(self, names):
         from royale.vision.detectors.card_detector import CardDetector
-        names = [n for n in names if n in self.by_name][:8]
-        self.deck = names
-        cards = [self.by_name[n] for n in names] if len(names) == 8 else self.all_cards
+        filtered = [n for n in names if n in self.by_name][:8]
+        missing = [n for n in names if n and n not in self.by_name]
+        if missing:
+            import logging
+            logging.getLogger(__name__).warning(f"Clash Royale: unknown cards not in deck: {missing}")
+        self.deck = filtered
+        cards = [self.by_name[n] for n in filtered] if len(filtered) == 8 else self.all_cards
         self._card_det = CardDetector(cards)
         # units that can be ours: only those of our deck are asked "ours or theirs?" (others are theirs).
         # While the deck is not known yet EVERY unit is asked: before 5.43.1 an unknown deck meant "everything is
         # theirs", so the bot's own first troops were taken for the enemy and spelled (Fireball on itself)
-        self.units.cards = [self.by_name[n] for n in names]
-        self.units.possible_ally_names = ({u.name for n in names for u in self.by_name[n].units} if len(names) == 8
+        self.units.cards = [self.by_name[n] for n in filtered]
+        self.units.possible_ally_names = ({u.name for n in filtered for u in self.by_name[n].units} if len(filtered) == 8
                                           else {u.name for c in self.all_cards for u in c.units})
 
     @staticmethod
@@ -181,6 +185,12 @@ class Eyes:
         self.overlay_boxes = []
         en, al = self._units(frame_rgb, raw, big_current, img, now, hp, spells)
         t_track = time.perf_counter()
+
+        # Detect stale/frozen frames: compare frame hash or timestamp gap
+        frame_age = now - getattr(self, '_last_frame_time', now)
+        is_stale = frame_age > 0.5  # more than 500ms since last frame
+        self._last_frame_time = now
+
         self.last_timings = {
             "prep_ms": round((t_prep - started) * 1000, 1),
             "big_ms": round((t_big - t_prep) * 1000, 1),
@@ -188,6 +198,7 @@ class Eyes:
             "hand_ms": round((t_hand - t_models) * 1000, 1),
             "track_ms": round((t_track - t_hand) * 1000, 1),
             "total_ms": round((t_track - started) * 1000, 1),
+            "frame_age_ms": round(frame_age * 1000, 1),
         }
         return {
             "next": nxt, "hand": hand, "ready": list(ready), "hand_look": hand_look,
@@ -204,6 +215,7 @@ class Eyes:
                               "large-current-frame" if big_now else "small-current-frame"),
             "vision_timing": dict(self.last_timings),
             "t": now, "_seen_t": seen_t,
+            "frame_age": frame_age,  # for stale frame detection
         }
 
     def _health(self, frame_rgb, dets):
@@ -384,7 +396,12 @@ class Eyes:
         from royale import hand_classifier
         if self.hand_cls is None:
             self.hand_cls = hand_classifier.HandClassifier.load()
-            if self.hand_cls is None: return nxt, hand, looks
+            if self.hand_cls is None:
+                if not getattr(self, '_hand_model_warned', False):
+                    import logging
+                    logging.getLogger(__name__).warning("Clash Royale: hand classifier not loaded — falling back to picture matcher")
+                    self._hand_model_warned = True
+                return nxt, hand, looks
         allowed = set(self.deck) if len(self.deck) == 8 else None
         out = self.hand_cls.read(frame, allowed=allowed, known=set(self.by_name))
         if not out: return nxt, hand, looks

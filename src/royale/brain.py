@@ -58,21 +58,39 @@ SPAWNED = {"golemite", "lava_pup", "elixir_golem_medium", "elixir_golem_small", 
 
 def cards_db():
     if _DB["cards"] is None:
-        with open(os.path.join(_ROOT, "assets", "royale", "cards.json"), encoding="utf-8") as f:
-            d = json.load(f)
-        _DB["cards"] = d["cards"]
-        _DB["elixir"] = d.get("elixir") or {"start": 6.0, "steps": [{"seconds": 120, "ms_per_elixir": 2800},
+        cards_path = os.path.join(_ROOT, "assets", "royale", "cards.json")
+        try:
+            with open(cards_path, encoding="utf-8") as f:
+                d = json.load(f)
+            if "cards" not in d:
+                import logging
+                logging.error(f"Clash Royale: {cards_path} missing 'cards' key")
+                return {}
+            _DB["cards"] = d["cards"]
+            _DB["elixir"] = d.get("elixir") or {"start": 6.0, "steps": [{"seconds": 120, "ms_per_elixir": 2800},
                                                                    {"seconds": 120, "ms_per_elixir": 1400},
                                                                    {"seconds": 60, "ms_per_elixir": 930}]}
-        _DB["unit_to_card"] = {}
-        # a unit some cards share (skeleton: Skeletons / Skeleton Army / Graveyard / Tombstone): the card that is
-        # mostly that unit and cheapest (its own card), the group size picks Skeleton Army (see observe)
-        cand = {}
-        for name, c in _DB["cards"].items():
-            for u in c.get("units") or []:
-                cand.setdefault(u, []).append((len(c.get("units") or []), c.get("kind") != "troop", c.get("cost", 9), name))
-        for u, lst in cand.items():
-            _DB["unit_to_card"][u] = sorted(lst)[0][3]
+            _DB["unit_to_card"] = {}
+            # a unit some cards share (skeleton: Skeletons / Skeleton Army / Graveyard / Tombstone): the card that is
+            # mostly that unit and cheapest (its own card), the group size picks Skeleton Army (see observe)
+            cand = {}
+            for name, c in _DB["cards"].items():
+                for u in c.get("units") or []:
+                    cand.setdefault(u, []).append((len(c.get("units") or []), c.get("kind") != "troop", c.get("cost", 9), name))
+            for u, lst in cand.items():
+                _DB["unit_to_card"][u] = sorted(lst)[0][3]
+        except FileNotFoundError:
+            import logging
+            logging.error(f"Clash Royale: {cards_path} not found — ensure assets/royale/cards.json exists")
+            return {}
+        except json.JSONDecodeError as e:
+            import logging
+            logging.error(f"Clash Royale: {cards_path} has invalid JSON — {e}")
+            return {}
+        except Exception as e:
+            import logging
+            logging.error(f"Clash Royale: failed to load {cards_path} — {e}")
+            return {}
     return _DB["cards"]
 
 

@@ -185,9 +185,13 @@ def selftest(log=None):
     m = module()
     if m is None:
         _S["ok"] = False
+        _S["why"] = "no engine module for this Python version"
+        if log: log.warning("Clash Royale: battle engine not available — no compiled module for this Python")
         return False
     try:
         ids = card_ids()
+        if "hog_rider" not in ids:
+            raise KeyError("hog_rider not in card_ids")
         hog, cannon = ids["hog_rider"][0], ids["cannon"][0]
         # 1. an enemy Hog at their side of our left bridge hits our left Princess within 8 s
         e = m.ClashRoyaleEnv(_filler_deck(m, [cannon]), _filler_deck(m, [hog]), 3600)
@@ -195,9 +199,9 @@ def selftest(log=None):
         x, y = eng_xy(3, 17)
         e.inject(hog, x, y, 1, -1.0, 0)
         hp0 = e.get_tower_hp(0, 1)
-        for _ in range(8): e.step_self_play_fast(-1, 0.0, 0.0, -1, 0.0, 0.0, 10)
+        for _ in range(8): e.step_self_play_fast(-1, 0.0, 0.0, -1.0, 0.0, 0.0, 10)
         lost_alone = hp0 - e.get_tower_hp(0, 1)
-        assert lost_alone > 0, "a Hog at our bridge did no damage to our tower"
+        assert lost_alone > 0, f"Hog alone did -{lost_alone} damage (expected > 0)"
         # 2. a Cannon in the middle (our tile 8, 9) pulls it: the tower loses less
         e2 = m.ClashRoyaleEnv(_filler_deck(m, [cannon]), _filler_deck(m, [hog]), 3600)
         e2.reset()
@@ -206,7 +210,7 @@ def selftest(log=None):
         e2.inject(cannon, cx, cy, 0, -1.0, 0)
         for _ in range(8): e2.step_self_play_fast(-1, 0.0, 0.0, -1, 0.0, 0.0, 10)
         lost_pulled = hp0 - e2.get_tower_hp(0, 1)
-        assert lost_pulled < lost_alone, "a Cannon in the middle did not pull the Hog"
+        assert lost_pulled < lost_alone, f"Cannon pull failed: {lost_pulled} >= {lost_alone}"
         # 3. our half is legal for a troop, the river is not
         assert e.is_valid_placement(hog, *eng_xy(3, 12), 0), "our half refused"
         assert not e.is_valid_placement(hog, *eng_xy(5, 15), 0), "the river accepted a troop"
@@ -215,12 +219,15 @@ def selftest(log=None):
         s.step_self_play_fast(-1, 0.0, 0.0, -1, 0.0, 0.0, 30)
         assert s.get_current_tick() != e2.get_current_tick(), "the copy is not independent"
         _S["ok"] = True
-        if log: log.info(f"Clash Royale: the battle engine passed its self-test (Hog alone -{lost_alone}, "
-                         f"pulled by a Cannon -{lost_pulled}) — the bot thinks every move through in it")
+        if log: log.info(f"Clash Royale: battle engine passed selftest (Hog alone -{lost_alone:.1f}, pulled -{lost_pulled:.1f})")
+    except AssertionError as ex:
+        _S["ok"] = False
+        _S["why"] = f"assertion failed: {ex}"
+        if log: log.warning(f"Clash Royale: engine skipped ({_S['why']})")
     except Exception as ex:
         _S["ok"] = False
-        _S["why"] = f"self-test failed: {ex}"
-        if log: log.warning(f"Clash Royale: the battle engine is OFF — {_S['why']}")
+        _S["why"] = f"{type(ex).__name__}: {ex}"
+        if log: log.warning(f"Clash Royale: engine skipped ({_S['why']})")
     return _S["ok"]
 
 

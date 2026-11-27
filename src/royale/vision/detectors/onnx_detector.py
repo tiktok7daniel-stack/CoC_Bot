@@ -20,6 +20,18 @@ class OnnxDetector:
     def __init__(self, model_path):
         self.model_path = model_path
 
+        if not os.path.exists(model_path):
+            import logging
+            logging.error(f"Clash Royale: detector model not found at {model_path}")
+            self.sess = None
+            self.gpu = False
+            self._gpu_retry_at = 0.0
+            self._threads = 1
+            self.output_name = None
+            self.input_name = None
+            self.model_height = self.model_width = 0
+            return
+
         try:                                   # TensorRT FP16 -> CUDA -> DirectML -> processor (6.6, trt_engine)
             import trt_engine
             self.sess = trt_engine.make_session(self.model_path, threads=max(2, (os.cpu_count() or 4) // 2))

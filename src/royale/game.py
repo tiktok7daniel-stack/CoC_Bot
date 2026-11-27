@@ -127,6 +127,8 @@ class RoyaleBot:
         except Exception:
             logger.debug("Clash Royale: match memory off", exc_info=True)
         self.wins = self.losses = self.battles = 0
+        self._frame_fails = 0            # frame capture failures (emulator/ADB recovery)
+        self._max_frame_fails = 5         # max consecutive frame fails before giving up
         try:                                         # the stronger eyes: fetched / converted once in the background
             from royale import strong_eyes
             strong_eyes.ensure(logger)
@@ -343,6 +345,22 @@ class RoyaleBot:
             spent = getattr(self, "_spent", None)
             if spent and time.monotonic() - spent[1] < 1.5:
                 el = min(el, max(0.0, spent[2] - spent[0] + (time.monotonic() - spent[1]) / self.brain.seconds_per_elixir()))
+
+            # stale/frozen frame guard: skip battle decisions if frame is too old
+            frame_age = st.get("frame_age", 0.0)
+            stale_threshold = self.s.get("stale_frame_threshold", 1.0)  # configurable, default 1.0s
+            if frame_age > stale_threshold:
+                self._stale_frames = getattr(self, "_stale_frames", 0) + 1
+                log.debug(f"Clash Royale: skipping stale frame (age={frame_age:.2f}s, consecutive={self._stale_frames})")
+                # escalate to recovery if frames stay stale for too many consecutive ticks
+                if self._stale_frames >= 10:
+                    log.warning(f"Clash Royale: {self._stale_frames} consecutive stale frames — triggering recovery")
+                    self._recover(Exception(f"stale frames: {self._stale_frames} consecutive frames > {stale_threshold}s"))
+                    self._stale_frames = 0
+                continue
+            else:
+                self._stale_frames = 0
+
             # sure of the card before it is played: the same card read in that slot on two looks in a row (a
             # card half-seen while the hand moves is never played)
             prev, self._prev_hand = getattr(self, "_prev_hand", None), list(st["hand"])
@@ -610,7 +628,15 @@ class RoyaleBot:
     def run(self):
         from royale import catalog_selection
         from royale.eyes import in_battle
+        from royale import preflight
         log = self.log
+
+        # Pre-flight check before any battle loop
+        pre = preflight.log_preflight(log)
+        if not pre.ok:
+            log.error("Clash Royale: pre-flight checks failed — aborting")
+            return
+
         while _u().running():
             try:
                 start_game(log)
@@ -1215,13 +1241,20 @@ def _recover(self, err):
     """The emulator / ADB is gone: LDPlayer started again (when it is closed), ADB reconnected, the game opened."""
     n = self._frame_fails
     if n == 1:
-        self._say(f"⚠️ كلاش رويال: الاتصال بـ LDPlayer اتقطع ({type(err).__name__}) — بحاول أرجّعه",
-                  f"LDPlayer / ADB lost ({err}) — bringing it back", phone=True)
+        self.log.warning(f"Clash Royale: frame capture lost ({type(err).__name__}: {err}) — attempting recovery")
+        self._say("⚠️ كلاش رويال: الاتصال بـ LDPlayer اتقطب — بحاول أرجّعه", phone=True)
+    elif n >= self._max_frame_fails:
+        self.log.error(f"Clash Royale: too many frame fails ({n}) — stopping for safety")
+        time.sleep(60)
+        return
     try:
         u = _u()
         try:
-            if not u.Emulator_Manager.check(): u.Emulator_Manager.start()
-        except Exception:
+            if not u.Emulator_Manager.check():
+                self.log.info("Clash Royale: emulator not running — starting LDPlayer")
+                u.Emulator_Manager.start()
+                time.sleep(3)
+        except Exception as e:
             self.log.debug("emulator start failed", exc_info=True)
         u.ADB_Manager._adbutils_device = None
         if u.ADB_Manager.connect(timeout=60):
@@ -1229,10 +1262,14 @@ def _recover(self, err):
             self._say("✅ كلاش رويال: رجعت اتوصلت باللعبة وبكمّل", "reconnected, going on", phone=n > 1)
             self._frame_fails = 0
             return
-    except Exception:
+    except Exception as e:
         self.log.debug("recovering the emulator failed", exc_info=True)
-    time.sleep(min(60, 5 * n))
-
+        if n >= 2:
+            self.log.warning(f"Clash Royale: recovery attempt {n} failed")
+    # exponential backoff with cap
+    backoff = min(30, 5 * (2 ** min(n, 3)))
+    self.log.info(f"Clash Royale: waiting {backoff}s before retry")
+    time.sleep(backoff)
 
 def _detect_human_play(self, st, prev_st):
     """6.9.23: Watch mode — infer a card the human just played by hand-slot change + new ally unit or spell."""
