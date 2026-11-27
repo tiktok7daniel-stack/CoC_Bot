@@ -19,7 +19,7 @@ from PySide6.QtWidgets import QHBoxLayout, QWidget
 from ..i18n import on_lang, tr
 from ..theme import TOKENS
 from ..widgets import GlassCard, IconButton, label
-from ..icons import icons
+from .. import icons
 from .base import Screen, page
 
 HOME = Path.home() / ".CoC_Bot"

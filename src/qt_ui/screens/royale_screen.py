@@ -17,7 +17,7 @@ from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QVBoxLay
 
 from ..i18n import on_lang, tr
 from ..theme import TOKENS
-from ..icons import icons
+from .. import icons
 from ..widgets import GlassCard, KpiTile, combo_row, form_row, label, num_row, toggle_row
 from ..widgets.log_view import LogView
 from .base import Screen, grid, page

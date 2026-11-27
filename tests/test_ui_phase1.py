@@ -7,6 +7,9 @@ import os
 import sys
 import unittest
 
+# Add project root to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # Set offscreen platform for headless Qt
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
@@ -73,6 +76,16 @@ class TestUiPhase1Widgets(unittest.TestCase):
 class TestUiPhase1Icons(unittest.TestCase):
     """Test that SVG icons work correctly."""
 
+    @classmethod
+    def setUpClass(cls):
+        if not HAS_PY_SIDE6:
+            raise unittest.SkipTest("PySide6 not installed")
+        from PySide6.QtWidgets import QApplication
+        if not QApplication.instance():
+            cls.app = QApplication([])
+        else:
+            cls.app = QApplication.instance()
+
     @skip_if_no_qt
     def test_import_icons_module(self):
         """icons.py should import successfully."""
@@ -91,10 +104,9 @@ class TestUiPhase1Icons(unittest.TestCase):
         self.assertTrue(pm.width() > 0)
         self.assertTrue(pm.height() > 0)
 
+    @skip_if_no_qt
     def test_svg_icons_no_emoji(self):
         """Icons should be SVG-based, not Unicode emojis."""
-        if not HAS_PY_SIDE6:
-            raise unittest.SkipTest("PySide6 not installed")
         from qt_ui import icons
         svg = icons.svg_markup("check", "#E11D48")
         self.assertIn("<svg", svg)

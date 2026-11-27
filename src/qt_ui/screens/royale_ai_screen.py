@@ -20,7 +20,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWi
 from ..i18n import on_lang, tr
 from ..theme import TOKENS, ui_font
 from ..widgets import GlassCard, IconButton, label
-from ..icons import icons
+from .. import icons
 from .base import Screen
 from .royale_live_screen import decision_projection
 

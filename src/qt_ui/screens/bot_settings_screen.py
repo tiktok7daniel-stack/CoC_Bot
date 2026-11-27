@@ -17,7 +17,6 @@ from ..theme import TOKENS
 from ..widgets import (Chip, Combo, GlassCard, IconButton, NumField, StatusPill, Toggle, bind_combo, bind_line,
                                 bind_num, bind_time, bind_toggle, combo_row, form_row, label, note, num_row, time_edit,
                                 toggle_row)
-from ..icons import icons
 from .base import Screen, grid
 
 DAYS_AR = [5, 6, 0, 1, 2, 3, 4]   # Saturday first for Arabic (0 = Monday)

@@ -12,7 +12,6 @@ from ..api import fmt_dur, status_key
 from ..i18n import on_lang, tr
 from ..theme import TOKENS
 from ..widgets import Box, GlassCard, IconButton, StatusPill, label, note, toggle_row
-from ..icons import icons
 from .base import Screen, page
 
 

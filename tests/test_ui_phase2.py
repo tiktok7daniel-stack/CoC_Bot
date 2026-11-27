@@ -12,6 +12,10 @@ import sys
 import unittest
 import ast
 
+# Add project root and src to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src'))
+
 # Set offscreen platform for headless Qt
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
@@ -34,6 +38,16 @@ def skip_if_no_qt(test_method):
 
 class TestUiPhase2ZeroEmoji(unittest.TestCase):
     """Test that zero Unicode emojis remain in Royale UI files."""
+
+    @classmethod
+    def setUpClass(cls):
+        if not HAS_PY_SIDE6:
+            raise unittest.SkipTest("PySide6 not installed")
+        from PySide6.QtWidgets import QApplication
+        if not QApplication.instance():
+            cls.app = QApplication([])
+        else:
+            cls.app = QApplication.instance()
 
     # Common Unicode emoji ranges and specific characters to ban
     BANNED_CHARS = set([

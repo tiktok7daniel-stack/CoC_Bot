@@ -7,7 +7,7 @@ from PySide6.QtGui import QPainter, QColor, QPen, QFont, QPainterPath
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QLabel, QWidget
 
 from ..theme import TOKENS, mono_font, ui_font
-from ..icons import icons
+from .. import icons
 
 
 class MetricTile(QFrame):

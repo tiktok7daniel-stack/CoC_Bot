@@ -6,7 +6,7 @@ from PySide6.QtGui import QPainter, QPainterPath, QLinearGradient, QRadialGradie
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QWidget, QLabel, QGraphicsDropShadowEffect
 
 from ..theme import TOKENS, LIGHT, ui_font
-from ..icons import icons
+from .. import icons
 
 
 class GlassCard(QFrame):

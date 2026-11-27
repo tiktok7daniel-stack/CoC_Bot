@@ -21,7 +21,7 @@ from ..i18n import on_lang, tr
 from ..theme import TOKENS, ui_font
 from ..widgets.controls import GlassCard, label
 from ..widgets import StatusPill, AnimatedToggle, MetricTile, ConsoleLog, FlowLayout
-from ..icons import icons
+from .. import icons
 from .base import Screen
 from ..store import Store
 

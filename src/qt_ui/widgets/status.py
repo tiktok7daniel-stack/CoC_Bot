@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QLabel, QWidget, QHBoxLayout
 
 from ..theme import TOKENS, ui_font
 from ..i18n import tr
-from ..icons import icons, pixmap as icon_pixmap
+from .. import icons
 
 
 class StatusPill(QLabel):

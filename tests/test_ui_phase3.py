@@ -14,6 +14,9 @@ import unittest
 import ast
 import json
 
+# Add project root to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # Set offscreen platform for headless Qt
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
@@ -36,6 +39,16 @@ def skip_if_no_qt(test_method):
 
 class TestUiPhase3ZeroEmoji(unittest.TestCase):
     """Test that zero Unicode emojis remain in Phase 3 Royale UI files."""
+
+    @classmethod
+    def setUpClass(cls):
+        if not HAS_PY_SIDE6:
+            raise unittest.SkipTest("PySide6 not installed")
+        from PySide6.QtWidgets import QApplication
+        if not QApplication.instance():
+            cls.app = QApplication([])
+        else:
+            cls.app = QApplication.instance()
 
     # Common Unicode emoji ranges and specific characters to ban
     BANNED_CHARS = set([
@@ -475,7 +488,7 @@ class TestUiPhase3SVGIcons(unittest.TestCase):
         for screen in screens:
             with open(f'src/qt_ui/screens/{screen}', 'r', encoding='utf-8') as f:
                 content = f.read()
-            self.assertIn('from ..icons import icons', content,
+            self.assertIn('from .. import icons', content,
                 f"{screen} must import icons module")
 
     def test_img_tag_usage(self):
