@@ -2,8 +2,8 @@
 Console log widget — monospace, color-coded output.
 Zero emojis, pure Qt widgets for log display.
 """
-from PySide6.QtCore import Qt, QTimer, QColor, QTime
-from PySide6.QtGui import QPainter, QTextCursor, QTextCharFormat
+from PySide6.QtCore import Qt, QTimer, QTime
+from PySide6.QtGui import QPainter, QTextCursor, QTextCharFormat, QColor
 from PySide6.QtWidgets import QTextEdit, QWidget, QVBoxLayout, QLabel
 
 
