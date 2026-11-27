@@ -345,7 +345,7 @@ def _winner(env):
     return 0 if hp[0] > hp[1] else 1
 
 
-def battle(cx, decks, pilots, record=True, explore=0.15, max_ticks=1800, seed=None, trace=None, decision_ms=None, replay_atlases=(None, None)):
+def battle(cx, decks, pilots, record=True, explore=0.15, max_ticks=1800, seed=None, trace=None, decision_ms=None, replay_atlases=(None, None), proposal_policies=(None, None)):
     """decks: (ids team 0, ids team 1); pilots: each side uses "search", "search-replay", "search-counters", or a policy Ctx.
     -> (samples, winner, stats)"""
     rnd = random.Random(seed)
@@ -370,6 +370,11 @@ def battle(cx, decks, pilots, record=True, explore=0.15, max_ticks=1800, seed=No
                     if not _playable(cx, env, team, hand): continue
                     cands = candidates(cx, env, team, inp, hand, replay_placements=pilot != "search",
                                        replay_atlas=replay_atlases[team])
+                    proposer = proposal_policies[team]
+                    if proposer is not None:
+                        proposal = net_move(proposer, env, team, inp, hand)
+                        if proposal is not None and proposal not in cands:
+                            cands.append(proposal)
                     if not cands: continue
                     res = search(cx, env, team, cands, prioritize_counters=pilot == "search-counters")
                     n_search += 1

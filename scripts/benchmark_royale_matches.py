@@ -10,6 +10,23 @@ sys.path.insert(0, str(ROOT / "src"))
 from royale import exit_train
 
 
+def load_replay_atlas(path):
+    from royale.deck_catalog import variant_key
+
+    atlas = {}
+    evidence = json.loads(path.read_text(encoding="utf-8"))
+    for pattern in evidence["response_patterns"]:
+        x, y = pattern["left_lane_tile"]
+        if pattern["observations"] < 3 or not (0 <= x < 18 and 0 <= y < 32):
+            continue
+        key = (variant_key(pattern["attack"]).split("-")[0], pattern["attack_y_band"],
+               variant_key(pattern["reply"]).split("-")[0])
+        tiles = atlas.setdefault(key, [])
+        if (x, y) not in tiles and len(tiles) < 2:
+            tiles.append((x, y))
+    return atlas
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--candidate", default="search", help="search, search-replay, search-counters or a board-policy ONNX path")
@@ -20,6 +37,7 @@ def main():
     parser.add_argument("--matchups", type=int, default=4)
     parser.add_argument("--seeds", type=int, default=2)
     parser.add_argument("--candidate-replay-atlas", type=Path)
+    parser.add_argument("--candidate-proposer", type=Path)
     parser.add_argument("--out", required=True, type=Path)
     args = parser.parse_args()
     if args.matchups < 1 or args.seeds < 1:
@@ -34,21 +52,16 @@ def main():
     if not baseline.E.selftest():
         parser.error("native engine did not pass its self-test")
     candidate = args.candidate if args.candidate in search_modes else exit_train.Ctx(Path(args.candidate))
+    proposer = None
+    if args.candidate_proposer:
+        if args.candidate not in search_modes:
+            parser.error("candidate-proposer requires a search candidate")
+        proposer = exit_train.Ctx(args.candidate_proposer)
     atlas = {}
     if args.candidate_replay_atlas:
-        from royale.deck_catalog import variant_key
         if args.candidate not in ("search-replay", "search-counters"):
             parser.error("candidate-replay-atlas requires a replay-aware search candidate")
-        evidence = json.loads(args.candidate_replay_atlas.read_text(encoding="utf-8"))
-        for pattern in evidence["response_patterns"]:
-            x, y = pattern["left_lane_tile"]
-            if pattern["observations"] < 3 or not (0 <= x < 18 and 0 <= y < 32):
-                continue
-            key = (variant_key(pattern["attack"]).split("-")[0], pattern["attack_y_band"],
-                   variant_key(pattern["reply"]).split("-")[0])
-            tiles = atlas.setdefault(key, [])
-            if (x, y) not in tiles and len(tiles) < 2:
-                tiles.append((x, y))
+        atlas = load_replay_atlas(args.candidate_replay_atlas)
         if not atlas:
             parser.error("candidate-replay-atlas contains no supported response tiles")
     decks = [(name, names) for name, names in baseline.meta_decks() if len(names) == len(set(names)) == 8]
@@ -73,7 +86,8 @@ def main():
                     elapsed = [[], []]
                     _, winner, stats = exit_train.battle(
                         baseline, pair, pilots, record=False, explore=0, max_ticks=3600, seed=seed, trace=trace,
-                        decision_ms=elapsed, replay_atlases=(atlas, None) if candidate_side == 0 else (None, atlas))
+                        decision_ms=elapsed, replay_atlases=(atlas, None) if candidate_side == 0 else (None, atlas),
+                        proposal_policies=(proposer, None) if candidate_side == 0 else (None, proposer))
                     timings["candidate"].extend(elapsed[candidate_side])
                     timings["baseline"].extend(elapsed[1 - candidate_side])
                     outcome = "draw" if winner is None else "win" if winner == candidate_side else "loss"
@@ -109,6 +123,8 @@ def main():
         }
     if args.candidate_replay_atlas:
         report["candidate_replay_atlas"] = {"file": args.candidate_replay_atlas.name, "groups": len(atlas)}
+    if args.candidate_proposer:
+        report["candidate_proposer"] = args.candidate_proposer.name
     args.out.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(totals, decision_latency, gates)
     return 0 if all(gates.values()) else 1
