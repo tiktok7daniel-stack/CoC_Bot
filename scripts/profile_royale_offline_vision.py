@@ -5,6 +5,7 @@ import json
 import math
 from pathlib import Path
 import sys
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -13,6 +14,7 @@ sys.path.insert(0, str(ROOT / "src"))
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("frames", type=Path, nargs="+")
+    parser.add_argument("--small-only", action="store_true")
     parser.add_argument("--passes", type=int, default=5)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
@@ -32,18 +34,23 @@ def main():
         with Image.open(path) as image:
             frames.append(np.array(image.convert("RGB")))
     # Use only locally available weights. Never start a download from a benchmark.
-    if strong_eyes.ONNX.is_file() and strong_eyes.NAMES.is_file():
+    if args.small_only:
+        strong_eyes.ready = strong_eyes.fast_ready = lambda: False
+    elif strong_eyes.ONNX.is_file() and strong_eyes.NAMES.is_file():
         strong_eyes.ensure()
-    eyes = Eyes()
-    for frame in frames:
-        eyes.look(frame)
-    samples = []
-    for _ in range(args.passes):
-        eyes.tracker = UnitTracker()
-        eyes._side_cache.clear()
+    # Keep benchmark auto-calibration away from the application's arena settings.
+    with tempfile.TemporaryDirectory(prefix="royale-vision-") as calibration:
+        strong_eyes.CALIB = Path(calibration) / "arena.json"
+        eyes = Eyes()
         for frame in frames:
-            observation = eyes.look(frame)
-            samples.append({"source": observation["vision_source"], **observation["vision_timing"]})
+            eyes.look(frame)
+        samples = []
+        for _ in range(args.passes):
+            eyes.tracker = UnitTracker()
+            eyes._side_cache.clear()
+            for frame in frames:
+                observation = eyes.look(frame)
+                samples.append({"source": observation["vision_source"], **observation["vision_timing"]})
 
     stages = {}
     for field in samples[0]:
@@ -54,7 +61,7 @@ def main():
     session = strong_eyes._S.get("sess")
     report = {
         "scope": "saved RGB image to observation; excludes capture, game inputs and decision",
-        "frame_count": len(frames), "samples": len(samples),
+        "small_only": args.small_only, "frame_count": len(frames), "samples": len(samples),
         "runtime_accelerated": accelerated, "full_detector_runtime": getattr(session, "kind", None),
         "vision_sources": dict(Counter(row["source"] for row in samples)),
         "stages_ms": stages,
