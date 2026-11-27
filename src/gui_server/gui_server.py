@@ -137,6 +137,14 @@ def api_royale_deck_selection(id):
     if not isinstance(body, dict) or not isinstance(body.get("id"), str) or len(body["id"]) > 200:
         return jsonify({"ok": False, "error": "unknown_deck"}), 400
     result = catalog_selection.select(id, body["id"], body.get("slot", 0))
+    if result["ok"] and body["id"] and body.get("open_copy") is True:
+        from gui_server import emu_setup
+        from royale import deck_catalog
+
+        prepared = deck_catalog.prepare_copy(body["id"])
+        result["copy_opened"] = prepared["ok"] and emu_setup.open_royale_deck(
+            bot_settings.load_app(), id, prepared["ids"])
+
     return jsonify(result), 200 if result["ok"] else 400
 
 @app.route("/api/settings/<id>", methods=["GET", "POST"])

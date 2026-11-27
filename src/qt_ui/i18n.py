@@ -15,7 +15,7 @@ EXTRA = {
         "rc_loading": "بنحمّل…", "rc_empty": "مفيش تشكيلات بالبحث ده",
         "rc_unavailable": "كتالوج التشكيلات مش متاح دلوقتي", "rc_choose": "اختار تشكيلة من القائمة",
         "rc_games": "مباراة", "rc_slot": "خانة التشكيلة", "rc_slot_current": "الخانة النشطة",
-        "rc_select": "احفظ للاستخدام عند التشغيل", "rc_clear": "امسح الاختيار",
+        "rc_select": "احفظ وافتح النسخ في اللعبة", "rc_clear": "امسح الاختيار",
         "rc_none": "مفيش تشكيلة محفوظة من الكتالوج.",
         "rc_pending": "الاختيار محفوظ. هيتراجع عند تشغيل البوت.",
         "rc_checking": "بنتأكد من التشكيلة المختارة.",
@@ -112,7 +112,7 @@ EXTRA = {
         "rc_loading": "Loading…", "rc_empty": "No matching decks",
         "rc_unavailable": "The deck catalogue is unavailable", "rc_choose": "Select a deck from the list",
         "rc_games": "games", "rc_slot": "Deck slot", "rc_slot_current": "Active slot",
-        "rc_select": "Save for next start", "rc_clear": "Clear selection",
+        "rc_select": "Save and open in game", "rc_clear": "Clear selection",
         "rc_none": "No deck selected from the catalogue.",
         "rc_pending": "Selection saved. The bot will check it when it starts.",
         "rc_checking": "Checking the selected deck.",
@@ -207,6 +207,11 @@ EXTRA = {
 
 EXTRA["ar"]["ra_emulator_preview"] = "معاينة المحاكي"
 EXTRA["en"]["ra_emulator_preview"] = "Emulator preview"
+
+EXTRA["ar"].update(rc_opened_copy="رابط النسخ اتفتح في اللعبة. اختار الخانة المطلوبة وأكّد النسخ.",
+                   rc_failed_open="الاختيار محفوظ. فتح رابط النسخ تعذّر. افتح المحاكي المرتبط بالحساب وحاول تاني.")
+EXTRA["en"].update(rc_opened_copy="Copy link opened in Clash Royale. Choose the intended slot and confirm the copy.",
+                   rc_failed_open="Selection saved. Could not open the copy link. Open the linked emulator and retry.")
 
 LANG = "ar"
 _listeners = []

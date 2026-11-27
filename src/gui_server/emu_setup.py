@@ -344,6 +344,21 @@ def open_game(app, acc):
     return "ok"
 
 
+def open_royale_deck(app, acc, ids):
+    """Hand the catalogue deck to Clash Royale on the account's emulator."""
+    import shlex
+    from royale.deck_pick import deck_link
+
+    con, copy = _account_copy(app, acc)
+    addr, adb = address(app, copy), adb_exe(app, con)
+    if not addr or not adb or adb_state(adb, addr) != "device":
+        return False
+    url = shlex.quote(deck_link(ids))
+    command = f"am start -W -a android.intent.action.VIEW -d {url} -p com.supercell.clashroyale"
+    result = _run([adb, "-s", addr, "shell", command], timeout=15)
+    return "Status: ok" in result and "Error:" not in result
+
+
 def screenshot(app, acc, *, connect=True, timeout=15):
     """PNG bytes of the account's emulator screen right now (straight from adb, the bot doesn't need to run)."""
     con, c = _account_copy(app, acc)

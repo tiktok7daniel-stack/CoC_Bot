@@ -35,6 +35,7 @@ class RoyaleCatalogDialog(QDialog):
         self.offset, self.total, self.sequence = 0, 0, 0
         self.rows, self.chosen, self.saved = [], None, {}
         self.saving = False
+        self.copy_message = ""
         self.images = QNetworkAccessManager(self)
         self.downloaded = {}
         self.art = {_slug(p.stem): p for p in (ROOT / "assets" / "royale" / "cards").glob("*.jpg")}
@@ -236,6 +237,8 @@ class RoyaleCatalogDialog(QDialog):
             key = f"rc_{state.get('reason')}" if value == "blocked" else f"rc_{value}"
             message = tr(key)
             message = message if message != key else tr("rc_copy_failed")
+            if value == "pending" and self.copy_message:
+                message = self.copy_message
             self.status.setText(f"{result['deck_name']}\n{message}" if result.get("deck_name") else message)
             self.update_buttons()
         self.api.get(self.selection_path, done)
@@ -246,15 +249,18 @@ class RoyaleCatalogDialog(QDialog):
 
     def persist(self, deck_id):
         self.saving = True
+        self.copy_message = ""
         self.update_buttons()
         def done(result):
             self.saving = False
             if isinstance(result, dict) and result.get("ok"):
                 self.saved = result["selection"]
+                if deck_id:
+                    self.copy_message = tr("rc_opened_copy" if result.get("copy_opened") else "rc_failed_open")
                 self.refresh_selection()
             else:
                 key = "rc_" + str((result or {}).get("error", "unavailable"))
                 message = tr(key)
                 self.status.setText(message if message != key else tr("rc_unavailable"))
             self.update_buttons()
-        self.api.post(self.selection_path, {"id": deck_id, "slot": self.slot.currentData() or 0}, done)
+        self.api.post(self.selection_path, {"id": deck_id, "slot": self.slot.currentData() or 0, "open_copy": bool(deck_id)}, done, timeout=45)
