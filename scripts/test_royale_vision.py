@@ -937,6 +937,17 @@ def test_tracking_priority():
     check("tracker ignores duplicate or out-of-order frames",
           tr.update([d(5, .9, "enemy")], 1.35)[0][1] is None and tr.t == 1.4)
 
+    empty = UnitTracker()
+    empty.update([], 5.0)
+    for stamp in (4.0, 5.0, float("nan")):
+        check("invalid or stale frames cannot create a track after an empty detection",
+              empty.update([d(8, .9, "enemy")], stamp)[0][1] is None and empty.t == 5.0)
+    check("newer observations can start tracking normally",
+          empty.update([d(8, .9, "enemy")], 5.1)[0][1] is not None)
+    empty.reset()
+    check("a new replay can start at timestamp zero",
+          empty.update([d(8, .9, "enemy")], 0.0)[0][1] is not None)
+
 
 for fn in (test_viewer_assignment_and_eta, test_tracker, test_tracking_priority, test_brain_lead, test_occlusion, test_skins_and_ids, test_team_birth, test_fast_eyes, test_double_drop, test_replay_heat, test_path, test_soft_rules, test_team, test_hand, test_sessions, test_tactics, test_tactics_stronger, test_trt_and_gpu_recovery, test_adb_and_stream_fixes, test_qt_ui_design_system, test_frame_integrity, test_training_stays_off_by_default, test_live_ai_sync_and_watch_mode):
     try:

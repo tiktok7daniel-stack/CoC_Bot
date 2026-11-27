@@ -231,7 +231,7 @@ class UnitTracker:
     def __init__(self):
         self.tracks = []
         self._next_id = 0
-        self.t = 0.0
+        self.t = -math.inf
         self.our_plays = []         # (monotonic time, card, (x, y)): the bot's own placements (6.9.17)
         self.down = set()           # towers already down: ("our" | "their", "left" | "right" | "king")
         self.junk_spots = []        # (name, x, y): tower decorations read as units this battle (never a new track)
@@ -258,7 +258,7 @@ class UnitTracker:
         self.tracks = []
         self.our_plays = []
         self.junk_spots = []
-        self.t = 0.0
+        self.t = -math.inf
         self.down.clear()
         self._next_id = 0
 
@@ -268,7 +268,7 @@ class UnitTracker:
         from scipy.optimize import linear_sum_assignment
         t = time.monotonic() if t is None else float(t)
         dets = list(dets or [])
-        if t <= self.t and self.tracks:
+        if not math.isfinite(t) or t <= self.t:
             return [(d, None) for d in dets]
         self.t = t
         self.tracks = [tr for tr in self.tracks if t - tr.seen <= self.KEEP]
