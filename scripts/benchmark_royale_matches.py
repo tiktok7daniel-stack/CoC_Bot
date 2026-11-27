@@ -12,7 +12,7 @@ from royale import exit_train
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--candidate", default="search", help="search or a board-policy ONNX path")
+    parser.add_argument("--candidate", default="search", help="search, search-replay or a board-policy ONNX path")
     parser.add_argument("--baseline", default=str(ROOT / "assets/royale/board.onnx"),
                         help="search or a board-policy ONNX path")
     parser.add_argument("--min-win-rate", type=float)
@@ -31,7 +31,7 @@ def main():
     opponent = "search" if args.baseline == "search" else baseline
     if not baseline.E.selftest():
         parser.error("native engine did not pass its self-test")
-    candidate = "search" if args.candidate == "search" else exit_train.Ctx(Path(args.candidate))
+    candidate = args.candidate if args.candidate in ("search", "search-replay") else exit_train.Ctx(Path(args.candidate))
     decks = [(name, names) for name, names in baseline.meta_decks() if len(names) == len(set(names)) == 8]
     featured = ["cannon-ev1", "ice-wizard-hero", "bats-ev1", "barbarian-barrel", "knight",
                 "lightning", "minion-giant", "skeletons"]
@@ -82,6 +82,12 @@ def main():
               "gates": gates,
               "featured_deck": featured, "totals": totals,
               "score": (totals["win"] + totals["draw"] / 2) / len(matches), "matches": matches}
+    if candidate == "search-replay":
+        from royale import pro
+        report["placement_prior"] = {
+            "source": "https://huggingface.co/datasets/VanguardX101/IL_Replay",
+            "aggregated_matches": pro.games(),
+        }
     args.out.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(totals, decision_latency, gates)
     return 0 if all(gates.values()) else 1

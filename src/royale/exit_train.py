@@ -151,15 +151,21 @@ def _valid(env, team, slot, tile):
     except Exception: return False
 
 
-def candidates(cx, env, team, inp, hand, per_card=3):
+def candidates(cx, env, team, inp, hand, per_card=3, replay_placements=False):
     """(slot, card, tile in the side's own view) worth looking at."""
+    from royale import pro
     from royale.brain import card, roles
     out = []
     enemies = []
+    named_threats = []
     for u in env.get_units():
         if u.tower or u.team in (team,) or u.team not in (0, 1): continue
         x, y = (u.x, u.y - 1) if team == 0 else (17 - u.x, 32 - u.y)
         enemies.append((int(round(x)), int(round(y))))
+        name = cx.names.get(u.card_id)
+        if replay_placements and name and y <= 19:
+            named_threats.append((name, x, y))
+    named_threats.sort(key=lambda threat: threat[2])
     enemies.sort(key=lambda p: p[1])
     for slot, n, _cost in _playable(cx, env, team, hand):
         c = card(n) or {}
@@ -177,6 +183,17 @@ def candidates(cx, env, team, inp, hand, per_card=3):
             extra += [(3, 13), (14, 13)]
         for t in extra:
             if t not in tiles and len(tiles) < per_card + 2 and _valid(env, team, slot, t): tiles.append(t)
+        if replay_placements:
+            learned = []
+            for threat, x, y in named_threats[:2]:
+                side = "left" if x < 9 else "right"
+                if pro.answer(threat, y, side, [n]).get(n, 0) >= 0.025:
+                    learned.extend(pro.answer_tiles(threat, y, side, n)[:2])
+            if not named_threats:
+                learned.extend(t for side in ("left", "right") if (t := pro.place(n, side)) is not None)
+            for t in learned:
+                if t not in tiles and _valid(env, team, slot, t):
+                    tiles.append(t)
         out += [(slot, n, t) for t in tiles]
     return out
 
@@ -316,7 +333,7 @@ def _winner(env):
 
 
 def battle(cx, decks, pilots, record=True, explore=0.15, max_ticks=1800, seed=None, trace=None, decision_ms=None):
-    """decks: (ids team 0, ids team 1); pilots: per side "search" | a Ctx (its brain alone).
+    """decks: (ids team 0, ids team 1); pilots: each side uses "search", "search-replay", or a policy Ctx.
     -> (samples, winner, stats)"""
     rnd = random.Random(seed)
     env = cx.m.ClashRoyaleEnv(decks[0], decks[1], 3600)
@@ -334,10 +351,11 @@ def battle(cx, decks, pilots, record=True, explore=0.15, max_ticks=1800, seed=No
             decision_start = time.perf_counter() if decision_ms is not None else None
             try:
                 pilot = pilots[team]
-                inp, hand = inputs(cx if pilot == "search" else pilot, env, team, first)
-                if pilot == "search":
+                uses_search = pilot in ("search", "search-replay")
+                inp, hand = inputs(cx if uses_search else pilot, env, team, first)
+                if uses_search:
                     if not _playable(cx, env, team, hand): continue
-                    cands = candidates(cx, env, team, inp, hand)
+                    cands = candidates(cx, env, team, inp, hand, replay_placements=pilot == "search-replay")
                     if not cands: continue
                     res = search(cx, env, team, cands)
                     n_search += 1
