@@ -11,7 +11,8 @@ from .. import icons
 from ..api import fmt_dur, status_key
 from ..i18n import on_lang, tr
 from ..theme import TOKENS
-from ..widgets.controls import Box, GlassCard, IconButton, StatusPill, label, note, toggle_row
+from ..widgets import Box, GlassCard, IconButton, StatusPill, label, note, toggle_row
+from ..icons import icons
 from .base import Screen, page
 
 
@@ -95,7 +96,7 @@ class AccountsScreen(Screen):
         for acc in self.store.APP.get("accounts", []):
             a = next((x for x in st.get("accounts", []) if x.get("id") == acc), {})
             k = status_key(a)
-            row = Box(border=TOKENS["purple"] if acc == self.store.account else TOKENS["border"], radius=18)
+            row = Box(border=TOKENS["crimson"] if acc == self.store.account else TOKENS["border"], radius=18)
             h = QHBoxLayout(row)
             h.setContentsMargins(14, 10, 14, 10)
             h.setSpacing(12)
@@ -112,8 +113,8 @@ class AccountsScreen(Screen):
             nm.setMaximumWidth(240)
             nm.setMinimumWidth(160)
             nm.setAlignment(Qt.AlignLeading | Qt.AlignVCenter)
-            nm.setStyleSheet("QLineEdit { font-size: 12.5pt; font-weight: 800; background: transparent; border: 1px solid transparent; padding: 2px 6px; }"
-                             " QLineEdit:hover { border-color: rgba(255,255,255,0.12); } QLineEdit:focus { border-color: #F5B740; background: #15151C; }")
+            nm.setStyleSheet(f"QLineEdit {{ font-size: 12.5pt; font-weight: 800; background: transparent; border: 1px solid transparent; padding: 2px 6px; }}"
+                             f" QLineEdit:hover {{ border-color: rgba(255,255,255,0.12); }} QLineEdit:focus {{ border-color: {TOKENS['crimson']}; background: #15151C; }}")
             nm.editingFinished.connect(lambda x=acc, w=nm: set_display_name(self.store, x, w.text() or x))
             box.addWidget(nm)
             ids = label(f"ID: {acc}", "dim")

@@ -17,7 +17,8 @@ from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QVBoxLay
 
 from ..i18n import on_lang, tr
 from ..theme import TOKENS
-from ..widgets.controls import GlassCard, KpiTile, combo_row, form_row, label, num_row, toggle_row
+from ..icons import icons
+from ..widgets import GlassCard, KpiTile, combo_row, form_row, label, num_row, toggle_row
 from ..widgets.log_view import LogView
 from .base import Screen, grid, page
 
@@ -54,7 +55,7 @@ class RoyaleScreen(Screen):
         self.s_battles = KpiTile("royale_battles", TOKENS["text"])
         self.s_wins = KpiTile("royale_wins", TOKENS["ok"])
         self.s_losses = KpiTile("royale_losses", TOKENS["bad"])
-        self.s_rate = KpiTile("royale_rate", TOKENS["gold"])
+        self.s_rate = KpiTile("royale_rate", TOKENS["crimson"])
         for s in (self.s_battles, self.s_wins, self.s_losses, self.s_rate): row.addWidget(s, 1)
         holder = QWidget()
         holder.setLayout(row)
@@ -211,29 +212,41 @@ class RoyaleScreen(Screen):
         txt = tr("rt_" + stage) if tr("rt_" + stage) != "rt_" + stage else stage
         if st.get("note"): txt += " — " + str(st["note"])
         if st.get("base_map50") is not None and st.get("new_map50") is not None:
-            txt += f"\n{tr('rt_score')}: {st['base_map50']:.2f} → {st['new_map50']:.2f}" + (f" ✅ {tr('rt_used')}" if st.get("used") else "")
-        if st.get("error"): txt += "\n⚠ " + str(st["error"])
+            check = icons.img_tag("check", 12, TOKENS["ok"])
+            txt += f"\n{tr('rt_score')}: {st['base_map50']:.2f} → {st['new_map50']:.2f}" + (f" {check} {tr('rt_used')}" if st.get("used") else "")
+        if st.get("error"):
+            warn = icons.img_tag("warn", 12, TOKENS["warn"])
+            txt += f"\n{warn} " + str(st["error"])
         data = st.get("data") or {}
         if data:                                   # every data source: how many pictures it gave, or why none (6.01)
             tot = sum(int(v.get("n", 0)) for v in data.values())
-            txt += f"\n\n📦 {tr('rt_data_list')} — {tot:,}"
+            box = icons.img_tag("box", 12, TOKENS["info"])
+            txt += f"\n\n{box} {tr('rt_data_list')} — {tot:,}"
             for name, v in data.items():
                 n = int(v.get("n", 0))
-                txt += f"\n{'✅' if n else '⚠'} {name}: {n:,}" + (f"  ({v['note']})" if v.get("note") else "")
-        if st.get("pictures"): txt += f"\n🖼 {tr('rt_pictures')}: {int(st['pictures']):,}"
+                check = icons.img_tag("check", 12, TOKENS["ok"])
+                warn = icons.img_tag("warn", 12, TOKENS["warn"])
+                txt += f"\n{check if n else warn} {name}: {n:,}" + (f"  ({v['note']})" if v.get("note") else "")
+        if st.get("pictures"):
+            img = icons.img_tag("image", 12, TOKENS["info"])
+            txt += f"\n{img} {tr('rt_pictures')}: {int(st['pictures']):,}"
         try:                                   # the other two brains: the learned network and the own pictures
             from royale import policy, frames
             ti = policy.info()
             if ti:
-                txt += f"\n🧠 {tr('rt_policy')}: {100 * ti.get('card_in_hand', 0):.0f}% / {100 * ti.get('play', 0):.0f}%"
+                brain = icons.img_tag("brain", 12, TOKENS["crimson"])
+                txt += f"\n{brain} {tr('rt_policy')}: {100 * ti.get('card_in_hand', 0):.0f}% / {100 * ti.get('play', 0):.0f}%"
             from royale import board as _bb
             bi = _bb.info()
             if bi:
-                txt += f"\n🧩 {tr('rt_board')}: {100 * bi.get('card_in_hand', 0):.0f}% / {100 * bi.get('tile_within1', 0):.0f}%"
-            txt += f"\n📷 {tr('rt_frames')}: {frames.count()}"
+                puzzle = icons.img_tag("puzzle", 12, TOKENS["crimson"])
+                txt += f"\n{puzzle} {tr('rt_board')}: {100 * bi.get('card_in_hand', 0):.0f}% / {100 * bi.get('tile_within1', 0):.0f}%"
+            cam = icons.img_tag("camera", 12, TOKENS["info"])
+            txt += f"\n{cam} {tr('rt_frames')}: {frames.count()}"
             from royale import selfplay
             sp = selfplay.read_state(self.store.account or "main")
-            txt += (f"\n🔁 {tr('rt_self')}: v{sp.get('version', 0)} — {sp.get('battles', 0)} "
+            refresh = icons.img_tag("refresh", 12, TOKENS["crimson"])
+            txt += (f"\n{refresh} {tr('rt_self')}: v{sp.get('version', 0)} — {sp.get('battles', 0)} "
                     f"({selfplay.EVERY - (sp.get('battles', 0) - sp.get('trained_at_battles', 0)) % selfplay.EVERY})"
                     + (f" — {sp['note']}" if sp.get("note") else ""))
         except Exception:

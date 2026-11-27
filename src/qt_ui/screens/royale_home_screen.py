@@ -21,7 +21,9 @@ from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QVBoxLay
 
 from ..i18n import on_lang, tr
 from ..theme import TOKENS, ui_font
-from ..widgets.controls import GlassCard, IconButton, KpiTile, StatusPill, Toggle, bind_toggle, form_row, label
+from ..icons import icons
+from ..widgets import GlassCard, IconButton, KpiTile, StatusPill, Toggle, bind_toggle, form_row, label
+from ..widgets import AnimatedToggle, MetricTile
 from .base import Screen, page
 
 LEARN = Path.home() / ".CoC_Bot" / "learn"
@@ -119,7 +121,7 @@ class RoyaleHomeScreen(Screen):
         self.n_b = KpiTile("royale_battles", TOKENS["text"])
         self.n_w = KpiTile("royale_wins", TOKENS["ok"])
         self.n_l = KpiTile("royale_losses", TOKENS["bad"])
-        self.n_r = KpiTile("royale_rate", TOKENS["gold"])
+        self.n_r = KpiTile("royale_rate", TOKENS["crimson"])
         for x in (self.n_b, self.n_w, self.n_l, self.n_r): g.addWidget(x, 1)
         today.add(g)
         self.l_chores = label("", "sub", wrap=True)
@@ -132,7 +134,7 @@ class RoyaleHomeScreen(Screen):
         self.v_who.setStyleSheet(f"font-weight: 700; color: {TOKENS['text']};")
         self.v_eng = StatusPill("idle", "—")
         self.v_train = label("", "numsm", wrap=True)
-        self.v_train.setStyleSheet(f"color: {TOKENS['accent_hi']}; font-weight: 700;")
+        self.v_train.setStyleSheet(f"color: {TOKENS['crimson_hi']}; font-weight: 700;")
         for r_w in (_status_row("rh_who", self.v_who),
                     _status_row("rh_engine", self.v_eng),
                     _status_row("rh_training", self.v_train)):
@@ -241,7 +243,11 @@ class RoyaleHomeScreen(Screen):
                 d = live.get("decision")
                 t = live.get("time_s", 0)
                 now = f"{tr('rh_in_battle')} — {int(t // 60)}:{int(t % 60):02d} · {tr('rl_elixir')} {live.get('elixir')}"
-                if d: now += f"\n▶ {d['card'].replace('_', ' ').title()} — {d.get('why', '')[:90]}"
+                if d:
+                    card_name = d['card'].replace('_', ' ').title()
+                    why = d.get('why', '')[:90]
+                    dot = icons.img_tag("dot", 12, TOKENS["crimson"])
+                    now += f"\n{dot}&nbsp;{card_name} — {why}"
                 self.l_now.setText(now)
             else:
                 self.l_now.setText(tr("rl_phase_" + str(phase)) if phase else tr("rh_lobby"))

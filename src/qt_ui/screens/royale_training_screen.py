@@ -18,7 +18,8 @@ from PySide6.QtWidgets import QHBoxLayout, QWidget
 
 from ..i18n import on_lang, tr
 from ..theme import TOKENS
-from ..widgets.controls import GlassCard, IconButton, label
+from ..widgets import GlassCard, IconButton, label
+from ..icons import icons
 from .base import Screen, page
 
 HOME = Path.home() / ".CoC_Bot"
@@ -185,7 +186,7 @@ class RoyaleTrainingScreen(Screen):
     # ------------------------------------------------------------------ what each part shows
     def refresh(self):
         if not self.isVisible(): return
-        g, r, y = "#4ade80", "#f87171", TOKENS.get("gold", "#f5b740")
+        g, r, y = TOKENS["ok"], TOKENS["bad"], TOKENS["warn"]
         # the eyes
         st = _read(HOME / "royale_train" / "status.json")
         stage = st.get("stage") or "none"
@@ -196,49 +197,73 @@ class RoyaleTrainingScreen(Screen):
             running = False
         if not running and stage not in ("none", "done", "error", "no_gpu", "stopped"):
             stage = "stopped"                           # it was closed: what is done is kept
-        lines = [f"<b>{tr('rtr_state')}:</b> " + (f"<span style='color:{y}'>● {tr('rtr_running')}</span> — "
+        running_dot = icons.img_tag("dot", 10, y)
+        lines = [f"<b>{tr('rtr_state')}:</b> " + (f"<span style='color:{y}'>{running_dot} {tr('rtr_running')}</span> — "
                                                   if running else "") + (tr("rt_" + stage) if tr("rt_" + stage) != "rt_" + stage else stage)
                  + (f" — {st['note']}" if st.get("note") else "")]
         if running and st.get("alive"):                  # 6.9.3: a sign of life every 20 s (the window's heartbeat)
             ago = int(time.time() - float(st["alive"]))
             col = g if ago < 60 else (y if ago < 180 else r)
-            lines.append(f"<span style='color:{col}'>💓 {tr('rtr_alive')}: {ago} s</span>"
+            pulse = icons.img_tag("pulse", 10, col)
+            lines.append(f"<span style='color:{col}'>{pulse} {tr('rtr_alive')}: {ago} s</span>"
                          + (f" · {st['card_line']}" if st.get("card_line") else ""))
         if st.get("base_map50") is not None and st.get("new_map50") is not None:
             used = st.get("used")
+            check = icons.img_tag("check", 10, g)
             lines.append(f"<b>{tr('rtr_accuracy')}:</b> {100 * st['base_map50']:.1f}% → {100 * st['new_map50']:.1f}% "
-                         + (f"<span style='color:{g}'>✅ {tr('rt_used')}</span>" if used else f"({tr('rtr_kept_old')})"))
+                         + (f"<span style='color:{g}'>{check} {tr('rt_used')}</span>" if used else f"({tr('rtr_kept_old')})"))
         hd = st.get("hand") or {}
         if hd.get("score") is not None:                  # the hand-card model (6.6)
+            check = icons.img_tag("check", 10, g)
             lines.append(f"<b>{tr('rtr_hand')}:</b> {100 * float(hd['score']):.1f}% "
-                         + (f"<span style='color:{g}'>✅ {tr('rt_used')}</span>" if hd.get("used") else f"({tr('rtr_kept_old')})"))
+                         + (f"<span style='color:{g}'>{check} {tr('rt_used')}</span>" if hd.get("used") else f"({tr('rtr_kept_old')})"))
         if st.get("finished"): lines.append(f"<b>{tr('rtr_last')}:</b> {_ago(st['finished'])}")
         pg = st.get("prog") or {}
         if pg and stage != "done":                      # what the next start does not do again
-            done = (["🃏"] if pg.get("hand") else []) + (["📦"] if pg.get("data") else []) + \
-                (["1/3"] if pg.get("base") else []) + [f"✔ {k}" for k in (pg.get("done") or {})]
+            hand_icon = icons.img_tag("cards", 10, TOKENS["info"])
+            box_icon = icons.img_tag("box", 10, TOKENS["info"])
+            base_icon = icons.img_tag("layers", 10, TOKENS["info"])
+            check = icons.img_tag("check", 10, g)
+            done = ([hand_icon] if pg.get("hand") else []) + ([box_icon] if pg.get("data") else []) + \
+                ([base_icon] if pg.get("base") else []) + [f"{check} {k}" for k in (pg.get("done") or {})]
             if done: lines.append(f"<b>{tr('rtr_kept')}:</b> " + " · ".join(done))
         data = st.get("data") or {}
         if data:
             tot = sum(int(d.get("n", 0)) for d in data.values())
-            lines.append(f"<br><b>📦 {tr('rt_data_list')} — {tot:,}</b>")
+            box = icons.img_tag("box", 10, TOKENS["info"])
+            lines.append(f"<br><b>{box} {tr('rt_data_list')} — {tot:,}</b>")
             for name, d in data.items():
                 n = int(d.get("n", 0))
-                lines.append(f"{'✅' if n else '⚠'} {name}: <b>{n:,}</b>" + (f" <small>({d['note']})</small>" if d.get("note") else ""))
-        if st.get("pictures"): lines.append(f"🖼 {tr('rt_pictures')}: <b>{int(st['pictures']):,}</b>")
-        if st.get("error"): lines.append(f"<span style='color:{r}'>⚠ {st['error']}</span>")
+                check = icons.img_tag("check", 10, g)
+                warn = icons.img_tag("warn", 10, TOKENS["warn"])
+                lines.append(f"{check if n else warn} {name}: <b>{n:,}</b>" + (f" <small>({d['note']})</small>" if d.get("note") else ""))
+        if st.get("pictures"):
+            img = icons.img_tag("image", 10, TOKENS["info"])
+            lines.append(f"{img} {tr('rt_pictures')}: <b>{int(st['pictures']):,}</b>")
+        if st.get("error"):
+            warn = icons.img_tag("warn", 10, r)
+            lines.append(f"<span style='color:{r}'>{warn} {st['error']}</span>")
         self._set(self.t_eyes, lines)
         # the full check
         hc = _read(HOME / "health.json")
         hl = []
         p = getattr(self, "_health_p", None)
         if p is not None and p.poll() is None:
-            hl.append(f"<span style='color:{y}'>● {tr('rtr_health_running')} ({int(time.time() - self._health_t)} s)</span>")
+            running_dot = icons.img_tag("dot", 10, y)
+            hl.append(f"<span style='color:{y}'>{running_dot} {tr('rtr_health_running')} ({int(time.time() - self._health_t)} s)</span>")
         if hc:
             col = g if hc.get("ok") else r
             hl.append(f"<b style='color:{col}'>{hc.get('summary_ar', '')}</b>")
             for it in hc.get("items") or []:
-                ic = {"ok": "✅", "warn": "⚠", "bad": "❌"}.get(it.get("state"), "•")
+                state = it.get("state", "warn")
+                if state == "ok":
+                    ic = icons.img_tag("check", 10, g)
+                elif state == "warn":
+                    ic = icons.img_tag("warn", 10, y)
+                elif state == "bad":
+                    ic = icons.img_tag("x", 10, r)
+                else:
+                    ic = icons.img_tag("dot", 10, TOKENS["dim"])
                 hl.append(f"{ic} <b>{it.get('name')}</b>: {it.get('value')}"
                           + (f"<br>&nbsp;&nbsp;&nbsp;<small style='color:{y}'>{it['fix_ar']}</small>" if it.get("fix_ar") else ""))
             hl.append(f"<small>{tr('rtr_last')}: {_ago(hc.get('t'))} · v{hc.get('bot_version', '?')}</small>")
@@ -252,7 +277,8 @@ class RoyaleTrainingScreen(Screen):
             on = exit_train.running()
         except Exception:
             on = False
-        sl = [f"<b>{tr('rtr_state')}:</b> " + (f"<span style='color:{y}'>● {tr('rtr_running')}</span>" if on else tr("rh_train_off"))]
+        running_dot = icons.img_tag("dot", 10, y)
+        sl = [f"<b>{tr('rtr_state')}:</b> " + (f"<span style='color:{y}'>{running_dot} {tr('rtr_running')}</span>" if on else tr("rh_train_off"))]
         if pr:
             sl.append(f"<b>{tr('rh_round')}:</b> {pr.get('iteration', 0)} · <b>{tr('rtr_answers')}:</b> {int(pr.get('answers', 0)):,}"
                       f" · <b>{tr('rh_versions')}:</b> {pr.get('accepted', 0)}"
@@ -266,19 +292,26 @@ class RoyaleTrainingScreen(Screen):
         try:
             from royale import policy, board as _bb, frames
             ti, bi = policy.info(), _bb.info()
-            if ti: bl.append(f"🧠 {tr('rt_policy')}: <b>{100 * ti.get('card_in_hand', 0):.0f}% / {100 * ti.get('play', 0):.0f}%</b>")
-            if bi: bl.append(f"🧩 {tr('rt_board')}: <b>{100 * bi.get('card_in_hand', 0):.0f}% / {100 * bi.get('tile_within1', 0):.0f}%</b>")
-            bl.append(f"📷 {tr('rt_frames')}: <b>{frames.count():,}</b>")
+            if ti:
+                brain = icons.img_tag("brain", 10, TOKENS["crimson"])
+                bl.append(f"{brain} {tr('rt_policy')}: <b>{100 * ti.get('card_in_hand', 0):.0f}% / {100 * ti.get('play', 0):.0f}%</b>")
+            if bi:
+                puzzle = icons.img_tag("puzzle", 10, TOKENS["crimson"])
+                bl.append(f"{puzzle} {tr('rt_board')}: <b>{100 * bi.get('card_in_hand', 0):.0f}% / {100 * bi.get('tile_within1', 0):.0f}%</b>")
+            cam = icons.img_tag("camera", 10, TOKENS["info"])
+            bl.append(f"{cam} {tr('rt_frames')}: <b>{frames.count():,}</b>")
             # the eyes' runtime (6.6): TensorRT FP16 / CUDA / DirectML, with its measured ms
             import trt_engine
             ti = trt_engine.info()
             if ti.get("mode"):
                 ms = ", ".join(f"{k.replace('.onnx', '')} {v.get('trt_ms', v.get('cuda_ms'))} ms"
                                for k, v in (ti.get("bench") or {}).items())
-                bl.append(f"⚡ {tr('rtr_runtime')}: <b>{'TensorRT FP16' if ti['mode'] == 'trt' else 'CUDA'}</b>"
+                bolt = icons.img_tag("bolt", 10, TOKENS["crimson"])
+                bl.append(f"{bolt} {tr('rtr_runtime')}: <b>{'TensorRT FP16' if ti['mode'] == 'trt' else 'CUDA'}</b>"
                           + (f" <small>({ms})</small>" if ms else ""))
             elif trt_engine.LOG.exists() and time.time() - trt_engine.LOG.stat().st_mtime < 900:   # the bot sets it up
-                bl.append(f"⚡ {tr('rtr_runtime')}: <span style='color:{y}'>{tr('rtr_trt_setup')}</span>")
+                bolt = icons.img_tag("bolt", 10, y)
+                bl.append(f"{bolt} {tr('rtr_runtime')}: <span style='color:{y}'>{tr('rtr_trt_setup')}</span>")
         except Exception:
             pass
         self._set(self.t_brain, bl or ["—"])

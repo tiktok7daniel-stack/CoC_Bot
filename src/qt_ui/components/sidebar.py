@@ -54,19 +54,19 @@ class NavButton(QAbstractButton):
         on = self.isChecked()
         hov = self._hover and not self.soon
         if on:
-            # crisp tinted pill + solid gold indicator bar on leading edge
+            # crisp tinted pill + solid crimson indicator bar on leading edge
             p.setPen(Qt.NoPen)
             g = QLinearGradient(r.topRight() if rtl else r.topLeft(), r.topLeft() if rtl else r.topRight())
-            g.setColorAt(0, QColor(245, 183, 64, 48))
-            g.setColorAt(1, QColor(245, 183, 64, 12))
+            g.setColorAt(0, QColor(TOKENS["crimson"], 48))
+            g.setColorAt(1, QColor(TOKENS["crimson"], 12))
             p.setBrush(g)
             p.drawRoundedRect(r, 14, 14)
-            p.setPen(QPen(QColor(245, 183, 64, 88), 1))
+            p.setPen(QPen(QColor(TOKENS["crimson"], 88), 1))
             p.setBrush(Qt.NoBrush)
             p.drawRoundedRect(r, 14, 14)
             bar = QRectF(r.right() - 3.5, r.top() + 9, 3.5, r.height() - 18) if rtl else QRectF(r.left(), r.top() + 9, 3.5, r.height() - 18)
             p.setPen(Qt.NoPen)
-            p.setBrush(QColor(TOKENS["accent"]))
+            p.setBrush(QColor(TOKENS["crimson"]))
             p.drawRoundedRect(bar, 1.75, 1.75)
         elif hov:
             p.setPen(Qt.NoPen)
@@ -141,7 +141,9 @@ class Sidebar(QFrame):
             glow = QGraphicsDropShadowEffect(self.crest)
             glow.setBlurRadius(26)
             glow.setOffset(0, 2)
-            glow.setColor(QColor(245, 183, 64, 70))
+            crimson = QColor(TOKENS["crimson"])
+            crimson.setAlpha(70)
+            glow.setColor(crimson)
             self.crest.setGraphicsEffect(glow)
         brand.addWidget(self.crest)
         names = QVBoxLayout()
@@ -229,8 +231,8 @@ class Sidebar(QFrame):
         path.addRoundedRect(r, 24, 24)
         p.fillPath(path, QColor(TOKENS["glass_solid"]))
         g = QLinearGradient(r.topLeft(), r.bottomLeft())
-        g.setColorAt(0, QColor(245, 183, 64, 24))
-        g.setColorAt(0.32, QColor(245, 183, 64, 0))
+        g.setColorAt(0, QColor(TOKENS["crimson"], 24))
+        g.setColorAt(0.32, QColor(TOKENS["crimson"], 0))
         p.fillPath(path, QBrush(g))
         p.setPen(QPen(QColor(TOKENS["border_solid"]), 1))
         p.drawPath(path)
@@ -254,8 +256,8 @@ class FooterCapsule(QFrame):
         self.emu.setProperty("role", "dim")
         self.emu.hide()
         self.ver = QLabel("")
-        self.ver.setStyleSheet(f"background: rgba(245, 183, 64,0.18); border: 1px solid {TOKENS['border']}; border-radius: 8px;"
-                               f" padding: 1px 7px; font-family: 'JetBrains Mono'; font-size: 8pt; color: #E9D3A6;")
+        self.ver.setStyleSheet(f"background: rgba(225, 29, 72, 0.18); border: 1px solid {TOKENS['border']}; border-radius: 8px;"
+                               f" padding: 1px 7px; font-family: 'JetBrains Mono'; font-size: 8pt; color: {TOKENS['crimson_hi']};")
         h.addWidget(self.ver)
         self.setStyleSheet(f"FooterCapsule {{ background: {TOKENS['glass2']}; border: 1px solid {TOKENS['border']}; border-radius: 16px; }}")
 

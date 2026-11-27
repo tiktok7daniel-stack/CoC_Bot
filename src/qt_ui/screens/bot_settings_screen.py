@@ -14,9 +14,10 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QVBoxLayout, QWidg
 from .. import icons
 from ..i18n import on_lang, tr, why_ar
 from ..theme import TOKENS
-from ..widgets.controls import (Chip, Combo, GlassCard, IconButton, NumField, StatusPill, Toggle, bind_combo, bind_line,
+from ..widgets import (Chip, Combo, GlassCard, IconButton, NumField, StatusPill, Toggle, bind_combo, bind_line,
                                 bind_num, bind_time, bind_toggle, combo_row, form_row, label, note, num_row, time_edit,
                                 toggle_row)
+from ..icons import icons
 from .base import Screen, grid
 
 DAYS_AR = [5, 6, 0, 1, 2, 3, 4]   # Saturday first for Arabic (0 = Monday)
@@ -433,7 +434,8 @@ class BotSettingsScreen(Screen):
         self.gpu_links.setText(tr("checking"))
         def got(r):
             if isinstance(r, dict) and r.get("ok"):
-                rows = "".join(f'<div style="margin:4px 0">⬇️ <a href="{f["url"]}" style="color:{TOKENS["accent"]}">{f["name"]}</a></div>'
+                download_icon = icons.img_tag("download", 10, TOKENS["crimson"])
+                rows = "".join(f'<div style="margin:4px 0">{download_icon} <a href="{f["url"]}" style="color:{TOKENS["crimson"]}">{f["name"]}</a></div>'
                                for f in r.get("files", []))
                 self.gpu_links.setText(f'<div>{tr("pw_links_help")}</div>{rows}')
             else:
@@ -483,13 +485,16 @@ class BotSettingsScreen(Screen):
                         ups = [u.get("message") for u in json.loads(r.read().decode("utf-8")).get("result", []) if u.get("message")]
                     chat = ups[-1]["chat"]["id"] if ups else None
                 if chat is None:
-                    res = (False, f"@{name} ✓ — افتح البوت ده في تليجرام وابعتله /start، والبرنامج مفتوح، وبعدين دوس تجربة تاني")
+                    check = icons.img_tag("check", 12, TOKENS["ok"])
+                    res = (False, f"@{name} {check} — افتح البوت ده في تليجرام وابعتله /start، والبرنامج مفتوح، وبعدين دوس تجربة تاني")
                 else:
                     import urllib.parse
-                    body = urllib.parse.urlencode({"chat_id": chat, "text": "✅ التليجرام شغال — الإشعارات هتوصلك هنا"}).encode()
+                    check = icons.img_tag("check", 12, TOKENS["ok"])
+                    body = urllib.parse.urlencode({"chat_id": chat, "text": f"{check} التليجرام شغال — الإشعارات هتوصلك هنا"}).encode()
                     with urllib.request.urlopen(f"https://api.telegram.org/bot{token}/sendMessage", data=body, timeout=15) as r:
                         ok = json.loads(r.read().decode("utf-8")).get("ok")
-                    res = (bool(ok), f"@{name} ✓ — بعتّلك رسالة على التليفون" if ok else "ما قدرتش أبعت الرسالة")
+                    check = icons.img_tag("check", 12, TOKENS["ok"])
+                    res = (bool(ok), f"@{name} {check} — بعتّلك رسالة على التليفون" if ok else "ما قدرتش أبعت الرسالة")
             except Exception as e:
                 res = (False, str(e))
             self._relay.done.emit(self._tg_result, res)

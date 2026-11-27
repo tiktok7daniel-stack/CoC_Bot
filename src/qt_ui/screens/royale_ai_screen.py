@@ -19,7 +19,8 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWi
 
 from ..i18n import on_lang, tr
 from ..theme import TOKENS, ui_font
-from ..widgets.controls import GlassCard, IconButton, label
+from ..widgets import GlassCard, IconButton, label
+from ..icons import icons
 from .base import Screen
 from .royale_live_screen import decision_projection
 
@@ -48,7 +49,8 @@ class AiPicture(_Base):
         if time.monotonic() - self.live_t >= (1.5 if getattr(self, "preview", False) else 0.5): return
         p.setFont(ui_font(8, QFont.Bold))
         fps = getattr(self, "stream_fps", 0) or self.fps
-        tag = f"● LIVE · {fps:.0f} fps · {iw}x{ih}" if fps >= 1 else f"● LIVE · {iw}x{ih}"
+        live_dot = icons.img_tag("dot", 10, "#4ade80")
+        tag = f"{live_dot} LIVE · {fps:.0f} fps · {iw}x{ih}" if fps >= 1 else f"{live_dot} LIVE · {iw}x{ih}"
         if getattr(self, "preview", False):
             tag = f"{tr('ra_emulator_preview')} · {iw}x{ih}"
         trk = getattr(self, "tracker", None)
@@ -303,11 +305,11 @@ class AiPicture(_Base):
             p.drawEllipse(bpt, 10, 10)
             p.drawLine(bpt + QPointF(-14, 0), bpt + QPointF(14, 0)); p.drawLine(bpt + QPointF(0, -14), bpt + QPointF(0, 14))
         self._badge(p, ox, oy, w, h, iw, ih)
-        # the move: a gold arrow from the card in the hand to its tile
+        # the move: a crimson arrow from the card in the hand to its tile
         t, c0 = self.d.get("target"), self.d.get("card_at")
         if t:
-            gold = QColor(TOKENS["gold"])
-            p.setPen(QPen(gold, 3)); p.setBrush(Qt.NoBrush)
+            crimson = QColor(TOKENS["crimson"])
+            p.setPen(QPen(crimson, 3)); p.setBrush(Qt.NoBrush)
             p.drawEllipse(P(*t), 13, 13)
             dec = self.d.get("decision") or {}
             if dec.get("card"):                          # 6.8: what it played, where, and why in one line
@@ -322,7 +324,7 @@ class AiPicture(_Base):
                 p.drawRoundedRect(box, 5, 5)
                 p.setPen(QColor("#ffffff")); p.drawText(box, Qt.AlignCenter, txt)
                 p.setFont(f)
-                p.setPen(QPen(gold, 3)); p.setBrush(Qt.NoBrush)
+                p.setPen(QPen(crimson, 3)); p.setBrush(Qt.NoBrush)
             if c0:
                 a, bpt = P(*c0), P(*t)
                 p.drawLine(a, bpt)
@@ -330,7 +332,7 @@ class AiPicture(_Base):
                 ang = math.atan2(bpt.y() - a.y(), bpt.x() - a.x())
                 head = QPolygonF([bpt, bpt - QPointF(12 * math.cos(ang - 0.4), 12 * math.sin(ang - 0.4)),
                                   bpt - QPointF(12 * math.cos(ang + 0.4), 12 * math.sin(ang + 0.4))])
-                p.setBrush(gold); p.drawPolygon(head)
+                p.setBrush(crimson); p.drawPolygon(head)
 
 
 class RoyaleAiScreen(Screen):
@@ -526,24 +528,26 @@ class RoyaleAiScreen(Screen):
                 out.append(tr("ra_live_waiting"))
             out.append(f"<br><small>{tr('ra_live_bot_note')}</small>")
             return "<br>".join(out)
-        g, r, gold = TOKENS["ok"], TOKENS["bad"], TOKENS["gold"]
+        g, r, crimson = TOKENS["ok"], TOKENS["bad"], TOKENS["crimson"]
         out = []
         t = d.get("time_s", 0)
-        out.append(f"<b>{int(t // 60)}:{int(t % 60):02d}</b>" + (" · ⚡x2" if d.get("double") else "") +
+        double_icon = icons.img_tag("bolt", 10, TOKENS["crimson"])
+        out.append(f"<b>{int(t // 60)}:{int(t % 60):02d}</b>" + (f" · {double_icon}x2" if d.get("double") else "") +
                    f" · {tr('rl_elixir')} <b>{d.get('elixir')}</b> · {tr('rl_their_elixir')} <b>{d.get('their_elixir')}</b>")
         m = d.get("model") or {}
         if m:
             pl = float(m.get("play", 0))
-            out.append(f"<br><b style='color:{gold}'>{tr('ra_model')}</b><br>"
+            out.append(f"<br><b style='color:{crimson}'>{tr('ra_model')}</b><br>"
                        f"{tr('ra_play_now')}: <b style='color:{g if pl >= 0.5 else r}'>{int(pl * 100)}%</b>"
                        + (f" · {tr('ra_alone')}" if m.get("ai_only") else ""))
             for n, v in (m.get("cards") or {}).items():
                 bar = "█" * max(1, int(v * 20))
                 out.append(f"<span style='font-family:monospace'>{_nice(n):<14}</span> "
-                           f"<span style='color:{gold}'>{bar}</span> {int(v * 100)}%")
+                           f"<span style='color:{crimson}'>{bar}</span> {int(v * 100)}%")
         dec = d.get("decision")
-        out.append(f"<br><b style='color:{gold}'>{tr('ra_decision')}</b>")
-        out.append(f"▶ <b>{_nice(dec['card'])}</b> → {tuple(dec['tile'])}<br><small>{dec.get('why', '')}</small>"
+        out.append(f"<br><b style='color:{crimson}'>{tr('ra_decision')}</b>")
+        play_icon = icons.img_tag("play", 12, TOKENS["crimson"])
+        out.append(f"{play_icon} <b>{_nice(dec['card'])}</b> → {tuple(dec['tile'])}<br><small>{dec.get('why', '')}</small>"
                    if dec else tr("rl_waiting"))
         th = d.get("think") or {}
         summary = decision_projection(dec, th)
@@ -556,9 +560,13 @@ class RoyaleAiScreen(Screen):
             out.append(f"<small>{tr('rl_thought')}: {th.get('tried')} · {th.get('ms')} ms</small>")
         hand = d.get("hand") or []
         if hand:
+            ready_dot = icons.img_tag("dot", 10, TOKENS["crimson"])
+            idle_dot = icons.img_tag("dot", 10, TOKENS["dim"])
+            lightning = icons.img_tag("bolt", 10, TOKENS["crimson"])
+            crown = icons.img_tag("crown", 10, TOKENS["crimson"])
             out.append(f"<br><b>{tr('rl_hand')}</b><br>" + " · ".join(
-                ("● " if h.get("ready") else "○ ") + _nice(h.get("card")) + (" ⚡" if h.get("evo") else "") +
-                (" 👑" if h.get("hero") else "") for h in hand) + (f"<br>{tr('rl_next')}: {_nice(d.get('next'))}"
+                (f"{ready_dot} " if h.get("ready") else f"{idle_dot} ") + _nice(h.get("card")) + (f" {lightning}" if h.get("evo") else "") +
+                (f" {crown}" if h.get("hero") else "") for h in hand) + (f"<br>{tr('rl_next')}: {_nice(d.get('next'))}"
                                                                     if d.get("next") else ""))
         if d.get("their_hand"):
             out.append(f"<br><b>{tr('rl_their_hand')}</b>: " + ", ".join(_nice(c) for c in d["their_hand"]))

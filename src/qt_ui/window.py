@@ -62,10 +62,12 @@ class Canvas(QWidget):
         path.addRoundedRect(r, radius, radius)
         p.fillPath(path, QColor(TOKENS["void"]))
         rtl = self.layoutDirection() == Qt.RightToLeft
-        # balanced dual ambient lighting: warm Clash gold near sidebar crown, faint slate-indigo opposite
+        # balanced dual ambient lighting: crimson near sidebar crown, faint slate-indigo opposite
+        crimson = QColor(TOKENS["crimson"])
+        crimson.setAlpha(24)
         g = QRadialGradient(r.right() - 120 if rtl else r.left() + 120, r.top(), 680)
-        g.setColorAt(0, QColor(245, 183, 64, 24))
-        g.setColorAt(1, QColor(245, 183, 64, 0))
+        g.setColorAt(0, crimson)
+        g.setColorAt(1, QColor(crimson.red(), crimson.green(), crimson.blue(), 0))
         p.fillPath(path, QBrush(g))
         g2 = QRadialGradient(r.left() + 180 if rtl else r.right() - 180, r.bottom(), 560)
         g2.setColorAt(0, QColor(94, 177, 245, 14))
@@ -404,7 +406,7 @@ class MainWindow(QMainWindow):
     def desktop_notify(self, title, text, icon_name="bell"):
         """Windows toast (tray balloon) + an in-app banner."""
         if self.store.APP.get("desktop_notify", True) and self.tray is not None:
-            self.tray.showMessage(title, text, QIcon(icons.pixmap(icon_name, 64, "#F5B740")), 8000)
+            self.tray.showMessage(title, text, QIcon(icons.pixmap(icon_name, 64, TOKENS["crimson"])), 8000)
         self.banner.show_msg(f"{title} — {text}", "ok", icon_name)
 
     NOTIFY_KEYS = (("Upgrade finished:", "nt_upgrade_done", "builder_hammer"), ("Lab research finished:", "nt_lab_done", "flask"),

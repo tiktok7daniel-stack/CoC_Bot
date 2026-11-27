@@ -1,5 +1,18 @@
 from dataclasses import dataclass
-from enum import StrEnum, auto
+from enum import Enum, auto
+import sys
+
+
+if sys.version_info >= (3, 11):
+    from enum import StrEnum
+else:
+    class StrEnum(str, Enum):
+        """Fallback StrEnum for Python 3.10 compatibility."""
+        def __new__(cls, *values):
+            value = str(values[0]) if values else ""
+            object_ = str.__new__(cls, value)
+            object_._value_ = value
+            return object_
 
 
 class UnitCategory(StrEnum):

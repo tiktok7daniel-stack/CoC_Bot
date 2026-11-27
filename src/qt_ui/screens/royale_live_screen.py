@@ -20,7 +20,10 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWi
 from ..i18n import on_lang, tr
 from ..theme import TOKENS, ui_font
 from ..widgets.controls import GlassCard, label
+from ..widgets import StatusPill, AnimatedToggle, MetricTile, ConsoleLog, FlowLayout
+from ..icons import icons
 from .base import Screen
+from ..store import Store
 
 W, H = 18, 32
 
@@ -118,11 +121,11 @@ class Arena(QWidget):
         dec = d.get("decision")
         if dec and dec.get("tile"):
             r = self._tile(*dec["tile"]).adjusted(-2, -2, 2, 2)
-            p.setPen(QPen(QColor(TOKENS["gold"]), 3))
+            p.setPen(QPen(QColor(TOKENS["crimson"]), 3))
             p.setBrush(Qt.NoBrush)
             p.drawRect(r)
             p.setFont(ui_font(max(7.0, s * 0.38), QFont.Bold))
-            p.setPen(QColor(TOKENS["gold"]))
+            p.setPen(QColor(TOKENS["crimson"]))
             p.drawText(r.adjusted(-s * 2, -s * 1.1, s * 2, 0), Qt.AlignHCenter | Qt.AlignTop, _short(dec.get("card")))
         if d.get("phase") != "battle":
             p.fillRect(QRectF(ox, oy, s * W, s * H), QColor(0, 0, 0, 120))
@@ -241,7 +244,7 @@ class Camera(QWidget):
             p.drawText(badge.adjusted(8, 0, -5, 0), Qt.AlignVCenter | Qt.AlignLeft, text)
         t = self.d.get("target")
         if t:
-            p.setPen(QPen(QColor(TOKENS["gold"]), 3)); p.setBrush(Qt.NoBrush)
+            p.setPen(QPen(QColor(TOKENS["crimson"]), 3)); p.setBrush(Qt.NoBrush)
             p.drawEllipse(QPointF(ox + t[0] * w, oy + t[1] * h), 11, 11)
 
 
@@ -250,6 +253,12 @@ class RoyaleLiveScreen(Screen):
 
     def __init__(self, ctx):
         super().__init__(ctx)
+
+        # ── Pre-flight Health Strip (top) ──────────────────────────
+        self._preflight_bar = self._build_preflight_bar()
+        self.root.addWidget(self._preflight_bar)
+
+        # ── Main content row ──────────────────────────────────────
         top = QHBoxLayout()
         from ..widgets.controls import IconButton
         pop = IconButton("expand", "rl_popout", kind="go", size=14)
@@ -257,6 +266,7 @@ class RoyaleLiveScreen(Screen):
         top.addWidget(pop)
         top.addStretch(1)
         self.root.addLayout(top)
+
         row = QHBoxLayout()
         row.setSpacing(12)
         self.arena = Arena()
@@ -267,8 +277,34 @@ class RoyaleLiveScreen(Screen):
         cam = GlassCard("rl_camera", "eye", "rl_camera_sub")
         cam.add(self.camera)
         row.addWidget(cam, 3)
+
+        # ── Side panel with Watch Mode + telemetry ────────────────
         side = QVBoxLayout()
         side.setSpacing(10)
+
+        # Watch Mode toggle
+        watch_card = GlassCard("rl_watch_mode", "eye")
+        self.watch_toggle = AnimatedToggle()
+        self.watch_toggle.setChecked(bool(self.store.get("royale.watch_only", False)))
+        self.watch_toggle.toggled.connect(self._on_watch_toggled)
+        watch_row = QHBoxLayout()
+        watch_row.addWidget(label("rl_watch_mode"))
+        watch_row.addStretch(1)
+        watch_row.addWidget(self.watch_toggle)
+        watch_card.add(watch_row)
+
+        # Telemetry metrics (monospace)
+        self.tele_fps = MetricTile("rl_fps", TOKENS["crimson"])
+        self.tele_frame_age = MetricTile("rl_frame_age", TOKENS["info"])
+        self.tele_vision_src = MetricTile("rl_vision_src", TOKENS["warn"])
+
+        tele_card = GlassCard("rl_telemetry", "chart")
+        tele_row = FlowLayout(spacing=8)
+        tele_row.addWidget(self.tele_fps)
+        tele_row.addWidget(self.tele_frame_age)
+        tele_row.addWidget(self.tele_vision_src)
+        tele_card.add(tele_row)
+
         self.c_state = GlassCard("rl_state", "clock")
         self.l_state = label("", wrap=True)
         self.c_state.add(self.l_state)
@@ -283,20 +319,28 @@ class RoyaleLiveScreen(Screen):
         self.l_ev = label("", wrap=True)
         self.l_ev.setTextFormat(Qt.RichText)
         self.c_ev.add(self.l_ev)
-        for c in (self.c_state, self.c_think, self.c_them, self.c_ev): side.addWidget(c)
+
+        for c in (watch_card, tele_card, self.c_state, self.c_think, self.c_them, self.c_ev):
+            side.addWidget(c)
         side.addStretch(1)
+
         sw = QWidget()
         sw.setLayout(side)
         sw.setMinimumWidth(320)
         row.addWidget(sw, 2)
+
         holder = QWidget()
         holder.setLayout(row)
         self.root.addWidget(holder, 1)
+
         self._mtime = 0.0
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.refresh)
         self.timer.start(250)
         on_lang(lambda: self.refresh(force=True))
+
+        # Start pre-flight check off the main thread
+        self._run_preflight_async()
 
     def pop_out(self):
         """The battle view in its own small window, kept on top: put it beside LDPlayer and watch both."""
@@ -336,10 +380,129 @@ class RoyaleLiveScreen(Screen):
         t = d.get("time_s", 0)
         head = (f"<b>{int(t // 60)}:{int(t % 60):02d}</b> · {tr('rl_elixir')} {d.get('elixir')} · "
                 f"{tr('rl_their_elixir')} {d.get('their_elixir')}")
-        what = (f"<b style='color:{TOKENS['gold']}'>▶ {dec['card']} {tuple(dec['tile'])}</b> — {dec.get('why', '')}"
+        arrow_mark = icons.img_tag("chevron_right", 12, TOKENS["crimson"])
+        what = (f"{arrow_mark} <b style='color:{TOKENS['crimson']}'>{dec['card']} {tuple(dec['tile'])}</b> — {dec.get('why', '')}"
                 if dec else tr("rl_waiting"))
         more = f"{tr('rl_thought')}: {th.get('tried', 0)} · {th.get('ms', 0)} ms" if th.get("tried") else ""
         w._info.setText("<br>".join(x for x in (head, what, decision_projection(dec, th), more) if x))
+
+    # ── Pre-flight Health Strip ──────────────────────────────────
+    def _build_preflight_bar(self):
+        """Build the top pre-flight health bar with 4 status pills."""
+        from ..widgets import FlowLayout
+        bar = QWidget()
+        bar.setFixedHeight(40)
+        bar.setStyleSheet(f"background: {TOKENS['void2']}; border-bottom: 1px solid {TOKENS['border_solid']};")
+
+        layout = FlowLayout(bar, spacing=12)
+        layout.setContentsMargins(16, 4, 16, 4)
+
+        self.pf_assets = StatusPill(key="ok", text="Assets")
+        self.pf_adb = StatusPill(key="ok", text="ADB")
+        self.pf_ram = StatusPill(key="ok", text="RAM")
+        self.pf_disk = StatusPill(key="ok", text="Disk")
+
+        layout.addWidget(self.pf_assets)
+        layout.addWidget(self.pf_adb)
+        layout.addWidget(self.pf_ram)
+        layout.addWidget(self.pf_disk)
+        layout.addStretch(1)
+        return bar
+
+    def _run_preflight_async(self):
+        """Run pre-flight checks in a background thread."""
+        from PySide6.QtCore import QThread, Signal, QObject
+
+        class PreflightWorker(QObject):
+            finished = Signal(object)
+
+            def run(self):
+                import sys
+                sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+                from royale.preflight import run_preflight
+                result = run_preflight()
+                self.finished.emit(result)
+
+        self._pf_thread = QThread(self)
+        self._pf_worker = PreflightWorker()
+        self._pf_worker.moveToThread(self._pf_thread)
+        self._pf_thread.started.connect(self._pf_worker.run)
+        self._pf_worker.finished.connect(self._on_preflight_done)
+        self._pf_worker.finished.connect(self._pf_thread.quit)
+        self._pf_worker.finished.connect(self._pf_worker.deleteLater)
+        self._pf_thread.finished.connect(self._pf_thread.deleteLater)
+        self._pf_thread.start()
+
+    def _on_preflight_done(self, result):
+        """Update pre-flight pills with results."""
+        # Assets
+        asset_errors = [e for e in result.errors if "asset" in e.lower() or "missing" in e.lower()]
+        if asset_errors:
+            self.pf_assets.set("bad", "Assets")
+        else:
+            self.pf_assets.set("ok", "Assets")
+
+        # ADB
+        adb_errors = [e for e in result.errors if "adb" in e.lower()]
+        adb_warnings = [w for w in result.warnings if "adb" in w.lower() or "device" in w.lower()]
+        if adb_errors:
+            self.pf_adb.set("bad", "ADB")
+        elif adb_warnings:
+            self.pf_adb.set("warn", "ADB")
+        else:
+            self.pf_adb.set("ok", "ADB")
+
+        # RAM
+        ram_warnings = [w for w in result.warnings if "ram" in w.lower() or "memory" in w.lower()]
+        if ram_warnings:
+            self.pf_ram.set("warn", "RAM")
+        else:
+            self.pf_ram.set("ok", "RAM")
+
+        # Disk
+        disk_warnings = [w for w in result.warnings if "disk" in w.lower() or "space" in w.lower()]
+        if disk_warnings:
+            self.pf_disk.set("warn", "Disk")
+        else:
+            self.pf_disk.set("ok", "Disk")
+
+    # ── Watch Mode Toggle ────────────────────────────────────────
+    def _on_watch_toggled(self, checked: bool):
+        """Handle Watch Mode toggle change."""
+        self.store.set("royale.watch_only", checked, scope="s")
+        if checked:
+            self.l_state.setText(tr("rl_phase_watching"))
+        else:
+            self.refresh(force=True)
+
+    # ── Telemetry Updates ────────────────────────────────────────
+    def _update_telemetry(self, d):
+        """Update FPS, frame age, vision source metrics."""
+        vision = d.get("vision") or {}
+        perf = d.get("perf") or {}
+
+        # FPS from video stream
+        fps = vision.get("fps", 0)
+        if fps > 0:
+            self.tele_fps.set(f"{fps:.0f}")
+
+        # Frame age / stale status
+        frame_age = vision.get("decision_age_ms", 0)
+        if frame_age > 0:
+            if frame_age > 500:
+                self.tele_frame_age.set(f"{frame_age:.0f}ms")
+            else:
+                self.tele_frame_age.set(f"{frame_age:.0f}ms")
+
+        # Vision source
+        source_map = {
+            "large-current-frame": "Large",
+            "fast-current-frame": "Fast",
+            "combined-current-frame": "Combined",
+            "small-current-frame": "Fallback",
+        }
+        src = source_map.get(vision.get("source"), "Unknown")
+        self.tele_vision_src.set(src)
 
     def _path(self):
         acc = self.store.account or "main"
@@ -375,6 +538,7 @@ class RoyaleLiveScreen(Screen):
         self.camera.set_data(d, p.with_suffix(".jpg"))
         self.show_panel(d)
         self._feed_pop(d)
+        self._update_telemetry(d)
 
     def show_panel(self, d):
         if d.get("phase") != "battle":
@@ -382,10 +546,14 @@ class RoyaleLiveScreen(Screen):
             return
         t = d.get("time_s", 0)
         hand = d.get("hand") or []
+        arrow_mark = icons.img_tag("chevron_right", 12, TOKENS["crimson"])
 
         def card_txt(h):
-            tags = (" ⚡" if h.get("evo") else "") + (" 👑" if h.get("hero") else "")
-            return ("● " if h.get("ready") else "○ ") + str(h.get("card")) + tags
+            from ..icons import pixmap as icon_pixmap
+            check_icon = icons.img_tag("dot", 10, TOKENS["ok"]) if h.get("ready") else icons.img_tag("dot", 10, TOKENS["dim"])
+            evo_icon = icons.img_tag("sparkle", 10, TOKENS["crimson"]) if h.get("evo") else ""
+            hero_icon = icons.img_tag("crown", 10, TOKENS["crimson"]) if h.get("hero") else ""
+            return f"{check_icon} {str(h.get('card'))} {evo_icon} {hero_icon}"
         self.l_state.setText(
             f"{tr('rl_time')}: {int(t // 60)}:{int(t % 60):02d}" + (f"  ·  {tr('rl_double')}" if d.get("double") else "") + "\n" +
             f"{tr('rl_elixir')}: {d.get('elixir')}  ·  {tr('rl_their_elixir')}: ~{d.get('their_elixir')}\n" +
@@ -396,7 +564,7 @@ class RoyaleLiveScreen(Screen):
         eng = d.get("engine") or {}
         lines = []
         if dec:
-            lines.append(f"<b style='color:{TOKENS['gold']}'>▶ {dec['card']} → {tuple(dec['tile'])}</b><br>{dec.get('why', '')}")
+            lines.append(f"{arrow_mark} <b style='color:{TOKENS['crimson']}'>{dec['card']} {tuple(dec['tile'])}</b><br>{dec.get('why', '')}")
         else:
             lines.append(f"<b>{tr('rl_waiting')}</b>")
         projection = decision_projection(dec, th)
