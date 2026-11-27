@@ -1,3 +1,6 @@
 [submodule "third_party/firstlight-zero"]
 	path = third_party/firstlight-zero
 	url = https://github.com/Jaasssoooonnnnn/FirstLight-Zero.git
+[submodule "third_party/firstlight-cr"]
+	path = third_party/firstlight-cr
+	url = https://github.com/Jaasssoooonnnnn/FirstLight_CR.git

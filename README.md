@@ -113,13 +113,21 @@
 [FirstLight Zero](https://github.com/Jaasssoooonnnnn/FirstLight-Zero) is an optional research dependency for local self-play training and evaluation. It runs separately from the desktop bot.
 
 ```sh
-git submodule update --init third_party/firstlight-zero
+git submodule update --init third_party/firstlight-cr third_party/firstlight-zero
 cd third_party/firstlight-zero
 python -m pip install -r requirements.txt
 python tests/test_consistency.py
 ```
 
-The consistency test runs without a battle engine. Self-play requires a compatible FirstLight battle engine and separately supplied game data. See the [upstream setup guide](https://github.com/Jaasssoooonnnnn/FirstLight-Zero/blob/4fc9ebec1106ef8070c170dadd93b77f908b1184/docs/getting_started.md) for supported versions and setup.
+The consistency test runs without a battle engine. The `third_party/firstlight-cr` submodule provides the [offline engine build tools](https://github.com/Jaasssoooonnnnn/FirstLight_CR/blob/4c82496ad5af49a3c7ea2392f26ff7bac33d9707/docs/getting_started.md). The original ARM64 APK 15.535.13 and runtime content 15.535.86 are supplied separately. For FirstLight Zero, use the probe from the Zero checkout and a resident engine with eight available slots. Upstream used a Linux extracted engine for its published results. See the [FirstLight Zero setup guide](https://github.com/Jaasssoooonnnnn/FirstLight-Zero/blob/4fc9ebec1106ef8070c170dadd93b77f908b1184/docs/getting_started.md) for the workspace layout and engine configuration.
+
+From the CoC_Bot root, verify the assets and running local engine before starting a collector. Pass `--apk` if you also want to verify the original APK against the pinned build input.
+
+```sh
+python scripts/check_firstlight_engine.py --workspace /path/to/engine-workspace --port 26789
+```
+
+Set `CR_WORKSPACE_ROOT` to the same workspace and configure `FIRSTLIGHT_ZERO_ENGINES` with the verified endpoint and slot IDs 0 through 7 before launching FirstLight Zero.
 
 For a local experiment with the bundled ClashRoyaleEnv simulator, run this from the CoC_Bot root using a Python environment with PyTorch, Gymnasium and TensorBoard:
 
