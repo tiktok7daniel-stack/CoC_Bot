@@ -151,7 +151,7 @@ def _valid(env, team, slot, tile):
     except Exception: return False
 
 
-def candidates(cx, env, team, inp, hand, per_card=3, replay_placements=False):
+def candidates(cx, env, team, inp, hand, per_card=3, replay_placements=False, replay_atlas=None):
     """(slot, card, tile in the side's own view) worth looking at."""
     from royale import pro
     from royale.brain import card, roles
@@ -189,6 +189,9 @@ def candidates(cx, env, team, inp, hand, per_card=3, replay_placements=False):
                 side = "left" if x < 9 else "right"
                 if pro.answer(threat, y, side, [n]).get(n, 0) >= 0.025:
                     learned.extend(pro.answer_tiles(threat, y, side, n)[:2])
+                if replay_atlas:
+                    recorded = replay_atlas.get((pro.key(threat), int(y) // 4, pro.key(n)), ())
+                    learned.extend((tx if side == "left" else 17 - tx, ty) for tx, ty in recorded)
             if not named_threats:
                 learned.extend(t for side in ("left", "right") if (t := pro.place(n, side)) is not None)
             for t in learned:
@@ -342,7 +345,7 @@ def _winner(env):
     return 0 if hp[0] > hp[1] else 1
 
 
-def battle(cx, decks, pilots, record=True, explore=0.15, max_ticks=1800, seed=None, trace=None, decision_ms=None):
+def battle(cx, decks, pilots, record=True, explore=0.15, max_ticks=1800, seed=None, trace=None, decision_ms=None, replay_atlases=(None, None)):
     """decks: (ids team 0, ids team 1); pilots: each side uses "search", "search-replay", "search-counters", or a policy Ctx.
     -> (samples, winner, stats)"""
     rnd = random.Random(seed)
@@ -365,7 +368,8 @@ def battle(cx, decks, pilots, record=True, explore=0.15, max_ticks=1800, seed=No
                 inp, hand = inputs(cx if uses_search else pilot, env, team, first)
                 if uses_search:
                     if not _playable(cx, env, team, hand): continue
-                    cands = candidates(cx, env, team, inp, hand, replay_placements=pilot != "search")
+                    cands = candidates(cx, env, team, inp, hand, replay_placements=pilot != "search",
+                                       replay_atlas=replay_atlases[team])
                     if not cands: continue
                     res = search(cx, env, team, cands, prioritize_counters=pilot == "search-counters")
                     n_search += 1
