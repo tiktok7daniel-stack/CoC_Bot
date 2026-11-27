@@ -12,7 +12,7 @@ from royale import exit_train
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--candidate", default="search", help="search, search-replay or a board-policy ONNX path")
+    parser.add_argument("--candidate", default="search", help="search, search-replay, search-counters or a board-policy ONNX path")
     parser.add_argument("--baseline", default=str(ROOT / "assets/royale/board.onnx"),
                         help="search or a board-policy ONNX path")
     parser.add_argument("--min-win-rate", type=float)
@@ -27,11 +27,12 @@ def main():
         parser.error("min-win-rate must be between 0 and 1")
     if args.max_decision_p95_ms is not None and not 0 < args.max_decision_p95_ms < math.inf:
         parser.error("max-decision-p95-ms must be positive and finite")
-    baseline = exit_train.Ctx(None if args.baseline == "search" else Path(args.baseline))
-    opponent = "search" if args.baseline == "search" else baseline
+    search_modes = ("search", "search-replay", "search-counters")
+    baseline = exit_train.Ctx(None if args.baseline in search_modes else Path(args.baseline))
+    opponent = args.baseline if args.baseline in search_modes else baseline
     if not baseline.E.selftest():
         parser.error("native engine did not pass its self-test")
-    candidate = args.candidate if args.candidate in ("search", "search-replay") else exit_train.Ctx(Path(args.candidate))
+    candidate = args.candidate if args.candidate in search_modes else exit_train.Ctx(Path(args.candidate))
     decks = [(name, names) for name, names in baseline.meta_decks() if len(names) == len(set(names)) == 8]
     featured = ["cannon-ev1", "ice-wizard-hero", "bats-ev1", "barbarian-barrel", "knight",
                 "lightning", "minion-giant", "skeletons"]
@@ -82,7 +83,7 @@ def main():
               "gates": gates,
               "featured_deck": featured, "totals": totals,
               "score": (totals["win"] + totals["draw"] / 2) / len(matches), "matches": matches}
-    if candidate == "search-replay":
+    if candidate in ("search-replay", "search-counters"):
         from royale import pro
         report["placement_prior"] = {
             "source": "https://huggingface.co/datasets/VanguardX101/IL_Replay",
