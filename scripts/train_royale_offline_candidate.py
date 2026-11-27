@@ -16,6 +16,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--replay-atlas", type=Path, required=True)
     parser.add_argument("--out-dir", type=Path, required=True)
+    parser.add_argument("--teacher", choices=("search-replay", "search-crowns"), default="search-crowns")
     parser.add_argument("--training-games", type=int, default=8)
     parser.add_argument("--seed", type=int, default=7013)
     args = parser.parse_args()
@@ -46,7 +47,7 @@ def main():
         if index % 2:
             pair.reverse()
         evidence, _, _ = exit_train.battle(
-            cx, pair, ["search-replay", "search-replay"], max_ticks=3600,
+            cx, pair, [args.teacher, args.teacher], max_ticks=3600,
             explore=.08, seed=args.seed + index, replay_atlases=(atlas, atlas))
         samples.extend(evidence)
         print(f"Training match {index + 1}: {len(evidence)} labeled decisions", flush=True)
@@ -57,13 +58,13 @@ def main():
     report = args.out_dir / "acceptance.json"
     result = subprocess.run([
         sys.executable, str(ROOT / "scripts/benchmark_royale_matches.py"),
-        "--candidate", path, "--baseline", "search-replay", "--matchups", "8", "--seeds", "1",
+        "--candidate", path, "--baseline", args.teacher, "--matchups", "8", "--seeds", "1",
         "--min-win-rate", "0.55", "--out", str(report),
     ])
     if not report.is_file():
         raise RuntimeError("The candidate benchmark did not produce a report")
     (args.out_dir / "training.json").write_text(json.dumps({
-        "training_matches": args.training_games, "labeled_decisions": len(samples),
+        "teacher": args.teacher, "training_matches": args.training_games, "labeled_decisions": len(samples),
         "replay_atlas": args.replay_atlas.name, "atlas_groups": len(atlas), "seed": args.seed,
         "gate_passed": result.returncode == 0,
         "scope": "Offline candidate; simulator search labels. Evaluation uses different seeds.",

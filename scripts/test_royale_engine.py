@@ -309,5 +309,21 @@ for team in (0, 1):
           legal and match.get_elixir_for_team(team) < 8.0 and
           any(u.team == team and not u.tower and u.card_id == knight_id for u in match.get_units()))
 
+from types import SimpleNamespace
+
+score_context = SimpleNamespace(E=engine)
+native_deck = engine._deck_ids(m, deck)
+crown_game = m.ClashRoyaleEnv(native_deck, native_deck, 3600)
+crown_game.reset()
+before_loss = engine._snap_state(crown_game)
+crown_game.destroy_tower(0, 1)
+check("crown-aware search penalizes a newly lost tower",
+      exit_train._value(score_context, crown_game, 0, before_loss, 0, True)
+      < exit_train._value(score_context, crown_game, 0, before_loss, 0))
+after_loss = engine._snap_state(crown_game)
+check("crown-aware search does not charge again for an already lost tower",
+      exit_train._value(score_context, crown_game, 0, after_loss, 0, True)
+      == exit_train._value(score_context, crown_game, 0, after_loss, 0))
+
 print(f"\n{'ALL PASSED' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)

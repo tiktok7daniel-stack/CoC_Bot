@@ -202,15 +202,22 @@ def candidates(cx, env, team, inp, hand, per_card=3, replay_placements=False, re
 
 
 # ------------------------------------------------------------------ search
-def _value(cx, env, team, before, spent):
+def _value(cx, env, team, before, spent, value_crowns=False):
     E = cx.E
     v = 0.0
     o = 1 - team
     for t, sign in ((o, E.OFFENSE_DISCOUNT), (team, -1.0)):
         for s in (0, 1, 2):
+            hp_before = before["towers"][(t, s)]
+            hp = max(0, env.get_tower_hp(t, s))
             mx = env.get_tower_max_hp(t, s)
-            if mx < 100: continue                      # destroyed (max 0)
-            v += sign * E.TOWER_ELIXIR[s] * max(-1.0, min(1.0, (before["towers"][(t, s)] - max(0, env.get_tower_hp(t, s))) / mx))
+            if value_crowns and hp_before > 0 and hp == 0:
+                v += sign * (30.0 if s == 0 else 4.0)
+                if mx < 100:
+                    mx = hp_before
+            if mx < 100:
+                continue
+            v += sign * E.TOWER_ELIXIR[s] * max(-1.0, min(1.0, (hp_before - hp) / mx))
     army = E._army(env)
     v += before["army"][o] - army[o]
     v += STAND * (army[team] - before["army"][team])
@@ -258,14 +265,14 @@ def _rollout(env, team, act, reply=None):
     return s
 
 
-def search(cx, env, team, cands, prioritize_counters=False):
+def search(cx, env, team, cands, prioritize_counters=False, value_crowns=False):
     """-> [(value vs waiting, slot, card, tile)] (wait = (0, None, None, None) first)."""
     from royale.brain import roles
     from royale.knowledge import ANSWERS_TO
 
     E = cx.E
     before = E._snap_state(env)
-    base = _value(cx, _rollout(env, team, None), team, before, 0.0) - _leak(env, team, 0.0)
+    base = _value(cx, _rollout(env, team, None), team, before, 0.0, value_crowns) - _leak(env, team, 0.0)
     out = [(0.0, None, None, None)]
     o = 1 - team
     their = _playable(cx, env, o, [cx.names.get(c) for c in env.get_hand_for_team(o)])
@@ -274,7 +281,7 @@ def search(cx, env, team, cands, prioritize_counters=False):
         cost = float(cx.m.get_card_info(native_hand[slot])["cost"])
         pt = eng_point(team, *tile)
         end = _rollout(env, team, (slot, *pt))
-        v = _value(cx, end, team, before, cost) - _leak(env, team, cost) - base
+        v = _value(cx, end, team, before, cost, value_crowns) - _leak(env, team, cost) - base
         # the opponent answers with the cards really in their hand (5.84): half the worst, half the average
         vs = [v]
         otile = (17 - tile[0], 31 - tile[1])                   # our card's tile as THEY see it
@@ -288,7 +295,7 @@ def search(cx, env, team, cands, prioritize_counters=False):
             else: t2 = (otile[0], max(1, min(14, otile[1] - 2)))
             if not _valid(env, o, oslot, t2): continue
             e2 = _rollout(env, team, (slot, *pt), (oslot, *eng_point(o, *t2)))
-            vs.append(_value(cx, e2, team, before, cost) - _leak(env, team, cost) - base)
+            vs.append(_value(cx, e2, team, before, cost, value_crowns) - _leak(env, team, cost) - base)
             tested += 1
             if tested == REPLIES:
                 break
@@ -346,7 +353,7 @@ def _winner(env):
 
 
 def battle(cx, decks, pilots, record=True, explore=0.15, max_ticks=1800, seed=None, trace=None, decision_ms=None, replay_atlases=(None, None), proposal_policies=(None, None)):
-    """decks: (ids team 0, ids team 1); pilots: each side uses "search", "search-replay", "search-counters", or a policy Ctx.
+    """decks: (ids team 0, ids team 1); pilots: each side uses "search", "search-replay", "search-counters", "search-crowns", or a policy Ctx.
     -> (samples, winner, stats)"""
     rnd = random.Random(seed)
     env = cx.m.ClashRoyaleEnv(decks[0], decks[1], 3600)
@@ -364,7 +371,7 @@ def battle(cx, decks, pilots, record=True, explore=0.15, max_ticks=1800, seed=No
             decision_start = time.perf_counter() if decision_ms is not None else None
             try:
                 pilot = pilots[team]
-                uses_search = pilot in ("search", "search-replay", "search-counters")
+                uses_search = pilot in ("search", "search-replay", "search-counters", "search-crowns")
                 inp, hand = inputs(cx if uses_search else pilot, env, team, first)
                 if uses_search:
                     if not _playable(cx, env, team, hand): continue
@@ -376,7 +383,8 @@ def battle(cx, decks, pilots, record=True, explore=0.15, max_ticks=1800, seed=No
                         if proposal is not None and proposal not in cands:
                             cands.append(proposal)
                     if not cands: continue
-                    res = search(cx, env, team, cands, prioritize_counters=pilot == "search-counters")
+                    res = search(cx, env, team, cands, prioritize_counters=pilot == "search-counters",
+                                 value_crowns=pilot == "search-crowns")
                     n_search += 1
                     play_t, card_t, tile_card, tile_t, p = label(cx, res)
                     if record:

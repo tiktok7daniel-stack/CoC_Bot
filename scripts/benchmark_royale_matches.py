@@ -29,12 +29,13 @@ def load_replay_atlas(path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--candidate", default="search", help="search, search-replay, search-counters or a board-policy ONNX path")
+    parser.add_argument("--candidate", default="search", help="search, search-replay, search-counters, search-crowns or a board-policy ONNX path")
     parser.add_argument("--baseline", default=str(ROOT / "assets/royale/board.onnx"),
                         help="search or a board-policy ONNX path")
     parser.add_argument("--min-win-rate", type=float)
     parser.add_argument("--max-decision-p95-ms", type=float)
     parser.add_argument("--matchups", type=int, default=4)
+    parser.add_argument("--matchup-offset", type=int, default=0)
     parser.add_argument("--seeds", type=int, default=2)
     parser.add_argument("--candidate-replay-atlas", type=Path)
     parser.add_argument("--candidate-proposer", type=Path)
@@ -42,11 +43,13 @@ def main():
     args = parser.parse_args()
     if args.matchups < 1 or args.seeds < 1:
         parser.error("matchups and seeds must be positive")
+    if args.matchup_offset < 0:
+        parser.error("matchup-offset cannot be negative")
     if args.min_win_rate is not None and not 0 <= args.min_win_rate <= 1:
         parser.error("min-win-rate must be between 0 and 1")
     if args.max_decision_p95_ms is not None and not 0 < args.max_decision_p95_ms < math.inf:
         parser.error("max-decision-p95-ms must be positive and finite")
-    search_modes = ("search", "search-replay", "search-counters")
+    search_modes = ("search", "search-replay", "search-counters", "search-crowns")
     baseline = exit_train.Ctx(None if args.baseline in search_modes else Path(args.baseline))
     opponent = args.baseline if args.baseline in search_modes else baseline
     if not baseline.E.selftest():
@@ -59,7 +62,7 @@ def main():
         proposer = exit_train.Ctx(args.candidate_proposer)
     atlas = {}
     if args.candidate_replay_atlas:
-        if args.candidate not in ("search-replay", "search-counters"):
+        if args.candidate not in ("search-replay", "search-counters", "search-crowns"):
             parser.error("candidate-replay-atlas requires a replay-aware search candidate")
         atlas = load_replay_atlas(args.candidate_replay_atlas)
         if not atlas:
@@ -70,11 +73,11 @@ def main():
     variants = [("cannon", 1), ("ice_wizard", 2), ("bats", 1), ("barbarian_barrel", 0),
                 ("knight", 0), ("lightning", 0), ("minion_giant", 0), ("skeletons", 0)]
     my_deck = [baseline.ids.get(name, (None, None, None))[variant] for name, variant in variants]
-    if len(decks) < args.matchups or None in my_deck or baseline.m.validate_deck_slots(my_deck):
+    if len(decks) < args.matchup_offset + args.matchups or None in my_deck or baseline.m.validate_deck_slots(my_deck):
         parser.error("not enough supported complete decks")
     matches = []
     timings = {"candidate": [], "baseline": []}
-    for index, (name, cards) in enumerate(decks[:args.matchups]):
+    for index, (name, cards) in enumerate(decks[args.matchup_offset:args.matchup_offset + args.matchups], args.matchup_offset):
         other = baseline.deck_ids(cards)
         for run in range(args.seeds):
             seed = index * args.seeds + run
@@ -115,7 +118,7 @@ def main():
               "gates": gates,
               "featured_deck": featured, "totals": totals,
               "score": (totals["win"] + totals["draw"] / 2) / len(matches), "matches": matches}
-    if candidate in ("search-replay", "search-counters"):
+    if candidate in ("search-replay", "search-counters", "search-crowns"):
         from royale import pro
         report["placement_prior"] = {
             "source": "https://huggingface.co/datasets/VanguardX101/IL_Replay",
