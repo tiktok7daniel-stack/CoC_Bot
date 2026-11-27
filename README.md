@@ -121,6 +121,14 @@ python tests/test_consistency.py
 
 The consistency test runs without a battle engine. Self-play requires a compatible FirstLight battle engine and separately supplied game data. See the [upstream setup guide](https://github.com/Jaasssoooonnnnn/FirstLight-Zero/blob/4fc9ebec1106ef8070c170dadd93b77f908b1184/docs/getting_started.md) for supported versions and setup.
 
+For a local experiment with the bundled ClashRoyaleEnv simulator, run this from the CoC_Bot root using a Python environment with PyTorch, Gymnasium and TensorBoard:
+
+```sh
+python scripts/train_royale_scratch.py --out-dir royale-scratch-run
+```
+
+The experiment starts from random weights and learns from simulator rewards against frozen copies of itself. The default is a 3.0 X-Bow mirror with standard Knight, Evo Archers and Evo Tesla. The run writes the initial and candidate weights, TensorBoard logs, and a report for one deck. It compares both policies head-to-head with sides swapped and measures each policy against the simulator's built-in opponent on the same held-out seeds. The desktop bot reads its production weights from a separate directory.
+
 ## Miscellaneous
 * Please report issues in the [Issues Tab](https://github.com/m24842/CoC_Bot/issues)
 * For help with setup or usage, open a discussion in [Q&A](https://github.com/m24842/CoC_Bot/discussions/categories/q-a)

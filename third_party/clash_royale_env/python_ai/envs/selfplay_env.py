@@ -252,8 +252,14 @@ class MicroRoyaleSelfPlayEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
+        if seed is not None:
+            # The frozen opponent samples its actions inside the worker.
+            torch.manual_seed(int(seed))
         self._sample_pfsp_opponent()
-        self.game.reset()
+        if seed is None:
+            self.game.reset()
+        else:
+            self.game.seed(int(seed))
         # New match: reset the played-tick baseline so the first poll re-seeds
         # against this episode's clock.
         self._opp_last_tick = {}

@@ -51,18 +51,21 @@ def _load(path):
     return net
 
 
-def _duel(m, deck, net0, net1, steps=400):
-    """One game in the engine, net0 bottom vs net1 top, same deck. -> net0's score (1 / 0.5 / 0)."""
+def _duel(m, deck, net0, net1, steps=400, *, seed=None):
+    """Return net0's score against net1, or the native heuristic when net1 is None."""
     import numpy as np, torch
     from python_ai.engine_constants import BOARD_W
     env = m.ClashRoyaleEnv(deck, deck, 3600)
-    env.reset()
-    hid = [(torch.zeros(1, net0.LSTM_HIDDEN), torch.zeros(1, net0.LSTM_HIDDEN)),
-           (torch.zeros(1, net1.LSTM_HIDDEN), torch.zeros(1, net1.LSTM_HIDDEN))]
-    acts = [None, None]
+    if seed is None:
+        env.reset()
+    else:
+        env.seed(seed)
+    nets = (net0,) if net1 is None else (net0, net1)
+    hid = [(torch.zeros(1, net.LSTM_HIDDEN), torch.zeros(1, net.LSTM_HIDDEN)) for net in nets]
+    acts = [None] * len(nets)
     with torch.no_grad():
         for _ in range(steps):
-            for team, net in ((0, net0), (1, net1)):
+            for team, net in enumerate(nets):
                 obs = torch.tensor(np.asarray(env.get_observation_for_team(team), dtype=np.float32)).unsqueeze(0)
                 feats, emb, sp = net.extract_features(obs)
                 lg, _, _, _, h = net.step_lstm_and_card(feats, hid[team], net.affordability_mask(obs))
@@ -70,7 +73,10 @@ def _duel(m, deck, net0, net1, steps=400):
                 cell = int(net.placement_given_card(h[0], emb, torch.tensor([gi]), obs, sp).argmax(-1).item())
                 hid[team] = h
                 acts[team] = (gi, float(cell % BOARD_W), float(cell // BOARD_W))
-            r = env.step_self_play(acts[0][0], acts[0][1], acts[0][2], acts[1][0], acts[1][1], acts[1][2], 10)
+            if net1 is None:
+                r = env.step(*acts[0], 10)
+            else:
+                r = env.step_self_play(*acts[0], *acts[1], 10)
             if r.done: break
     a, b = env.get_towers_alive(0), env.get_towers_alive(1)
     if a != b: return 1.0 if a > b else 0.0
