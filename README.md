@@ -108,6 +108,19 @@
     * To run bots for multiple accounts just create additional instances with your emulator's multi-instance manager (ensuring instance names match bot instance IDs), set up the instance as usual, and append new instance names to `INSTANCE_IDS` in `configs.py`. Specify the instance to run using the `--id` flag (e.g. `python src/main.py --id main`).
     * To run several accounts **at the same time**, use `--all` (every ID in `INSTANCE_IDS`) or `--ids` (e.g. `python src/main.py --ids main alt1`). Each account runs in its own process, launches are staggered by `MULTI_INSTANCE_STAGGER` seconds, and a crashed instance is restarted automatically with increasing delays.
 
+## FirstLight Zero (Clash Royale)
+
+[FirstLight Zero](https://github.com/Jaasssoooonnnnn/FirstLight-Zero) is an optional research dependency for local self-play training and evaluation. It runs separately from the desktop bot.
+
+```sh
+git submodule update --init third_party/firstlight-zero
+cd third_party/firstlight-zero
+python -m pip install -r requirements.txt
+python tests/test_consistency.py
+```
+
+The consistency test runs without a battle engine. Self-play requires a compatible FirstLight battle engine and separately supplied game data. See the [upstream setup guide](https://github.com/Jaasssoooonnnnn/FirstLight-Zero/blob/4fc9ebec1106ef8070c170dadd93b77f908b1184/docs/getting_started.md) for supported versions and setup.
+
 ## Miscellaneous
 * Please report issues in the [Issues Tab](https://github.com/m24842/CoC_Bot/issues)
 * For help with setup or usage, open a discussion in [Q&A](https://github.com/m24842/CoC_Bot/discussions/categories/q-a)
