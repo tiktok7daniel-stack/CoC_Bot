@@ -315,7 +315,7 @@ def _winner(env):
     return 0 if hp[0] > hp[1] else 1
 
 
-def battle(cx, decks, pilots, record=True, explore=0.15, max_ticks=1800, seed=None, trace=None):
+def battle(cx, decks, pilots, record=True, explore=0.15, max_ticks=1800, seed=None, trace=None, decision_ms=None):
     """decks: (ids team 0, ids team 1); pilots: per side "search" | a Ctx (its brain alone).
     -> (samples, winner, stats)"""
     rnd = random.Random(seed)
@@ -331,28 +331,33 @@ def battle(cx, decks, pilots, record=True, explore=0.15, max_ticks=1800, seed=No
     while env.get_current_tick() < max_ticks:
         acts = [None, None]
         for team in (0, 1):
-            pilot = pilots[team]
-            inp, hand = inputs(cx if pilot == "search" else pilot, env, team, first)
-            if pilot == "search":
-                if not _playable(cx, env, team, hand): continue
-                cands = candidates(cx, env, team, inp, hand)
-                if not cands: continue
-                res = search(cx, env, team, cands)
-                n_search += 1
-                play_t, card_t, tile_card, tile_t, p = label(cx, res)
-                if record:
-                    samples.append((inp, play_t, card_t, tile_card, tile_t))
-                explored = rnd.random() < explore
-                if explored:
-                    k = rnd.choices(range(len(res)), weights=p)[0]
+            decision_start = time.perf_counter() if decision_ms is not None else None
+            try:
+                pilot = pilots[team]
+                inp, hand = inputs(cx if pilot == "search" else pilot, env, team, first)
+                if pilot == "search":
+                    if not _playable(cx, env, team, hand): continue
+                    cands = candidates(cx, env, team, inp, hand)
+                    if not cands: continue
+                    res = search(cx, env, team, cands)
+                    n_search += 1
+                    play_t, card_t, tile_card, tile_t, p = label(cx, res)
+                    if record:
+                        samples.append((inp, play_t, card_t, tile_card, tile_t))
+                    explored = rnd.random() < explore
+                    if explored:
+                        k = rnd.choices(range(len(res)), weights=p)[0]
+                    else:
+                        k = max(range(len(res)), key=lambda i: res[i][0])
+                    if res[k][1] is not None and (explored or res[k][0] > 0.0):
+                        acts[team] = (res[k][1], *eng_point(team, *res[k][3]))
                 else:
-                    k = max(range(len(res)), key=lambda i: res[i][0])
-                if res[k][1] is not None and (explored or res[k][0] > 0.0):
-                    acts[team] = (res[k][1], *eng_point(team, *res[k][3]))
-            else:
-                mv = net_move(pilot, env, team, inp, hand)
-                if mv: acts[team] = (mv[0], *eng_point(team, *mv[2]))
-            if acts[team]: n_moves += 1
+                    mv = net_move(pilot, env, team, inp, hand)
+                    if mv: acts[team] = (mv[0], *eng_point(team, *mv[2]))
+                if acts[team]: n_moves += 1
+            finally:
+                if decision_start is not None:
+                    decision_ms[team].append((time.perf_counter() - decision_start) * 1000)
         a0 = acts[0] or (-1, 0.0, 0.0)
         a1 = acts[1] or (-1, 0.0, 0.0)
         # Placement checks use world coordinates. Self-play accepts team 1's
